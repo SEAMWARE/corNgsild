@@ -1,0 +1,316 @@
+//
+// FILE            ldApiEntityToDbModel.c
+//
+// AUTHOR          Ken Zangelin
+//
+// Copyright 2026 Seamware
+// 
+//
+#include <stdbool.h>                                     // bool
+#include <string.h>                                      // strcmp
+
+#include "kalloc/KAlloc.h"                             // KAlloc
+#include "kjson/KjNode.h"                               // KjNode
+#include "kjson/kjBuilder.h"                             // kjObject
+#include "kjson/kjChildReplace.h"                       // kjChildReplace
+#include "kjson/kjLookup.h"                             // kjLookup
+#include "swRest/swRest.h"                             // swRest
+
+#include "swNgsild/LdVocab.h"                            // LD_VOCAB_*
+#include "swNgsild/LdAttrType.h"                         // LdAttrType, LdAttrGeoProperty
+#include "swNgsild/ldAttrTypeDetect.h"                   // ldAttrTypeDetect
+#include "swNgsild/ldApiEntityToDbModel.h"               // Own interface
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldGeoValueUnexpand - convert expanded GeoJSON IRIs back to short form
+//
+// After JSON-LD expansion, GeoJSON looks like:
+//   { "type": "https://purl.org/geojson/vocab#Point",
+//     "https://purl.org/geojson/vocab#coordinates": [-3.703, 40.417] }
+//
+// MongoDB 2dsphere indexes require standard GeoJSON field names,
+// so we un-expand to:
+//   { "type": "Point", "coordinates": [-3.703, 40.417] }
+//
+// This modifies the tree in-place by repointing name/value strings.
+//
+static void ldGeoValueUnexpand(KjNode* geoValueP)
+{
+  if (geoValueP == NULL || geoValueP->type != KjObject)
+    return;
+
+  for (KjNode* childP = geoValueP->value.firstChildP; childP != NULL; childP = childP->next)
+  {
+    // Un-expand key names: "https://purl.org/geojson/vocab#coordinates" -> "coordinates"
+    if (strncmp(childP->name, LD_VOCAB_GEOJSON_PREFIX, LD_VOCAB_GEOJSON_PREFIX_LEN) == 0)
+      childP->name = childP->name + LD_VOCAB_GEOJSON_PREFIX_LEN;
+
+    // Un-expand the "type" value: "https://purl.org/geojson/vocab#Point" -> "Point"
+    if (strcmp(childP->name, "type") == 0 && childP->type == KjString)
+    {
+      if (strncmp(childP->value.s, LD_VOCAB_GEOJSON_PREFIX, LD_VOCAB_GEOJSON_PREFIX_LEN) == 0)
+        childP->value.s = childP->value.s + LD_VOCAB_GEOJSON_PREFIX_LEN;
+    }
+
+    // Recurse into nested objects (e.g. GeometryCollection members)
+    if (childP->type == KjObject)
+      ldGeoValueUnexpand(childP);
+
+    // Recurse into arrays of objects (e.g. GeometryCollection "geometries" array)
+    if (childP->type == KjArray)
+    {
+      for (KjNode* elemP = childP->value.firstChildP; elemP != NULL; elemP = elemP->next)
+      {
+        if (elemP->type == KjObject)
+          ldGeoValueUnexpand(elemP);
+      }
+    }
+  }
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// expandedValueKeys - all expanded IRI value keys that should be normalized to "value"
+//
+static const char* expandedValueKeys[] =
+{
+  LD_VOCAB_HAS_VALUE, LD_VOCAB_HAS_OBJECT, LD_VOCAB_HAS_LANGUAGE_MAP,
+  LD_VOCAB_HAS_VOCAB, LD_VOCAB_HAS_VALUE_LIST, LD_VOCAB_HAS_OBJECT_LIST,
+  LD_VOCAB_HAS_JSON, NULL
+};
+
+
+
+// -----------------------------------------------------------------------------
+//
+// normalizeValueKey - rename any HAS_* value key to "value" in an attribute instance
+//
+static void normalizeValueKey(KjNode* attrP)
+{
+  if (attrP->type != KjObject)
+    return;
+
+  for (KjNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
+    for (const char** vk = expandedValueKeys; *vk != NULL; vk++)
+      if (strcmp(childP->name, *vk) == 0) { childP->name = "value"; return; }
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// isEntityKeyword - check if a field name is an entity-level keyword
+//
+static bool isEntityKeyword(const char* name)
+{
+  if (strcmp(name, "id")            == 0)  return true;
+  if (strcmp(name, "@id")           == 0)  return true;
+  if (strcmp(name, "type")          == 0)  return true;
+  if (strcmp(name, "@type")         == 0)  return true;
+  if (strcmp(name, "@context")      == 0)  return true;
+  if (strcmp(name, LD_VOCAB_SCOPE)  == 0)  return true;
+
+  return false;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// timestampSet - add createdAt/modifiedAt to an KjObject node
+//
+static void timestampSet(KjNode* objP, uint64_t ts, KAlloc* faP)
+{
+  kjChildAdd(objP, kjInteger(swRest.kjsonP, LD_VOCAB_CREATED_AT,  (long long) ts));
+  kjChildAdd(objP, kjInteger(swRest.kjsonP, LD_VOCAB_MODIFIED_AT, (long long) ts));
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// extractDatasetId - find and remove datasetId from an attribute instance
+//
+// Returns the datasetId value string, or "@none" if not present.
+//
+static const char* extractDatasetId(KjNode* attrP)
+{
+  KjNode* dsP = kjLookup(attrP, LD_VOCAB_DATASET_ID);
+
+  if (dsP == NULL)
+    return "@none";
+
+  const char* dsId = dsP->value.s;
+
+  kjChildRemove(attrP, dsP);
+  return dsId;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// isCoreAttrTerm - check if a name is a known NGSI-LD core context attribute-level term
+//
+static bool isCoreAttrTerm(const char* name)
+{
+  if (strcmp(name, "type")                    == 0)  return true;
+  if (strcmp(name, LD_VOCAB_HAS_VALUE)        == 0)  return true;
+  if (strcmp(name, LD_VOCAB_HAS_OBJECT)       == 0)  return true;
+  if (strcmp(name, LD_VOCAB_HAS_LANGUAGE_MAP) == 0)  return true;
+  if (strcmp(name, LD_VOCAB_HAS_VOCAB)        == 0)  return true;
+  if (strcmp(name, LD_VOCAB_HAS_VALUE_LIST)   == 0)  return true;
+  if (strcmp(name, LD_VOCAB_HAS_OBJECT_LIST)  == 0)  return true;
+  if (strcmp(name, LD_VOCAB_HAS_JSON)         == 0)  return true;
+  if (strcmp(name, LD_VOCAB_OBSERVED_AT)      == 0)  return true;
+  if (strcmp(name, LD_VOCAB_UNIT_CODE)        == 0)  return true;
+  if (strcmp(name, LD_VOCAB_DATASET_ID)       == 0)  return true;
+
+  return false;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// attrToDbModel - transform an attribute instance to DB format
+//
+// Adds timestamps and recurses into sub-attributes.
+// Sub-attributes are children that are KjObject and NOT core context terms.
+//
+static void attrToDbModel(KjNode* attrP, uint64_t ts, KAlloc* faP)
+{
+  if (attrP->type != KjObject)
+    return;
+
+  // Recurse into sub-attributes (non-core-context object children)
+  for (KjNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
+  {
+    if (childP->type == KjObject && !isCoreAttrTerm(childP->name))
+      attrToDbModel(childP, ts, faP);
+  }
+
+  // For GeoProperty, un-expand the GeoJSON hasValue so MongoDB can use 2dsphere index
+  if (ldAttrTypeDetect(attrP) == LdAttrGeoProperty)
+  {
+    KjNode* hasValueP = kjLookup(attrP, LD_VOCAB_HAS_VALUE);
+    if (hasValueP != NULL)
+      ldGeoValueUnexpand(hasValueP);
+  }
+
+  // Normalize value key: rename any HAS_* expanded IRI to "value" for uniform DB queries
+  normalizeValueKey(attrP);
+
+  // Add timestamps to this attribute instance
+  timestampSet(attrP, ts, faP);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// wrapSingleAttr - wrap a single attribute object in a dataset-keyed wrapper
+//
+// Before: "attrName": { "type": "Property", "value": 100, "datasetId": "urn:x" }
+// After:  "attrName": { "urn:x": { "type": "Property", "value": 100 } }
+//
+static KjNode* wrapSingleAttr(KjNode* attrP, uint64_t ts, KAlloc* faP)
+{
+  const char* dsKey = extractDatasetId(attrP);
+
+  attrToDbModel(attrP, ts, faP);
+
+  // Create wrapper object with same name as the attribute
+  KjNode* wrapperP = kjObject(swRest.kjsonP, attrP->name);
+
+  // Move attrP into the wrapper as a child keyed by datasetId
+  // Keep attrP->next intact — kjChildReplace needs it to link wrapperP to the next sibling
+  attrP->name = (char*) dsKey;
+  wrapperP->value.firstChildP = attrP;
+  wrapperP->lastChild         = attrP;
+
+  return wrapperP;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// wrapMultiAttr - wrap multi-attribute array into a dataset-keyed wrapper object
+//
+// Before: "attrName": [ { "type": "Property", "value": 100 },
+//                        { "type": "Property", "value": 98, "datasetId": "urn:x" } ]
+// After:  "attrName": { "@none": { "type": "Property", "value": 100 },
+//                        "urn:x": { "type": "Property", "value": 98 } }
+//
+static KjNode* wrapMultiAttr(KjNode* arrayP, uint64_t ts, KAlloc* faP)
+{
+  KjNode* wrapperP = kjObject(swRest.kjsonP, arrayP->name);
+
+  // Move each array element into the wrapper, keyed by its datasetId
+  KjNode* instP = arrayP->value.firstChildP;
+
+  while (instP != NULL)
+  {
+    KjNode* nextP = instP->next;
+
+    const char* dsKey = extractDatasetId(instP);
+
+    attrToDbModel(instP, ts, faP);
+
+    instP->name = (char*) dsKey;
+    instP->next = NULL;
+    kjChildAdd(wrapperP, instP);
+
+    instP = nextP;
+  }
+
+  return wrapperP;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldApiEntityToDbModel - transform API-format entity tree to DB storage format
+//
+void ldApiEntityToDbModel(KjNode* entityP, KAlloc* faP)
+{
+  if (entityP == NULL || entityP->type != KjObject)
+    return;
+
+  uint64_t ts = swRest.requestStartTime;
+
+  KjNode* childP = entityP->value.firstChildP;
+
+  while (childP != NULL)
+  {
+    KjNode* nextP = childP->next;
+
+    if (childP->name != NULL && !isEntityKeyword(childP->name))
+    {
+      KjNode* replacementP = NULL;
+
+      if (childP->type == KjObject)
+        replacementP = wrapSingleAttr(childP, ts, faP);
+      else if (childP->type == KjArray)
+        replacementP = wrapMultiAttr(childP, ts, faP);
+
+      if (replacementP != NULL)
+      {
+        kjChildReplace(entityP, childP, replacementP);
+        childP->next = NULL;  // childP is now inside the wrapper
+      }
+    }
+
+    childP = nextP;
+  }
+
+  // Add timestamps to the entity itself
+  timestampSet(entityP, ts, faP);
+}
