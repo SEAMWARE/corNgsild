@@ -52,6 +52,12 @@ typedef struct SwNgsild
 
   char*   lang;          // language filter for LanguageProperty reduction
 
+  char*   expandValues;
+  char**  expandValuesV; // split + JSON-LD expanded — attribute names whose values to expand in q
+
+  char*   jsonKeys;
+  char**  jsonKeysV;     // split + JSON-LD expanded — attribute names whose values are opaque (no expansion)
+
   // URL parameters — geo-query
   char*      georel;       // raw georel string (e.g. "near;maxDistance==1000")
   LdGeoRel*  geoRel;       // parsed georel
@@ -71,9 +77,10 @@ typedef struct SwNgsild
   bool    count;         // true if ?count=true
   bool    local;         // true if ?local=true
 
-  // @context validation error (set in parseHook)
+  // @context (set in parseHook)
   bool              contextError;
-  SwldContext*  contextP;
+  SwldContext*       contextP;
+  const char*        userContextUrl;  // URL from Link header or default context (NULL if none)
 
   // Tenant (resolved in preServiceHook, opaque to swNgsild)
   void*  tenantP;
@@ -95,6 +102,14 @@ extern __thread SwNgsild swNgsild;
 // ldLocalOnly - global flag set by --localOnly CLI arg
 //
 extern bool ldLocalOnly;
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldDefaultContextUrl - default user @context URL (set by --userContext CLI arg, or NULL)
+//
+extern char* ldDefaultContextUrl;
 
 
 

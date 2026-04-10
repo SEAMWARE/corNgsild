@@ -31,7 +31,8 @@
 //
 // ldLocalOnly - global flag set by --localOnly CLI arg (no distributed ops)
 //
-bool ldLocalOnly = false;
+bool  ldLocalOnly        = false;
+char* ldDefaultContextUrl = NULL;
 
 
 
@@ -124,6 +125,16 @@ void ldParamHook(const char* name, const char* value)
   {
     swNgsild.omit  = (char*) value;
     swNgsild.omitV = ldParamExpandV(ldParamSplit((char*) value, faP), faP);
+  }
+  else if (strcmp(name, "expandValues") == 0)
+  {
+    swNgsild.expandValues  = (char*) value;
+    swNgsild.expandValuesV = ldParamExpandV(ldParamSplit((char*) value, faP), faP);
+  }
+  else if (strcmp(name, "jsonKeys") == 0)
+  {
+    swNgsild.jsonKeys  = (char*) value;
+    swNgsild.jsonKeysV = ldParamExpandV(ldParamSplit((char*) value, faP), faP);
   }
   else if (strcmp(name, "scopeQ") == 0)
   {

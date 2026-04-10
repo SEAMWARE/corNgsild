@@ -17,9 +17,11 @@
 // Operators: ==  !=  >  <  >=  <=  ~=  !~=
 // Values:    number, "string", true/false, date-time, range (lo..hi), list (v1,v2,...)
 //
+#define _GNU_SOURCE
 #include <ctype.h>                                       // isdigit, isalpha
 #include <stdlib.h>                                      // strtod
 #include <string.h>                                      // strlen, strncmp, strcmp, strchr, memcpy
+#include <time.h>                                        // strptime, timegm
 
 #include "kalloc/KAlloc.h"                             // kaAlloc
 #include "kalloc/kaAlloc.h"                            // kaAlloc
@@ -244,6 +246,36 @@ static bool parseRange(const char* raw, int rawLen, const char* dotdot, LdQTerm*
 
 // -----------------------------------------------------------------------------
 //
+// isoToNanoseconds - convert ISO 8601 date-time string to nanoseconds since epoch
+//
+static long long isoToNanoseconds(const char* iso)
+{
+  struct tm tm;
+  memset(&tm, 0, sizeof(tm));
+  const char* rest = strptime(iso, "%Y-%m-%dT%H:%M:%S", &tm);
+  long long ns = (long long) timegm(&tm) * 1000000000LL;
+  if (rest != NULL && *rest == '.')
+  {
+    rest++;
+    long long frac = 0;
+    int digits = 0;
+    while (*rest >= '0' && *rest <= '9' && digits < 9)
+    {
+      frac = frac * 10 + (*rest - '0');
+      rest++;
+      digits++;
+    }
+    // Pad to 9 digits
+    while (digits < 9) { frac *= 10; digits++; }
+    ns += frac;
+  }
+  return ns;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // parseTerm - parse: attrName [operator value]
 //
 static LdQNode* parseTerm(const char** pp, KAlloc* faP)
@@ -438,7 +470,7 @@ static LdQNode* parseTerm(const char** pp, KAlloc* faP)
       s[vLen] = 0;
 
       nodeP->term.valueType = LdQDateTime;
-      nodeP->term.value.s   = s;
+      nodeP->term.value.ns  = isoToNanoseconds(s);
     }
     else
     {
@@ -448,6 +480,24 @@ static LdQNode* parseTerm(const char** pp, KAlloc* faP)
     }
   }
 
+
+  //
+  // expandValues: if the attribute is in expandValuesV, expand string values via @context
+  //
+  if (swNgsild.expandValuesV != NULL && nodeP->term.valueType == LdQString &&
+      nodeP->term.op != LdQPattern && nodeP->term.op != LdQNotPattern)
+  {
+    for (int ix = 0; swNgsild.expandValuesV[ix] != NULL; ix++)
+    {
+      if (strcmp(nodeP->term.attr, swNgsild.expandValuesV[ix]) == 0)
+      {
+        char* expanded = swldExpand(swNgsild.contextP, nodeP->term.value.s, faP, NULL, NULL);
+        if (expanded != NULL)
+          nodeP->term.value.s = expanded;
+        break;
+      }
+    }
+  }
   *pp = p;
   return nodeP;
 }
