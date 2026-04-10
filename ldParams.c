@@ -53,6 +53,8 @@ SwRestParam ldParamRegistryV[] =
   { "aggrPeriodDuration",    LD_PARAM_AGGR_PERIOD_DURATION },
   { "sysAttrs",              LD_PARAM_SYSATTRS },
   { "datasetId",             LD_PARAM_DATASETID },
+  { "expandValues",          LD_PARAM_EXPAND_VALUES },
+  { "jsonKeys",              LD_PARAM_JSON_KEYS },
   { NULL,                    0 }
 };
 

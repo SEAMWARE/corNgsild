@@ -51,6 +51,8 @@
 #define LD_PARAM_AGGR_PERIOD_DURATION  (1ULL << 29)
 #define LD_PARAM_SYSATTRS              (1ULL << 30)
 #define LD_PARAM_DATASETID             (1ULL << 31)
+#define LD_PARAM_EXPAND_VALUES         (1ULL << 32)
+#define LD_PARAM_JSON_KEYS             (1ULL << 33)
 
 
 
@@ -81,19 +83,23 @@
   | LD_PARAM_ENTITY_MAP  \
   | LD_PARAM_LOCAL       \
   | LD_PARAM_VIA         \
-  | LD_PARAM_SYSATTRS    \
-  | LD_PARAM_DATASETID   \
+  | LD_PARAM_SYSATTRS       \
+  | LD_PARAM_DATASETID      \
+  | LD_PARAM_EXPAND_VALUES  \
+  | LD_PARAM_JSON_KEYS      \
   )
 
 #define LD_PARAMS_GET_ENTITY     \
-  ( LD_PARAM_ATTRS       \
-  | LD_PARAM_OPTIONS     \
-  | LD_PARAM_PICK        \
-  | LD_PARAM_OMIT        \
-  | LD_PARAM_LANG        \
-  | LD_PARAM_FORMAT      \
-  | LD_PARAM_SYSATTRS    \
-  | LD_PARAM_DATASETID   \
+  ( LD_PARAM_ATTRS          \
+  | LD_PARAM_OPTIONS        \
+  | LD_PARAM_PICK           \
+  | LD_PARAM_OMIT           \
+  | LD_PARAM_LANG           \
+  | LD_PARAM_FORMAT         \
+  | LD_PARAM_SYSATTRS       \
+  | LD_PARAM_DATASETID      \
+  | LD_PARAM_EXPAND_VALUES  \
+  | LD_PARAM_JSON_KEYS      \
   )
 
 #define LD_PARAMS_POST_ENTITIES  0
