@@ -48,11 +48,7 @@ LdGeoRel* ldGeoRelParse(const char* georelStr, KAlloc* faP)
   else if (relLen == 8  && strncmp(georelStr, "contains",   8)  == 0)  geoRelP->rel = LdGeoContains;
   else if (relLen == 8  && strncmp(georelStr, "overlaps",   8)  == 0)  geoRelP->rel = LdGeoOverlaps;
   else if (relLen == 10 && strncmp(georelStr, "intersects", 10) == 0)  geoRelP->rel = LdGeoIntersects;
-  else if (relLen == 6  && strncmp(georelStr, "equals",     6)  == 0)
-  {
-    ldError(501, LD_ERROR_OP_NOT_SUPPORTED, "Unsupported georel", "georel 'equals' is not supported (MongoDB limitation)");
-    return NULL;
-  }
+  else if (relLen == 6  && strncmp(georelStr, "equals",     6)  == 0)  geoRelP->rel = LdGeoEquals;
   else if (relLen == 8  && strncmp(georelStr, "disjoint",   8)  == 0)  geoRelP->rel = LdGeoDisjoint;
   else
   {
