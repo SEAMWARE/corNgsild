@@ -131,6 +131,10 @@ void ldParamHook(const char* name, const char* value)
     swNgsild.expandValues  = (char*) value;
     swNgsild.expandValuesV = ldParamExpandV(ldParamSplit((char*) value, faP), faP);
   }
+  else if (strcmp(name, "geometryProperty") == 0)
+  {
+    swNgsild.geometryProperty = (char*) value;
+  }
   else if (strcmp(name, "jsonKeys") == 0)
   {
     swNgsild.jsonKeys  = (char*) value;

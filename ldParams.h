@@ -53,6 +53,7 @@
 #define LD_PARAM_DATASETID             (1ULL << 31)
 #define LD_PARAM_EXPAND_VALUES         (1ULL << 32)
 #define LD_PARAM_JSON_KEYS             (1ULL << 33)
+#define LD_PARAM_GEOMETRY_PROPERTY     (1ULL << 34)
 
 
 
@@ -86,7 +87,8 @@
   | LD_PARAM_SYSATTRS       \
   | LD_PARAM_DATASETID      \
   | LD_PARAM_EXPAND_VALUES  \
-  | LD_PARAM_JSON_KEYS      \
+  | LD_PARAM_JSON_KEYS           \
+  | LD_PARAM_GEOMETRY_PROPERTY   \
   )
 
 #define LD_PARAMS_GET_ENTITY     \
@@ -99,7 +101,8 @@
   | LD_PARAM_SYSATTRS       \
   | LD_PARAM_DATASETID      \
   | LD_PARAM_EXPAND_VALUES  \
-  | LD_PARAM_JSON_KEYS      \
+  | LD_PARAM_JSON_KEYS           \
+  | LD_PARAM_GEOMETRY_PROPERTY   \
   )
 
 #define LD_PARAMS_POST_ENTITIES  0

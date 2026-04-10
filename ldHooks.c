@@ -8,10 +8,12 @@
 //
 #include <string.h>                                      // strcmp, strncasecmp, memset
 
+#include "kalloc/kaAlloc.h"                             // kaAlloc
 #include "kjson/KjNode.h"                               // KjNode
 #include "kjson/kjLookup.h"                             // kjLookup
 #include "kjson/kjBuilder.h"                        // kjChildRemove
 #include "swRest/swRest.h"                             // swRest
+#include "swJsonld/swldInit.h"                             // swldCoreContext
 #include "swJsonld/swldExpandTree.h"                       // swldExpandTree
 #include "swJsonld/swldCompactTree.h"                      // swldCompactTree
 
@@ -21,6 +23,7 @@
 #include "swNgsild/ldError.h"                            // ldError
 #include "swNgsild/ldEntityToApi.h"                      // ldEntityToApi
 #include "swNgsild/ldPickOmit.h"                         // ldPickOmit
+#include "swNgsild/ldToGeoJson.h"                        // ldToGeoJson
 #include "swNgsild/ldStripSysAttrs.h"                    // ldStripSysAttrs
 #include "swNgsild/ldLangReduce.h"                       // ldLangReduce
 #include "swNgsild/ldRender.h"                           // ldToSimplified, ldToConcise
@@ -82,7 +85,69 @@ static void ldParseHook(void)
     return;
   }
 
+  //
+  // For application/json: inject @context from Link header or default user context
+  //
+  if (!isLdJson && swRest.in.requestTree != NULL)
+  {
+    const char* contextUrl = NULL;
+
+    // Check Link header for context URL
+    for (int i = 0; i < swRest.in.httpHeaderCount; i++)
+    {
+      if (strcasecmp(swRest.in.httpHeaderV[i].key, "Link") == 0 &&
+          strstr(swRest.in.httpHeaderV[i].value, "json-ld#context") != NULL)
+      {
+        // Extract URL from: <URL>; rel="..."; type="..."
+        char* v = swRest.in.httpHeaderV[i].value;
+
+        if (v[0] == '<')
+        {
+          char* end = strchr(v + 1, '>');
+
+          if (end != NULL)
+          {
+            int   len = end - (v + 1);
+            char* url = kaAlloc(&swRest.kalloc, len + 1);
+
+            memcpy(url, v + 1, len);
+            url[len] = '\0';
+            contextUrl = url;
+          }
+        }
+        break;
+      }
+    }
+
+    // Fall back to default user context
+    if (contextUrl == NULL && ldDefaultContextUrl != NULL)
+      contextUrl = ldDefaultContextUrl;
+
+    // Inject @context string node into the tree so swldExpandTree picks it up
+    if (contextUrl != NULL)
+    {
+      KjNode* ctxNode = kjString(swRest.kjsonP, "@context", contextUrl);
+      kjChildAdd(swRest.in.requestTree, ctxNode);
+      swNgsild.userContextUrl = contextUrl;
+    }
+  }
+
   swNgsild.contextP = swldExpandTree(swRest.in.requestTree, &swRest.kalloc);
+
+  // If a user context URL was provided but expansion fell back to core context, the download failed
+  if (swNgsild.userContextUrl != NULL)
+  {
+    SwldContext* coreP = swldCoreContext();
+
+    if (swNgsild.contextP == NULL || swNgsild.contextP == coreP)
+    {
+      ldError(503, LD_ERROR_LD_CONTEXT_NOT_AVAILABLE, "Context Not Available",
+              "unable to retrieve @context from '%s'", swNgsild.userContextUrl);
+      swNgsild.contextError = true;
+      return;
+    }
+  }
+
   ldNormalizeInput(swRest.in.requestTree, &swRest.kalloc);
 }
 
@@ -220,6 +285,67 @@ static void ldRenderHook(void)
     {
       ldLangReduce(treeP, swNgsild.lang, &swRest.kalloc);
     }
+  }
+
+  //
+
+  //
+  // GeoJSON representation: Accept: application/geo+json
+  //
+  bool acceptGeoJson = (swRest.in.accept != NULL && strstr(swRest.in.accept, "application/geo+json") != NULL);
+  if (acceptGeoJson && treeP != NULL)
+  {
+    ldToGeoJson(&swRest.out.responseTree, swNgsild.geometryProperty, swRest.kjsonP);
+    treeP = swRest.out.responseTree;
+    swRest.out.contentType = "application/geo+json";
+  }
+  // @context in response: either in body (ld+json) or via Link header (json)
+  //
+  if (treeP == NULL)
+    return;
+
+  SwldContext* ctxP   = (swNgsild.contextP != NULL) ? swNgsild.contextP : swldCoreContext();
+  const char*  ctxUrl = (ctxP != NULL) ? ctxP->url : NULL;
+  bool         acceptLdJson = (swRest.in.accept != NULL && strstr(swRest.in.accept, "application/ld+json") != NULL);
+
+  if (acceptLdJson && ctxUrl != NULL)
+  {
+    // Inject @context into response body and set Content-Type
+    if (treeP->type == KjArray)
+    {
+      for (KjNode* itemP = treeP->value.firstChildP; itemP != NULL; itemP = itemP->next)
+      {
+        if (itemP->type == KjObject)
+        {
+          KjNode* ctxNode = kjString(swRest.kjsonP, "@context", ctxUrl);
+          kjChildAdd(itemP, ctxNode);
+        }
+      }
+    }
+    else if (treeP->type == KjObject)
+    {
+      KjNode* ctxNode = kjString(swRest.kjsonP, "@context", ctxUrl);
+      kjChildAdd(treeP, ctxNode);
+    }
+
+    swRest.out.contentType = "application/ld+json";
+  }
+  else if (ctxUrl != NULL)
+  {
+    // Add Link header for application/json responses
+    const char* suffix  = ">; rel=\"http://www.w3.org/ns/json-ld#context\"; type=\"application/ld+json\"";
+    int         linkLen = 1 + strlen(ctxUrl) + strlen(suffix) + 1;
+    char*       linkBuf = kaAlloc(&swRest.kalloc, linkLen);
+
+    strcpy(linkBuf, "<");
+    strcat(linkBuf, ctxUrl);
+    strcat(linkBuf, suffix);
+
+    SwRestKeyValue* hV = swRest.out.headerV;
+    int ix = swRest.out.headerCount;
+    hV[ix].key   = "Link";
+    hV[ix].value = linkBuf;
+    swRest.out.headerCount = ix + 1;
   }
 }
 

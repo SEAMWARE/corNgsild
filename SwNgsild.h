@@ -58,6 +58,8 @@ typedef struct SwNgsild
   char*   jsonKeys;
   char**  jsonKeysV;     // split + JSON-LD expanded — attribute names whose values are opaque (no expansion)
 
+  char*   geometryProperty;  // GeoProperty for GeoJSON geometry field (short name from URL param)
+
   // URL parameters — geo-query
   char*      georel;       // raw georel string (e.g. "near;maxDistance==1000")
   LdGeoRel*  geoRel;       // parsed georel

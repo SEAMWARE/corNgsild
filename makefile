@@ -45,7 +45,8 @@ LIB_SOURCES   = swNgsild.c \
                 ldNormalizeInput.c \
                 ldHooks.c \
                 ldPagination.c \
-                ldParamsValidate.c
+                ldParamsValidate.c \
+                ldToGeoJson.c
 LIB_OBJS      = $(LIB_SOURCES:c=o)
 
 LIBS          = ../swRest/libswRest.a ../swJsonld/libswJsonld.a ../kalloc/libkalloc.a ../kjson/libkjson.a ../kbase/libkbase.a ../klog/libklog.a ../ktrace/libktrace.a ../khash/libkhash.a -lpthread
