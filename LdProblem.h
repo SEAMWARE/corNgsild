@@ -21,6 +21,7 @@
 #define LD_ERROR_OP_NOT_SUPPORTED   "https://uri.etsi.org/ngsi-ld/errors/OperationNotSupported"
 #define LD_ERROR_INVALID_REQUEST    "https://uri.etsi.org/ngsi-ld/errors/InvalidRequest"
 #define LD_ERROR_INTERNAL_ERROR     "https://uri.etsi.org/ngsi-ld/errors/InternalError"
-#define LD_ERROR_NONEXISTENT_TENANT "https://uri.etsi.org/ngsi-ld/errors/NonexistentTenant"
+#define LD_ERROR_NONEXISTENT_TENANT      "https://uri.etsi.org/ngsi-ld/errors/NonexistentTenant"
+#define LD_ERROR_LD_CONTEXT_NOT_AVAILABLE "https://uri.etsi.org/ngsi-ld/errors/LdContextNotAvailable"
 
 #endif

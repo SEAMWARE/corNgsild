@@ -9,11 +9,39 @@
 #include <stdbool.h>                                     // bool
 
 #include "kbase/kLibLog.h"                             // KLOG_T
+#include "swJsonld/swldExpand.h"                       // swldSetVocabExpandCheck
 
 #include "swNgsild/ldTraceLevels.h"                      // LdTInit
 #include "swNgsild/ldParams.h"                           // ldParamsInit
+#include "swNgsild/ldError.h"                            // ldError
+#include "swNgsild/LdProblem.h"                          // LD_ERROR_BAD_REQUEST_DATA
 #include "swNgsild/ldHooks.h"                            // ldHooksRegister
 #include "swNgsild/ldInit.h"                             // Own interface
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldVocabNameCheck - reject short-names with chars that break q-filter syntax
+//
+// Called by swJsonld when expanding a name via @vocab.
+// Forbidden: '=', '[', ']', '&', '?', '"', '\'', control chars, space
+//
+static bool ldVocabNameCheck(const char* name)
+{
+  for (const char* p = name; *p != 0; ++p)
+  {
+    if (*p == '=' || *p == '[' || *p == ']' || *p == '&' || *p == '?' ||
+        *p == '"' || *p == '\'' || *p == '\b' || *p == '\t' || *p == '\n' || *p == ' ')
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Attribute Name",
+              "attribute name '%s' contains a forbidden character (0x%02x)", name, (unsigned char) *p);
+      return false;
+    }
+  }
+
+  return true;
+}
 
 
 
@@ -40,6 +68,7 @@ int ldInit(void)
     return -1;
 
   ldHooksRegister();
+  swldSetVocabExpandCheck(ldVocabNameCheck);
 
   ldInitialized = true;
   return 0;

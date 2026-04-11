@@ -18,25 +18,8 @@
 #include "kjson/kjBuilder.h"                             // kjString
 #include "kjson/kjChildReplace.h"                       // kjChildReplace
 
+#include "swNgsild/ldIsEntityKeyword.h"                   // ldIsEntityKeyword
 #include "swNgsild/ldLangReduce.h"                       // Own interface
-
-
-
-// -----------------------------------------------------------------------------
-//
-// isEntityKeyword - (compacted names)
-//
-static bool isEntityKeyword(const char* name)
-{
-  if (strcmp(name, "id")         == 0)  return true;
-  if (strcmp(name, "type")       == 0)  return true;
-  if (strcmp(name, "@context")   == 0)  return true;
-  if (strcmp(name, "scope")      == 0)  return true;
-  if (strcmp(name, "createdAt")  == 0)  return true;
-  if (strcmp(name, "modifiedAt") == 0)  return true;
-
-  return false;
-}
 
 
 
@@ -157,7 +140,7 @@ void ldLangReduce(KjNode* entityP, const char* lang, KAlloc* faP)
 
   for (KjNode* childP = entityP->value.firstChildP; childP != NULL; childP = childP->next)
   {
-    if (childP->name != NULL && isEntityKeyword(childP->name) == false)
+    if (childP->name != NULL && ldIsEntityKeyword(childP->name) == false)
       attrLangReduce(childP, lang, faP);
   }
 }

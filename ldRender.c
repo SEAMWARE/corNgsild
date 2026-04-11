@@ -19,26 +19,9 @@
 #include "swNgsild/LdVocab.h"                            // LD_VOCAB_*
 #include "swNgsild/ldTypes.h"                            // ldAttrTypeToString
 #include "swNgsild/ldAttrTypeDetect.h"                   // ldAttrTypeDetect
+#include "swNgsild/ldIsEntityKeyword.h"                   // ldIsEntityKeyword
 #include "swNgsild/ldRender.h"                           // Own interface
 #include "swNgsild/ldTraceLevels.h"                      // LdTRender
-
-
-
-// -----------------------------------------------------------------------------
-//
-// isEntityKeyword -
-//
-static bool isEntityKeyword(const char* name)
-{
-  if (strcmp(name, "id")            == 0)  return true;
-  if (strcmp(name, "@id")           == 0)  return true;
-  if (strcmp(name, "type")          == 0)  return true;
-  if (strcmp(name, "@type")         == 0)  return true;
-  if (strcmp(name, "@context")      == 0)  return true;
-  if (strcmp(name, LD_VOCAB_SCOPE)  == 0)  return true;
-
-  return false;
-}
 
 
 
@@ -155,7 +138,7 @@ bool ldToNormalized(KjNode* entityP, KAlloc* faP)
 
   for (KjNode* childP = entityP->value.firstChildP; childP != NULL; childP = childP->next)
   {
-    if (isEntityKeyword(childP->name) == false)
+    if (ldIsEntityKeyword(childP->name) == false)
       attrToNormalized(childP, faP);
   }
 
@@ -229,7 +212,7 @@ bool ldToConcise(KjNode* entityP, KAlloc* faP)
 
   for (KjNode* childP = entityP->value.firstChildP; childP != NULL; childP = childP->next)
   {
-    if (isEntityKeyword(childP->name) == false)
+    if (ldIsEntityKeyword(childP->name) == false)
       attrToConcise(childP);
   }
 
@@ -287,7 +270,7 @@ bool ldToSimplified(KjNode* entityP, KAlloc* faP)
   {
     KjNode* nextP = childP->next;
 
-    if (isEntityKeyword(childP->name) == false && childP->type == KjObject)
+    if (ldIsEntityKeyword(childP->name) == false && childP->type == KjObject)
     {
       KjNode* valueP = getValueNode(childP);
 
