@@ -10,6 +10,7 @@
 // 
 //
 #include <stdbool.h>                                     // bool
+#include <stdint.h>                                      // uint64_t
 
 #include "swJsonld/SwldContext.h"                     // SwldContext
 #include "swNgsild/LdFormat.h"                           // LdFormat
@@ -51,6 +52,12 @@ typedef struct SwNgsild
   char**  omitV;         // split + JSON-LD expanded
 
   char*   lang;          // language filter for LanguageProperty reduction
+
+  // PATCH /entities/{id} (§ 6.5.3.4): default observedAt to inject into each
+  // merged attribute instance whose target already has an observedAt sub.
+  // observedAtNs is 0 when the URL param is not set.
+  char*      observedAt;
+  uint64_t   observedAtNs;
 
   char*   expandValues;
   char**  expandValuesV; // split + JSON-LD expanded — attribute names whose values to expand in q

@@ -56,6 +56,7 @@ SwRestParam ldParamRegistryV[] =
   { "expandValues",          LD_PARAM_EXPAND_VALUES },
   { "jsonKeys",              LD_PARAM_JSON_KEYS },
   { "geometryProperty",      LD_PARAM_GEOMETRY_PROPERTY },
+  { "observedAt",            LD_PARAM_OBSERVED_AT },
   { NULL,                    0 }
 };
 

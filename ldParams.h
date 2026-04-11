@@ -54,6 +54,7 @@
 #define LD_PARAM_EXPAND_VALUES         (1ULL << 32)
 #define LD_PARAM_JSON_KEYS             (1ULL << 33)
 #define LD_PARAM_GEOMETRY_PROPERTY     (1ULL << 34)
+#define LD_PARAM_OBSERVED_AT           (1ULL << 35)
 
 
 
@@ -106,6 +107,15 @@
   )
 
 #define LD_PARAMS_POST_ENTITIES  0
+
+#define LD_PARAMS_DELETE_ENTITY  0
+
+#define LD_PARAMS_PATCH_ENTITY  \
+  ( LD_PARAM_FORMAT       \
+  | LD_PARAM_LANG         \
+  | LD_PARAM_OBSERVED_AT  \
+  | LD_PARAM_OPTIONS      \
+  )
 
 
 

@@ -15,6 +15,7 @@
 #include "swJsonld/swldDownload.h"                         // swldContextFromUrl
 #include "swJsonld/swldExpand.h"                           // swldExpand
 #include "swJsonld/swldInit.h"                             // swldCoreContext
+#include "swNgsild/ldCheckDateTime.h"                    // ldCheckDateTime, ldIsoToNanoseconds
 #include "swNgsild/ldTypes.h"                            // ldFormatFromString
 #include "swNgsild/ldQueryParams.h"                      // ldParamSplit, ldParamExpandV
 #include "swNgsild/ldQParse.h"                           // ldQParse
@@ -241,5 +242,16 @@ void ldParamHook(const char* name, const char* value)
   else if (strcmp(name, "lang") == 0)
   {
     swNgsild.lang = (char*) value;
+  }
+  else if (strcmp(name, "observedAt") == 0)
+  {
+    if (ldCheckDateTime(value) < 0)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid observedAt",
+              "observedAt query parameter is not a valid ISO 8601 DateTime: '%s'", value);
+      return;
+    }
+    swNgsild.observedAt   = (char*) value;
+    swNgsild.observedAtNs = ldIsoToNanoseconds(value);
   }
 }

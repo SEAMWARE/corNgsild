@@ -5,10 +5,11 @@
 //
 // Copyright 2026 Seamware
 //
+#define _GNU_SOURCE
 #include <ctype.h>                                       // isdigit
 #include <stdlib.h>                                      // mktime
-#include <string.h>                                      // strlen
-#include <time.h>                                        // struct tm, timegm
+#include <string.h>                                      // strlen, memset
+#include <time.h>                                        // struct tm, timegm, strptime
 
 #include "swNgsild/ldCheckDateTime.h"                    // Own interface
 
@@ -92,4 +93,46 @@ double ldCheckDateTime(const char* dateTimeStr)
   time_t epoch = timegm(&tm);
 
   return (double) epoch;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldIsoToNanoseconds - convert ISO 8601 date-time string to epoch nanoseconds
+//
+uint64_t ldIsoToNanoseconds(const char* iso)
+{
+  if (iso == NULL)
+    return 0;
+
+  struct tm tm;
+  memset(&tm, 0, sizeof(tm));
+
+  const char* rest = strptime(iso, "%Y-%m-%dT%H:%M:%S", &tm);
+  if (rest == NULL)
+    return 0;
+
+  uint64_t ns = (uint64_t) timegm(&tm) * 1000000000ULL;
+
+  if (*rest == '.')
+  {
+    rest++;
+    uint64_t frac   = 0;
+    int      digits = 0;
+    while (*rest >= '0' && *rest <= '9' && digits < 9)
+    {
+      frac = frac * 10 + (*rest - '0');
+      rest++;
+      digits++;
+    }
+    while (digits < 9)
+    {
+      frac *= 10;
+      digits++;
+    }
+    ns += frac;
+  }
+
+  return ns;
 }
