@@ -7,36 +7,90 @@
 // 
 //
 #include <stdbool.h>                                     // bool
+#include <stdio.h>                                       // snprintf
 #include <string.h>                                      // strcmp
+#include <time.h>                                        // gmtime_r, strftime
 #include "swRest/swRest.h"                            // swRest
 
 #include "kalloc/KAlloc.h"                             // KAlloc
+#include "kalloc/kaAlloc.h"                            // kaAlloc
 #include "kjson/KjNode.h"                               // KjNode
 #include "kjson/kjBuilder.h"                              // kjArray
 #include "kjson/kjChildReplace.h"                       // kjChildReplace
 #include "swNgsild/LdVocab.h"                            // LD_VOCAB_DATASET_ID, LD_VOCAB_SCOPE
 #include "swNgsild/ldTypes.h"                            // ldAttrTypeFromString, ldValueKeyForType
 
+#include "swNgsild/ldIsEntityKeyword.h"                   // ldIsEntityKeyword
 #include "swNgsild/ldEntityToApi.h"                      // Own interface
 
 
 
 // -----------------------------------------------------------------------------
 //
-// isEntityKeyword - check if a field name is an entity-level keyword
+// timestampToIso - convert epoch nanoseconds (long long) to ISO 8601 string
 //
-static bool isEntityKeyword(const char* name)
+// Output: "2026-04-01T12:00:00.000000000Z" (30 chars + null)
+//
+static void timestampToIso(long long nsec, char* buf, int bufSize)
 {
-  if (strcmp(name, "id")                   == 0)  return true;
-  if (strcmp(name, "@id")                  == 0)  return true;
-  if (strcmp(name, "type")                 == 0)  return true;
-  if (strcmp(name, "@type")                == 0)  return true;
-  if (strcmp(name, "@context")             == 0)  return true;
-  if (strcmp(name, LD_VOCAB_SCOPE)         == 0)  return true;
-  if (strcmp(name, LD_VOCAB_CREATED_AT)    == 0)  return true;
-  if (strcmp(name, LD_VOCAB_MODIFIED_AT)   == 0)  return true;
+  time_t     sec  = (time_t)(nsec / 1000000000LL);
+  int        frac = (int)(nsec % 1000000000LL);
+  struct tm  tm;
 
-  return false;
+  gmtime_r(&sec, &tm);
+  int n = strftime(buf, bufSize, "%Y-%m-%dT%H:%M:%S", &tm);
+
+  if (frac == 0)
+  {
+    buf[n++] = 'Z';
+    buf[n]   = 0;
+  }
+  else
+  {
+    snprintf(buf + n, bufSize - n, ".%09d", frac);
+    // Trim trailing zeros
+    int end = strlen(buf) - 1;
+    while (end > n && buf[end] == '0')
+      end--;
+    buf[end + 1] = 'Z';
+    buf[end + 2] = 0;
+  }
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// timestampsToIsoStrings - convert createdAt/modifiedAt from integer to ISO string
+//
+// Walks the children of an object, finds createdAt/modifiedAt integer nodes,
+// and converts them in-place to string nodes.
+//
+static void timestampsToIsoStrings(KjNode* objP, KAlloc* allocP)
+{
+  if (objP == NULL || objP->type != KjObject)
+    return;
+
+  for (KjNode* childP = objP->value.firstChildP; childP != NULL; childP = childP->next)
+  {
+    if (childP->type == KjInt &&
+        (strcmp(childP->name, LD_VOCAB_CREATED_AT)  == 0 ||
+         strcmp(childP->name, LD_VOCAB_MODIFIED_AT) == 0 ||
+         strcmp(childP->name, LD_VOCAB_OBSERVED_AT) == 0 ||
+         strcmp(childP->name, LD_VOCAB_EXPIRES_AT)  == 0))
+    {
+      char  isoBuf[32];
+      timestampToIso(childP->value.i, isoBuf, sizeof(isoBuf));
+
+      char* isoStr = (char*) kaAlloc(allocP, 32);
+      if (isoStr != NULL)
+      {
+        strcpy(isoStr, isoBuf);
+        childP->type    = KjString;
+        childP->value.s = isoStr;
+      }
+    }
+  }
 }
 
 
@@ -134,7 +188,7 @@ void ldEntityToApi(KjNode* entityP, KAlloc* faP)
     KjNode* nextP = childP->next;
 
     // Only process entity-level attribute wrappers (KjObject, non-keyword)
-    if (childP->type != KjObject || childP->name == NULL || isEntityKeyword(childP->name))
+    if (childP->type != KjObject || childP->name == NULL || ldIsEntityKeyword(childP->name))
     {
       childP = nextP;
       continue;
@@ -206,5 +260,22 @@ void ldEntityToApi(KjNode* entityP, KAlloc* faP)
     }
 
     childP = nextP;
+  }
+
+  // Convert integer timestamps to ISO 8601 strings (entity-level + inside each attribute)
+  timestampsToIsoStrings(entityP, faP);
+
+  for (KjNode* attrP = entityP->value.firstChildP; attrP != NULL; attrP = attrP->next)
+  {
+    if (attrP->type == KjObject)
+      timestampsToIsoStrings(attrP, faP);
+    else if (attrP->type == KjArray)
+    {
+      for (KjNode* instP = attrP->value.firstChildP; instP != NULL; instP = instP->next)
+      {
+        if (instP->type == KjObject)
+          timestampsToIsoStrings(instP, faP);
+      }
+    }
   }
 }

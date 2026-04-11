@@ -61,9 +61,10 @@ typedef struct LdQValue
 {
   union
   {
-    double  n;      // LdQNumber
-    char*   s;      // LdQString, LdQDateTime, LdQPattern/LdQNotPattern
-    bool    b;      // LdQBool
+    double     n;      // LdQNumber
+    char*      s;      // LdQString, LdQPattern/LdQNotPattern
+    bool       b;      // LdQBool
+    long long  ns;     // LdQDateTime (nanoseconds since epoch)
 
     struct { double lo; double hi; }                          numRange;   // LdQRange (numeric)
     struct { char*  lo; char*  hi; }                          dateRange;  // LdQRange (date)

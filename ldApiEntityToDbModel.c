@@ -6,8 +6,10 @@
 // Copyright 2026 Seamware
 // 
 //
+#define _GNU_SOURCE
 #include <stdbool.h>                                     // bool
-#include <string.h>                                      // strcmp
+#include <string.h>                                      // strcmp, memset
+#include <time.h>                                        // strptime, timegm
 
 #include "kalloc/KAlloc.h"                             // KAlloc
 #include "kjson/KjNode.h"                               // KjNode
@@ -19,6 +21,7 @@
 #include "swNgsild/LdVocab.h"                            // LD_VOCAB_*
 #include "swNgsild/LdAttrType.h"                         // LdAttrType, LdAttrGeoProperty
 #include "swNgsild/ldAttrTypeDetect.h"                   // ldAttrTypeDetect
+#include "swNgsild/ldIsEntityKeyword.h"                   // ldIsEntityKeyword
 #include "swNgsild/ldApiEntityToDbModel.h"               // Own interface
 
 
@@ -88,6 +91,72 @@ static const char* expandedValueKeys[] =
 
 // -----------------------------------------------------------------------------
 //
+// isoToNanoseconds - convert ISO 8601 date-time string to nanoseconds since epoch
+//
+static long long isoToNanoseconds(const char* iso)
+{
+  struct tm tm;
+  memset(&tm, 0, sizeof(tm));
+  const char* rest = strptime(iso, "%Y-%m-%dT%H:%M:%S", &tm);
+  long long ns = (long long) timegm(&tm) * 1000000000LL;
+  if (rest != NULL && *rest == '.')
+  {
+    rest++;
+    long long frac = 0;
+    int digits = 0;
+    while (*rest >= '0' && *rest <= '9' && digits < 9)
+    {
+      frac = frac * 10 + (*rest - '0');
+      rest++;
+      digits++;
+    }
+    // Pad to 9 digits
+    while (digits < 9) { frac *= 10; digits++; }
+    ns += frac;
+  }
+  return ns;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// temporalPropertiesToNanoseconds - convert observedAt string children to KjInt nanoseconds
+//
+static void temporalPropertiesToNanoseconds(KjNode* attrP)
+{
+  for (KjNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
+  {
+    bool isTemporal = (strcmp(childP->name, LD_VOCAB_OBSERVED_AT) == 0 ||
+                       strcmp(childP->name, LD_VOCAB_EXPIRES_AT)  == 0);
+    if (!isTemporal)
+      continue;
+
+    if (childP->type == KjString)
+    {
+      childP->value.i = isoToNanoseconds(childP->value.s);
+      childP->type = KjInt;
+    }
+    else if (childP->type == KjObject)
+    {
+      // JSON-LD expanded DateTime: {"@value": "2026-...", "@type": "DateTime"}
+      for (KjNode* m = childP->value.firstChildP; m != NULL; m = m->next)
+      {
+        if (strcmp(m->name, "@value") == 0 && m->type == KjString)
+        {
+          childP->value.i = isoToNanoseconds(m->value.s);
+          childP->type = KjInt;
+          break;
+        }
+      }
+    }
+  }
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // normalizeValueKey - rename any HAS_* value key to "value" in an attribute instance
 //
 static void normalizeValueKey(KjNode* attrP)
@@ -98,24 +167,6 @@ static void normalizeValueKey(KjNode* attrP)
   for (KjNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
     for (const char** vk = expandedValueKeys; *vk != NULL; vk++)
       if (strcmp(childP->name, *vk) == 0) { childP->name = "value"; return; }
-}
-
-
-
-// -----------------------------------------------------------------------------
-//
-// isEntityKeyword - check if a field name is an entity-level keyword
-//
-static bool isEntityKeyword(const char* name)
-{
-  if (strcmp(name, "id")            == 0)  return true;
-  if (strcmp(name, "@id")           == 0)  return true;
-  if (strcmp(name, "type")          == 0)  return true;
-  if (strcmp(name, "@type")         == 0)  return true;
-  if (strcmp(name, "@context")      == 0)  return true;
-  if (strcmp(name, LD_VOCAB_SCOPE)  == 0)  return true;
-
-  return false;
 }
 
 
@@ -168,6 +219,7 @@ static bool isCoreAttrTerm(const char* name)
   if (strcmp(name, LD_VOCAB_HAS_OBJECT_LIST)  == 0)  return true;
   if (strcmp(name, LD_VOCAB_HAS_JSON)         == 0)  return true;
   if (strcmp(name, LD_VOCAB_OBSERVED_AT)      == 0)  return true;
+  if (strcmp(name, LD_VOCAB_EXPIRES_AT)       == 0)  return true;
   if (strcmp(name, LD_VOCAB_UNIT_CODE)        == 0)  return true;
   if (strcmp(name, LD_VOCAB_DATASET_ID)       == 0)  return true;
 
@@ -205,6 +257,9 @@ static void attrToDbModel(KjNode* attrP, uint64_t ts, KAlloc* faP)
 
   // Normalize value key: rename any HAS_* expanded IRI to "value" for uniform DB queries
   normalizeValueKey(attrP);
+
+  // Convert observedAt ISO string to nanoseconds integer
+  temporalPropertiesToNanoseconds(attrP);
 
   // Add timestamps to this attribute instance
   timestampSet(attrP, ts, faP);
@@ -292,7 +347,7 @@ void ldApiEntityToDbModel(KjNode* entityP, KAlloc* faP)
   {
     KjNode* nextP = childP->next;
 
-    if (childP->name != NULL && !isEntityKeyword(childP->name))
+    if (childP->name != NULL && !ldIsEntityKeyword(childP->name))
     {
       KjNode* replacementP = NULL;
 
@@ -309,6 +364,42 @@ void ldApiEntityToDbModel(KjNode* entityP, KAlloc* faP)
     }
 
     childP = nextP;
+  }
+
+  // Convert entity-level expiresAt from ISO string to nanoseconds
+  // After JSON-LD expansion, DateTime-typed values may be:
+  //   - KjString: bare string (no expansion of value)
+  //   - KjObject: {"@value": "2026-...", "@type": "DateTime"} (expanded by JSON-LD)
+  for (KjNode* cP = entityP->value.firstChildP; cP != NULL; cP = cP->next)
+  {
+    if (strcmp(cP->name, LD_VOCAB_EXPIRES_AT) != 0)
+      continue;
+
+    if (cP->type == KjString)
+    {
+      cP->value.i = isoToNanoseconds(cP->value.s);
+      cP->type    = KjInt;
+    }
+    else if (cP->type == KjObject)
+    {
+      // Extract @value from the expanded DateTime object
+      KjNode* atValueP = NULL;
+      for (KjNode* m = cP->value.firstChildP; m != NULL; m = m->next)
+      {
+        if (strcmp(m->name, "@value") == 0 && m->type == KjString)
+        {
+          atValueP = m;
+          break;
+        }
+      }
+      if (atValueP != NULL)
+      {
+        // Collapse the object to a plain integer
+        cP->value.i = isoToNanoseconds(atValueP->value.s);
+        cP->type    = KjInt;
+      }
+    }
+    break;
   }
 
   // Add timestamps to the entity itself
