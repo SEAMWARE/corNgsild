@@ -13,6 +13,7 @@
 #include "kalloc/KAlloc.h"                             // KAlloc
 #include "kjson/KjNode.h"                               // KjNode
 #include "kjson/kjLookup.h"                             // kjLookup
+#include "kjson/kjBuilder.h"                            // kjChildRemove
 
 #include "swNgsild/LdOp.h"                               // LdOp
 #include "swNgsild/LdCheck.h"                            // OBJECT_CHECK, STRING_CHECK, ...
@@ -21,30 +22,9 @@
 #include "swNgsild/ldError.h"                            // ldError
 #include "swNgsild/ldAttrTypeDetect.h"                   // ldAttrTypeDetect
 #include "swNgsild/ldCheckAttribute.h"                   // ldCheckAttribute
+#include "swNgsild/ldIsEntityKeyword.h"                   // ldIsEntityKeyword
 #include "swNgsild/ldCheckEntity.h"                      // Own interface
 #include "swNgsild/ldTraceLevels.h"                      // LdTCheckEnt
-
-
-
-// -----------------------------------------------------------------------------
-//
-// isEntityKeyword - check if a field name is an entity-level keyword
-//
-// After expansion, "id" stays as "id" (@id is skipped by expander),
-// "type" stays as "type" (@type is skipped), "@context" is removed from tree.
-// "scope" is expanded to its full IRI.
-//
-static bool isEntityKeyword(const char* name)
-{
-  if (strcmp(name, "id")            == 0)  return true;
-  if (strcmp(name, "@id")           == 0)  return true;
-  if (strcmp(name, "type")          == 0)  return true;
-  if (strcmp(name, "@type")         == 0)  return true;
-  if (strcmp(name, "@context")      == 0)  return true;
-  if (strcmp(name, LD_VOCAB_SCOPE)  == 0)  return true;
-
-  return false;
-}
 
 
 
@@ -84,6 +64,24 @@ static LdAttrType findAttrTypeInDb(KjNode* dbEntityP, const char* attrName)
 
 
 
+
+// -----------------------------------------------------------------------------
+//
+// hasDuplicateSibling - check if a node has a sibling with the same name (before it)
+//
+static bool hasDuplicateSibling(KjNode* container, KjNode* nodeP)
+{
+  for (KjNode* p = container->value.firstChildP; p != nodeP; p = p->next)
+  {
+    if (strcmp(p->name, nodeP->name) == 0)
+      return true;
+  }
+
+  return false;
+}
+
+
+
 // -----------------------------------------------------------------------------
 //
 // ldCheckEntity -
@@ -94,6 +92,11 @@ bool ldCheckEntity(KjNode* entityP, LdOp op, KjNode* dbEntityP, KAlloc* faP)
 
   KLOG_T(LdTCheckEnt, "Checking entity payload for op %s", ldOpToString(op));
 
+  // Silently remove system-managed timestamps if present in payload
+  KjNode* rmP;
+  if ((rmP = kjLookup(entityP, LD_VOCAB_CREATED_AT))  != NULL)  kjChildRemove(entityP, rmP);
+  if ((rmP = kjLookup(entityP, LD_VOCAB_MODIFIED_AT)) != NULL)  kjChildRemove(entityP, rmP);
+
   KjNode*  idNodeP    = NULL;
   KjNode*  typeNodeP  = NULL;
   bool     hasId      = false;
@@ -101,9 +104,23 @@ bool ldCheckEntity(KjNode* entityP, LdOp op, KjNode* dbEntityP, KAlloc* faP)
   bool     hasType    = false;
   bool     hasAtType  = false;
 
-  // First pass: find id and type, check for duplicates
+  // First pass: find id and type, check for duplicates, null values, and attribute names
   for (KjNode* childP = entityP->value.firstChildP; childP != NULL; childP = childP->next)
   {
+    // JSON null is not allowed in NGSI-LD (JSON-LD drops null values)
+    if (childP->type == KjNull)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Value", "JSON null is not allowed in NGSI-LD (field: '%s')", childP->name);
+      return false;
+    }
+
+    // urn:ngsi-ld:null is not allowed as a first-level value in Create Entity
+    if (isCreateOp(op) && childP->type == KjString && strcmp(childP->value.s, "urn:ngsi-ld:null") == 0)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Value", "'urn:ngsi-ld:null' is not allowed as a first-level value in Create Entity (field: '%s')", childP->name);
+      return false;
+    }
+
     if (strcmp(childP->name, "id") == 0)
     {
       DUPLICATE_FLAG_CHECK(hasId, hasAtId, "Duplicate Id", "Duplicate 'id' / '@id' in entity");
@@ -237,8 +254,15 @@ bool ldCheckEntity(KjNode* entityP, LdOp op, KjNode* dbEntityP, KAlloc* faP)
   // Second pass: validate each attribute
   for (KjNode* childP = entityP->value.firstChildP; childP != NULL; childP = childP->next)
   {
-    if (isEntityKeyword(childP->name) == true)
+    if (ldIsEntityKeyword(childP->name) == true)
       continue;
+
+    // Duplicate attribute detection
+    if (hasDuplicateSibling(entityP, childP))
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Duplicate Field", "Duplicated field in entity: '%s'", childP->name);
+      return false;
+    }
 
     LdAttrType dbAttrType = findAttrTypeInDb(dbEntityP, childP->name);
 

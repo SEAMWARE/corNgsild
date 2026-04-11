@@ -202,6 +202,13 @@ bool ldCheckAttribute(KjNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc*
 
   for (KjNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
   {
+    // JSON null not allowed inside attributes (except JsonProperty's "json" value is opaque)
+    if (childP->type == KjNull && attrType != LdAttrJsonProperty)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Value", "JSON null is not allowed in NGSI-LD (attribute '%s', field '%s')", attrP->name, childP->name);
+      return false;
+    }
+
     if (isValueKey(childP->name) == true)
     {
       ++valueKeyCount;
@@ -220,6 +227,16 @@ bool ldCheckAttribute(KjNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc*
   {
     ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Missing Value", "Attribute '%s' of type %s must have '%s'", attrP->name, ldAttrTypeToString(attrType), expectedKey);
     return false;
+  }
+
+  // Check for urn:ngsi-ld:null on value (not allowed in Create Entity)
+  if (valueNodeP->type == KjString && strcmp(valueNodeP->value.s, "urn:ngsi-ld:null") == 0)
+  {
+    if (attrType == LdAttrProperty || attrType == LdAttrRelationship)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Value", "'urn:ngsi-ld:null' is not allowed as the value/object of attribute '%s'", attrP->name);
+      return false;
+    }
   }
 
   // Step 4: Type-specific value validation
