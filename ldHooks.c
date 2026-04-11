@@ -148,7 +148,11 @@ static void ldParseHook(void)
     }
   }
 
-  ldNormalizeInput(swRest.in.requestTree, &swRest.kalloc);
+  // PATCH /entities/{id} is Merge Entity (§ 5.6.17): a plain-object attribute
+  // fragment without type/value is a partial update carrying sub-attributes,
+  // not a simplified Property whose value happens to be an object.
+  bool mergeMode = (swRest.in.verb == SwVerbPatch);
+  ldNormalizeInput(swRest.in.requestTree, &swRest.kalloc, mergeMode);
 }
 
 

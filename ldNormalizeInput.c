@@ -27,25 +27,8 @@
 #include "swNgsild/LdAttrType.h"                         // LdAttrType
 #include "swNgsild/ldTypes.h"                             // ldAttrTypeToString
 #include "swNgsild/ldAttrTypeDetect.h"                   // ldAttrTypeDetect
+#include "swNgsild/ldIsEntityKeyword.h"                   // ldIsEntityKeyword
 #include "swNgsild/LdNormalizeInput.h"                   // Own interface
-
-
-
-// -----------------------------------------------------------------------------
-//
-// isEntityKeyword -
-//
-static bool isEntityKeyword(const char* name)
-{
-  if (strcmp(name, "id")            == 0)  return true;
-  if (strcmp(name, "@id")           == 0)  return true;
-  if (strcmp(name, "type")          == 0)  return true;
-  if (strcmp(name, "@type")         == 0)  return true;
-  if (strcmp(name, "@context")      == 0)  return true;
-  if (strcmp(name, LD_VOCAB_SCOPE)  == 0)  return true;
-
-  return false;
-}
 
 
 
@@ -264,7 +247,7 @@ static void wrapAsGeoProperty(KjNode* entityP, KjNode* childP, KAlloc* faP)
 
 
 
-static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* faP);
+static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* faP, bool mergeMode);
 
 
 
@@ -275,11 +258,25 @@ static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* faP);
 // containerP: the parent node (entity or attribute object) — needed for kjChildReplace
 // attrP:      the attribute node to normalize
 //
-static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* faP)
+static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* faP, bool mergeMode)
 {
   // ---  Scalar children → simplified Property  ---
   if (attrP->type == KjInt || attrP->type == KjFloat || attrP->type == KjString || attrP->type == KjBoolean || attrP->type == KjNull)
   {
+    // Leave NGSI-LD null delete-markers alone: they are never a Property value.
+    // In Merge Entity (PATCH § 5.6.17) they indicate deletion of the named
+    // (sub-)attribute; in Create Entity they are rejected later by ldCheckEntity.
+    if (attrP->type == KjString && strcmp(attrP->value.s, LD_VOCAB_NGSILD_NULL) == 0)
+      return;
+
+    // In merge mode (PATCH), leave simplified scalars untouched. ldEntityMerge
+    // resolves them against the target's existing attribute type so that e.g.
+    // a scalar in the fragment updates the Relationship's object, the
+    // LanguageProperty's languageMap[<lang>], or the Property's value, without
+    // changing the attribute's type.
+    if (mergeMode)
+      return;
+
     wrapAsProperty(containerP, attrP, faP);
     return;
   }
@@ -300,7 +297,7 @@ static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* faP)
       {
         KjNode* elemNextP = elemP->next;
         if (elemP->type == KjObject)
-          normalizeAttr(attrP, elemP, faP);
+          normalizeAttr(attrP, elemP, faP, mergeMode);
         elemP = elemNextP;
       }
     }
@@ -325,7 +322,7 @@ static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* faP)
     {
       KjNode* subNextP = subP->next;
       if (isAttrKeyword(subP->name) == false)
-        normalizeAttr(attrP, subP, faP);
+        normalizeAttr(attrP, subP, faP, mergeMode);
       subP = subNextP;
     }
     return;
@@ -363,7 +360,7 @@ static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* faP)
     {
       KjNode* subNextP = subP->next;
       if (isAttrKeyword(subP->name) == false)
-        normalizeAttr(attrP, subP, faP);
+        normalizeAttr(attrP, subP, faP, mergeMode);
       subP = subNextP;
     }
     return;
@@ -378,6 +375,26 @@ static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* faP)
   }
 
   // Case 4: Plain object value → simplified Property
+  //
+  // In merge mode (PATCH § 5.6.17), a fragment attribute that is a plain
+  // object without type or value key is a partial attribute fragment whose
+  // children are sub-attributes to be merged into an existing attribute. Do
+  // not wrap it — recurse into the sub-attributes so they get normalized in
+  // their own right.
+  //
+  if (mergeMode)
+  {
+    KjNode* subP = attrP->value.firstChildP;
+    while (subP != NULL)
+    {
+      KjNode* subNextP = subP->next;
+      if (isAttrKeyword(subP->name) == false)
+        normalizeAttr(attrP, subP, faP, mergeMode);
+      subP = subNextP;
+    }
+    return;
+  }
+
   wrapAsProperty(containerP, attrP, faP);
 }
 
@@ -387,7 +404,7 @@ static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* faP)
 //
 // ldNormalizeInput -
 //
-void ldNormalizeInput(KjNode* entityP, KAlloc* faP)
+void ldNormalizeInput(KjNode* entityP, KAlloc* faP, bool mergeMode)
 {
   if (entityP == NULL || entityP->type != KjObject)
     return;
@@ -398,8 +415,8 @@ void ldNormalizeInput(KjNode* entityP, KAlloc* faP)
   {
     KjNode* nextP = childP->next;  // save before normalizeAttr may replace childP
 
-    if (isEntityKeyword(childP->name) == false)
-      normalizeAttr(entityP, childP, faP);
+    if (ldIsEntityKeyword(childP->name) == false)
+      normalizeAttr(entityP, childP, faP, mergeMode);
 
     childP = nextP;
   }

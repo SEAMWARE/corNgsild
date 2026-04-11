@@ -38,6 +38,10 @@
 // Entity-level
 #define LD_VOCAB_SCOPE             "https://uri.etsi.org/ngsi-ld/scope"
 
+// NGSI-LD null marker — used in Merge Entity (PATCH) to request member deletion.
+// See ETSI GS CIM 009 v1.9.1 clauses 5.5.12 and 5.6.17.
+#define LD_VOCAB_NGSILD_NULL       "urn:ngsi-ld:null"
+
 // GeoJSON
 #define LD_VOCAB_GEOJSON_PREFIX    "https://purl.org/geojson/vocab#"
 #define LD_VOCAB_GEOJSON_PREFIX_LEN 31

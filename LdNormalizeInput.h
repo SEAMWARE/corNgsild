@@ -9,6 +9,8 @@
 // Copyright 2026 Seamware
 // 
 //
+#include <stdbool.h>                                   // bool
+
 #include "kalloc/KAlloc.h"                             // KAlloc
 #include "kjson/KjNode.h"                               // KjNode
 
@@ -22,6 +24,12 @@
 // ensures every attribute is an KjObject with an explicit "type" field and
 // the appropriate value key (hasValue, hasObject, etc.).
 //
-extern void ldNormalizeInput(KjNode* entityP, KAlloc* faP);
+// mergeMode: set to true for PATCH /entities/{id} (Merge Entity § 5.6.17) so
+// that a fragment attribute which is a plain object without a type/value key
+// is left untouched instead of being wrapped as a simplified Property — in
+// merge semantics, such an object is a partial fragment targeting existing
+// sub-attributes, not a new Property whose value happens to be an object.
+//
+extern void ldNormalizeInput(KjNode* entityP, KAlloc* faP, bool mergeMode);
 
 #endif  // SWNGSILD_LDNORMALIZEINPUT_H_
