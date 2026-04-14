@@ -117,6 +117,20 @@
   | LD_PARAM_OPTIONS      \
   )
 
+#define LD_PARAMS_POST_SUBSCRIPTIONS   0
+
+#define LD_PARAMS_GET_SUBSCRIPTIONS    \
+  ( LD_PARAM_LIMIT       \
+  | LD_PARAM_OFFSET      \
+  | LD_PARAM_COUNT       \
+  )
+
+#define LD_PARAMS_GET_SUBSCRIPTION     0
+
+#define LD_PARAMS_PATCH_SUBSCRIPTION   0
+
+#define LD_PARAMS_DELETE_SUBSCRIPTION  0
+
 
 
 // -----------------------------------------------------------------------------

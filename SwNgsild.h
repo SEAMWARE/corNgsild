@@ -91,6 +91,9 @@ typedef struct SwNgsild
   SwldContext*       contextP;
   const char*        userContextUrl;  // URL from Link header or default context (NULL if none)
 
+  // Response flags
+  bool    rawResponse;  // true => renderHook skips ldEntityToApi (used for subscription responses)
+
   // Tenant (resolved in preServiceHook, opaque to swNgsild)
   void*  tenantP;
 
@@ -127,5 +130,13 @@ extern char* ldDefaultContextUrl;
 // ldParamHook - callback for swRest param validation
 //
 extern void ldParamHook(const char* name, const char* value);
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldContextResolve - resolve @context from Link header or fall back to core context
+//
+extern void ldContextResolve(void);
 
 #endif  // SWNGSILD_SWNGSILD_STATE_H_

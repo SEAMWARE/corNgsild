@@ -18,8 +18,8 @@
 //
 // ldQParse - parse a ?q= expression into an expression tree
 //
-// Returns a faP-allocated LdQNode tree, or NULL on parse error (ldError called).
+// Returns a kaP-allocated LdQNode tree, or NULL on parse error (ldError called).
 //
-extern LdQNode* ldQParse(const char* q, KAlloc* faP);
+extern LdQNode* ldQParse(const char* q, KAlloc* kaP);
 
 #endif  // SWNGSILD_LDQPARSE_H_

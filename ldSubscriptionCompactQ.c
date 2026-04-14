@@ -1,0 +1,40 @@
+//
+// FILE            ldSubscriptionCompactQ.c
+//
+// AUTHOR          Ken Zangelin
+//
+// Copyright 2026 Seamware
+//
+#include <string.h>                                    // strcmp
+
+#include "kjson/KjNode.h"                              // KjNode
+#include "kjson/kjLookup.h"                            // kjLookup
+
+#include "swNgsild/LdQ.h"                              // LdQNode
+#include "swNgsild/ldQRender.h"                        // ldQRender
+#include "swNgsild/ldSubscriptionCompactQ.h"           // Own interface
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldSubscriptionCompactQ -
+//
+void ldSubscriptionCompactQ(KjNode* subP, LdQNode* qExpr, SwldContext* contextP, KAlloc* allocP)
+{
+  if (qExpr == NULL)
+    return;
+
+  // Find q field (try both expanded and compacted key)
+  KjNode* qP = kjLookup(subP, "https://uri.etsi.org/ngsi-ld/q");
+  if (qP == NULL)
+    qP = kjLookup(subP, "q");
+
+  if (qP == NULL || qP->type != KjString)
+    return;
+
+  // Render the pre-parsed tree with compaction against the response @context
+  char* compactedQ = ldQRender(qExpr, contextP, allocP);
+  if (compactedQ != NULL)
+    qP->value.s = compactedQ;
+}

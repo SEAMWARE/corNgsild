@@ -64,6 +64,8 @@
 #define LD_VOCAB_ATTRIBUTES        "https://uri.etsi.org/ngsi-ld/attributes"
 #define LD_VOCAB_URI               "https://uri.etsi.org/ngsi-ld/uri"
 #define LD_VOCAB_ID_PATTERN        "https://uri.etsi.org/ngsi-ld/idPattern"
+#define LD_VOCAB_IS_ACTIVE         "https://uri.etsi.org/ngsi-ld/isActive"
+#define LD_VOCAB_STATUS            "https://uri.etsi.org/ngsi-ld/status"
 
 // Registration fields
 #define LD_VOCAB_INFORMATION       "https://uri.etsi.org/ngsi-ld/information"

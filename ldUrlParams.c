@@ -47,6 +47,48 @@ __thread SwNgsild swNgsild;
 
 // -----------------------------------------------------------------------------
 //
+// -----------------------------------------------------------------------------
+//
+// ldContextResolve - resolve @context from Link header or fall back to core context
+//
+// Called lazily for GET requests (no payload → parseHook didn't set contextP).
+// Also callable directly from service routines that need the context before
+// the param hook runs (e.g. GET with zero URL params).
+//
+void ldContextResolve(void)
+{
+  if (swNgsild.contextP != NULL)
+    return;
+
+  KAlloc* faP = &swRest.kalloc;
+
+  for (int i = 0; i < swRest.in.httpHeaderCount; i++)
+  {
+    if (strcasecmp(swRest.in.httpHeaderV[i].key, "Link") == 0 &&
+        strstr(swRest.in.httpHeaderV[i].value, "json-ld#context") != NULL)
+    {
+      char* hdr   = swRest.in.httpHeaderV[i].value;
+      char* start = strchr(hdr, '<');
+      char* end   = (start != NULL) ? strchr(start, '>') : NULL;
+
+      if (start != NULL && end != NULL)
+      {
+        start++;
+        *end = 0;
+        swNgsild.contextP = swldContextFromUrl(start, faP);
+        *end = '>';
+      }
+
+      break;
+    }
+  }
+
+  if (swNgsild.contextP == NULL)
+    swNgsild.contextP = swldCoreContext();
+}
+
+
+
 // ldParamHook - callback for swRest param validation
 //
 void ldParamHook(const char* name, const char* value)
@@ -54,36 +96,9 @@ void ldParamHook(const char* name, const char* value)
   KAlloc* faP = &swRest.kalloc;
 
   //
-  // Lazy context resolution: if parseHook didn't set contextP (GET requests
-  // have no payload), resolve from the Link header or fall back to core context.
+  // Lazy context resolution
   //
-  if (swNgsild.contextP == NULL)
-  {
-    for (int i = 0; i < swRest.in.httpHeaderCount; i++)
-    {
-      if (strcasecmp(swRest.in.httpHeaderV[i].key, "Link") == 0 &&
-          strstr(swRest.in.httpHeaderV[i].value, "json-ld#context") != NULL)
-      {
-        // Extract URL from: <URL>; rel="http://www.w3.org/ns/json-ld#context"
-        char* hdr   = swRest.in.httpHeaderV[i].value;
-        char* start = strchr(hdr, '<');
-        char* end   = (start != NULL) ? strchr(start, '>') : NULL;
-
-        if (start != NULL && end != NULL)
-        {
-          start++;
-          *end = 0;
-          swNgsild.contextP = swldContextFromUrl(start, faP);
-          *end = '>';
-        }
-
-        break;
-      }
-    }
-
-    if (swNgsild.contextP == NULL)
-      swNgsild.contextP = swldCoreContext();
-  }
+  ldContextResolve();
 
   if (strcmp(name, "id") == 0)
   {

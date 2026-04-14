@@ -148,11 +148,22 @@ static void ldParseHook(void)
     }
   }
 
-  // PATCH /entities/{id} is Merge Entity (§ 5.6.17): a plain-object attribute
-  // fragment without type/value is a partial update carrying sub-attributes,
-  // not a simplified Property whose value happens to be an object.
-  bool mergeMode = (swRest.in.verb == SwVerbPatch);
-  ldNormalizeInput(swRest.in.requestTree, &swRest.kalloc, mergeMode);
+  //
+  // Normalize input: convert simplified/concise NGSI-LD to normalized format.
+  // Only applies to entity payloads — subscription and registration payloads
+  // are passed through as-is.
+  //
+  bool isEntityPayload = (swRest.in.urlPath != NULL
+                          && strncmp(swRest.in.urlPath, "/ngsi-ld/v1/entities", 20) == 0);
+
+  if (isEntityPayload)
+  {
+    // PATCH /entities/{id} is Merge Entity (§ 5.6.17): a plain-object attribute
+    // fragment without type/value is a partial update carrying sub-attributes,
+    // not a simplified Property whose value happens to be an object.
+    bool mergeMode = (swRest.in.verb == SwVerbPatch);
+    ldNormalizeInput(swRest.in.requestTree, &swRest.kalloc, mergeMode);
+  }
 }
 
 
@@ -231,47 +242,53 @@ static void ldRenderHook(void)
 {
   KjNode* treeP = swRest.out.responseTree;
 
-  // Apply datasetId filtering on storage-format tree (before ldEntityToApi)
-  if (swNgsild.datasetIdV != NULL)
+  //
+  // Entity-specific transforms (skip for rawResponse, e.g. subscription responses)
+  //
+  if (!swNgsild.rawResponse)
   {
+    // Apply datasetId filtering on storage-format tree (before ldEntityToApi)
+    if (swNgsild.datasetIdV != NULL)
+    {
+      if (treeP != NULL && treeP->type == KjArray)
+      {
+        for (KjNode* itemP = treeP->value.firstChildP; itemP != NULL; itemP = itemP->next)
+          filterDatasetId(itemP, swNgsild.datasetIdV);
+      }
+      else
+      {
+        filterDatasetId(treeP, swNgsild.datasetIdV);
+      }
+    }
+
+    // Convert storage format to API format
     if (treeP != NULL && treeP->type == KjArray)
     {
       for (KjNode* itemP = treeP->value.firstChildP; itemP != NULL; itemP = itemP->next)
-        filterDatasetId(itemP, swNgsild.datasetIdV);
+        ldEntityToApi(itemP, &swRest.kalloc);
     }
     else
     {
-      filterDatasetId(treeP, swNgsild.datasetIdV);
+      ldEntityToApi(treeP, &swRest.kalloc);
     }
-  }
 
-  // Convert storage format to API format
-  if (treeP != NULL && treeP->type == KjArray)
-  {
-    for (KjNode* itemP = treeP->value.firstChildP; itemP != NULL; itemP = itemP->next)
-      ldEntityToApi(itemP, &swRest.kalloc);
-  }
-  else
-  {
-    ldEntityToApi(treeP, &swRest.kalloc);
-  }
+    if (swNgsild.sysAttrs == false)
+      ldStripSysAttrs(swRest.out.responseTree);
 
-  if (swNgsild.sysAttrs == false)
-    ldStripSysAttrs(swRest.out.responseTree);
-
-  // Apply representation format (simplified/concise/normalized)
-  if (swNgsild.format == LdFormatSimplified || swNgsild.format == LdFormatConcise)
-  {
-    void (*formatFn)(KjNode*, KAlloc*) = (swNgsild.format == LdFormatSimplified) ? (void(*)(KjNode*, KAlloc*)) ldToSimplified : (void(*)(KjNode*, KAlloc*)) ldToConcise;
-
-    if (treeP != NULL && treeP->type == KjArray)
+    // Apply representation format (simplified/concise/normalized)
+    if (swNgsild.format == LdFormatSimplified || swNgsild.format == LdFormatConcise)
     {
-      for (KjNode* itemP = treeP->value.firstChildP; itemP != NULL; itemP = itemP->next)
-        formatFn(itemP, &swRest.kalloc);
-    }
-    else
-    {
-      formatFn(treeP, &swRest.kalloc);
+      void (*formatFn)(KjNode*, KAlloc*) = (swNgsild.format == LdFormatSimplified) ? (void(*)(KjNode*, KAlloc*)) ldToSimplified : (void(*)(KjNode*, KAlloc*)) ldToConcise;
+
+      if (treeP != NULL && treeP->type == KjArray)
+      {
+        for (KjNode* itemP = treeP->value.firstChildP; itemP != NULL; itemP = itemP->next)
+          formatFn(itemP, &swRest.kalloc);
+      }
+      else
+      {
+        formatFn(treeP, &swRest.kalloc);
+      }
     }
   }
 

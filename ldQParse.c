@@ -39,7 +39,7 @@
 //
 // Forward declarations
 //
-static LdQNode* parseOr(const char** pp, KAlloc* faP);
+static LdQNode* parseOr(const char** pp, KAlloc* kaP);
 
 
 
@@ -59,15 +59,28 @@ static void skipWs(const char** pp)
 //
 // expandAttr - expand an attribute name via the request's @context
 //
-static char* expandAttr(const char* name, int len, KAlloc* faP)
+static char* expandAttr(const char* name, int len, KAlloc* kaP)
 {
   // Make a NUL-terminated copy
-  char* buf = (char*) kaAlloc(faP, len + 1);
+  char* buf = (char*) kaAlloc(kaP, len + 1);
+  if (buf == NULL)
+    return NULL;
   memcpy(buf, name, len);
   buf[len] = 0;
 
-  char* expanded = swldExpand(swNgsild.contextP, buf, faP, NULL, NULL);
-  return (expanded != NULL) ? expanded : buf;
+  // Already a full IRI — don't expand again
+  if (swldAlreadyExpanded(buf))
+    return buf;
+
+  char* expanded = swldExpand(swNgsild.contextP, buf, kaP, NULL, NULL);
+
+  // swldExpand may return a pointer into the context structure (itemP->id),
+  // which lives in the request allocator.  The q-expr tree persists in the
+  // subscription cache, so copy the result into kaP (the cache allocator).
+  if (expanded != NULL && expanded != buf)
+    return kaStrdup(kaP, expanded);
+
+  return buf;
 }
 
 
@@ -120,7 +133,7 @@ static int scanValueLen(const char* p)
 //
 // Items can be quoted strings, numbers, or booleans (all same type expected).
 //
-static bool parseValueList(const char* raw, int rawLen, LdQTerm* term, KAlloc* faP)
+static bool parseValueList(const char* raw, int rawLen, LdQTerm* term, KAlloc* kaP)
 {
   // Count commas to determine size
   int count = 1;
@@ -131,7 +144,7 @@ static bool parseValueList(const char* raw, int rawLen, LdQTerm* term, KAlloc* f
       count++;
   }
 
-  char** values  = (char**) kaAlloc(faP, count * sizeof(char*));
+  char** values  = (char**) kaAlloc(kaP, count * sizeof(char*));
   int    ix      = 0;
   const char* p  = raw;
   const char* end = raw + rawLen;
@@ -189,7 +202,7 @@ static bool parseValueList(const char* raw, int rawLen, LdQTerm* term, KAlloc* f
       }
     }
 
-    char* item = (char*) kaAlloc(faP, itemLen + 1);
+    char* item = (char*) kaAlloc(kaP, itemLen + 1);
     memcpy(item, itemStart, itemLen);
     item[itemLen] = 0;
     values[ix++] = item;
@@ -213,16 +226,16 @@ static bool parseValueList(const char* raw, int rawLen, LdQTerm* term, KAlloc* f
 //
 // parseRange - parse a range value: lo..hi
 //
-static bool parseRange(const char* raw, int rawLen, const char* dotdot, LdQTerm* term, KAlloc* faP)
+static bool parseRange(const char* raw, int rawLen, const char* dotdot, LdQTerm* term, KAlloc* kaP)
 {
   int loLen = (int)(dotdot - raw);
   int hiLen = rawLen - loLen - 2;  // skip ".."
 
-  char* lo = (char*) kaAlloc(faP, loLen + 1);
+  char* lo = (char*) kaAlloc(kaP, loLen + 1);
   memcpy(lo, raw, loLen);
   lo[loLen] = 0;
 
-  char* hi = (char*) kaAlloc(faP, hiLen + 1);
+  char* hi = (char*) kaAlloc(kaP, hiLen + 1);
   memcpy(hi, dotdot + 2, hiLen);
   hi[hiLen] = 0;
 
@@ -278,7 +291,7 @@ static long long isoToNanoseconds(const char* iso)
 //
 // parseTerm - parse: attrName [operator value]
 //
-static LdQNode* parseTerm(const char** pp, KAlloc* faP)
+static LdQNode* parseTerm(const char** pp, KAlloc* kaP)
 {
   const char* p = *pp;
 
@@ -304,9 +317,9 @@ static LdQNode* parseTerm(const char** pp, KAlloc* faP)
   //
   // Allocate the node
   //
-  LdQNode* nodeP = (LdQNode*) kaAlloc(faP, sizeof(LdQNode));
+  LdQNode* nodeP = (LdQNode*) kaAlloc(kaP, sizeof(LdQNode));
   nodeP->type = LdQTermNode;
-  nodeP->term.attr = expandAttr(attrStart, attrLen, faP);
+  nodeP->term.attr = expandAttr(attrStart, attrLen, kaP);
 
   //
   // Detect operator
@@ -387,7 +400,7 @@ static LdQNode* parseTerm(const char** pp, KAlloc* faP)
     if (*p == '"')
       p++;
 
-    char* s = (char*) kaAlloc(faP, sLen + 1);
+    char* s = (char*) kaAlloc(kaP, sLen + 1);
     memcpy(s, sStart, sLen);
     s[sLen] = 0;
 
@@ -399,7 +412,7 @@ static LdQNode* parseTerm(const char** pp, KAlloc* faP)
       // Reparse from original position as a value list
       const char* listStart = sStart - 1;  // back to opening quote
       int listLen = scanValueLen(listStart);
-      parseValueList(listStart, listLen, &nodeP->term, faP);
+      parseValueList(listStart, listLen, &nodeP->term, kaP);
       *pp = listStart + listLen;
       return nodeP;
     }
@@ -426,7 +439,7 @@ static LdQNode* parseTerm(const char** pp, KAlloc* faP)
     int rLen = scanValueLen(p);
     p += rLen;
 
-    char* s = (char*) kaAlloc(faP, rLen + 1);
+    char* s = (char*) kaAlloc(kaP, rLen + 1);
     memcpy(s, rStart, rLen);
     s[rLen] = 0;
 
@@ -456,16 +469,16 @@ static LdQNode* parseTerm(const char** pp, KAlloc* faP)
 
     if (dotdot != NULL)
     {
-      parseRange(vStart, vLen, dotdot, &nodeP->term, faP);
+      parseRange(vStart, vLen, dotdot, &nodeP->term, kaP);
     }
     else if (strchr(vStart, ',') != NULL && (int)(strchr(vStart, ',') - vStart) < vLen && (nodeP->term.op == LdQEqual || nodeP->term.op == LdQUnequal))
     {
       // Value list (comma-separated)
-      parseValueList(vStart, vLen, &nodeP->term, faP);
+      parseValueList(vStart, vLen, &nodeP->term, kaP);
     }
     else if (looksLikeDateTime(vStart))
     {
-      char* s = (char*) kaAlloc(faP, vLen + 1);
+      char* s = (char*) kaAlloc(kaP, vLen + 1);
       memcpy(s, vStart, vLen);
       s[vLen] = 0;
 
@@ -491,7 +504,7 @@ static LdQNode* parseTerm(const char** pp, KAlloc* faP)
     {
       if (strcmp(nodeP->term.attr, swNgsild.expandValuesV[ix]) == 0)
       {
-        char* expanded = swldExpand(swNgsild.contextP, nodeP->term.value.s, faP, NULL, NULL);
+        char* expanded = swldExpand(swNgsild.contextP, nodeP->term.value.s, kaP, NULL, NULL);
         if (expanded != NULL)
           nodeP->term.value.s = expanded;
         break;
@@ -508,14 +521,14 @@ static LdQNode* parseTerm(const char** pp, KAlloc* faP)
 //
 // parseAtom - parse: '(' expr ')' | term
 //
-static LdQNode* parseAtom(const char** pp, KAlloc* faP)
+static LdQNode* parseAtom(const char** pp, KAlloc* kaP)
 {
   skipWs(pp);
 
   if (**pp == '(')
   {
     (*pp)++;  // skip '('
-    LdQNode* inner = parseOr(pp, faP);
+    LdQNode* inner = parseOr(pp, kaP);
 
     if (inner == NULL)
       return NULL;
@@ -528,7 +541,7 @@ static LdQNode* parseAtom(const char** pp, KAlloc* faP)
     return inner;
   }
 
-  return parseTerm(pp, faP);
+  return parseTerm(pp, kaP);
 }
 
 
@@ -537,12 +550,12 @@ static LdQNode* parseAtom(const char** pp, KAlloc* faP)
 //
 // groupAdd - add a child to an AND/OR group, growing the array if needed
 //
-static void groupAdd(LdQNode* groupP, LdQNode* childP, KAlloc* faP)
+static void groupAdd(LdQNode* groupP, LdQNode* childP, KAlloc* kaP)
 {
   if (groupP->group.count >= groupP->group.allocated)
   {
     int newAlloc = (groupP->group.allocated == 0) ? 4 : groupP->group.allocated * 2;
-    LdQNode** newV = (LdQNode**) kaAlloc(faP, newAlloc * sizeof(LdQNode*));
+    LdQNode** newV = (LdQNode**) kaAlloc(kaP, newAlloc * sizeof(LdQNode*));
 
     if (groupP->group.childV != NULL)
       memcpy(newV, groupP->group.childV, groupP->group.count * sizeof(LdQNode*));
@@ -560,9 +573,9 @@ static void groupAdd(LdQNode* groupP, LdQNode* childP, KAlloc* faP)
 //
 // parseAnd - parse: atom *(';' atom)
 //
-static LdQNode* parseAnd(const char** pp, KAlloc* faP)
+static LdQNode* parseAnd(const char** pp, KAlloc* kaP)
 {
-  LdQNode* left = parseAtom(pp, faP);
+  LdQNode* left = parseAtom(pp, kaP);
 
   if (left == NULL)
     return NULL;
@@ -573,23 +586,23 @@ static LdQNode* parseAnd(const char** pp, KAlloc* faP)
     return left;  // single atom, no AND
 
   // Build AND group
-  LdQNode* andP = (LdQNode*) kaAlloc(faP, sizeof(LdQNode));
+  LdQNode* andP = (LdQNode*) kaAlloc(kaP, sizeof(LdQNode));
   andP->type              = LdQAndNode;
   andP->group.childV      = NULL;
   andP->group.count       = 0;
   andP->group.allocated   = 0;
 
-  groupAdd(andP, left, faP);
+  groupAdd(andP, left, kaP);
 
   while (**pp == ';')
   {
     (*pp)++;  // skip ';'
-    LdQNode* right = parseAtom(pp, faP);
+    LdQNode* right = parseAtom(pp, kaP);
 
     if (right == NULL)
       return NULL;
 
-    groupAdd(andP, right, faP);
+    groupAdd(andP, right, kaP);
     skipWs(pp);
   }
 
@@ -602,9 +615,9 @@ static LdQNode* parseAnd(const char** pp, KAlloc* faP)
 //
 // parseOr - parse: andExpr *('|' andExpr)
 //
-static LdQNode* parseOr(const char** pp, KAlloc* faP)
+static LdQNode* parseOr(const char** pp, KAlloc* kaP)
 {
-  LdQNode* left = parseAnd(pp, faP);
+  LdQNode* left = parseAnd(pp, kaP);
 
   if (left == NULL)
     return NULL;
@@ -615,23 +628,23 @@ static LdQNode* parseOr(const char** pp, KAlloc* faP)
     return left;  // single andExpr, no OR
 
   // Build OR group
-  LdQNode* orP = (LdQNode*) kaAlloc(faP, sizeof(LdQNode));
+  LdQNode* orP = (LdQNode*) kaAlloc(kaP, sizeof(LdQNode));
   orP->type              = LdQOrNode;
   orP->group.childV      = NULL;
   orP->group.count       = 0;
   orP->group.allocated   = 0;
 
-  groupAdd(orP, left, faP);
+  groupAdd(orP, left, kaP);
 
   while (**pp == '|')
   {
     (*pp)++;  // skip '|'
-    LdQNode* right = parseAnd(pp, faP);
+    LdQNode* right = parseAnd(pp, kaP);
 
     if (right == NULL)
       return NULL;
 
-    groupAdd(orP, right, faP);
+    groupAdd(orP, right, kaP);
     skipWs(pp);
   }
 
@@ -644,14 +657,14 @@ static LdQNode* parseOr(const char** pp, KAlloc* faP)
 //
 // ldQParse - parse a ?q= expression into an expression tree
 //
-LdQNode* ldQParse(const char* q, KAlloc* faP)
+LdQNode* ldQParse(const char* q, KAlloc* kaP)
 {
   if (q == NULL || q[0] == 0)
     return NULL;
 
   const char* p = q;
 
-  LdQNode* root = parseOr(&p, faP);
+  LdQNode* root = parseOr(&p, kaP);
 
   if (root == NULL)
     return NULL;
