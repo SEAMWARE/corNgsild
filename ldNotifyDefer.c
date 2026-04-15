@@ -24,13 +24,14 @@
 typedef struct LdNotifyPending
 {
   bool            active;
+  bool            hasReport;    // true if report was non-NULL at defer time
   LdSubCache*     cacheP;
   KjNode*         entityP;
   LdNotifyOp      op;
-  LdMergeReport*  reportP;
+  LdMergeReport   report;       // copied by value — caller's stack frame is gone by dispatch time
 } LdNotifyPending;
 
-static __thread LdNotifyPending pending = { false, NULL, NULL, 0, NULL };
+static __thread LdNotifyPending pending;
 
 
 
@@ -40,11 +41,13 @@ static __thread LdNotifyPending pending = { false, NULL, NULL, 0, NULL };
 //
 void ldNotifyDefer(LdSubCache* cacheP, KjNode* entityP, LdNotifyOp op, LdMergeReport* reportP)
 {
-  pending.active  = true;
-  pending.cacheP  = cacheP;
-  pending.entityP = entityP;
-  pending.op      = op;
-  pending.reportP = reportP;
+  pending.active    = true;
+  pending.cacheP    = cacheP;
+  pending.entityP   = entityP;
+  pending.op        = op;
+  pending.hasReport = (reportP != NULL);
+  if (reportP != NULL)
+    pending.report = *reportP;  // struct copy — the referenced KjNode* changes tree is arena-allocated and still valid at dispatch
 }
 
 
@@ -58,10 +61,11 @@ void ldNotifyDispatchPending(void)
   if (!pending.active)
     return;
 
-  ldSubscriptionNotify(pending.cacheP, pending.entityP, pending.op, pending.reportP);
+  LdMergeReport* reportP = pending.hasReport ? &pending.report : NULL;
+  ldSubscriptionNotify(pending.cacheP, pending.entityP, pending.op, reportP);
 
-  pending.active  = false;
-  pending.cacheP  = NULL;
-  pending.entityP = NULL;
-  pending.reportP = NULL;
+  pending.active    = false;
+  pending.hasReport = false;
+  pending.cacheP    = NULL;
+  pending.entityP   = NULL;
 }
