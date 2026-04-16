@@ -209,8 +209,7 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
   }
   else
   {
-    KjNode* qNodeP = kjLookup(itemP->subTree, "https://uri.etsi.org/ngsi-ld/q");
-    if (qNodeP == NULL) qNodeP = kjLookup(itemP->subTree, "q");
+    KjNode* qNodeP = kjLookup(itemP->subTree, "q");
     if (qNodeP != NULL && qNodeP->type == KjString)
       itemP->qExpr = ldQParse(qNodeP->value.s, &cacheP->alloc);
   }
@@ -218,19 +217,13 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
   //
   // geoQ: { georel: "near;maxDistance==1000", geometry: "Point", coordinates: "[-3.7,40.4]", geoproperty: "location" }
   //
-  KjNode* geoQP = kjLookup(itemP->subTree, "https://uri.etsi.org/ngsi-ld/geoQ");
-  if (geoQP == NULL) geoQP = kjLookup(itemP->subTree, "geoQ");
+  KjNode* geoQP = kjLookup(itemP->subTree, "geoQ");
   if (geoQP != NULL && geoQP->type == KjObject)
   {
-    KjNode* georelP   = kjLookup(geoQP, "https://uri.etsi.org/ngsi-ld/georel");
-    KjNode* geomP     = kjLookup(geoQP, "https://purl.org/geojson/vocab#geometry");
-    KjNode* coordsP   = kjLookup(geoQP, "https://purl.org/geojson/vocab#coordinates");
-    KjNode* geopropP  = kjLookup(geoQP, "https://uri.etsi.org/ngsi-ld/geoproperty");
-
-    if (georelP == NULL) georelP   = kjLookup(geoQP, "georel");
-    if (geomP == NULL)   geomP     = kjLookup(geoQP, "geometry");
-    if (coordsP == NULL) coordsP   = kjLookup(geoQP, "coordinates");
-    if (geopropP == NULL) geopropP = kjLookup(geoQP, "geoproperty");
+    KjNode* georelP   = kjLookup(geoQP, "georel");
+    KjNode* geomP     = kjLookup(geoQP, "geometry");
+    KjNode* coordsP   = kjLookup(geoQP, "coordinates");
+    KjNode* geopropP  = kjLookup(geoQP, "geoproperty");
 
     if (georelP != NULL && georelP->type == KjString)
       itemP->geoRel = ldGeoRelParse(georelP->value.s, &cacheP->alloc);
@@ -255,11 +248,11 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
     }
   }
 
-  KjNode* scopeQP = kjLookup(itemP->subTree, "https://uri.etsi.org/ngsi-ld/scopeQ");
+  KjNode* scopeQP = kjLookup(itemP->subTree, "scopeQ");
   if (scopeQP != NULL && scopeQP->type == KjString)
     itemP->scopeExpr = ldScopeExprParse(scopeQP->value.s, &cacheP->alloc);
 
-  KjNode* triggerP = kjLookup(itemP->subTree, "https://uri.etsi.org/ngsi-ld/notificationTrigger");
+  KjNode* triggerP = kjLookup(itemP->subTree, "notificationTrigger");
   if (triggerP != NULL && triggerP->type == KjArray)
   {
     itemP->triggerMask = 0;
@@ -295,13 +288,11 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
     }
   }
 
-  KjNode* expiresP = kjLookup(itemP->subTree, "https://uri.etsi.org/ngsi-ld/expiresAt");
-  if (expiresP == NULL) expiresP = kjLookup(itemP->subTree, "expiresAt");
+  KjNode* expiresP = kjLookup(itemP->subTree, LD_VOCAB_EXPIRES_AT);
   if (expiresP != NULL && expiresP->type == KjString)
     itemP->expiresAt = ldIsoToNanoseconds(expiresP->value.s);
 
-  KjNode* formatP = (notifP != NULL) ? kjLookup(notifP, "https://uri.etsi.org/ngsi-ld/format") : NULL;
-  if (formatP == NULL && notifP != NULL) formatP = kjLookup(notifP, "format");
+  KjNode* formatP = (notifP != NULL) ? kjLookup(notifP, LD_VOCAB_FORMAT) : NULL;
   itemP->format = (formatP != NULL && formatP->type == KjString) ? formatP->value.s : NULL;
 
   KjNode* jcP = kjLookup(itemP->subTree, "jsonldContext");

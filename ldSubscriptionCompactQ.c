@@ -25,10 +25,7 @@ void ldSubscriptionCompactQ(KjNode* subP, LdQNode* qExpr, SwldContext* contextP,
   if (qExpr == NULL)
     return;
 
-  // Find q field (try both expanded and compacted key)
-  KjNode* qP = kjLookup(subP, "https://uri.etsi.org/ngsi-ld/q");
-  if (qP == NULL)
-    qP = kjLookup(subP, "q");
+  KjNode* qP = kjLookup(subP, "q");
 
   if (qP == NULL || qP->type != KjString)
     return;
