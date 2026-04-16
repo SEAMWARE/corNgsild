@@ -17,6 +17,7 @@
 #include "kjson/kjFree.h"                              // kjFree
 #include "kjson/kjLookup.h"                            // kjLookup
 
+#include "kalloc/KAlloc.h"                              // KAlloc
 #include "swJsonld/swldExpand.h"                       // swldExpand, swldAlreadyExpanded
 #include "swNgsild/LdVocab.h"                          // LD_VOCAB_*
 #include "swNgsild/LdRegCache.h"                       // LdRegCache, LdRegCacheItem
@@ -102,7 +103,9 @@ static LdRegEntityInfo* entityInfoExtract(KjNode* entP)
 // stringArrayExtract - build NULL-terminated string array from a KjArray
 //
 // Returns NULL if input is absent or empty. Strings are borrowed pointers
-// into the cloned regTree.
+// into the cloned regTree. Use this for verbatim string lists (operations,
+// etc.). For attribute-name lists (propertyNames / relationshipNames) use
+// attrIRIArrayExtract which also vocab-expands each entry.
 //
 static char** stringArrayExtract(KjNode* arrP)
 {
@@ -134,9 +137,41 @@ static char** stringArrayExtract(KjNode* arrP)
 
 // -----------------------------------------------------------------------------
 //
+// attrIRIArrayExtract - like stringArrayExtract, but vocab-expands each entry
+//
+// swldExpandTree intentionally does NOT perform @type:@vocab/@type:@id value
+// coercion (that would silently launder sketchy user input past validators
+// that run post-expansion — see swldExpandTree.c's comment). So values
+// inside arrays like propertyNames / relationshipNames stay short after
+// parseHook. Downstream matching against entity attribute names (which
+// ARE stored fully-expanded) needs the IRI form, so we expand here at
+// cache-ingest time, once. Mirrors ldSubCache.c's notifAttrsV expansion.
+//
+static char** attrIRIArrayExtract(KjNode* arrP, KAlloc* allocP)
+{
+  char** v = stringArrayExtract(arrP);
+  if (v == NULL)
+    return NULL;
+
+  for (int i = 0; v[i] != NULL; i++)
+  {
+    if (swldAlreadyExpanded(v[i]) == false)
+    {
+      char* expanded = swldExpand(NULL, v[i], allocP, NULL, NULL);
+      if (expanded != NULL)
+        v[i] = expanded;
+    }
+  }
+  return v;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // infoListExtract - parse the information[] array into a linked list
 //
-static LdRegInfo* infoListExtract(KjNode* infoArrayP)
+static LdRegInfo* infoListExtract(KjNode* infoArrayP, KAlloc* allocP)
 {
   if (infoArrayP == NULL || infoArrayP->type != KjArray)
     return NULL;
@@ -177,8 +212,8 @@ static LdRegInfo* infoListExtract(KjNode* infoArrayP)
       riP->entityInfoV = eHead;
     }
 
-    riP->propertyNamesV     = stringArrayExtract(propsP);
-    riP->relationshipNamesV = stringArrayExtract(relsP);
+    riP->propertyNamesV     = attrIRIArrayExtract(propsP, allocP);
+    riP->relationshipNamesV = attrIRIArrayExtract(relsP,  allocP);
 
     if (tail == NULL)
       head = riP;
@@ -290,7 +325,7 @@ LdRegCacheItem* ldRegCacheItemAdd(LdRegCache* cacheP, KjNode* regTree)
 
   // Pre-parse RegistrationInfo[] for matching
   KjNode* infoP = kjLookup(itemP->regTree, LD_VOCAB_INFORMATION);
-  itemP->infoV = infoListExtract(infoP);
+  itemP->infoV = infoListExtract(infoP, &cacheP->alloc);
 
   // mode (default inclusive)
   KjNode* modeP = kjLookup(itemP->regTree, LD_VOCAB_MODE);
