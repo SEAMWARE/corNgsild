@@ -148,6 +148,29 @@
 #define LD_PARAMS_POST_JSONLD_CONTEXTS 0
 #define LD_PARAMS_DELETE_JSONLD_CONTEXT  ( LD_PARAM_RELOAD )
 
+#define LD_PARAMS_POST_CSOURCE_REGISTRATIONS  0
+
+#define LD_PARAMS_GET_CSOURCE_REGISTRATIONS   \
+  ( LD_PARAM_TYPE         \
+  | LD_PARAM_ID           \
+  | LD_PARAM_ID_PATTERN   \
+  | LD_PARAM_ATTRS        \
+  | LD_PARAM_Q            \
+  | LD_PARAM_GEOMETRY     \
+  | LD_PARAM_COORDINATES  \
+  | LD_PARAM_GEOREL       \
+  | LD_PARAM_GEOPROPERTY  \
+  | LD_PARAM_CSF          \
+  | LD_PARAM_SCOPE_Q      \
+  | LD_PARAM_LIMIT        \
+  | LD_PARAM_OFFSET       \
+  | LD_PARAM_COUNT        \
+  )
+
+#define LD_PARAMS_GET_CSOURCE_REGISTRATION    0
+#define LD_PARAMS_PATCH_CSOURCE_REGISTRATION  0
+#define LD_PARAMS_DELETE_CSOURCE_REGISTRATION 0
+
 
 
 // -----------------------------------------------------------------------------
