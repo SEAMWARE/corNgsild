@@ -131,6 +131,19 @@ extern char* ldDefaultContextUrl;
 
 // -----------------------------------------------------------------------------
 //
+// ldCsourceAliasBase - per-broker contextSourceAlias base (NGSI-LD § 5.7.5 /
+// RFC 7230 pseudonym), used in Via headers for distributed-op loop detection.
+// Set by --csourceAlias CLI arg, defaults to "<exe-basename>:<port>".
+//
+// The per-tenant alias used in Via headers is derived from this base; see
+// ldCsourceAliasForTenant.
+//
+extern const char* ldCsourceAliasBase;
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldParamHook - callback for swRest param validation
 //
 extern void ldParamHook(const char* name, const char* value);

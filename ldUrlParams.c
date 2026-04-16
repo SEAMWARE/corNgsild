@@ -32,8 +32,9 @@
 //
 // ldLocalOnly - global flag set by --localOnly CLI arg (no distributed ops)
 //
-bool  ldLocalOnly        = false;
-char* ldDefaultContextUrl = NULL;
+bool        ldLocalOnly         = false;
+char*       ldDefaultContextUrl  = NULL;
+const char* ldCsourceAliasBase   = NULL;
 
 
 
