@@ -55,6 +55,8 @@
 #define LD_PARAM_JSON_KEYS             (1ULL << 33)
 #define LD_PARAM_GEOMETRY_PROPERTY     (1ULL << 34)
 #define LD_PARAM_OBSERVED_AT           (1ULL << 35)
+#define LD_PARAM_DETAILS               (1ULL << 36)
+#define LD_PARAM_KIND                  (1ULL << 37)
 
 
 
@@ -132,6 +134,16 @@
 #define LD_PARAMS_PATCH_SUBSCRIPTION   0
 
 #define LD_PARAMS_DELETE_SUBSCRIPTION  0
+
+#define LD_PARAMS_GET_JSONLD_CONTEXTS  \
+  ( LD_PARAM_DETAILS  \
+  | LD_PARAM_KIND     \
+  | LD_PARAM_LIMIT    \
+  | LD_PARAM_OFFSET   \
+  | LD_PARAM_COUNT    \
+  )
+
+#define LD_PARAMS_GET_JSONLD_CONTEXT   0
 
 
 

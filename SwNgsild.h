@@ -85,6 +85,10 @@ typedef struct SwNgsild
   bool    sysAttrs;
   bool    count;         // true if ?count=true
   bool    local;         // true if ?local=true
+  bool    details;       // true if ?details=true
+
+  // URL parameters — strings
+  char*   kind;          // ?kind= for GET /jsonldContexts
 
   // @context (set in parseHook)
   bool              contextError;

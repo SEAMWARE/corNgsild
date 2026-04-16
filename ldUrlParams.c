@@ -190,6 +190,14 @@ void ldParamHook(const char* name, const char* value)
   {
     swNgsild.local = (value != NULL && strcmp(value, "true") == 0);
   }
+  else if (strcmp(name, "details") == 0)
+  {
+    swNgsild.details = (value != NULL && strcmp(value, "true") == 0);
+  }
+  else if (strcmp(name, "kind") == 0)
+  {
+    swNgsild.kind = (char*) value;
+  }
   else if (strcmp(name, "options") == 0)
   {
     // Deprecated comma-separated param.  Wrap with commas for safe substring matching:
