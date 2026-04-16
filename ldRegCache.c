@@ -406,6 +406,98 @@ bool ldRegCacheItemRemove(LdRegCache* cacheP, const char* regId)
 
 // -----------------------------------------------------------------------------
 //
+// entityInfoMatches - apply the § 5.12 EntityInfo match against an id+type
+//
+// Returns true if this EntityInfo entry matches the requested entity.
+// type matching: NULL entityType (caller doesn't know) bypasses type
+// constraint and accepts any.
+//
+static bool entityInfoMatches(LdRegEntityInfo* eiP, const char* entityId, const char* entityType)
+{
+  if (entityType != NULL && eiP->type != NULL && strcmp(eiP->type, entityType) != 0)
+    return false;
+
+  if (eiP->id == NULL && eiP->idPatternList == NULL)
+    return true;
+
+  if (eiP->id != NULL && strcmp(eiP->id, entityId) == 0)
+    return true;
+
+  for (LdRegIdPattern* ripP = eiP->idPatternList; ripP != NULL; ripP = ripP->next)
+  {
+    if (regexec(&ripP->regex, entityId, 0, NULL, 0) == 0)
+      return true;
+  }
+
+  return false;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// itemMatches - any RegistrationInfo / EntityInfo entry matches?
+//
+static bool itemMatches(LdRegCacheItem* itemP, const char* entityId, const char* entityType)
+{
+  for (LdRegInfo* riP = itemP->infoV; riP != NULL; riP = riP->next)
+  {
+    for (LdRegEntityInfo* eiP = riP->entityInfoV; eiP != NULL; eiP = eiP->next)
+    {
+      if (entityInfoMatches(eiP, entityId, entityType))
+        return true;
+    }
+  }
+  return false;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldRegCacheMatchForRetrieve -
+//
+int ldRegCacheMatchForRetrieve(LdRegCache*       cacheP,
+                                const char*       entityId,
+                                const char*       entityType,
+                                LdRegMode         modeFilter,
+                                LdRegCacheItem*** matchVP)
+{
+  if (cacheP == NULL || entityId == NULL || matchVP == NULL)
+    return 0;
+
+  // Two-pass: count first, then allocate exactly + populate
+  int count = 0;
+  for (LdRegCacheItem* itemP = cacheP->itemList; itemP != NULL; itemP = itemP->next)
+  {
+    if (itemP->mode != modeFilter)
+      continue;
+    if (itemMatches(itemP, entityId, entityType))
+      count++;
+  }
+
+  if (count == 0)
+    return 0;
+
+  LdRegCacheItem** v = (LdRegCacheItem**) malloc(count * sizeof(LdRegCacheItem*));
+  int ix = 0;
+
+  for (LdRegCacheItem* itemP = cacheP->itemList; itemP != NULL; itemP = itemP->next)
+  {
+    if (itemP->mode != modeFilter)
+      continue;
+    if (itemMatches(itemP, entityId, entityType))
+      v[ix++] = itemP;
+  }
+
+  *matchVP = v;
+  return count;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldRegCacheRelease -
 //
 void ldRegCacheRelease(LdRegCache* cacheP)

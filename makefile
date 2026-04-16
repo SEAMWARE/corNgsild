@@ -53,6 +53,7 @@ LIB_SOURCES   = swNgsild.c \
                 ldNotifyDefer.c \
                 ldSubCache.c \
                 ldRegCache.c \
+                ldForwarding.c \
                 ldQRender.c \
                 ldSubscriptionCompactQ.c \
                 ldSubscriptionCounters.c \

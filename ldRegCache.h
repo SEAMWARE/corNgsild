@@ -57,4 +57,39 @@ extern bool ldRegCacheItemRemove(LdRegCache* cacheP, const char* regId);
 //
 extern void ldRegCacheRelease(LdRegCache* cacheP);
 
+
+
+// -----------------------------------------------------------------------------
+//
+// ldRegCacheMatchForRetrieve - find CSRs that match a single-entity retrieve
+//
+// Walks cacheP->itemList, applies the § 5.12 matching algorithm against
+// each item filtered by mode (caller picks exclusive / redirect /
+// inclusive / auxiliary in turn so the dispatcher can sequence the
+// passes per § 5.6 / § 5.7).
+//
+// Match conditions per RegistrationInfo:
+//   - The EntityInfo's type matches entityType (or entityType is NULL,
+//     meaning "we don't know the type — accept any match"); AND
+//   - Either the EntityInfo has neither id nor idPattern, OR
+//     entityId == EntityInfo.id, OR
+//     entityId matches EntityInfo.idPattern.
+//
+// On match the LdRegCacheItem* is written into *matchVP[i]. The array
+// is malloc'd; caller must free(*matchVP) (the items themselves are
+// owned by the cache — do not free them).
+//
+// Returns the count of matches (0 = no matches; *matchVP unchanged).
+//
+// Attribute-set narrowing (RegistrationInfo.propertyNames /
+// relationshipNames) is NOT applied here yet — the simplest exclusive
+// retrieveEntity case doesn't need it. Will be added when the
+// dispatcher needs to choose a subset of attrs to forward.
+//
+extern int ldRegCacheMatchForRetrieve(LdRegCache*       cacheP,
+                                       const char*       entityId,
+                                       const char*       entityType,
+                                       LdRegMode         modeFilter,
+                                       LdRegCacheItem*** matchVP);
+
 #endif  // SWNGSILD_LDREGCACHE_OPS_H_

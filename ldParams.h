@@ -107,6 +107,7 @@
   | LD_PARAM_EXPAND_VALUES  \
   | LD_PARAM_JSON_KEYS           \
   | LD_PARAM_GEOMETRY_PROPERTY   \
+  | LD_PARAM_LOCAL               \
   )
 
 #define LD_PARAMS_POST_ENTITIES  0
