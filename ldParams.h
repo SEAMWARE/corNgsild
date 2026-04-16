@@ -57,6 +57,7 @@
 #define LD_PARAM_OBSERVED_AT           (1ULL << 35)
 #define LD_PARAM_DETAILS               (1ULL << 36)
 #define LD_PARAM_KIND                  (1ULL << 37)
+#define LD_PARAM_RELOAD                (1ULL << 38)
 
 
 
@@ -144,6 +145,8 @@
   )
 
 #define LD_PARAMS_GET_JSONLD_CONTEXT   0
+#define LD_PARAMS_POST_JSONLD_CONTEXTS 0
+#define LD_PARAMS_DELETE_JSONLD_CONTEXT  ( LD_PARAM_RELOAD )
 
 
 

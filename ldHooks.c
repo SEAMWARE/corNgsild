@@ -50,6 +50,18 @@ static void ldRequestStartHook(void)
 //
 static void ldParseHook(void)
 {
+  //
+  // POST /jsonldContexts body is itself a JSON-LD Context document (for
+  // Hosted) or a { "url": ... } wrapper (for Cached). It is NOT an NGSI-LD
+  // payload and must not be expanded. The service routine will read the
+  // body as-is.
+  //
+  if ((swRest.in.urlPath != NULL) &&
+      (strncmp(swRest.in.urlPath, "/ngsi-ld/v1/jsonldContexts", 26) == 0))
+  {
+    return;
+  }
+
   KjNode* atCtx    = kjLookup(swRest.in.requestTree, "@context");
   char*   ct       = swRest.in.contentType;
   bool    isLdJson = (ct != NULL && strncasecmp(ct, "application/ld+json", 19) == 0);

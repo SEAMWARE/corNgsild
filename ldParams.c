@@ -59,6 +59,7 @@ SwRestParam ldParamRegistryV[] =
   { "observedAt",            LD_PARAM_OBSERVED_AT },
   { "details",               LD_PARAM_DETAILS },
   { "kind",                  LD_PARAM_KIND },
+  { "reload",                LD_PARAM_RELOAD },
   { NULL,                    0 }
 };
 
