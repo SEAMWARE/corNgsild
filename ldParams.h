@@ -60,6 +60,7 @@
 #define LD_PARAM_RELOAD                (1ULL << 38)
 #define LD_PARAM_ORDER_BY              (1ULL << 39)
 #define LD_PARAM_COLLATION             (1ULL << 40)
+#define LD_PARAM_SPLIT_ENTITIES        (1ULL << 41)
 
 
 
@@ -97,6 +98,7 @@
   | LD_PARAM_GEOMETRY_PROPERTY   \
   | LD_PARAM_ORDER_BY            \
   | LD_PARAM_COLLATION           \
+  | LD_PARAM_SPLIT_ENTITIES      \
   )
 
 #define LD_PARAMS_GET_ENTITY     \

@@ -33,6 +33,7 @@
 // ldLocalOnly - global flag set by --localOnly CLI arg (no distributed ops)
 //
 bool        ldLocalOnly         = false;
+bool        ldSplitEntities      = true;
 char*       ldDefaultContextUrl  = NULL;
 const char* ldCsourceAliasBase   = NULL;
 
@@ -198,6 +199,11 @@ void ldParamHook(const char* name, const char* value)
   else if (strcmp(name, "entityMap") == 0)
   {
     swNgsild.entityMap = (value != NULL && strcmp(value, "true") == 0);
+  }
+  else if (strcmp(name, "splitEntities") == 0)
+  {
+    swNgsild.splitEntitiesSet = true;
+    swNgsild.splitEntitiesVal = (value != NULL && strcmp(value, "true") == 0);
   }
   else if (strcmp(name, "kind") == 0)
   {

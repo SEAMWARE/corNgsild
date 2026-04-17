@@ -94,8 +94,10 @@ typedef struct SwNgsild
   int           orderByCount;  // number of terms
   char*         collation;     // BCP47 collation tag (NULL = default)
 
-  // URL parameters — entity map
-  bool    entityMap;     // true if ?entityMap=true (create + return map location)
+  // URL parameters — entity map + split entities
+  bool    entityMap;          // true if ?entityMap=true
+  bool    splitEntitiesSet;   // true if ?splitEntities= was present in URL
+  bool    splitEntitiesVal;   // value of ?splitEntities= (only valid if splitEntitiesSet)
 
   // URL parameters — strings
   char*   kind;          // ?kind= for GET /jsonldContexts
@@ -141,6 +143,17 @@ extern char* ldDefaultContextUrl;
 
 // -----------------------------------------------------------------------------
 //
+// ldSplitEntities - global flag, default TRUE (standard NGSI-LD behavior).
+// Set to false via --noSplitEntities CLI arg.
+// When true, distributed queries collect ALL entity IDs from all sources,
+// assemble complete entities, then apply filters post-assembly.
+// When false (no-split), each entity is fully at one source — forward
+// the full query, merge + dedup.
+//
+extern bool ldSplitEntities;
+
+
+
 // ldCsourceAliasBase - per-broker contextSourceAlias base (NGSI-LD § 5.7.5 /
 // RFC 7230 pseudonym), used in Via headers for distributed-op loop detection.
 // Set by --csourceAlias CLI arg, defaults to "<exe-basename>:<port>".

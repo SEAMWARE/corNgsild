@@ -62,6 +62,7 @@ SwRestParam ldParamRegistryV[] =
   { "reload",                LD_PARAM_RELOAD },
   { "orderBy",               LD_PARAM_ORDER_BY },
   { "collation",             LD_PARAM_COLLATION },
+  { "splitEntities",         LD_PARAM_SPLIT_ENTITIES },
   { NULL,                    0 }
 };
 
