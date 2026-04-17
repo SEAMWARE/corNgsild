@@ -447,10 +447,16 @@ bool ldRegCacheItemRemove(LdRegCache* cacheP, const char* regId)
 // type matching: NULL entityType (caller doesn't know) bypasses type
 // constraint and accepts any.
 //
-static bool entityInfoMatches(LdRegEntityInfo* eiP, const char* entityId, const char* entityType)
+static bool entityInfoMatches(LdRegEntityInfo* eiP, const char* entityId, char** entityTypeV)
 {
-  if (entityType != NULL && eiP->type != NULL && strcmp(eiP->type, entityType) != 0)
-    return false;
+  if (entityTypeV != NULL && eiP->type != NULL)
+  {
+    bool typeMatch = false;
+    for (int i = 0; entityTypeV[i] != NULL; i++)
+      if (strcmp(eiP->type, entityTypeV[i]) == 0) { typeMatch = true; break; }
+    if (!typeMatch)
+      return false;
+  }
 
   if (eiP->id == NULL && eiP->idPatternList == NULL)
     return true;
@@ -473,13 +479,13 @@ static bool entityInfoMatches(LdRegEntityInfo* eiP, const char* entityId, const 
 //
 // itemMatches - any RegistrationInfo / EntityInfo entry matches?
 //
-static bool itemMatches(LdRegCacheItem* itemP, const char* entityId, const char* entityType)
+static bool itemMatches(LdRegCacheItem* itemP, const char* entityId, char** entityTypeV)
 {
   for (LdRegInfo* riP = itemP->infoV; riP != NULL; riP = riP->next)
   {
     for (LdRegEntityInfo* eiP = riP->entityInfoV; eiP != NULL; eiP = eiP->next)
     {
-      if (entityInfoMatches(eiP, entityId, entityType))
+      if (entityInfoMatches(eiP, entityId, entityTypeV))
         return true;
     }
   }
@@ -494,7 +500,7 @@ static bool itemMatches(LdRegCacheItem* itemP, const char* entityId, const char*
 //
 int ldRegCacheMatchForRetrieve(LdRegCache*       cacheP,
                                 const char*       entityId,
-                                const char*       entityType,
+                                char**            entityTypeV,
                                 LdRegMode         modeFilter,
                                 LdRegCacheItem*** matchVP)
 {
@@ -507,7 +513,7 @@ int ldRegCacheMatchForRetrieve(LdRegCache*       cacheP,
   {
     if (itemP->mode != modeFilter)
       continue;
-    if (itemMatches(itemP, entityId, entityType))
+    if (itemMatches(itemP, entityId, entityTypeV))
       count++;
   }
 
@@ -521,7 +527,7 @@ int ldRegCacheMatchForRetrieve(LdRegCache*       cacheP,
   {
     if (itemP->mode != modeFilter)
       continue;
-    if (itemMatches(itemP, entityId, entityType))
+    if (itemMatches(itemP, entityId, entityTypeV))
       v[ix++] = itemP;
   }
 

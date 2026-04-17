@@ -63,7 +63,8 @@ static char* expandString(char* s, KAlloc* kaP)
 //
 void ldExpandParams(KAlloc* kaP)
 {
-  swNgsild.type = expandString(swNgsild.type, kaP);
+  // type: only expand typeV[] entries (the parsed list). swNgsild.type is the
+  // raw string (may be "T1,T2") — not meaningful as a single expanded IRI.
   expandArray(swNgsild.typeV,             kaP);
   expandArray(swNgsild.pickV,             kaP);
   expandArray(swNgsild.omitV,             kaP);

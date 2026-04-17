@@ -88,7 +88,7 @@ extern void ldRegCacheRelease(LdRegCache* cacheP);
 //
 extern int ldRegCacheMatchForRetrieve(LdRegCache*       cacheP,
                                        const char*       entityId,
-                                       const char*       entityType,
+                                       char**            entityTypeV,
                                        LdRegMode         modeFilter,
                                        LdRegCacheItem*** matchVP);
 
