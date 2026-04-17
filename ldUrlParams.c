@@ -277,4 +277,47 @@ void ldParamHook(const char* name, const char* value)
     swNgsild.observedAt   = (char*) value;
     swNgsild.observedAtNs = ldIsoToNanoseconds(value);
   }
+  else if (strcmp(name, "orderBy") == 0)
+  {
+    swNgsild.orderBy = (char*) value;
+
+    // Parse orderBy: "attr1;desc,attr2" → array of LdOrderTerm
+    // Count terms first
+    int count = 1;
+    for (const char* p = value; *p; p++)
+      if (*p == ',') count++;
+
+    LdOrderTerm* terms = (LdOrderTerm*) kaAlloc(faP, (count + 1) * sizeof(LdOrderTerm));
+    int ix = 0;
+
+    char* copy = (char*) kaAlloc(faP, strlen(value) + 1);
+    strcpy(copy, value);
+
+    char* saveptr = NULL;
+    for (char* tok = strtok_r(copy, ",", &saveptr); tok != NULL; tok = strtok_r(NULL, ",", &saveptr))
+    {
+      // Each token: "attrName" or "attrName;desc" or "attrName;asc"
+      char* semi = strchr(tok, ';');
+      LdOrderDir dir = LdOrderAsc;
+
+      if (semi != NULL)
+      {
+        *semi = 0;
+        char* dirStr = semi + 1;
+        if (strcmp(dirStr, "desc") == 0)
+          dir = LdOrderDesc;
+      }
+
+      terms[ix].attrName = tok;  // expanded later in ldExpandParams
+      terms[ix].dir      = dir;
+      ix++;
+    }
+
+    swNgsild.orderByV     = terms;
+    swNgsild.orderByCount = ix;
+  }
+  else if (strcmp(name, "collation") == 0)
+  {
+    swNgsild.collation = (char*) value;
+  }
 }

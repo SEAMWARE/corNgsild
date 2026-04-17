@@ -15,6 +15,7 @@
 #include "swJsonld/SwldContext.h"                     // SwldContext
 #include "swNgsild/LdFormat.h"                           // LdFormat
 #include "swNgsild/LdGeoRel.h"                           // LdGeoRel
+#include "swNgsild/LdOrder.h"                            // LdOrderTerm
 #include "swNgsild/LdQ.h"                               // LdQNode
 #include "swNgsild/LdScopeExpr.h"                        // LdScopeExpr
 #include "swNgsild/LdTypeExpr.h"                         // LdTypeExpr
@@ -86,6 +87,12 @@ typedef struct SwNgsild
   bool    count;         // true if ?count=true
   bool    local;         // true if ?local=true
   bool    details;       // true if ?details=true
+
+  // URL parameters — ordering (§ 4.23)
+  char*         orderBy;       // raw orderBy string
+  LdOrderTerm*  orderByV;      // parsed terms (NULL-terminated array, expanded in ldExpandParams)
+  int           orderByCount;  // number of terms
+  char*         collation;     // BCP47 collation tag (NULL = default)
 
   // URL parameters — strings
   char*   kind;          // ?kind= for GET /jsonldContexts

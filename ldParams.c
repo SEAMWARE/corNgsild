@@ -60,6 +60,8 @@ SwRestParam ldParamRegistryV[] =
   { "details",               LD_PARAM_DETAILS },
   { "kind",                  LD_PARAM_KIND },
   { "reload",                LD_PARAM_RELOAD },
+  { "orderBy",               LD_PARAM_ORDER_BY },
+  { "collation",             LD_PARAM_COLLATION },
   { NULL,                    0 }
 };
 

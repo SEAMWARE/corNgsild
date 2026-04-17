@@ -8,6 +8,7 @@
 #include <stddef.h>                                    // NULL
 
 #include "kalloc/KAlloc.h"                             // KAlloc, kaAlloc
+#include "swRest/SwRestState.h"                        // swRest
 #include "swJsonld/swldExpand.h"                       // swldExpand
 #include "swNgsild/SwNgsild.h"                         // swNgsild
 
@@ -63,6 +64,9 @@ static char* expandString(char* s, KAlloc* kaP)
 //
 void ldExpandParams(KAlloc* kaP)
 {
+  if (swRest.out.problemType != NULL)
+    return;
+
   // type: only expand typeV[] entries (the parsed list). swNgsild.type is the
   // raw string (may be "T1,T2") — not meaningful as a single expanded IRI.
   expandArray(swNgsild.typeV,             kaP);
@@ -72,4 +76,11 @@ void ldExpandParams(KAlloc* kaP)
 
   swNgsild.geoproperty      = expandString(swNgsild.geoproperty, kaP);
   swNgsild.geometryProperty = expandString(swNgsild.geometryProperty, kaP);
+
+  // orderBy: expand each term's attrName
+  if (swNgsild.orderByV != NULL)
+  {
+    for (int i = 0; i < swNgsild.orderByCount; i++)
+      swNgsild.orderByV[i].attrName = expandString(swNgsild.orderByV[i].attrName, kaP);
+  }
 }

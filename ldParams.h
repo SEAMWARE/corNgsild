@@ -58,6 +58,8 @@
 #define LD_PARAM_DETAILS               (1ULL << 36)
 #define LD_PARAM_KIND                  (1ULL << 37)
 #define LD_PARAM_RELOAD                (1ULL << 38)
+#define LD_PARAM_ORDER_BY              (1ULL << 39)
+#define LD_PARAM_COLLATION             (1ULL << 40)
 
 
 
@@ -93,6 +95,8 @@
   | LD_PARAM_EXPAND_VALUES  \
   | LD_PARAM_JSON_KEYS           \
   | LD_PARAM_GEOMETRY_PROPERTY   \
+  | LD_PARAM_ORDER_BY            \
+  | LD_PARAM_COLLATION           \
   )
 
 #define LD_PARAMS_GET_ENTITY     \
