@@ -94,6 +94,9 @@ typedef struct SwNgsild
   int           orderByCount;  // number of terms
   char*         collation;     // BCP47 collation tag (NULL = default)
 
+  // URL parameters — entity map
+  bool    entityMap;     // true if ?entityMap=true (create + return map location)
+
   // URL parameters — strings
   char*   kind;          // ?kind= for GET /jsonldContexts
 

@@ -195,6 +195,10 @@ void ldParamHook(const char* name, const char* value)
   {
     swNgsild.details = (value != NULL && strcmp(value, "true") == 0);
   }
+  else if (strcmp(name, "entityMap") == 0)
+  {
+    swNgsild.entityMap = (value != NULL && strcmp(value, "true") == 0);
+  }
   else if (strcmp(name, "kind") == 0)
   {
     swNgsild.kind = (char*) value;
