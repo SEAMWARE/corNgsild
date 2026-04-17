@@ -96,7 +96,8 @@
   )
 
 #define LD_PARAMS_GET_ENTITY     \
-  ( LD_PARAM_ATTRS          \
+  ( LD_PARAM_TYPE           \
+  | LD_PARAM_ATTRS          \
   | LD_PARAM_OPTIONS        \
   | LD_PARAM_PICK           \
   | LD_PARAM_OMIT           \
@@ -112,12 +113,13 @@
 
 #define LD_PARAMS_POST_ENTITIES  0
 
-#define LD_PARAMS_REPLACE_ENTITY 0
+#define LD_PARAMS_REPLACE_ENTITY  ( LD_PARAM_TYPE )
 
-#define LD_PARAMS_DELETE_ENTITY  0
+#define LD_PARAMS_DELETE_ENTITY   ( LD_PARAM_TYPE )
 
 #define LD_PARAMS_PATCH_ENTITY  \
-  ( LD_PARAM_FORMAT       \
+  ( LD_PARAM_TYPE         \
+  | LD_PARAM_FORMAT       \
   | LD_PARAM_LANG         \
   | LD_PARAM_OBSERVED_AT  \
   | LD_PARAM_OPTIONS      \
