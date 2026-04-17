@@ -75,6 +75,7 @@ typedef struct LdSubCacheItem
   char*                     geoCoordinates; // geoQ.coordinates as JSON string (NULL if no geoQ)
   char*                     geoProperty;    // geoQ.geoproperty expanded IRI (default: location)
   char**                    notifAttrsV;    // NULL-terminated array of notification attribute IRIs (NULL = all)
+  char**                    datasetIdV;    // NULL-terminated array of datasetId URIs + "@none" (NULL = all instances)
   int                       triggerMask;    // bitmask of LD_TRIGGER_* values (0 = use LD_TRIGGER_DEFAULT)
 
   // Subscription state (borrowed pointers into subTree)

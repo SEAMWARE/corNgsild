@@ -288,6 +288,11 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
     }
   }
 
+  // datasetId: list of dataset IDs to include in notifications (NULL = all instances)
+  // Values are URIs or "@none" (default instance) — no expansion needed.
+  KjNode* datasetIdP = kjLookup(itemP->subTree, LD_VOCAB_DATASET_ID);
+  itemP->datasetIdV = watchedAttrsExtract(datasetIdP);  // reuse: builds NULL-term string array
+
   KjNode* expiresP = kjLookup(itemP->subTree, LD_VOCAB_EXPIRES_AT);
   if (expiresP != NULL && expiresP->type == KjString)
     itemP->expiresAt = ldIsoToNanoseconds(expiresP->value.s);
@@ -358,6 +363,9 @@ static void cacheItemFree(LdSubCacheItem* itemP)
 
   if (itemP->notifAttrsV != NULL)
     free(itemP->notifAttrsV);    // array only — strings are borrowed
+
+  if (itemP->datasetIdV != NULL)
+    free(itemP->datasetIdV);     // array only — strings are borrowed
 
   // qExpr, scopeExpr, geoRel were malloc'd by parsers — need recursive free
   // For now, accept the leak; these are small and the cache lives for the

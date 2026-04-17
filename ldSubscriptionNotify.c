@@ -278,6 +278,57 @@ static void notificationSend(LdSubCacheItem* itemP, KjNode* entityP)
   KjNode* dataArray    = kjArray(NULL, "data");
   KjNode* entityClone  = kjClone(NULL, entityP);
 
+  //
+  // datasetId filter (§ 5.8.6): if the subscription specifies a datasetId
+  // list, keep only matching instances within each attribute wrapper.
+  // Must run BEFORE ldEntityToApi (which unwraps the dataset-keyed storage
+  // format). In storage, each attr is { "@none": {...}, "urn:ds:1": {...} }.
+  // The filter removes instances whose dsKey is not in the list.
+  //
+  if (itemP->datasetIdV != NULL)
+  {
+    KjNode* attrP = entityClone->value.firstChildP;
+    while (attrP != NULL)
+    {
+      KjNode* nextAttr = attrP->next;
+
+      if (attrP->type != KjObject || attrP->name == NULL ||
+          strcmp(attrP->name, "id") == 0 || strcmp(attrP->name, "type") == 0)
+      {
+        attrP = nextAttr;
+        continue;
+      }
+
+      // Walk instances within the attr wrapper
+      KjNode* instP = attrP->value.firstChildP;
+      while (instP != NULL)
+      {
+        KjNode* nextInst = instP->next;
+        bool keep = false;
+
+        for (int i = 0; itemP->datasetIdV[i] != NULL; i++)
+        {
+          if (strcmp(instP->name, itemP->datasetIdV[i]) == 0)
+          {
+            keep = true;
+            break;
+          }
+        }
+
+        if (!keep)
+          kjChildRemove(attrP, instP);
+
+        instP = nextInst;
+      }
+
+      // If all instances were removed, remove the attr wrapper too
+      if (attrP->value.firstChildP == NULL)
+        kjChildRemove(entityClone, attrP);
+
+      attrP = nextAttr;
+    }
+  }
+
   ldEntityToApi(entityClone, &swRest.kalloc);
   ldStripSysAttrs(entityClone);
 

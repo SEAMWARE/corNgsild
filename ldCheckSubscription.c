@@ -323,6 +323,24 @@ bool ldCheckSubscription(KjNode* subP, LdOp op, KAlloc* kaP)
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Read-Only Field", "'status' is read-only and cannot be set");
       return false;
     }
+    else if (strcmp(name, LD_VOCAB_DATASET_ID) == 0)
+    {
+      // datasetId: array of URIs + "@none" — restricts which attribute instances
+      // are included in notifications (§ 5.8.6).
+      if (childP->type != KjArray)
+      {
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription", "'datasetId' must be a JSON array");
+        return false;
+      }
+      for (KjNode* dsP = childP->value.firstChildP; dsP != NULL; dsP = dsP->next)
+      {
+        if (dsP->type != KjString)
+        {
+          ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription", "'datasetId' items must be strings");
+          return false;
+        }
+      }
+    }
     else if (strcmp(name, "jsonldContext") == 0)
     {
       // Internal field — ignore silently
