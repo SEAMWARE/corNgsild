@@ -453,12 +453,19 @@ static bool entityInfoMatches(LdRegEntityInfo* eiP, const char* entityId, char**
   {
     bool typeMatch = false;
     for (int i = 0; entityTypeV[i] != NULL; i++)
+    {
       if (strcmp(eiP->type, entityTypeV[i]) == 0) { typeMatch = true; break; }
+    }
     if (!typeMatch)
       return false;
   }
 
   if (eiP->id == NULL && eiP->idPatternList == NULL)
+    return true;
+
+  // If caller passed NULL entityId (queryEntities — matching by type only),
+  // any registration that covers this type matches regardless of id/idPattern.
+  if (entityId == NULL)
     return true;
 
   if (eiP->id != NULL && strcmp(eiP->id, entityId) == 0)
@@ -504,7 +511,7 @@ int ldRegCacheMatchForRetrieve(LdRegCache*       cacheP,
                                 LdRegMode         modeFilter,
                                 LdRegCacheItem*** matchVP)
 {
-  if (cacheP == NULL || entityId == NULL || matchVP == NULL)
+  if (cacheP == NULL || matchVP == NULL)
     return 0;
 
   // Two-pass: count first, then allocate exactly + populate
