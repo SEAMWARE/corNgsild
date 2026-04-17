@@ -102,14 +102,12 @@ typedef struct LdSubCacheItem
 
 // -----------------------------------------------------------------------------
 //
-// LdSubGeoMatchFunc - callback for geo matching (avoids GEOS dependency in swNgsild)
+// LdGeoMatchFunc - callback for geo matching (avoids GEOS dependency in swNgsild)
 //
-// entityP:     the entity to check
-// cacheItem:   subscription cache item (carries geoRel, geoGeometry, geoCoordinates, geoProperty)
+// Used for both subscription notification matching and queryEntities post-assembly.
 //
-// Returns true if the entity matches the subscription's geoQ (or if no geoQ is defined).
-//
-typedef bool (*LdSubGeoMatchFunc)(KjNode* entityP, LdSubCacheItem* cacheItem);
+typedef bool (*LdGeoMatchFunc)(KjNode* entityP, LdGeoRel* geoRel, const char* geometry,
+                                const char* coordinates, const char* geoproperty);
 
 
 
@@ -121,7 +119,7 @@ typedef struct LdSubCache
 {
   LdSubCacheItem*     itemList;     // linked list head
   LdSubCacheItem*     last;         // linked list tail (O(1) append)
-  LdSubGeoMatchFunc   geoMatchFunc; // registered by broker (NULL = skip geo check)
+  LdGeoMatchFunc   geoMatchFunc; // registered by broker (NULL = skip geo check)
   KAlloc              alloc;        // persistent allocator for parsed trees (q, scope, etc.)
   char                allocBuf[1024]; // initial allocation buffer
 } LdSubCache;

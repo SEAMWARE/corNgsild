@@ -525,7 +525,8 @@ void ldSubscriptionNotify(LdSubCache*     cacheP,
     //
     if (itemP->geoRel != NULL && cacheP->geoMatchFunc != NULL)
     {
-      if (!cacheP->geoMatchFunc(entityP, itemP))
+      if (!cacheP->geoMatchFunc(entityP, itemP->geoRel, itemP->geoGeometry,
+                                    itemP->geoCoordinates, itemP->geoProperty))
         continue;
     }
 
