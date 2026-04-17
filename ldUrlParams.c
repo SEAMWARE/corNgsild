@@ -198,7 +198,10 @@ void ldParamHook(const char* name, const char* value)
   }
   else if (strcmp(name, "entityMap") == 0)
   {
-    swNgsild.entityMap = (value != NULL && strcmp(value, "true") == 0);
+    if (value != NULL && strcmp(value, "true") == 0)
+      swNgsild.entityMapCreate = true;
+    else if (value != NULL && value[0] != 0 && strcmp(value, "false") != 0)
+      swNgsild.entityMapId = (char*) value;   // URI of existing map
   }
   else if (strcmp(name, "splitEntities") == 0)
   {

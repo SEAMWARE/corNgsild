@@ -95,7 +95,8 @@ typedef struct SwNgsild
   char*         collation;     // BCP47 collation tag (NULL = default)
 
   // URL parameters — entity map + split entities
-  bool    entityMap;          // true if ?entityMap=true
+  bool    entityMapCreate;    // true if ?entityMap=true (create new map)
+  char*   entityMapId;        // non-NULL if ?entityMap=<mapId> (page from existing)
   bool    splitEntitiesSet;   // true if ?splitEntities= was present in URL
   bool    splitEntitiesVal;   // value of ?splitEntities= (only valid if splitEntitiesSet)
 
