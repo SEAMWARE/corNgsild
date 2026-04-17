@@ -420,12 +420,19 @@ bool ldCheckSubscription(KjNode* subP, LdOp op, KAlloc* kaP)
   }
 
   //
-  // timeInterval + watchedAttributes conflict
+  // timeInterval conflicts: watchedAttributes and throttling are incompatible
+  // with periodic subscriptions (§ 5.2.12)
   //
   if (timeIntervalP != NULL && watchedAttrsP != NULL)
   {
     ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Incompatible Fields",
             "'timeInterval' and 'watchedAttributes' are mutually exclusive");
+    return false;
+  }
+  if (timeIntervalP != NULL && throttlingP != NULL)
+  {
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Incompatible Fields",
+            "'timeInterval' and 'throttling' are mutually exclusive");
     return false;
   }
 

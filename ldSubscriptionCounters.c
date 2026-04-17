@@ -93,3 +93,49 @@ void ldSubscriptionCountersInject(KjNode* subP, LdSubCacheItem* itemP)
     kjChildAdd(notifP, kjString(NULL, "lastFailure", isoBuf));
   }
 }
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldPernotCountersInject - inject pernot subscription counters into a sub tree
+//
+void ldPernotCountersInject(KjNode* subP, LdPernotItem* itemP)
+{
+  if (subP == NULL || itemP == NULL)
+    return;
+
+  KjNode* notifP = kjLookup(subP, LD_VOCAB_NOTIFICATION);
+  if (notifP == NULL)
+    notifP = kjLookup(subP, "notification");
+  if (notifP == NULL || notifP->type != KjObject)
+    return;
+
+  if (itemP->timesSent == 0)
+    return;
+
+  char isoBuf[64];
+
+  kjChildAdd(notifP, kjInteger(NULL, "timesSent", itemP->timesSent));
+
+  if (itemP->timesFailed > 0)
+    kjChildAdd(notifP, kjInteger(NULL, "timesFailed", itemP->timesFailed));
+
+  if (itemP->lastNotification > 0)
+  {
+    nsToIso(itemP->lastNotification, isoBuf, sizeof(isoBuf));
+    kjChildAdd(notifP, kjString(NULL, "lastNotification", isoBuf));
+  }
+
+  if (itemP->lastSuccess > 0)
+  {
+    nsToIso(itemP->lastSuccess, isoBuf, sizeof(isoBuf));
+    kjChildAdd(notifP, kjString(NULL, "lastSuccess", isoBuf));
+  }
+
+  if (itemP->lastFailure > 0)
+  {
+    nsToIso(itemP->lastFailure, isoBuf, sizeof(isoBuf));
+    kjChildAdd(notifP, kjString(NULL, "lastFailure", isoBuf));
+  }
+}
