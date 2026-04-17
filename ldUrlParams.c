@@ -136,17 +136,17 @@ void ldParamHook(const char* name, const char* value)
   else if (strcmp(name, "pick") == 0)
   {
     swNgsild.pick  = (char*) value;
-    swNgsild.pickV = ldParamExpandV(ldParamSplit((char*) value, faP), faP);
+    swNgsild.pickV = ldParamSplit((char*) value, faP);  // expanded later in ldExpandParams
   }
   else if (strcmp(name, "omit") == 0)
   {
     swNgsild.omit  = (char*) value;
-    swNgsild.omitV = ldParamExpandV(ldParamSplit((char*) value, faP), faP);
+    swNgsild.omitV = ldParamSplit((char*) value, faP);  // expanded later in ldExpandParams
   }
   else if (strcmp(name, "expandValues") == 0)
   {
     swNgsild.expandValues  = (char*) value;
-    swNgsild.expandValuesV = ldParamExpandV(ldParamSplit((char*) value, faP), faP);
+    swNgsild.expandValuesV = ldParamSplit((char*) value, faP);  // NOT expanded — names used as-is during q-parse
   }
   else if (strcmp(name, "geometryProperty") == 0)
   {
@@ -155,7 +155,7 @@ void ldParamHook(const char* name, const char* value)
   else if (strcmp(name, "jsonKeys") == 0)
   {
     swNgsild.jsonKeys  = (char*) value;
-    swNgsild.jsonKeysV = ldParamExpandV(ldParamSplit((char*) value, faP), faP);
+    swNgsild.jsonKeysV = ldParamSplit((char*) value, faP);  // expanded later in ldExpandParams
   }
   else if (strcmp(name, "scopeQ") == 0)
   {
@@ -260,8 +260,7 @@ void ldParamHook(const char* name, const char* value)
   }
   else if (strcmp(name, "geoproperty") == 0)
   {
-    char* expanded = swldExpand(swNgsild.contextP, value, faP, NULL, NULL);
-    swNgsild.geoproperty = (expanded != NULL) ? expanded : (char*) value;
+    swNgsild.geoproperty = (char*) value;  // expanded later in ldExpandParams
   }
   else if (strcmp(name, "lang") == 0)
   {

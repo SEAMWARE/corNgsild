@@ -304,6 +304,19 @@ static void ldRenderHook(void)
     }
   }
 
+  //
+  // GeoJSON representation: Accept: application/geo+json
+  // Runs BEFORE compaction — geometryProperty is an expanded IRI and the
+  // tree still has expanded attr names at this point.
+  //
+  bool acceptGeoJson = (swRest.in.accept != NULL && strstr(swRest.in.accept, "application/geo+json") != NULL);
+  if (acceptGeoJson && treeP != NULL)
+  {
+    ldToGeoJson(&swRest.out.responseTree, swNgsild.geometryProperty, swRest.kjsonP);
+    treeP = swRest.out.responseTree;
+    swRest.out.contentType = "application/geo+json";
+  }
+
   swldCompactTree(swRest.out.responseTree);
 
   // Apply lang reduction after compaction (languageMap keys are BCP47 tags, not JSON-LD terms)
@@ -320,18 +333,6 @@ static void ldRenderHook(void)
     }
   }
 
-  //
-
-  //
-  // GeoJSON representation: Accept: application/geo+json
-  //
-  bool acceptGeoJson = (swRest.in.accept != NULL && strstr(swRest.in.accept, "application/geo+json") != NULL);
-  if (acceptGeoJson && treeP != NULL)
-  {
-    ldToGeoJson(&swRest.out.responseTree, swNgsild.geometryProperty, swRest.kjsonP);
-    treeP = swRest.out.responseTree;
-    swRest.out.contentType = "application/geo+json";
-  }
   // @context in response: either in body (ld+json) or via Link header (json)
   //
   if (treeP == NULL)
