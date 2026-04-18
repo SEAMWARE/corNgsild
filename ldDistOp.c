@@ -177,17 +177,21 @@ static SwRestKeyValue* buildHeaders(SwRestVerb   verb,
 
 // -----------------------------------------------------------------------------
 //
-// ldDistOpSend -
+// ldDistOpSendReceive -
 //
-int ldDistOpSend(LdRegCacheItem*  csr,
-                 SwRestVerb       verb,
-                 const char*      url,
-                 const char*      body,
-                 int              bodyLen,
-                 const char*      ownAlias,
-                 const char**     errorDetailPP)
+int ldDistOpSendReceive(LdRegCacheItem*  csr,
+                        SwRestVerb       verb,
+                        const char*      url,
+                        const char*      body,
+                        int              bodyLen,
+                        const char*      ownAlias,
+                        const char**     errorDetailPP,
+                        char**           responseBodyPP,
+                        int*             responseBodyLenP)
 {
-  if (errorDetailPP != NULL) *errorDetailPP = NULL;
+  if (errorDetailPP   != NULL) *errorDetailPP   = NULL;
+  if (responseBodyPP  != NULL) *responseBodyPP  = NULL;
+  if (responseBodyLenP != NULL) *responseBodyLenP = 0;
 
   const LdForwardingPlugin* plugin = ldForwardingForEndpoint(csr->endpoint);
   if (plugin == NULL)
@@ -251,7 +255,28 @@ int ldDistOpSend(LdRegCacheItem*  csr,
     csr->lastFailure = nowNs;
   }
 
+  if (responseBodyPP   != NULL) *responseBodyPP   = resp.body;
+  if (responseBodyLenP != NULL) *responseBodyLenP = resp.bodyLen;
+
   return resp.statusCode;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldDistOpSend - thin wrapper when the caller doesn't need the response body
+//
+int ldDistOpSend(LdRegCacheItem*  csr,
+                 SwRestVerb       verb,
+                 const char*      url,
+                 const char*      body,
+                 int              bodyLen,
+                 const char*      ownAlias,
+                 const char**     errorDetailPP)
+{
+  return ldDistOpSendReceive(csr, verb, url, body, bodyLen, ownAlias,
+                             errorDetailPP, NULL, NULL);
 }
 
 

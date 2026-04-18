@@ -80,6 +80,27 @@ extern int ldDistOpSend(LdRegCacheItem*  csr,
 
 // -----------------------------------------------------------------------------
 //
+// ldDistOpSendReceive - like ldDistOpSend, but also returns the response
+// body (used by GET forwards which must parse the upstream payload).
+//
+// responseBodyPP / responseBodyLenP are out-parameters. On success with a
+// non-empty body they point into the request kalloc; empty-body cases
+// leave them NULL/0. Both may be NULL — behaves like ldDistOpSend then.
+//
+extern int ldDistOpSendReceive(LdRegCacheItem*  csr,
+                               SwRestVerb       verb,
+                               const char*      url,
+                               const char*      body,
+                               int              bodyLen,
+                               const char*      ownAlias,
+                               const char**     errorDetailPP,
+                               char**           responseBodyPP,
+                               int*             responseBodyLenP);
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldDistOpBatchErrorAdd - append one BatchEntityError (§ 5.2.17) to errors[]
 //
 // Used by the decision-matrix at the end of every distributed write op to
