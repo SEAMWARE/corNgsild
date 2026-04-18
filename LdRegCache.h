@@ -114,6 +114,32 @@ typedef struct LdRegCacheItem
   // Borrowed pointers into regTree
   char*                  endpoint;           // dereferenceable URI of the context source
   char*                  csourceAlias;       // loop-detection pseudonym (NULL if absent)
+  char*                  tenant;             // § 5.2.9 tenant rewrite — forwarded requests get
+                                             // NGSILD-Tenant: <tenant> (NULL = keep sender's tenant)
+
+  // contextSourceInfo (§ 5.2.22) — arbitrary KV pairs added to every
+  // forwarded request's HTTP headers. Use cases: API keys, auth
+  // tokens, Accept overrides. Interleaved key/value pairs in a
+  // NULL-terminated char* array (kv[0]=key, kv[1]=val, kv[2]=key, ...).
+  char**                 contextSourceInfoKV;
+
+  // scope (§ 5.2.9) — scopes (or scope patterns, § 4.18) this Context
+  // Source covers. NULL-terminated string array. NULL means wildcard
+  // (CSR matches regardless of entity scope).
+  char**                 scopeV;
+
+  // Geo coverage (§ 5.2.9). KjNode pointers into regTree, borrowed. All
+  // three are full GeoJSON Geometry objects with "type" and "coordinates".
+  // Match-time filtering is performed in the dispatch loop via the
+  // registered db.geoMatchFunc (shared plugin GEOS) — swNgsild has no
+  // direct GEOS dependency, it routes through that function pointer.
+  KjNode*                locationP;           // where the source has Entities
+  KjNode*                observationSpaceP;   // union of observationSpaces (§ 4.7)
+  KjNode*                operationSpaceP;     // union of operationSpaces (§ 4.7)
+
+  // management.timeout (§ 5.2.34) — max ms before a forwarded request is
+  // assumed failed. 0 = plugin default (no per-CSR override).
+  int                    timeoutMs;
 
   // Expiration
   uint64_t               expiresAt;          // epoch nanoseconds (0 = never)

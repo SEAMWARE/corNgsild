@@ -18,6 +18,7 @@
 #define LD_ERROR_BAD_REQUEST_DATA   "https://uri.etsi.org/ngsi-ld/errors/BadRequestData"
 #define LD_ERROR_RESOURCE_NOT_FOUND "https://uri.etsi.org/ngsi-ld/errors/ResourceNotFound"
 #define LD_ERROR_ALREADY_EXISTS     "https://uri.etsi.org/ngsi-ld/errors/AlreadyExists"
+#define LD_ERROR_CONFLICT           "https://uri.etsi.org/ngsi-ld/errors/Conflict"
 #define LD_ERROR_OP_NOT_SUPPORTED   "https://uri.etsi.org/ngsi-ld/errors/OperationNotSupported"
 #define LD_ERROR_INVALID_REQUEST    "https://uri.etsi.org/ngsi-ld/errors/InvalidRequest"
 #define LD_ERROR_INTERNAL_ERROR     "https://uri.etsi.org/ngsi-ld/errors/InternalError"

@@ -10,6 +10,7 @@
 #include <regex.h>                                     // regcomp, regfree
 #include <stdlib.h>                                    // calloc, free, strdup
 #include <string.h>                                    // strcmp
+#include <time.h>                                      // clock_gettime
 
 #include "kalloc/kaBufferInit.h"                       // kaBufferInit
 #include "kjson/KjNode.h"                              // KjNode
@@ -22,7 +23,38 @@
 #include "swNgsild/LdVocab.h"                          // LD_VOCAB_*
 #include "swNgsild/LdRegCache.h"                       // LdRegCache, LdRegCacheItem
 #include "swNgsild/ldCheckDateTime.h"                  // ldIsoToNanoseconds
+#include "swNgsild/ldScopeMatch.h"                     // ldScopePatternMatch
 #include "swNgsild/ldRegCache.h"                       // Own interface
+
+
+
+// -----------------------------------------------------------------------------
+//
+// csrScopeMatches - does CSR's scopeV cover any entry in entityScopeV?
+//
+// Returns true if:
+//   - the CSR has no scope filter (scopeV == NULL), OR
+//   - entityScopeV has at least one value that matches at least one
+//     pattern in csrScopeV via ldScopePatternMatch.
+//
+// If the CSR declares a scope but the entity has no scope, the match
+// fails (scope-restricted CSRs need a scoped entity to apply to).
+//
+static bool csrScopeMatches(char** csrScopeV, char** entityScopeV)
+{
+  if (csrScopeV == NULL)
+    return true;
+
+  if (entityScopeV == NULL || entityScopeV[0] == NULL)
+    return false;
+
+  for (int i = 0; entityScopeV[i] != NULL; i++)
+    for (int j = 0; csrScopeV[j] != NULL; j++)
+      if (ldScopePatternMatch(csrScopeV[j], entityScopeV[i]))
+        return true;
+
+  return false;
+}
 
 
 
@@ -343,6 +375,88 @@ LdRegCacheItem* ldRegCacheItemAdd(LdRegCache* cacheP, KjNode* regTree)
   KjNode* aliasP = kjLookup(itemP->regTree, "contextSourceAlias");
   itemP->csourceAlias = (aliasP != NULL && aliasP->type == KjString) ? aliasP->value.s : NULL;
 
+  // tenant (borrowed; NGSI-LD § 5.2.9 — forwarded requests carry
+  // NGSILD-Tenant: <tenant>, letting a single broker instance back itself
+  // under a different tenancy without a Via-loop false positive)
+  KjNode* tenantP = kjLookup(itemP->regTree, "tenant");
+  itemP->tenant = (tenantP != NULL && tenantP->type == KjString) ? tenantP->value.s : NULL;
+
+  // Geo coverage borrowed pointers — § 5.2.9. Match-time filtering
+  // requires GEOS integration into swNgsild; tracked as a gap.
+  itemP->locationP         = kjLookup(itemP->regTree, "location");
+  itemP->observationSpaceP = kjLookup(itemP->regTree, "observationSpace");
+  itemP->operationSpaceP   = kjLookup(itemP->regTree, "operationSpace");
+
+  // management.timeout (§ 5.2.34) — per-CSR request timeout in ms
+  KjNode* mgmtP = kjLookup(itemP->regTree, "management");
+  if (mgmtP != NULL && mgmtP->type == KjObject)
+  {
+    KjNode* toP = kjLookup(mgmtP, "timeout");
+    if (toP != NULL)
+    {
+      if (toP->type == KjInt)    itemP->timeoutMs = (int) toP->value.i;
+      else if (toP->type == KjFloat) itemP->timeoutMs = (int) toP->value.f;
+    }
+  }
+
+  // scope (§ 5.2.9) — scope or scope[] the CSR claims. Normalize both
+  // KjString and KjArray cases into a NULL-terminated char* array.
+  KjNode* scopeP = kjLookup(itemP->regTree, LD_VOCAB_SCOPE);
+  if (scopeP != NULL)
+  {
+    if (scopeP->type == KjString)
+    {
+      itemP->scopeV = (char**) malloc(2 * sizeof(char*));
+      itemP->scopeV[0] = scopeP->value.s;
+      itemP->scopeV[1] = NULL;
+    }
+    else if (scopeP->type == KjArray)
+    {
+      int n = 0;
+      for (KjNode* sP = scopeP->value.firstChildP; sP != NULL; sP = sP->next)
+        if (sP->type == KjString) n++;
+      if (n > 0)
+      {
+        itemP->scopeV = (char**) malloc((n + 1) * sizeof(char*));
+        int ix = 0;
+        for (KjNode* sP = scopeP->value.firstChildP; sP != NULL; sP = sP->next)
+          if (sP->type == KjString)
+            itemP->scopeV[ix++] = sP->value.s;
+        itemP->scopeV[ix] = NULL;
+      }
+    }
+  }
+
+  // contextSourceInfo (§ 5.2.22) — arbitrary KV pairs forwarded as HTTP
+  // headers. Flatten [{key,value}, ...] → [k0, v0, k1, v1, ..., NULL].
+  KjNode* csiP = kjLookup(itemP->regTree, "contextSourceInfo");
+  if (csiP != NULL && csiP->type == KjArray)
+  {
+    int n = 0;
+    for (KjNode* kvP = csiP->value.firstChildP; kvP != NULL; kvP = kvP->next)
+      if (kvP->type == KjObject)
+        n++;
+
+    if (n > 0)
+    {
+      itemP->contextSourceInfoKV = (char**) malloc((n * 2 + 1) * sizeof(char*));
+      int ix = 0;
+      for (KjNode* kvP = csiP->value.firstChildP; kvP != NULL; kvP = kvP->next)
+      {
+        if (kvP->type != KjObject) continue;
+        KjNode* keyP = kjLookup(kvP, "key");
+        KjNode* valP = kjLookup(kvP, "value");
+        if (keyP == NULL || keyP->type != KjString) continue;
+        if (valP == NULL || valP->type != KjString) continue;
+
+        // Borrow from regTree (cache owns regTree lifetime)
+        itemP->contextSourceInfoKV[ix++] = keyP->value.s;
+        itemP->contextSourceInfoKV[ix++] = valP->value.s;
+      }
+      itemP->contextSourceInfoKV[ix] = NULL;
+    }
+  }
+
   // expiresAt
   KjNode* expiresP = kjLookup(itemP->regTree, LD_VOCAB_EXPIRES_AT);
   if (expiresP != NULL && expiresP->type == KjString)
@@ -396,6 +510,12 @@ static void cacheItemFree(LdRegCacheItem* itemP)
 
   if (itemP->operationsV != NULL)
     free(itemP->operationsV);  // array only — strings are borrowed
+
+  if (itemP->contextSourceInfoKV != NULL)
+    free(itemP->contextSourceInfoKV);  // array only — strings are borrowed
+
+  if (itemP->scopeV != NULL)
+    free(itemP->scopeV);  // array only — strings are borrowed
 
   free(itemP);
 }
@@ -511,14 +631,35 @@ int ldRegCacheMatchForRetrieve(LdRegCache*       cacheP,
                                 LdRegMode         modeFilter,
                                 LdRegCacheItem*** matchVP)
 {
+  return ldRegCacheMatchForRetrieveScoped(cacheP, entityId, entityTypeV,
+                                          NULL, modeFilter, matchVP);
+}
+
+
+int ldRegCacheMatchForRetrieveScoped(LdRegCache*       cacheP,
+                                     const char*       entityId,
+                                     char**            entityTypeV,
+                                     char**            entityScopeV,
+                                     LdRegMode         modeFilter,
+                                     LdRegCacheItem*** matchVP)
+{
   if (cacheP == NULL || matchVP == NULL)
     return 0;
+
+  // Expired CSRs are dead — § 5.2.9 expiresAt. Compare once per call.
+  struct timespec ts;
+  clock_gettime(CLOCK_REALTIME, &ts);
+  uint64_t nowNs = (uint64_t) ts.tv_sec * 1000000000ULL + (uint64_t) ts.tv_nsec;
 
   // Two-pass: count first, then allocate exactly + populate
   int count = 0;
   for (LdRegCacheItem* itemP = cacheP->itemList; itemP != NULL; itemP = itemP->next)
   {
     if (itemP->mode != modeFilter)
+      continue;
+    if (itemP->expiresAt > 0 && itemP->expiresAt <= nowNs)
+      continue;
+    if (!csrScopeMatches(itemP->scopeV, entityScopeV))
       continue;
     if (itemMatches(itemP, entityId, entityTypeV))
       count++;
@@ -534,12 +675,97 @@ int ldRegCacheMatchForRetrieve(LdRegCache*       cacheP,
   {
     if (itemP->mode != modeFilter)
       continue;
+    if (itemP->expiresAt > 0 && itemP->expiresAt <= nowNs)
+      continue;
+    if (!csrScopeMatches(itemP->scopeV, entityScopeV))
+      continue;
     if (itemMatches(itemP, entityId, entityTypeV))
       v[ix++] = itemP;
   }
 
   *matchVP = v;
   return count;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// opInGroup - true if opName is a member of a named operation group
+//
+// Groups per § 4.20 Table 4.20-2. Only the members that are relevant to
+// broker-side dispatch (entity CRUD + retrieve + query) are enumerated —
+// operations like createSubscription, retrieveEntityTypes etc. don't
+// need membership lookups from inside the dispatcher so listing them
+// here would be churn.
+//
+static bool opInGroup(const char* groupName, const char* opName)
+{
+  if (strcmp(groupName, "federationOps") == 0)
+    return (strcmp(opName, "retrieveEntity") == 0 ||
+            strcmp(opName, "queryEntity")    == 0 ||
+            strcmp(opName, "queryBatch")     == 0);
+
+  if (strcmp(groupName, "associationOps") == 0)
+    return (strcmp(opName, "retrieveEntity") == 0 ||
+            strcmp(opName, "queryEntity")    == 0 ||
+            strcmp(opName, "queryBatch")     == 0);
+
+  if (strcmp(groupName, "retrieveOps") == 0)
+    return (strcmp(opName, "retrieveEntity") == 0 ||
+            strcmp(opName, "queryEntity")    == 0);
+
+  if (strcmp(groupName, "updateOps") == 0)
+    return (strcmp(opName, "updateEntity")  == 0 ||
+            strcmp(opName, "updateAttrs")   == 0 ||
+            strcmp(opName, "replaceEntity") == 0 ||
+            strcmp(opName, "replaceAttrs")  == 0);
+
+  if (strcmp(groupName, "redirectionOps") == 0)
+    return (strcmp(opName, "createEntity")   == 0 ||
+            strcmp(opName, "updateEntity")   == 0 ||
+            strcmp(opName, "appendAttrs")    == 0 ||
+            strcmp(opName, "updateAttrs")    == 0 ||
+            strcmp(opName, "deleteAttrs")    == 0 ||
+            strcmp(opName, "deleteEntity")   == 0 ||
+            strcmp(opName, "mergeEntity")    == 0 ||
+            strcmp(opName, "replaceEntity")  == 0 ||
+            strcmp(opName, "replaceAttrs")   == 0 ||
+            strcmp(opName, "retrieveEntity") == 0 ||
+            strcmp(opName, "queryEntity")    == 0 ||
+            strcmp(opName, "purgeEntity")    == 0);
+
+  return false;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldRegOpSupported -
+//
+bool ldRegOpSupported(const LdRegCacheItem* itemP, const char* opName)
+{
+  if (itemP == NULL || opName == NULL)
+    return false;
+
+  // Default: federationOps (retrieve-only). A default-operations reg does
+  // not accept createEntity / updateEntity / etc.
+  if (itemP->operationsV == NULL)
+    return opInGroup("federationOps", opName);
+
+  for (int i = 0; itemP->operationsV[i] != NULL; i++)
+  {
+    const char* entry = itemP->operationsV[i];
+
+    if (strcmp(entry, opName) == 0)
+      return true;
+
+    if (opInGroup(entry, opName))
+      return true;
+  }
+
+  return false;
 }
 
 

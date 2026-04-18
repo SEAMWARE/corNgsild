@@ -57,6 +57,7 @@ LIB_SOURCES   = swNgsild.c \
                 ldPernotLoop.c \
                 ldEntityMap.c \
                 ldRegCache.c \
+                ldEntityFragment.c \
                 ldForwarding.c \
                 ldExpandParams.c \
                 ldCsourceAlias.c \

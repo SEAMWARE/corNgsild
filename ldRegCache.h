@@ -92,4 +92,36 @@ extern int ldRegCacheMatchForRetrieve(LdRegCache*       cacheP,
                                        LdRegMode         modeFilter,
                                        LdRegCacheItem*** matchVP);
 
+
+
+// -----------------------------------------------------------------------------
+//
+// ldRegCacheMatchForRetrieveScoped - like ldRegCacheMatchForRetrieve but
+// also filters by the entity's scope (§ 5.2.9 csr.scope vs entity scope).
+// entityScopeV is a NULL-terminated string array of the entity's scope
+// values; pass NULL to skip scope filtering (= same behaviour as the
+// non-scoped variant).
+//
+extern int ldRegCacheMatchForRetrieveScoped(LdRegCache*       cacheP,
+                                             const char*       entityId,
+                                             char**            entityTypeV,
+                                             char**            entityScopeV,
+                                             LdRegMode         modeFilter,
+                                             LdRegCacheItem*** matchVP);
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldRegOpSupported - true if a registration declares support for opName
+//
+// opName is the unprefixed NGSI-LD operation name ("createEntity",
+// "updateEntity", "retrieveEntity", ...). Matching rules (§ 4.20):
+//   - itemP->operationsV == NULL: default "federationOps" group applies
+//   - otherwise: opName must appear in operationsV OR be a member of a
+//     group name (federationOps, associationOps, updateOps, retrieveOps,
+//     redirectionOps) that appears in operationsV.
+//
+extern bool ldRegOpSupported(const LdRegCacheItem* itemP, const char* opName);
+
 #endif  // SWNGSILD_LDREGCACHE_OPS_H_
