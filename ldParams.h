@@ -129,6 +129,7 @@
   | LD_PARAM_LANG         \
   | LD_PARAM_OBSERVED_AT  \
   | LD_PARAM_OPTIONS      \
+  | LD_PARAM_LOCAL        \
   )
 
 #define LD_PARAMS_POST_SUBSCRIPTIONS   0
