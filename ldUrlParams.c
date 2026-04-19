@@ -32,10 +32,11 @@
 //
 // ldLocalOnly - global flag set by --localOnly CLI arg (no distributed ops)
 //
-bool        ldLocalOnly         = false;
+bool        ldLocalOnly          = false;
 bool        ldSplitEntities      = true;
 char*       ldDefaultContextUrl  = NULL;
 const char* ldCsourceAliasBase   = NULL;
+long long   ldBrokerStartTimeSec = 0;
 
 
 

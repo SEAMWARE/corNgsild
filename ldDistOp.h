@@ -38,6 +38,24 @@ extern bool ldDistOpLoopDetected(const char* ownAlias);
 
 // -----------------------------------------------------------------------------
 //
+// ldDistOpCsrWouldLoop - true if forwarding to this CSR would create a loop
+//
+// § 5.12 match rule: "no registration shall match if the CSourceRegistration
+// contextSourceAlias can be found within the listing of previously
+// encountered Context Sources". Dispatcher per-CSR pre-check:
+//   - csr->csourceAlias unknown (NULL) → false (can't decide, proceed).
+//   - csr->csourceAlias in incoming Via chain → true (skip this CSR).
+//   - csr->csourceAlias equals our own alias → true (pointing at self).
+//
+// This is the PROACTIVE form — distinct from ldDistOpLoopDetected which
+// reacts to our own alias already appearing in the chain at entry.
+//
+extern bool ldDistOpCsrWouldLoop(LdRegCacheItem* csr, const char* ownAlias);
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldDistOpSend - send one CSR forward and update its counters
 //
 // Common machinery shared by every dispatcher:

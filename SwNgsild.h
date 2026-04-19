@@ -166,6 +166,14 @@ extern const char* ldCsourceAliasBase;
 
 
 
+// ldBrokerStartTimeSec - epoch seconds at which the broker process started.
+// Used by /info/sourceIdentity to compute contextSourceUptime. Set once at
+// startup.
+//
+extern long long ldBrokerStartTimeSec;
+
+
+
 // -----------------------------------------------------------------------------
 //
 // ldParamHook - callback for swRest param validation

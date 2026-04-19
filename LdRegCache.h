@@ -113,7 +113,12 @@ typedef struct LdRegCacheItem
 
   // Borrowed pointers into regTree
   char*                  endpoint;           // dereferenceable URI of the context source
-  char*                  csourceAlias;       // loop-detection pseudonym (NULL if absent)
+  char*                  csourceAlias;       // loop-detection pseudonym (NULL if absent) —
+                                             // points to regTree when client-supplied,
+                                             // or to probedAlias when learned via probe.
+  char*                  probedAlias;        // strdup'd alias from /info/sourceIdentity
+                                             // probe; owned by the item (free on release).
+                                             // NULL if not probed or probe failed.
   char*                  tenant;             // § 5.2.9 tenant rewrite — forwarded requests get
                                              // NGSILD-Tenant: <tenant> (NULL = keep sender's tenant)
 

@@ -44,6 +44,25 @@ bool ldDistOpLoopDetected(const char* ownAlias)
 
 // -----------------------------------------------------------------------------
 //
+// ldDistOpCsrWouldLoop -
+//
+bool ldDistOpCsrWouldLoop(LdRegCacheItem* csr, const char* ownAlias)
+{
+  if (csr == NULL || csr->csourceAlias == NULL)
+    return false;
+
+  // Pointing at ourselves
+  if (ownAlias != NULL && strcmp(csr->csourceAlias, ownAlias) == 0)
+    return true;
+
+  // Pointing at a broker we've already transited
+  return ldViaHasAlias(swRest.in.httpHeaderV, swRest.in.httpHeaderCount, csr->csourceAlias);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // verbHasBody - true for verbs that carry a request body
 //
 // Only these inherit the default Content-Type header when building a

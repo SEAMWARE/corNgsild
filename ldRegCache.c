@@ -24,6 +24,7 @@
 #include "swNgsild/LdRegCache.h"                       // LdRegCache, LdRegCacheItem
 #include "swNgsild/ldCheckDateTime.h"                  // ldIsoToNanoseconds
 #include "swNgsild/ldScopeMatch.h"                     // ldScopePatternMatch
+#include "swNgsild/ldProbeSourceIdentity.h"            // ldProbeSourceIdentity
 #include "swNgsild/ldRegCache.h"                       // Own interface
 
 
@@ -371,15 +372,29 @@ LdRegCacheItem* ldRegCacheItemAdd(LdRegCache* cacheP, KjNode* regTree)
   KjNode* endpointP = kjLookup(itemP->regTree, LD_VOCAB_ENDPOINT);
   itemP->endpoint = (endpointP != NULL && endpointP->type == KjString) ? endpointP->value.s : NULL;
 
-  // contextSourceAlias (borrowed; NGSI-LD § 5.2.9 — distribution loop detection)
-  KjNode* aliasP = kjLookup(itemP->regTree, "contextSourceAlias");
-  itemP->csourceAlias = (aliasP != NULL && aliasP->type == KjString) ? aliasP->value.s : NULL;
-
   // tenant (borrowed; NGSI-LD § 5.2.9 — forwarded requests carry
   // NGSILD-Tenant: <tenant>, letting a single broker instance back itself
   // under a different tenancy without a Via-loop false positive)
   KjNode* tenantP = kjLookup(itemP->regTree, "tenant");
   itemP->tenant = (tenantP != NULL && tenantP->type == KjString) ? tenantP->value.s : NULL;
+
+  // contextSourceAlias (borrowed; NGSI-LD § 5.2.9 — distribution loop
+  // detection). If the client didn't provide one, probe the CSR's
+  // /info/sourceIdentity endpoint (§ 5.15) to learn it. The probe's
+  // result is process-heap malloc'd; probedAlias records ownership so
+  // the item-free path can free it. Probe failure leaves csourceAlias
+  // NULL — reactive Via-based detection still protects us.
+  KjNode* aliasP = kjLookup(itemP->regTree, "contextSourceAlias");
+  if (aliasP != NULL && aliasP->type == KjString)
+  {
+    itemP->csourceAlias = aliasP->value.s;
+    itemP->probedAlias  = NULL;
+  }
+  else if (itemP->endpoint != NULL)
+  {
+    itemP->probedAlias  = ldProbeSourceIdentity(itemP->endpoint, itemP->tenant, 0);
+    itemP->csourceAlias = itemP->probedAlias;   // may be NULL on failure
+  }
 
   // Geo coverage borrowed pointers — § 5.2.9. Match-time filtering
   // requires GEOS integration into swNgsild; tracked as a gap.
@@ -502,6 +517,9 @@ static void cacheItemFree(LdRegCacheItem* itemP)
 {
   if (itemP->regId != NULL)
     free(itemP->regId);
+
+  if (itemP->probedAlias != NULL)
+    free(itemP->probedAlias);
 
   if (itemP->regTree != NULL)
     kjFree(itemP->regTree);
