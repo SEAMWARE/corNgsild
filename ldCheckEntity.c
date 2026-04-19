@@ -46,6 +46,21 @@ static bool isCreateOp(LdOp op)
 
 // -----------------------------------------------------------------------------
 //
+// isUpdateOp - ops where the URL carries the entity id and body must not
+//
+static bool isUpdateOp(LdOp op)
+{
+  if (op == LdOpUpdateEntity) return true;
+  if (op == LdOpAppendAttrs)  return true;
+  if (op == LdOpMergeEntity)  return true;
+
+  return false;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // findAttrTypeInDb - find an attribute's type from the DB entity
 //
 static LdAttrType findAttrTypeInDb(KjNode* dbEntityP, const char* attrName)
@@ -168,6 +183,16 @@ bool ldCheckEntity(KjNode* entityP, LdOp op, KjNode* dbEntityP, KAlloc* faP)
   {
     STRING_CHECK(idNodeP, "Invalid Entity Id", "Entity 'id' must be a string");
     URI_CHECK(idNodeP->value.s);
+
+    // Update ops take the id from the URL; forbidding it in the body
+    // prevents id-modification attempts and removes the match/mismatch
+    // ambiguity entirely.
+    if (isUpdateOp(op))
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Entity Id In Body",
+              "Entity 'id' must not appear in the payload of %s", ldOpToString(op));
+      return false;
+    }
   }
 
   // Validate "type" if present — string or array of non-empty strings
