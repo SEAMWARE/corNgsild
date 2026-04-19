@@ -42,6 +42,7 @@ SwRestParam ldParamRegistryV[] =
   { "format",                LD_PARAM_FORMAT },
   { "entityMap",             LD_PARAM_ENTITY_MAP },
   { "local",                 LD_PARAM_LOCAL },
+  { "noForward",             LD_PARAM_NO_FORWARD },
   { "via",                   LD_PARAM_VIA },
   { "deleteAll",             LD_PARAM_DELETE_ALL },
   { "timeproperty",          LD_PARAM_TIMEPROPERTY },

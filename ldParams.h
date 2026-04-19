@@ -61,6 +61,7 @@
 #define LD_PARAM_ORDER_BY              (1ULL << 39)
 #define LD_PARAM_COLLATION             (1ULL << 40)
 #define LD_PARAM_SPLIT_ENTITIES        (1ULL << 41)
+#define LD_PARAM_NO_FORWARD            (1ULL << 42)  // discovery: local + CSR metadata, no forward
 
 
 
@@ -141,6 +142,26 @@
   | LD_PARAM_OBSERVED_AT  \
   | LD_PARAM_OPTIONS      \
   | LD_PARAM_LOCAL        \
+  )
+
+// Discovery endpoints (§ 5.7.5 – § 5.7.10 / § 6.25 – § 6.28)
+#define LD_PARAMS_GET_TYPES        \
+  ( LD_PARAM_DETAILS               \
+  | LD_PARAM_LOCAL                 \
+  | LD_PARAM_NO_FORWARD            \
+  )
+#define LD_PARAMS_GET_TYPE         \
+  ( LD_PARAM_LOCAL                 \
+  | LD_PARAM_NO_FORWARD            \
+  )
+#define LD_PARAMS_GET_ATTRIBUTES   \
+  ( LD_PARAM_DETAILS               \
+  | LD_PARAM_LOCAL                 \
+  | LD_PARAM_NO_FORWARD            \
+  )
+#define LD_PARAMS_GET_ATTRIBUTE    \
+  ( LD_PARAM_LOCAL                 \
+  | LD_PARAM_NO_FORWARD            \
   )
 
 #define LD_PARAMS_POST_SUBSCRIPTIONS   0

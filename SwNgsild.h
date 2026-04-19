@@ -86,6 +86,7 @@ typedef struct SwNgsild
   bool    sysAttrs;
   bool    count;         // true if ?count=true
   bool    local;         // true if ?local=true
+  bool    noForward;     // true if ?noForward=true  (discovery: local + CSR metadata, no forward)
   bool    details;       // true if ?details=true
   bool    noOverwrite;   // true if ?options=noOverwrite (Append Attributes)
 

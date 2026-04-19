@@ -193,6 +193,10 @@ void ldParamHook(const char* name, const char* value)
   {
     swNgsild.local = (value != NULL && strcmp(value, "true") == 0);
   }
+  else if (strcmp(name, "noForward") == 0)
+  {
+    swNgsild.noForward = (value != NULL && strcmp(value, "true") == 0);
+  }
   else if (strcmp(name, "details") == 0)
   {
     swNgsild.details = (value != NULL && strcmp(value, "true") == 0);
