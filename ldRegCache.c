@@ -720,14 +720,26 @@ int ldRegCacheMatchForRetrieveScoped(LdRegCache*       cacheP,
 static bool opInGroup(const char* groupName, const char* opName)
 {
   if (strcmp(groupName, "federationOps") == 0)
-    return (strcmp(opName, "retrieveEntity") == 0 ||
-            strcmp(opName, "queryEntity")    == 0 ||
-            strcmp(opName, "queryBatch")     == 0);
+    return (strcmp(opName, "retrieveEntity")            == 0 ||
+            strcmp(opName, "queryEntity")               == 0 ||
+            strcmp(opName, "queryBatch")                == 0 ||
+            strcmp(opName, "retrieveEntityTypes")       == 0 ||
+            strcmp(opName, "retrieveEntityTypeDetails") == 0 ||
+            strcmp(opName, "retrieveEntityTypeInfo")    == 0 ||
+            strcmp(opName, "retrieveAttrTypes")         == 0 ||
+            strcmp(opName, "retrieveAttrTypeDetails")   == 0 ||
+            strcmp(opName, "retrieveAttrTypeInfo")      == 0);
 
   if (strcmp(groupName, "associationOps") == 0)
-    return (strcmp(opName, "retrieveEntity") == 0 ||
-            strcmp(opName, "queryEntity")    == 0 ||
-            strcmp(opName, "queryBatch")     == 0);
+    return (strcmp(opName, "retrieveEntity")            == 0 ||
+            strcmp(opName, "queryEntity")               == 0 ||
+            strcmp(opName, "queryBatch")                == 0 ||
+            strcmp(opName, "retrieveEntityTypes")       == 0 ||
+            strcmp(opName, "retrieveEntityTypeDetails") == 0 ||
+            strcmp(opName, "retrieveEntityTypeInfo")    == 0 ||
+            strcmp(opName, "retrieveAttrTypes")         == 0 ||
+            strcmp(opName, "retrieveAttrTypeDetails")   == 0 ||
+            strcmp(opName, "retrieveAttrTypeInfo")      == 0);
 
   if (strcmp(groupName, "retrieveOps") == 0)
     return (strcmp(opName, "retrieveEntity") == 0 ||

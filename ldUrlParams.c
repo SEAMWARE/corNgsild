@@ -197,6 +197,15 @@ void ldParamHook(const char* name, const char* value)
   {
     swNgsild.noForward = (value != NULL && strcmp(value, "true") == 0);
   }
+  else if (strcmp(name, "hops") == 0)
+  {
+    if (value != NULL)
+    {
+      swNgsild.hops    = atoi(value);
+      swNgsild.hopsSet = true;
+      if (swNgsild.hops < 0) swNgsild.hops = 0;
+    }
+  }
   else if (strcmp(name, "details") == 0)
   {
     swNgsild.details = (value != NULL && strcmp(value, "true") == 0);

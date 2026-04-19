@@ -87,6 +87,8 @@ typedef struct SwNgsild
   bool    count;         // true if ?count=true
   bool    local;         // true if ?local=true
   bool    noForward;     // true if ?noForward=true  (discovery: local + CSR metadata, no forward)
+  int     hops;          // ?hops=<N> — federation hop limit (default 8 when absent)
+  bool    hopsSet;       // true if ?hops=... was explicitly supplied
   bool    details;       // true if ?details=true
   bool    noOverwrite;   // true if ?options=noOverwrite (Append Attributes)
 

@@ -62,6 +62,7 @@
 #define LD_PARAM_COLLATION             (1ULL << 40)
 #define LD_PARAM_SPLIT_ENTITIES        (1ULL << 41)
 #define LD_PARAM_NO_FORWARD            (1ULL << 42)  // discovery: local + CSR metadata, no forward
+#define LD_PARAM_HOPS                  (1ULL << 43)  // federation hop limit (proposed in ETSI TC DATA)
 
 
 
@@ -149,19 +150,23 @@
   ( LD_PARAM_DETAILS               \
   | LD_PARAM_LOCAL                 \
   | LD_PARAM_NO_FORWARD            \
+  | LD_PARAM_HOPS                  \
   )
 #define LD_PARAMS_GET_TYPE         \
   ( LD_PARAM_LOCAL                 \
   | LD_PARAM_NO_FORWARD            \
+  | LD_PARAM_HOPS                  \
   )
 #define LD_PARAMS_GET_ATTRIBUTES   \
   ( LD_PARAM_DETAILS               \
   | LD_PARAM_LOCAL                 \
   | LD_PARAM_NO_FORWARD            \
+  | LD_PARAM_HOPS                  \
   )
 #define LD_PARAMS_GET_ATTRIBUTE    \
   ( LD_PARAM_LOCAL                 \
   | LD_PARAM_NO_FORWARD            \
+  | LD_PARAM_HOPS                  \
   )
 
 #define LD_PARAMS_POST_SUBSCRIPTIONS   0
