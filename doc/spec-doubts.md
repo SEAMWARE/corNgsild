@@ -306,6 +306,63 @@ to) CSR's X-Space" for all three.
 
 ---
 
+## 11. § 5.7.11 / § 6.25–6.28 — no URL param for "local + registry, no forward"
+
+**Hit:** Discovery endpoints (/types, /types/{type}, /attributes,
+/attributes/{attrId}) have three natural modes per § 5.7.11:
+
+1. **Local only** — only the local datastore.
+2. **Local + CSR metadata** — augment with types/attrs declared in
+   `information.entities[].type`, `propertyNames`, `relationshipNames`.
+3. **Local + CSR metadata + forwarded retrieval** — forward the GET
+   to every CSR that supports the relevant retrieve op and merge.
+
+The spec defines `?local=true` (mode 1) and text for § 5.7.11 lays
+out both "local + registry" and "forward" as alternatives (mode 2 and
+mode 3), but the HTTP binding has **no URL parameter** to ask for
+mode 2 specifically. The default is underspecified — implementations
+will diverge on whether the default is mode 2 or mode 3.
+
+**Spec:** § 5.7.11 — "implementations may only take into account
+information that is available or can be derived from a local datastore
+**and the Context Registry** … **As an alternative** … the request
+can be forwarded to all Context Sources". Reads as two implementation
+options but without a client-side switch.
+
+**Our call:** Added a non-standard URL param `?noForward=true` that
+requests mode 2 (local + CSR metadata, no forwarding). Default (no
+`?local` and no `?noForward`) is mode 3 (forward).
+
+**Fix wanted:** A standardised URL param (suggested `noForward=true`)
+so clients can explicitly request the middle mode, plus spec language
+mandating what the default is when the param is absent.
+
+---
+
+## 12. § 5.7.11 federation depth — no hop / TTL bound
+
+**Hit:** Mode-3 discovery forwarding is recursive by nature: every
+forwarded GET lands on a broker that itself re-forwards to its own
+CSRs. In a misconfigured or deep federation this can explode. Via-
+header loop detection catches **cycles** but not deep **chains**,
+and for discovery (which asks each CSR to aggregate upstream) it
+does not stop on legitimate non-cyclic trees that are simply too
+deep.
+
+**Spec:** Silent on depth. § 5.7.11 describes forwarding as an option
+without any bounded-traversal concern.
+
+**Our call:** Added a non-standard URL param `?hops=<N>`. Decremented
+on each outgoing forward; when the inbound hop count reaches 0 we
+stop forwarding entirely. Default when absent: 8 — deep enough for
+realistic federations while capping the worst case.
+
+**Fix wanted:** Standardise the hop limit (name `hops` preferred over
+`ttl`; TTL-in-HTTP is ambiguous vs. cache-age) with a clear default
+and the rule "decrement on each hop, stop at 0".
+
+---
+
 ## Template for new entries
 
 ```
