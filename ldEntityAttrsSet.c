@@ -35,6 +35,36 @@ static bool isEntityKeyword(const char* name)
 
 // -----------------------------------------------------------------------------
 //
+// isNgsildNull - true if node is the "urn:ngsi-ld:null" delete-marker string
+//
+static inline bool isNgsildNull(const KjNode* nodeP)
+{
+  return (nodeP != NULL &&
+          nodeP->type == KjString &&
+          strcmp(nodeP->value.s, LD_VOCAB_NGSILD_NULL) == 0);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// instanceValueIsNull - true if an instance object's "value" is the null-marker
+//
+// After ldApiEntityToDbModel, every instance's payload key is "value"
+// (Property.value, Relationship.object, LanguageProperty.languageMap, ...
+// all normalized).
+//
+static bool instanceValueIsNull(KjNode* instP)
+{
+  if (instP == NULL || instP->type != KjObject)
+    return false;
+  return isNgsildNull(kjLookup(instP, "value"));
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // bumpModifiedAt - set modifiedAt on an object (replace in-place or add)
 //
 static void bumpModifiedAt(KjNode* objP, uint64_t ts, Kjson* allocP)
@@ -282,6 +312,25 @@ void ldEntityAttrsSet(KjNode* target, KjNode* fragment,
     if (isEntityKeyword(fAttrP->name)) continue;
     if (strcmp(fAttrP->name, "type")         == 0) continue;
     if (strcmp(fAttrP->name, LD_VOCAB_SCOPE) == 0) continue;
+
+    //
+    // Top-level null-marker → delete the whole attr. Used by PATCH /attrs
+    // and PATCH /{id} (merge). Append's validator rejects nulls upfront,
+    // so this branch never fires for Append callers.
+    //
+    if (isNgsildNull(fAttrP))
+    {
+      KjNode* tAttrP = kjLookup(target, fAttrP->name);
+      if (tAttrP != NULL)
+      {
+        KjNode* preClone = (reportP != NULL) ? kjClone(swRest.kjsonP, tAttrP) : NULL;
+        kjChildRemove(target, tAttrP);
+        addReportEntry(reportP, fAttrP->name, "attributeDeleted", preClone);
+        anyChange = true;
+      }
+      continue;
+    }
+
     if (fAttrP->type != KjObject)                  continue;
 
     KjNode* tAttrP = kjLookup(target, fAttrP->name);
@@ -314,12 +363,29 @@ void ldEntityAttrsSet(KjNode* target, KjNode* fragment,
     if (reportP != NULL)
       preClone = kjClone(swRest.kjsonP, tAttrP);
 
-    for (KjNode* fInstP = fAttrP->value.firstChildP; fInstP != NULL; fInstP = fInstP->next)
+    KjNode* fInstP = fAttrP->value.firstChildP;
+    while (fInstP != NULL)
     {
+      KjNode* nextInst = fInstP->next;
       if (fInstP->type != KjObject)
+      {
+        fInstP = nextInst;
         continue;
+      }
 
       KjNode* tInstP = kjLookup(tAttrP, fInstP->name);
+
+      //
+      // Instance-level null-marker → delete that dsKey from target
+      // (§ 5.6.2.4 Update Attributes). Only matters if target has it.
+      //
+      if (instanceValueIsNull(fInstP))
+      {
+        if (tInstP != NULL)
+          kjChildRemove(tAttrP, tInstP);
+        fInstP = nextInst;
+        continue;
+      }
 
       if (tInstP == NULL)
       {
@@ -355,6 +421,8 @@ void ldEntityAttrsSet(KjNode* target, KjNode* fragment,
         kjChildRemove(tAttrP, tInstP);
         kjChildAdd(tAttrP, newInst);
       }
+
+      fInstP = nextInst;
     }
 
     // The attr wrapper (dsKey-keyed map) holds no timestamps — only
