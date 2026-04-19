@@ -87,6 +87,7 @@ typedef struct SwNgsild
   bool    count;         // true if ?count=true
   bool    local;         // true if ?local=true
   bool    details;       // true if ?details=true
+  bool    noOverwrite;   // true if ?options=noOverwrite (Append Attributes)
 
   // URL parameters — ordering (§ 4.23)
   char*         orderBy;       // raw orderBy string

@@ -236,6 +236,9 @@ void ldParamHook(const char* name, const char* value)
 
     if (strstr(wrapped, ",sysAttrs,") != NULL)
       swNgsild.sysAttrs = true;
+
+    if (strstr(wrapped, ",noOverwrite,") != NULL)
+      swNgsild.noOverwrite = true;
   }
   else if (strcmp(name, "georel") == 0)
   {

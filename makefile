@@ -50,6 +50,7 @@ LIB_SOURCES   = swNgsild.c \
                 ldParamsValidate.c \
                 ldToGeoJson.c \
                 ldEntityMatch.c \
+                ldEntityAttrsSet.c \
                 ldSubscriptionNotify.c \
                 ldNotifyDefer.c \
                 ldSubCache.c \
