@@ -67,7 +67,8 @@ LIB_SOURCES   = swNgsild.c \
                 ldQRender.c \
                 ldSubscriptionCompactQ.c \
                 ldSubscriptionCounters.c \
-                ldSimplifyEntity.c
+                ldSimplifyEntity.c \
+                ldDiscovery.c
 LIB_OBJS      = $(LIB_SOURCES:c=o)
 
 LIBS          = ../swRest/libswRest.a ../swJsonld/libswJsonld.a ../kalloc/libkalloc.a ../kjson/libkjson.a ../kbase/libkbase.a ../klog/libklog.a ../ktrace/libktrace.a ../khash/libkhash.a -lpthread
