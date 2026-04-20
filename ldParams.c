@@ -44,6 +44,8 @@ SwRestParam ldParamRegistryV[] =
   { "local",                 LD_PARAM_LOCAL },
   { "noForward",             LD_PARAM_NO_FORWARD },
   { "hops",                  LD_PARAM_HOPS },
+  { "drop",                  LD_PARAM_DROP },
+  { "keep",                  LD_PARAM_KEEP },
   { "via",                   LD_PARAM_VIA },
   { "deleteAll",             LD_PARAM_DELETE_ALL },
   { "timeproperty",          LD_PARAM_TIMEPROPERTY },

@@ -206,6 +206,16 @@ void ldParamHook(const char* name, const char* value)
       if (swNgsild.hops < 0) swNgsild.hops = 0;
     }
   }
+  else if (strcmp(name, "drop") == 0)
+  {
+    if (value != NULL)
+      swNgsild.dropV = ldParamSplit((char*) value, faP);
+  }
+  else if (strcmp(name, "keep") == 0)
+  {
+    if (value != NULL)
+      swNgsild.keepV = ldParamSplit((char*) value, faP);
+  }
   else if (strcmp(name, "details") == 0)
   {
     swNgsild.details = (value != NULL && strcmp(value, "true") == 0);

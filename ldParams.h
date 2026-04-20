@@ -63,6 +63,8 @@
 #define LD_PARAM_SPLIT_ENTITIES        (1ULL << 41)
 #define LD_PARAM_NO_FORWARD            (1ULL << 42)  // discovery: local + CSR metadata, no forward
 #define LD_PARAM_HOPS                  (1ULL << 43)  // federation hop limit (proposed in ETSI TC DATA)
+#define LD_PARAM_DROP                  (1ULL << 44)  // Purge § 6.4.3.3 — restrictive attr list
+#define LD_PARAM_KEEP                  (1ULL << 45)  // Purge § 6.4.3.3 — exclusionary attr list
 
 
 
@@ -135,6 +137,25 @@
 #define LD_PARAMS_REPLACE_ENTITY  ( LD_PARAM_TYPE | LD_PARAM_LOCAL )
 
 #define LD_PARAMS_DELETE_ENTITY   ( LD_PARAM_TYPE | LD_PARAM_LOCAL )
+
+// Purge Entities (§ 5.6.21 / § 6.4.3.3)
+#define LD_PARAMS_PURGE_ENTITIES  \
+  ( LD_PARAM_ID          \
+  | LD_PARAM_TYPE        \
+  | LD_PARAM_ID_PATTERN  \
+  | LD_PARAM_ATTRS       \
+  | LD_PARAM_Q           \
+  | LD_PARAM_GEOREL      \
+  | LD_PARAM_GEOMETRY    \
+  | LD_PARAM_COORDINATES \
+  | LD_PARAM_GEOPROPERTY \
+  | LD_PARAM_CSF         \
+  | LD_PARAM_SCOPE_Q     \
+  | LD_PARAM_LOCAL       \
+  | LD_PARAM_DROP        \
+  | LD_PARAM_KEEP        \
+  | LD_PARAM_VIA         \
+  )
 
 #define LD_PARAMS_PATCH_ENTITY  \
   ( LD_PARAM_TYPE         \

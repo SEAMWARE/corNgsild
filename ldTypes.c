@@ -117,6 +117,7 @@ const char* ldOpToString(LdOp op)
   case LdOpDeleteEntity:       return "DeleteEntity";
   case LdOpDeleteAttr:         return "DeleteAttr";
   case LdOpReplaceAttr:        return "ReplaceAttr";
+  case LdOpPurgeEntity:        return "PurgeEntity";
   case LdOpBatchCreate:        return "BatchCreate";
   case LdOpBatchUpsert:        return "BatchUpsert";
   case LdOpBatchUpdate:        return "BatchUpdate";

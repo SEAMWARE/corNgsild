@@ -28,6 +28,7 @@ typedef enum LdOp
   LdOpDeleteEntity,
   LdOpDeleteAttr,
   LdOpReplaceAttr,
+  LdOpPurgeEntity,
 
   // Batch ops
   LdOpBatchCreate,

@@ -92,6 +92,10 @@ typedef struct SwNgsild
   bool    details;       // true if ?details=true
   bool    noOverwrite;   // true if ?options=noOverwrite (Append Attributes)
 
+  // Purge Entities (§ 6.4.3.3)
+  char**  dropV;         // ?drop=a,b — restrictive attr list (delete only these attrs)
+  char**  keepV;         // ?keep=a,b — exclusionary attr list (delete everything except these)
+
   // URL parameters — ordering (§ 4.23)
   char*         orderBy;       // raw orderBy string
   LdOrderTerm*  orderByV;      // parsed terms (NULL-terminated array, expanded in ldExpandParams)
