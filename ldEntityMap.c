@@ -118,6 +118,15 @@ void ldEntityMapAddEntry(LdEntityMap* mapP, const char* entityId,
 
 
 
+// ldEntityMapSetExpiresAt
+void ldEntityMapSetExpiresAt(LdEntityMap* mapP, uint64_t expiresAtNs)
+{
+  if (mapP == NULL) return;
+  mapP->expiresAt = expiresAtNs;
+}
+
+
+
 // ldEntityMapLookup
 LdEntityMap* ldEntityMapLookup(LdEntityMapStore* storeP, const char* mapId)
 {

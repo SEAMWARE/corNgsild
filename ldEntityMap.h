@@ -29,6 +29,9 @@ extern LdEntityMap* ldEntityMapLookup(LdEntityMapStore* storeP, const char* mapI
 // ldEntityMapRemove - remove and free a map by ID
 extern bool ldEntityMapRemove(LdEntityMapStore* storeP, const char* mapId);
 
+// ldEntityMapSetExpiresAt - overwrite a map's expiresAt (§ 5.14.2)
+extern void ldEntityMapSetExpiresAt(LdEntityMap* mapP, uint64_t expiresAtNs);
+
 // ldEntityMapToTree - render an EntityMap as a KjNode tree for API output
 extern KjNode* ldEntityMapToTree(LdEntityMap* mapP);
 

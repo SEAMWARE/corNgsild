@@ -388,6 +388,32 @@ update / delete / replace are.
 
 ---
 
+## 14. § 6.34.3.1 — GET /entityMaps creates (HTTP method semantics)
+
+**Hit:** § 6.34.3.1 binds the HTTP GET method on `/entityMaps` to the
+"Create EntityMap for Query Entities" operation, responds 201 Created,
+and includes an `NGSILD-EntityMap` location header. The same semantics
+apply to GET /temporal/entityMaps (§ 6.35.3.1).
+
+**Spec:** GET is defined this way; POST /entityMaps (§ 6.34.3.2) exists
+as an alternative with a Query body. Both forms CREATE an EntityMap.
+
+**Our call:** Implemented as specified — GET creates (201), POST creates
+(201). No-op fallback or listing endpoint added.
+
+**Fix wanted:** GET should be safe (RFC 9110 § 9.2.1) — "do not request
+any state change on the target resource". A method that creates a
+resource on every call and burdens the broker with garbage-collected
+EntityMaps is not safe. Either:
+  - Bind creation to POST only, drop the GET form; or
+  - Add a listing endpoint at GET /entityMaps (read-only), and keep
+    creation on POST.
+Rationale: intermediaries (proxies, browsers, crawlers, prefetchers)
+routinely retry / prefetch GET requests assuming safety. A creating
+GET generates a new resource per retry — classic anti-pattern.
+
+---
+
 ## Template for new entries
 
 ```

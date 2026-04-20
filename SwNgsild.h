@@ -119,6 +119,7 @@ typedef struct SwNgsild
 
   // Response flags
   bool    rawResponse;  // true => renderHook skips ldEntityToApi (used for subscription responses)
+  bool    entityMapOnly; // true => GET|POST /entityMaps: query + return the EntityMap (not entities)
 
   // Tenant (resolved in preServiceHook, opaque to swNgsild)
   void*  tenantP;
