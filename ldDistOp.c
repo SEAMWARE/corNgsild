@@ -109,26 +109,62 @@ static SwRestKeyValue* buildHeaders(SwRestVerb   verb,
   if (csrInfoKV != NULL)
     for (int i = 0; csrInfoKV[i] != NULL; i += 2) csiCount++;
 
-  int cap = viaIn + 4 + csiCount;   // Content-Type + Accept + own Via + NGSILD-Tenant + info[]
+  int cap = viaIn + 5 + csiCount;   // Content-Type + Accept + Link + own Via + NGSILD-Tenant + info[]
   SwRestKeyValue* hv = (SwRestKeyValue*) kaAlloc(&swRest.kalloc, cap * sizeof(SwRestKeyValue));
   int hc = 0;
 
-  const char* csiContentType = NULL;
-  const char* csiAccept      = NULL;
+  const char* csiContentType   = NULL;
+  const char* csiAccept        = NULL;
+  const char* csiJsonldContext = NULL;
   if (csrInfoKV != NULL)
   {
     for (int i = 0; csrInfoKV[i] != NULL; i += 2)
     {
       const char* k = csrInfoKV[i];
-      if      (strcasecmp(k, "contentType") == 0)  csiContentType = csrInfoKV[i + 1];
-      else if (strcasecmp(k, "accept")      == 0)  csiAccept      = csrInfoKV[i + 1];
+      if      (strcasecmp(k, "contentType")   == 0)  csiContentType   = csrInfoKV[i + 1];
+      else if (strcasecmp(k, "accept")        == 0)  csiAccept        = csrInfoKV[i + 1];
+      else if (strcasecmp(k, "jsonldContext") == 0)  csiJsonldContext = csrInfoKV[i + 1];
     }
   }
 
   if (wantBody)
   {
+    //
+    // § 6.3.19: when jsonldContext is present in contextSourceInfo,
+    // the broker shall place the URL in a Link header and set
+    // Content-Type to application/json (NOT ld+json) on the forward.
+    // Explicit csi "contentType" still wins — it's a client-level
+    // override that post-dates the jsonldContext rule.
+    //
+    const char* chosenCT;
+    if (csiContentType != NULL)
+      chosenCT = csiContentType;
+    else if (csiJsonldContext != NULL)
+      chosenCT = "application/json";
+    else
+      chosenCT = "application/ld+json";
+
     hv[hc].key   = (char*) "Content-Type";
-    hv[hc].value = (char*) (csiContentType != NULL ? csiContentType : "application/ld+json");
+    hv[hc].value = (char*) chosenCT;
+    hc++;
+  }
+
+  //
+  // § 6.3.19 Link header when jsonldContext is present (outside of
+  // wantBody guard — Link is also useful on GETs where the receiver
+  // needs to know which context to compact the response against).
+  //
+  if (csiJsonldContext != NULL)
+  {
+    const char* suffix  = ">; rel=\"http://www.w3.org/ns/json-ld#context\"; type=\"application/ld+json\"";
+    int   urlLen = strlen(csiJsonldContext);
+    int   sufLen = strlen(suffix);
+    char* linkVal = (char*) kaAlloc(&swRest.kalloc, 1 + urlLen + sufLen + 1);
+    linkVal[0] = '<';
+    strcpy(linkVal + 1, csiJsonldContext);
+    strcpy(linkVal + 1 + urlLen, suffix);
+    hv[hc].key   = (char*) "Link";
+    hv[hc].value = linkVal;
     hc++;
   }
 
@@ -179,7 +215,7 @@ static SwRestKeyValue* buildHeaders(SwRestVerb   verb,
       if (strcasecmp(k, "Content-Length")    == 0) continue;   // banned
       if (strcasecmp(k, "Host")              == 0) continue;   // banned
       if (strcasecmp(k, "NGSILD-Tenant")     == 0) continue;   // banned
-      if (strcasecmp(k, "jsonldContext")     == 0) continue;   // TODO
+      if (strcasecmp(k, "jsonldContext")     == 0) continue;   // handled via Link + Content-Type (§ 6.3.19)
       if (strcasecmp(k, "ngsildConformance") == 0) continue;   // TODO
 
       hv[hc].key   = (char*) k;

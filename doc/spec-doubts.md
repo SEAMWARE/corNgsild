@@ -414,6 +414,75 @@ GET generates a new resource per retry — classic anti-pattern.
 
 ---
 
+## 16. § 4.3.6.6 / § 5.8 — `jsonldContext` fallback asymmetry: subs vs. CSRs
+
+**Hit:** When `jsonldContext` is not specified on a CSR's
+`contextSourceInfo`, forwarded requests go out with the original
+request's @context handling (no compaction, no context substitution).
+Subscriptions get different treatment for the same absent-field case.
+
+**Spec:**
+
+- For **Subscriptions** (§ 5.8.1.4 on create, analogous language on
+  update):
+  > "The @context to be used for sending Notifications ... shall be the
+  > one specified in the jsonldContext field. If not present, the
+  > jsonldContext field **shall be initialized** with the @context
+  > applicable for the Subscription."
+
+  Net: absent `jsonldContext` → broker auto-fills from the
+  subscription-creation request's @context.
+
+- For **CSRs** (§ 4.3.6.6 + § 6.3.19): no analogous fallback clause.
+  § 4.3.6.6 only describes what happens when `jsonldContext` IS
+  explicitly set (compact body + strip @context + Content-Type
+  application/json). Nothing says the broker should auto-fill from the
+  registration's @context.
+
+**Our call:** Follow the spec as written. Subscriptions get the
+fallback; CSRs do not — absent `jsonldContext` we forward with
+per-element @context (application/ld+json array body) using the core
+context.
+
+**Fix wanted:** Make the fallback symmetric (CSRs also auto-initialise
+`jsonldContext` from the registration-creation request's @context) or
+state explicitly that the asymmetry is intentional. The subscription
+and CSR mechanisms otherwise mirror each other closely; a diverging
+default here is surprising.
+
+---
+
+## 15. § 6.3.5 — @context placement for array bodies is ambiguous
+
+**Hit:** Batch ops (§ 5.6.7 / 5.6.8 / 5.6.9 / 5.6.10 / 5.6.20) and ld+json
+listings take/produce a JSON **array** as the payload body. JSON arrays
+have no keys, so `@context` cannot appear "at the root of the body".
+
+**Spec:** § 6.3.5 says, for Content-Type `application/ld+json`, "the
+associated @context shall be obtained from the request payload body
+itself" and "No mixes are allowed" (referring to Link header vs. in-body
+@context). The spec does not explicitly address arrays.
+
+Two plausible readings:
+- **Strict:** "body" means root — arrays cannot carry @context → ld+json
+  would be disallowed for array bodies entirely.
+- **Per-element:** array elements each carry their own @context; "no
+  mixes" refers to Link ⊕ in-body @context, not to per-element within
+  an array.
+
+**Our call:** Per-element reading (what NGSI-LD listings already do in
+practice — GET /entities with Accept: ld+json returns an array whose
+elements each carry @context). An ld+json array body is valid iff EACH
+element has its own `@context`. A missing `@context` on any element
+raises BadRequestData. Link header with ld+json remains forbidden.
+
+**Fix wanted:** § 6.3.5 should add one sentence: "For array request
+bodies with Content-Type `application/ld+json`, each element in the
+array shall carry its own `@context`." Same clarification applies to
+response bodies rendered as ld+json arrays.
+
+---
+
 ## Template for new entries
 
 ```

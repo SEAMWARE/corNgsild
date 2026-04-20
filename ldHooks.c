@@ -66,7 +66,33 @@ static void ldParseHook(void)
   char*   ct       = swRest.in.contentType;
   bool    isLdJson = (ct != NULL && strncasecmp(ct, "application/ld+json", 19) == 0);
 
-  if (isLdJson && atCtx == NULL)
+  //
+  // Array bodies (batch ops § 5.6.7 / 5.6.8 / 5.6.9 / 5.6.10 / 5.6.20)
+  // can't carry a root @context — JSON arrays have no keys. For
+  // Content-Type `application/ld+json` the @context then lives on each
+  // element; a missing @context on ANY element is BadRequestData. See
+  // spec-doubts #15 — the ETSI text doesn't spell this out, but it
+  // matches established NGSI-LD listing behaviour.
+  //
+  bool isArrayBody = (swRest.in.requestTree != NULL &&
+                      swRest.in.requestTree->type == KjArray);
+
+  if (isLdJson && isArrayBody)
+  {
+    for (KjNode* elemP = swRest.in.requestTree->value.firstChildP; elemP != NULL; elemP = elemP->next)
+    {
+      if (elemP->type != KjObject)
+        continue;
+      if (kjLookup(elemP, "@context") == NULL)
+      {
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Missing @context",
+                "@context is mandatory on every element of an application/ld+json array body");
+        swNgsild.contextError = true;
+        return;
+      }
+    }
+  }
+  else if (isLdJson && atCtx == NULL)
   {
     ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Missing @context",
             "@context is mandatory for Content-Type application/ld+json");
@@ -98,9 +124,10 @@ static void ldParseHook(void)
   }
 
   //
-  // For application/json: inject @context from Link header or default user context
+  // For application/json: inject @context from Link header or default user context.
+  // Skip array bodies — JSON arrays can't carry @context at the root.
   //
-  if (!isLdJson && swRest.in.requestTree != NULL)
+  if (!isLdJson && swRest.in.requestTree != NULL && !isArrayBody)
   {
     const char* contextUrl = NULL;
 
