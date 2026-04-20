@@ -91,6 +91,7 @@ typedef struct SwNgsild
   bool    hopsSet;       // true if ?hops=... was explicitly supplied
   bool    details;       // true if ?details=true
   bool    noOverwrite;   // true if ?options=noOverwrite (Append Attributes)
+  bool    deleteAll;     // true if ?deleteAll=true (Delete Attribute § 5.6.5)
 
   // Purge Entities (§ 6.4.3.3)
   char**  dropV;         // ?drop=a,b — restrictive attr list (delete only these attrs)

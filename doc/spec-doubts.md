@@ -363,6 +363,31 @@ and the rule "decrement on each hop, stop at 0".
 
 ---
 
+## 13. § 5.6 — no Retrieve Attribute operation
+
+**Hit:** The spec has PATCH/DELETE/PUT on `/entities/{id}/attrs/{attrId}`
+but no GET. Retrieving one specific attribute requires fetching the whole
+entity and filtering client-side (or using `?pick=`, which still returns
+the wrapping entity and its id/type).
+
+**Spec:** § 5.6 covers Partial Attribute Update (5.6.4), Delete Attribute
+(5.6.5), Replace Attribute (5.6.19). There is no Retrieve Attribute
+operation, and no corresponding CSR op name.
+
+**Our call:** Implemented `GET /entities/{id}/attrs/{attrId}` locally,
+returning the Attribute in NGSI-LD API format (plain Property /
+Relationship / ... object, no entity wrapping). `?datasetId` filters
+the default or specific instance. `?sysAttrs` preserved. DistOps
+forwarding not wired — no agreed op name.
+
+**Fix wanted:** Add a Retrieve Attribute operation to § 5.6 with a
+defined response shape (plain Attribute vs. minimal entity wrapper)
+and a CSR op name (candidate: `retrieveAttribute`) so distributed
+retrieval of a single attribute is specified the same way as
+update / delete / replace are.
+
+---
+
 ## Template for new entries
 
 ```

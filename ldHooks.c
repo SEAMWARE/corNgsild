@@ -168,7 +168,16 @@ static void ldParseHook(void)
   bool isEntityPayload = (swRest.in.urlPath != NULL
                           && strncmp(swRest.in.urlPath, "/ngsi-ld/v1/entities", 20) == 0);
 
-  if (isEntityPayload)
+  //
+  // PATCH/PUT/DELETE on /entities/{id}/attrs/{attrId} carry an attribute
+  // fragment, not an entity fragment — so treating the top level as an
+  // entity (and wrapping its scalar children as simplified attributes)
+  // would corrupt the payload.
+  //
+  bool isAttrFragmentUrl = (swRest.in.urlPath != NULL
+                            && strstr(swRest.in.urlPath, "/attrs/") != NULL);
+
+  if (isEntityPayload && !isAttrFragmentUrl)
   {
     // PATCH /entities/{id} is Merge Entity (§ 5.6.17): a plain-object attribute
     // fragment without type/value is a partial update carrying sub-attributes,

@@ -134,6 +134,26 @@
   | LD_PARAM_LOCAL   \
   )
 
+// Per-attribute CRUD on /entities/{id}/attrs/{attrId} (§ 5.6.4 / § 5.6.5 /
+// § 5.6.19 / § 6.7). GET is a pre-emptive addition (not in v1.9.1).
+#define LD_PARAMS_GET_ENTITY_ATTR         \
+  ( LD_PARAM_TYPE        \
+  | LD_PARAM_OPTIONS     \
+  | LD_PARAM_SYSATTRS    \
+  | LD_PARAM_DATASETID   \
+  | LD_PARAM_FORMAT      \
+  | LD_PARAM_LANG        \
+  | LD_PARAM_LOCAL       \
+  )
+#define LD_PARAMS_PATCH_ENTITY_ATTR      ( LD_PARAM_TYPE | LD_PARAM_LOCAL )
+#define LD_PARAMS_PUT_ENTITY_ATTR        ( LD_PARAM_TYPE | LD_PARAM_LOCAL )
+#define LD_PARAMS_DELETE_ENTITY_ATTR     \
+  ( LD_PARAM_TYPE         \
+  | LD_PARAM_DATASETID    \
+  | LD_PARAM_DELETE_ALL   \
+  | LD_PARAM_LOCAL        \
+  )
+
 #define LD_PARAMS_REPLACE_ENTITY  ( LD_PARAM_TYPE | LD_PARAM_LOCAL )
 
 #define LD_PARAMS_DELETE_ENTITY   ( LD_PARAM_TYPE | LD_PARAM_LOCAL )

@@ -220,6 +220,10 @@ void ldParamHook(const char* name, const char* value)
   {
     swNgsild.details = (value != NULL && strcmp(value, "true") == 0);
   }
+  else if (strcmp(name, "deleteAll") == 0)
+  {
+    swNgsild.deleteAll = (value != NULL && strcmp(value, "true") == 0);
+  }
   else if (strcmp(name, "entityMap") == 0)
   {
     if (value != NULL && strcmp(value, "true") == 0)
