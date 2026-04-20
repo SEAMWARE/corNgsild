@@ -31,6 +31,8 @@
 #include "kalloc/KAlloc.h"                             // KAlloc
 #include "kjson/KjNode.h"                              // KjNode
 
+#include "swNgsild/LdOp.h"                             // LdOp
+
 
 
 // -----------------------------------------------------------------------------
@@ -109,7 +111,10 @@ typedef struct LdRegCacheItem
   // Pre-parsed matching shortcuts
   LdRegInfo*             infoV;              // linked list of RegistrationInfo entries
   LdRegMode              mode;               // inclusive / exclusive / redirect / auxiliary
-  char**                 operationsV;        // NULL-term op-names (NULL = federationOps default)
+  uint64_t               operationsMask;     // OR of supported LdOp bits (§ 4.20 Table 4.20-1/2).
+                                             // When the registration omits operations[] the
+                                             // parser pre-seeds LD_OP_GROUP_FEDERATION so match
+                                             // time is a single AND with no defaulting.
 
   // Borrowed pointers into regTree
   char*                  endpoint;           // dereferenceable URI of the context source

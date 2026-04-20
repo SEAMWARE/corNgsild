@@ -108,30 +108,118 @@ const char* ldOpToString(LdOp op)
 {
   switch (op)
   {
-  case LdOpNone:               return "None";
-  case LdOpCreateEntity:       return "CreateEntity";
-  case LdOpUpdateEntity:       return "UpdateEntity";
-  case LdOpAppendAttrs:        return "AppendAttrs";
-  case LdOpMergeEntity:        return "MergeEntity";
-  case LdOpReplaceEntity:      return "ReplaceEntity";
-  case LdOpDeleteEntity:       return "DeleteEntity";
-  case LdOpDeleteAttr:         return "DeleteAttr";
-  case LdOpReplaceAttr:        return "ReplaceAttr";
-  case LdOpPurgeEntity:        return "PurgeEntity";
-  case LdOpBatchCreate:        return "BatchCreate";
-  case LdOpBatchUpsert:        return "BatchUpsert";
-  case LdOpBatchUpdate:        return "BatchUpdate";
-  case LdOpBatchDelete:        return "BatchDelete";
-  case LdOpBatchMerge:         return "BatchMerge";
-  case LdOpCreateSubscription: return "CreateSubscription";
-  case LdOpUpdateSubscription: return "UpdateSubscription";
-  case LdOpCreateRegistration: return "CreateRegistration";
-  case LdOpUpdateRegistration: return "UpdateRegistration";
-  case LdOpRetrieveEntity:     return "RetrieveEntity";
-  case LdOpQueryEntities:      return "QueryEntities";
+  case LdOpNone:                      return "None";
+  case LdOpCreateEntity:              return "CreateEntity";
+  case LdOpUpdateEntity:              return "UpdateEntity";
+  case LdOpAppendAttrs:               return "AppendAttrs";
+  case LdOpUpdateAttrs:               return "UpdateAttrs";
+  case LdOpMergeEntity:               return "MergeEntity";
+  case LdOpReplaceEntity:             return "ReplaceEntity";
+  case LdOpDeleteEntity:              return "DeleteEntity";
+  case LdOpDeleteAttr:                return "DeleteAttr";
+  case LdOpReplaceAttr:               return "ReplaceAttr";
+  case LdOpPurgeEntity:               return "PurgeEntity";
+  case LdOpRetrieveEntity:            return "RetrieveEntity";
+  case LdOpQueryEntities:             return "QueryEntities";
+  case LdOpBatchCreate:               return "BatchCreate";
+  case LdOpBatchUpsert:               return "BatchUpsert";
+  case LdOpBatchUpdate:               return "BatchUpdate";
+  case LdOpBatchDelete:               return "BatchDelete";
+  case LdOpBatchMerge:                return "BatchMerge";
+  case LdOpBatchQuery:                return "BatchQuery";
+  case LdOpRetrieveEntityTypes:       return "RetrieveEntityTypes";
+  case LdOpRetrieveEntityTypeDetails: return "RetrieveEntityTypeDetails";
+  case LdOpRetrieveEntityTypeInfo:    return "RetrieveEntityTypeInfo";
+  case LdOpRetrieveAttrTypes:         return "RetrieveAttrTypes";
+  case LdOpRetrieveAttrTypeDetails:   return "RetrieveAttrTypeDetails";
+  case LdOpRetrieveAttrTypeInfo:      return "RetrieveAttrTypeInfo";
+  case LdOpCreateSubscription:        return "CreateSubscription";
+  case LdOpUpdateSubscription:        return "UpdateSubscription";
+  case LdOpRetrieveSubscription:      return "RetrieveSubscription";
+  case LdOpQuerySubscription:         return "QuerySubscription";
+  case LdOpDeleteSubscription:        return "DeleteSubscription";
+  case LdOpCreateRegistration:        return "CreateRegistration";
+  case LdOpUpdateRegistration:        return "UpdateRegistration";
+  case LdOpRetrieveRegistration:      return "RetrieveRegistration";
+  case LdOpQueryRegistration:         return "QueryRegistration";
+  case LdOpDeleteRegistration:        return "DeleteRegistration";
   }
 
   return "Unknown";
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldOpFromName - map an NGSI-LD op string to its LdOp bit.
+//
+// Spec-defined atomic op names as they appear in CSourceRegistration's
+// operations[] field. Returns LdOpNone on unknown name.
+//
+LdOp ldOpFromName(const char* name)
+{
+  if (name == NULL)
+    return LdOpNone;
+
+  // Entity write
+  if (strcmp(name, "createEntity")              == 0)  return LdOpCreateEntity;
+  if (strcmp(name, "updateEntity")              == 0)  return LdOpUpdateEntity;
+  if (strcmp(name, "appendAttrs")               == 0)  return LdOpAppendAttrs;
+  if (strcmp(name, "updateAttrs")               == 0)  return LdOpUpdateAttrs;
+  if (strcmp(name, "mergeEntity")               == 0)  return LdOpMergeEntity;
+  if (strcmp(name, "replaceEntity")             == 0)  return LdOpReplaceEntity;
+  if (strcmp(name, "deleteEntity")              == 0)  return LdOpDeleteEntity;
+  if (strcmp(name, "deleteAttrs")               == 0)  return LdOpDeleteAttr;
+  if (strcmp(name, "deleteAttr")                == 0)  return LdOpDeleteAttr;
+  if (strcmp(name, "replaceAttrs")              == 0)  return LdOpReplaceAttr;
+  if (strcmp(name, "replaceAttr")               == 0)  return LdOpReplaceAttr;
+  if (strcmp(name, "purgeEntity")               == 0)  return LdOpPurgeEntity;
+
+  // Entity read
+  if (strcmp(name, "retrieveEntity")            == 0)  return LdOpRetrieveEntity;
+  if (strcmp(name, "queryEntity")               == 0)  return LdOpQueryEntities;
+
+  // Batch
+  if (strcmp(name, "createBatch")               == 0)  return LdOpBatchCreate;
+  if (strcmp(name, "upsertBatch")               == 0)  return LdOpBatchUpsert;
+  if (strcmp(name, "updateBatch")               == 0)  return LdOpBatchUpdate;
+  if (strcmp(name, "deleteBatch")               == 0)  return LdOpBatchDelete;
+  if (strcmp(name, "mergeBatch")                == 0)  return LdOpBatchMerge;
+  if (strcmp(name, "queryBatch")                == 0)  return LdOpBatchQuery;
+
+  // Type / attribute-type metadata
+  if (strcmp(name, "retrieveEntityTypes")       == 0)  return LdOpRetrieveEntityTypes;
+  if (strcmp(name, "retrieveEntityTypeDetails") == 0)  return LdOpRetrieveEntityTypeDetails;
+  if (strcmp(name, "retrieveEntityTypeInfo")    == 0)  return LdOpRetrieveEntityTypeInfo;
+  if (strcmp(name, "retrieveAttrTypes")         == 0)  return LdOpRetrieveAttrTypes;
+  if (strcmp(name, "retrieveAttrTypeDetails")   == 0)  return LdOpRetrieveAttrTypeDetails;
+  if (strcmp(name, "retrieveAttrTypeInfo")      == 0)  return LdOpRetrieveAttrTypeInfo;
+
+  return LdOpNone;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldOpGroupMaskFromName - map a § 4.20 group name to its OR-mask.
+//
+// Returns 0 on unknown name. Intended fall-through after ldOpFromName()
+// for CSR operations[] entries.
+//
+uint64_t ldOpGroupMaskFromName(const char* name)
+{
+  if (name == NULL)
+    return 0;
+
+  if (strcmp(name, "federationOps")  == 0)  return LD_OP_GROUP_FEDERATION;
+  if (strcmp(name, "associationOps") == 0)  return LD_OP_GROUP_ASSOCIATION;
+  if (strcmp(name, "retrieveOps")    == 0)  return LD_OP_GROUP_RETRIEVE;
+  if (strcmp(name, "updateOps")      == 0)  return LD_OP_GROUP_UPDATE;
+  if (strcmp(name, "redirectionOps") == 0)  return LD_OP_GROUP_REDIRECTION;
+
+  return 0;
 }
 
 

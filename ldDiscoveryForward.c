@@ -378,7 +378,7 @@ void ldDiscoveryForwardTypes(KjNode* agg, LdRegCache* cacheP, bool details, cons
     // which includes retrieveEntityTypes (both list and details forms fold
     // into "retrieveEntityTypes" / "retrieveEntityTypeDetails" — we go with
     // the details one since we always request ?details=true below).
-    if (!ldRegOpSupported(it, "retrieveEntityTypeDetails")) continue;
+    if (!ldRegOpSupported(it, LdOpRetrieveEntityTypeDetails)) continue;
 
     KjNode* respP = forwardGet(it, "/ngsi-ld/v1/types", true, hops, ownAlias);
     mergeEntityTypeArray(agg, respP, details);
@@ -407,7 +407,7 @@ void ldDiscoveryForwardType(KjNode* agg, LdRegCache* cacheP, const char* typeIri
   {
     if (it->endpoint == NULL)                         continue;
     if (ldDistOpCsrWouldLoop(it, ownAlias))           continue;
-    if (!ldRegOpSupported(it, "retrieveEntityTypeInfo")) continue;
+    if (!ldRegOpSupported(it, LdOpRetrieveEntityTypeInfo)) continue;
 
     KjNode* respP = forwardGet(it, path, false, hops, ownAlias);
     mergeEntityTypeInfo(agg, respP);
@@ -431,7 +431,7 @@ void ldDiscoveryForwardAttrs(KjNode* agg, LdRegCache* cacheP, bool details, cons
   {
     if (it->endpoint == NULL)                           continue;
     if (ldDistOpCsrWouldLoop(it, ownAlias))             continue;
-    if (!ldRegOpSupported(it, "retrieveAttrTypeDetails")) continue;
+    if (!ldRegOpSupported(it, LdOpRetrieveAttrTypeDetails)) continue;
 
     KjNode* respP = forwardGet(it, "/ngsi-ld/v1/attributes", true, hops, ownAlias);
     mergeAttributeArray(agg, respP, details);
@@ -460,7 +460,7 @@ void ldDiscoveryForwardAttr(KjNode* agg, LdRegCache* cacheP, const char* attrIri
   {
     if (it->endpoint == NULL)                         continue;
     if (ldDistOpCsrWouldLoop(it, ownAlias))           continue;
-    if (!ldRegOpSupported(it, "retrieveAttrTypeInfo")) continue;
+    if (!ldRegOpSupported(it, LdOpRetrieveAttrTypeInfo)) continue;
 
     KjNode* respP = forwardGet(it, path, false, hops, ownAlias);
     mergeAttributeInfo(agg, respP);

@@ -364,9 +364,29 @@ LdRegCacheItem* ldRegCacheItemAdd(LdRegCache* cacheP, KjNode* regTree)
   KjNode* modeP = kjLookup(itemP->regTree, LD_VOCAB_MODE);
   itemP->mode = (modeP != NULL && modeP->type == KjString) ? modeFromString(modeP->value.s) : LdRegModeInclusive;
 
-  // operations (NULL = federationOps default)
+  // operations — OR'd LdOp bits. § 4.20: when operations[] is absent,
+  // the default group "federationOps" applies. Resolve that once here
+  // so the match path is a single AND with no default fallback logic.
   KjNode* opsP = kjLookup(itemP->regTree, "operations");
-  itemP->operationsV = stringArrayExtract(opsP);
+  if (opsP != NULL && opsP->type == KjArray && opsP->value.firstChildP != NULL)
+  {
+    itemP->operationsMask = 0;
+    for (KjNode* e = opsP->value.firstChildP; e != NULL; e = e->next)
+    {
+      if (e->type != KjString)
+        continue;
+
+      LdOp bit = ldOpFromName(e->value.s);
+      if (bit != LdOpNone)
+        itemP->operationsMask |= (uint64_t) bit;
+      else
+        itemP->operationsMask |= ldOpGroupMaskFromName(e->value.s);
+    }
+  }
+  else
+  {
+    itemP->operationsMask = LD_OP_GROUP_FEDERATION;
+  }
 
   // endpoint (borrowed)
   KjNode* endpointP = kjLookup(itemP->regTree, LD_VOCAB_ENDPOINT);
@@ -525,9 +545,6 @@ static void cacheItemFree(LdRegCacheItem* itemP)
     kjFree(itemP->regTree);
 
   infoListFree(itemP->infoV);
-
-  if (itemP->operationsV != NULL)
-    free(itemP->operationsV);  // array only — strings are borrowed
 
   if (itemP->contextSourceInfoKV != NULL)
     free(itemP->contextSourceInfoKV);  // array only — strings are borrowed
@@ -707,96 +724,7 @@ int ldRegCacheMatchForRetrieveScoped(LdRegCache*       cacheP,
 
 
 
-// -----------------------------------------------------------------------------
-//
-// opInGroup - true if opName is a member of a named operation group
-//
-// Groups per § 4.20 Table 4.20-2. Only the members that are relevant to
-// broker-side dispatch (entity CRUD + retrieve + query) are enumerated —
-// operations like createSubscription, retrieveEntityTypes etc. don't
-// need membership lookups from inside the dispatcher so listing them
-// here would be churn.
-//
-static bool opInGroup(const char* groupName, const char* opName)
-{
-  if (strcmp(groupName, "federationOps") == 0)
-    return (strcmp(opName, "retrieveEntity")            == 0 ||
-            strcmp(opName, "queryEntity")               == 0 ||
-            strcmp(opName, "queryBatch")                == 0 ||
-            strcmp(opName, "retrieveEntityTypes")       == 0 ||
-            strcmp(opName, "retrieveEntityTypeDetails") == 0 ||
-            strcmp(opName, "retrieveEntityTypeInfo")    == 0 ||
-            strcmp(opName, "retrieveAttrTypes")         == 0 ||
-            strcmp(opName, "retrieveAttrTypeDetails")   == 0 ||
-            strcmp(opName, "retrieveAttrTypeInfo")      == 0);
-
-  if (strcmp(groupName, "associationOps") == 0)
-    return (strcmp(opName, "retrieveEntity")            == 0 ||
-            strcmp(opName, "queryEntity")               == 0 ||
-            strcmp(opName, "queryBatch")                == 0 ||
-            strcmp(opName, "retrieveEntityTypes")       == 0 ||
-            strcmp(opName, "retrieveEntityTypeDetails") == 0 ||
-            strcmp(opName, "retrieveEntityTypeInfo")    == 0 ||
-            strcmp(opName, "retrieveAttrTypes")         == 0 ||
-            strcmp(opName, "retrieveAttrTypeDetails")   == 0 ||
-            strcmp(opName, "retrieveAttrTypeInfo")      == 0);
-
-  if (strcmp(groupName, "retrieveOps") == 0)
-    return (strcmp(opName, "retrieveEntity") == 0 ||
-            strcmp(opName, "queryEntity")    == 0);
-
-  if (strcmp(groupName, "updateOps") == 0)
-    return (strcmp(opName, "updateEntity")  == 0 ||
-            strcmp(opName, "updateAttrs")   == 0 ||
-            strcmp(opName, "replaceEntity") == 0 ||
-            strcmp(opName, "replaceAttrs")  == 0);
-
-  if (strcmp(groupName, "redirectionOps") == 0)
-    return (strcmp(opName, "createEntity")   == 0 ||
-            strcmp(opName, "updateEntity")   == 0 ||
-            strcmp(opName, "appendAttrs")    == 0 ||
-            strcmp(opName, "updateAttrs")    == 0 ||
-            strcmp(opName, "deleteAttrs")    == 0 ||
-            strcmp(opName, "deleteEntity")   == 0 ||
-            strcmp(opName, "mergeEntity")    == 0 ||
-            strcmp(opName, "replaceEntity")  == 0 ||
-            strcmp(opName, "replaceAttrs")   == 0 ||
-            strcmp(opName, "retrieveEntity") == 0 ||
-            strcmp(opName, "queryEntity")    == 0 ||
-            strcmp(opName, "purgeEntity")    == 0);
-
-  return false;
-}
-
-
-
-// -----------------------------------------------------------------------------
-//
-// ldRegOpSupported -
-//
-bool ldRegOpSupported(const LdRegCacheItem* itemP, const char* opName)
-{
-  if (itemP == NULL || opName == NULL)
-    return false;
-
-  // Default: federationOps (retrieve-only). A default-operations reg does
-  // not accept createEntity / updateEntity / etc.
-  if (itemP->operationsV == NULL)
-    return opInGroup("federationOps", opName);
-
-  for (int i = 0; itemP->operationsV[i] != NULL; i++)
-  {
-    const char* entry = itemP->operationsV[i];
-
-    if (strcmp(entry, opName) == 0)
-      return true;
-
-    if (opInGroup(entry, opName))
-      return true;
-  }
-
-  return false;
-}
+// ldRegOpSupported is now a static inline in ldRegCache.h — a single AND.
 
 
 

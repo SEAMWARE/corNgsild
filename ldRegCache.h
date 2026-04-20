@@ -11,7 +11,9 @@
 // Context Source Registration cache operations.
 //
 #include <stdbool.h>                                   // bool
+#include <stdint.h>                                    // uint64_t
 
+#include "swNgsild/LdOp.h"                             // LdOp
 #include "swNgsild/LdRegCache.h"                       // LdRegCache, LdRegCacheItem
 
 
@@ -113,15 +115,16 @@ extern int ldRegCacheMatchForRetrieveScoped(LdRegCache*       cacheP,
 
 // -----------------------------------------------------------------------------
 //
-// ldRegOpSupported - true if a registration declares support for opName
+// ldRegOpSupported - true if a registration declares support for opBit
 //
-// opName is the unprefixed NGSI-LD operation name ("createEntity",
-// "updateEntity", "retrieveEntity", ...). Matching rules (§ 4.20):
-//   - itemP->operationsV == NULL: default "federationOps" group applies
-//   - otherwise: opName must appear in operationsV OR be a member of a
-//     group name (federationOps, associationOps, updateOps, retrieveOps,
-//     redirectionOps) that appears in operationsV.
+// opBit is a single LdOp bit (e.g. LdOpCreateEntity), typically the
+// matched service's own ldOp (swRest.serviceP->ldOp). Inlined to a
+// single AND — operationsMask already carries the § 4.20 default
+// (federationOps) when the registration omits operations[].
 //
-extern bool ldRegOpSupported(const LdRegCacheItem* itemP, const char* opName);
+static inline bool ldRegOpSupported(const LdRegCacheItem* itemP, LdOp opBit)
+{
+  return (itemP->operationsMask & (uint64_t) opBit) != 0;
+}
 
 #endif  // SWNGSILD_LDREGCACHE_OPS_H_
