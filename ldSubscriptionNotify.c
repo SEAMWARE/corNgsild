@@ -254,36 +254,21 @@ static bool watchedAttrsMatch(LdSubCacheItem* itemP, KjNode* entityP, LdNotifyOp
 
 // -----------------------------------------------------------------------------
 //
-// notificationSend - build and POST the notification payload
+// buildNotifDataEntry - clone + transform one entity for a notification's data[]
 //
-static void notificationSend(LdSubCacheItem* itemP, KjNode* entityP)
+// Applies, in order: datasetId filter, ldEntityToApi, strip sys attrs,
+// notification.attributes filter, notification.format. Returns a fresh
+// KjNode suitable for direct insertion into the notification's data[].
+//
+static KjNode* buildNotifDataEntry(LdSubCacheItem* itemP, KjNode* entityP)
 {
-  if (itemP->endpointUri == NULL || itemP->subId == NULL)
-    return;
-
-  //
-  // Build the Notification payload (per spec 5.3.1)
-  //
-  char isoTimeBuf[64];
-  isoNow(isoTimeBuf, sizeof(isoTimeBuf));
-
-  KjNode* notification = kjObject(NULL, NULL);
-
-  kjChildAdd(notification, kjString(NULL, "id",             notifIdGenerate()));
-  kjChildAdd(notification, kjString(NULL, "type",           "Notification"));
-  kjChildAdd(notification, kjString(NULL, "subscriptionId", itemP->subId));
-  kjChildAdd(notification, kjString(NULL, "notifiedAt",     isoTimeBuf));
-
-  // data: array of entities — convert from DB storage format to API format
-  KjNode* dataArray    = kjArray(NULL, "data");
-  KjNode* entityClone  = kjClone(NULL, entityP);
+  KjNode* entityClone = kjClone(NULL, entityP);
 
   //
   // datasetId filter (§ 5.8.6): if the subscription specifies a datasetId
   // list, keep only matching instances within each attribute wrapper.
   // Must run BEFORE ldEntityToApi (which unwraps the dataset-keyed storage
   // format). In storage, each attr is { "@none": {...}, "urn:ds:1": {...} }.
-  // The filter removes instances whose dsKey is not in the list.
   //
   if (itemP->datasetIdV != NULL)
   {
@@ -299,7 +284,6 @@ static void notificationSend(LdSubCacheItem* itemP, KjNode* entityP)
         continue;
       }
 
-      // Walk instances within the attr wrapper
       KjNode* instP = attrP->value.firstChildP;
       while (instP != NULL)
       {
@@ -321,7 +305,6 @@ static void notificationSend(LdSubCacheItem* itemP, KjNode* entityP)
         instP = nextInst;
       }
 
-      // If all instances were removed, remove the attr wrapper too
       if (attrP->value.firstChildP == NULL)
         kjChildRemove(entityClone, attrP);
 
@@ -332,9 +315,6 @@ static void notificationSend(LdSubCacheItem* itemP, KjNode* entityP)
   ldEntityToApi(entityClone, &swRest.kalloc);
   ldStripSysAttrs(entityClone);
 
-  //
-  // Filter attributes if notification.attributes is specified
-  //
   if (itemP->notifAttrsV != NULL)
   {
     KjNode* childP = entityClone->value.firstChildP;
@@ -342,7 +322,6 @@ static void notificationSend(LdSubCacheItem* itemP, KjNode* entityP)
     {
       KjNode* nextP = childP->next;
 
-      // Keep id, type, scope — filter everything else
       if (childP->name != NULL &&
           strcmp(childP->name, "id")    != 0 &&
           strcmp(childP->name, "type")  != 0 &&
@@ -365,15 +344,6 @@ static void notificationSend(LdSubCacheItem* itemP, KjNode* entityP)
     }
   }
 
-  kjChildAdd(dataArray, entityClone);
-  kjChildAdd(notification, dataArray);
-
-  // Compact expanded URIs to short names
-  swldCompactTree(notification);
-
-  //
-  // Apply notification format (simplified / concise / normalized)
-  //
   if (itemP->format != NULL)
   {
     if (strcmp(itemP->format, "simplified") == 0 || strcmp(itemP->format, "keyValues") == 0)
@@ -381,6 +351,38 @@ static void notificationSend(LdSubCacheItem* itemP, KjNode* entityP)
     else if (strcmp(itemP->format, "concise") == 0)
       ldConciseEntity(entityClone);
   }
+
+  return entityClone;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// notificationSendMany - build a Notification payload with N entities in data[]
+// and POST it to the subscription's endpoint.
+//
+static void notificationSendMany(LdSubCacheItem* itemP, KjNode** entities, int n)
+{
+  if (itemP->endpointUri == NULL || itemP->subId == NULL || n == 0)
+    return;
+
+  char isoTimeBuf[64];
+  isoNow(isoTimeBuf, sizeof(isoTimeBuf));
+
+  KjNode* notification = kjObject(NULL, NULL);
+  kjChildAdd(notification, kjString(NULL, "id",             notifIdGenerate()));
+  kjChildAdd(notification, kjString(NULL, "type",           "Notification"));
+  kjChildAdd(notification, kjString(NULL, "subscriptionId", itemP->subId));
+  kjChildAdd(notification, kjString(NULL, "notifiedAt",     isoTimeBuf));
+
+  KjNode* dataArray = kjArray(NULL, "data");
+  for (int i = 0; i < n; i++)
+    kjChildAdd(dataArray, buildNotifDataEntry(itemP, entities[i]));
+  kjChildAdd(notification, dataArray);
+
+  // Compact expanded URIs to short names (covers every data[] entry)
+  swldCompactTree(notification);
 
   //
   // Render to JSON
@@ -443,30 +445,24 @@ static void notificationSend(LdSubCacheItem* itemP, KjNode* entityP)
 
 // -----------------------------------------------------------------------------
 //
-// ldSubscriptionNotify -
+// ldSubscriptionNotifyBatch -
 //
-void ldSubscriptionNotify(LdSubCache*     cacheP,
-                          KjNode*         entityP,
-                          LdNotifyOp      op,
-                          LdMergeReport*  reportP)
+void ldSubscriptionNotifyBatch(LdSubCache*           cacheP,
+                               LdNotifyPendingEntry* pendingV,
+                               int                   pendingN)
 {
-  if (cacheP == NULL || entityP == NULL)
+  if (cacheP == NULL || pendingV == NULL || pendingN == 0)
     return;
 
   //
-  // Extract entity id and type for matching
-  //
-  KjNode*     entityIdP   = kjLookup(entityP, "id");
-  KjNode*     entityTypeP = kjLookup(entityP, "type");
-  const char* entityId    = (entityIdP != NULL && entityIdP->type == KjString) ? entityIdP->value.s : NULL;
-
-  //
-  // Walk cached subscriptions
+  // Outer: per subscription. Inner: per pending entry. Collect per-sub
+  // matches in encounter-order, then emit ONE notification per sub whose
+  // data[] carries each matched entity (one entry per merged instance).
   //
   for (LdSubCacheItem* itemP = cacheP->itemList; itemP != NULL; itemP = itemP->next)
   {
     //
-    // 1. Check status — skip paused / expired
+    // Per-sub static checks (done once, regardless of pending count)
     //
     if (itemP->status != NULL)
     {
@@ -474,65 +470,12 @@ void ldSubscriptionNotify(LdSubCache*     cacheP,
       if (strcmp(itemP->status, "expired") == 0) continue;
     }
 
-    //
-    // 1b. Dynamic expiration check (using request timestamp, nanoseconds)
-    //
     if (itemP->expiresAt > 0 && swRest.requestStartTime > itemP->expiresAt)
     {
       itemP->status = "expired";
       continue;
     }
 
-    //
-    // 2. Check notificationTrigger
-    //
-    if (!triggerMatches(itemP, op, reportP))
-      continue;
-
-    //
-    // 3-5. Check entities[] (id, idPattern, type) — pre-parsed selectors
-    //
-    if (!entitiesMatch(itemP, entityId, entityTypeP))
-      continue;
-
-    //
-    // 6. Check watchedAttributes — pre-parsed array
-    //
-    if (!watchedAttrsMatch(itemP, entityP, op, reportP))
-      continue;
-
-    //
-    // 7. scopeQ — pre-parsed scope expression
-    //
-    if (itemP->scopeExpr != NULL)
-    {
-      KjNode* scopeP = kjLookup(entityP, LD_VOCAB_SCOPE);
-      if (!ldEntityMatchScope(scopeP, itemP->scopeExpr))
-        continue;
-    }
-
-    //
-    // 8. q-filter — pre-parsed LdQNode tree
-    //
-    if (itemP->qExpr != NULL)
-    {
-      if (!ldEntityMatchQ(entityP, itemP->qExpr))
-        continue;
-    }
-
-    //
-    // 8. geoQ — use registered callback (GEOS lives in the DB plugin, not here)
-    //
-    if (itemP->geoRel != NULL && cacheP->geoMatchFunc != NULL)
-    {
-      if (!cacheP->geoMatchFunc(entityP, itemP->geoRel, itemP->geoGeometry,
-                                    itemP->geoCoordinates, itemP->geoProperty))
-        continue;
-    }
-
-    //
-    // 9. Throttling — skip if last notification was too recent
-    //
     if (itemP->throttling > 0 && itemP->lastNotification > 0)
     {
       uint64_t throttlingNs = (uint64_t) (itemP->throttling * 1e9);
@@ -541,8 +484,56 @@ void ldSubscriptionNotify(LdSubCache*     cacheP,
     }
 
     //
-    // Match! Send notification.
+    // Per-pending match pass
     //
-    notificationSend(itemP, entityP);
+    KjNode** matched  = (KjNode**) kaAlloc(&swRest.kalloc, pendingN * sizeof(KjNode*));
+    int      matchedN = 0;
+
+    for (int i = 0; i < pendingN; i++)
+    {
+      LdNotifyPendingEntry* p = &pendingV[i];
+      if (p->entityP == NULL)
+        continue;
+
+      LdMergeReport* reportP = p->hasReport ? &p->report : NULL;
+
+      KjNode*     entityIdP   = kjLookup(p->entityP, "id");
+      KjNode*     entityTypeP = kjLookup(p->entityP, "type");
+      const char* entityId    = (entityIdP != NULL && entityIdP->type == KjString) ? entityIdP->value.s : NULL;
+
+      if (!triggerMatches(itemP, p->op, reportP))
+        continue;
+
+      if (!entitiesMatch(itemP, entityId, entityTypeP))
+        continue;
+
+      if (!watchedAttrsMatch(itemP, p->entityP, p->op, reportP))
+        continue;
+
+      if (itemP->scopeExpr != NULL)
+      {
+        KjNode* scopeP = kjLookup(p->entityP, LD_VOCAB_SCOPE);
+        if (!ldEntityMatchScope(scopeP, itemP->scopeExpr))
+          continue;
+      }
+
+      if (itemP->qExpr != NULL)
+      {
+        if (!ldEntityMatchQ(p->entityP, itemP->qExpr))
+          continue;
+      }
+
+      if (itemP->geoRel != NULL && cacheP->geoMatchFunc != NULL)
+      {
+        if (!cacheP->geoMatchFunc(p->entityP, itemP->geoRel, itemP->geoGeometry,
+                                  itemP->geoCoordinates, itemP->geoProperty))
+          continue;
+      }
+
+      matched[matchedN++] = p->entityP;
+    }
+
+    if (matchedN > 0)
+      notificationSendMany(itemP, matched, matchedN);
   }
 }

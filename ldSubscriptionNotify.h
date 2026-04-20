@@ -10,18 +10,20 @@
 //
 // Subscription matching and notification delivery.
 //
-// Called from entity service routines after a successful entity write.
-// Walks all active subscriptions for the tenant, matches each against
-// the entity and change event, builds the NGSI-LD Notification payload,
-// and POSTs it to the subscription's endpoint.uri.
+// The service routine defers work via ldNotifyDefer(); after the HTTP
+// response has been sent, the post-response hook calls
+// ldSubscriptionNotifyBatch() which matches every deferred entry
+// against every subscription in the cache, then emits one notification
+// per sub — whose `data[]` array carries every matched entity in the
+// order they were deferred.
 //
 #include <stdbool.h>
 #include <string.h>                                    // strcmp (for inline helpers)
 
 #include "kjson/KjNode.h"
 
-#include "swNgsild/ldEntityMerge.h"                  // LdMergeReport
-#include "swNgsild/LdSubCache.h"                     // LdSubCache
+#include "swNgsild/ldEntityMerge.h"                    // LdMergeReport
+#include "swNgsild/LdSubCache.h"                       // LdSubCache
 
 
 
@@ -87,16 +89,40 @@ static inline int ldTriggerFromReport(const char* reason)
 
 // -----------------------------------------------------------------------------
 //
-// ldSubscriptionNotify - match entity change against subscriptions and send notifications
+// LdNotifyPendingEntry - one entity change captured for later sub dispatch.
 //
-// cacheP:          per-tenant subscription cache
-// entityP:         the entity after the operation (for create/update) or before (for delete)
-// op:              create / update / delete
-// reportP:         merge report from patchEntity (NULL for create/delete)
+// Populated by ldNotifyDefer(), consumed by ldSubscriptionNotifyBatch().
+// entityP must live until the post-response hook runs (request arena).
+// `report` is copied by value so callers can let their LdMergeReport go
+// out of scope after the defer call.
 //
-extern void ldSubscriptionNotify(LdSubCache*     cacheP,
-                                 KjNode*         entityP,
-                                 LdNotifyOp      op,
-                                 LdMergeReport*  reportP);
+typedef struct LdNotifyPendingEntry
+{
+  KjNode*        entityP;
+  LdNotifyOp     op;
+  bool           hasReport;
+  LdMergeReport  report;
+} LdNotifyPendingEntry;
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldSubscriptionNotifyBatch - match pending entries against every sub and
+// emit one notification per sub with data[] of its matches.
+//
+// For each subscription in cacheP:
+//   - run the per-sub static checks (status / expiration / throttling) once;
+//   - walk pendingV, applying per-entry matching (trigger, entities, watchedAttrs,
+//     scopeQ, q, geoQ) using each entry's own op + merge report;
+//   - if any match, collect them in encounter-order and emit ONE HTTP
+//     notification whose data[] carries the per-entry transformed entities.
+//
+// pendingN == 1 is the single-entity case — still valid, produces the same
+// notification shape as the pre-batch implementation (one data[] of one).
+//
+extern void ldSubscriptionNotifyBatch(LdSubCache*           cacheP,
+                                      LdNotifyPendingEntry* pendingV,
+                                      int                   pendingN);
 
 #endif  // SWNGSILD_LDSUBSCRIPTIONNOTIFY_H_

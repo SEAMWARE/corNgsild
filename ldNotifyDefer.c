@@ -5,33 +5,30 @@
 //
 // Copyright 2026 Seamware
 //
-#include <stddef.h>                               // NULL
+#include <stddef.h>                              // NULL
+#include <stdlib.h>                              // realloc, free
 
-#include "swNgsild/ldSubscriptionNotify.h"        // ldSubscriptionNotify
-#include "swNgsild/ldNotifyDefer.h"               // Own interface
+#include "swNgsild/ldSubscriptionNotify.h"       // ldSubscriptionNotifyBatch, LdNotifyPendingEntry
+#include "swNgsild/ldNotifyDefer.h"              // Own interface
 
 
 
 // -----------------------------------------------------------------------------
 //
-// Per-thread pending notification
+// Per-thread deferred-notification queue
 //
-// The current thread handles the full request lifecycle (MHD keeps one
-// connection on one thread), so thread-local storage is the cheapest way to
-// carry the deferred args from the service routine to the post-response hook
-// with no locking and no allocation.
+// MHD keeps one connection on one thread for the full request lifecycle,
+// so a thread-local array covers a full batch without locking. The
+// accumulator grows exponentially; it's never freed between requests —
+// the capacity is retained so subsequent requests on the same thread
+// reuse the allocation.
 //
-typedef struct LdNotifyPending
-{
-  bool            active;
-  bool            hasReport;    // true if report was non-NULL at defer time
-  LdSubCache*     cacheP;
-  KjNode*         entityP;
-  LdNotifyOp      op;
-  LdMergeReport   report;       // copied by value — caller's stack frame is gone by dispatch time
-} LdNotifyPending;
+#define LD_NOTIFY_PENDING_INITIAL_CAP 16
 
-static __thread LdNotifyPending pending;
+static __thread LdSubCache*           pendingCache   = NULL;
+static __thread LdNotifyPendingEntry* pendingV       = NULL;
+static __thread int                   pendingN       = 0;
+static __thread int                   pendingCap     = 0;
 
 
 
@@ -41,13 +38,28 @@ static __thread LdNotifyPending pending;
 //
 void ldNotifyDefer(LdSubCache* cacheP, KjNode* entityP, LdNotifyOp op, LdMergeReport* reportP)
 {
-  pending.active    = true;
-  pending.cacheP    = cacheP;
-  pending.entityP   = entityP;
-  pending.op        = op;
-  pending.hasReport = (reportP != NULL);
+  if (cacheP == NULL || entityP == NULL)
+    return;
+
+  // All pending entries within a request share one (sub) cache.
+  pendingCache = cacheP;
+
+  if (pendingN >= pendingCap)
+  {
+    int newCap = (pendingCap == 0) ? LD_NOTIFY_PENDING_INITIAL_CAP : pendingCap * 2;
+    LdNotifyPendingEntry* newV = (LdNotifyPendingEntry*) realloc(pendingV, newCap * sizeof(LdNotifyPendingEntry));
+    if (newV == NULL)
+      return;
+    pendingV   = newV;
+    pendingCap = newCap;
+  }
+
+  pendingV[pendingN].entityP   = entityP;
+  pendingV[pendingN].op        = op;
+  pendingV[pendingN].hasReport = (reportP != NULL);
   if (reportP != NULL)
-    pending.report = *reportP;  // struct copy — the referenced KjNode* changes tree is arena-allocated and still valid at dispatch
+    pendingV[pendingN].report  = *reportP;  // struct copy; referenced change-list tree lives in the request arena
+  pendingN++;
 }
 
 
@@ -58,14 +70,15 @@ void ldNotifyDefer(LdSubCache* cacheP, KjNode* entityP, LdNotifyOp op, LdMergeRe
 //
 void ldNotifyDispatchPending(void)
 {
-  if (!pending.active)
+  if (pendingCache == NULL || pendingN == 0)
+  {
+    pendingN     = 0;
+    pendingCache = NULL;
     return;
+  }
 
-  LdMergeReport* reportP = pending.hasReport ? &pending.report : NULL;
-  ldSubscriptionNotify(pending.cacheP, pending.entityP, pending.op, reportP);
+  ldSubscriptionNotifyBatch(pendingCache, pendingV, pendingN);
 
-  pending.active    = false;
-  pending.hasReport = false;
-  pending.cacheP    = NULL;
-  pending.entityP   = NULL;
+  pendingN     = 0;
+  pendingCache = NULL;
 }

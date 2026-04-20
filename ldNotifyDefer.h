@@ -8,25 +8,28 @@
 #ifndef SWNGSILD_LDNOTIFYDEFER_H_
 #define SWNGSILD_LDNOTIFYDEFER_H_
 
-#include "kjson/KjNode.h"                      // KjNode
-#include "swNgsild/ldSubCache.h"               // LdSubCache
-#include "swNgsild/ldSubscriptionNotify.h"     // LdNotifyOp
-#include "swNgsild/ldEntityMerge.h"             // LdMergeReport
+#include "kjson/KjNode.h"                        // KjNode
+#include "swNgsild/ldSubCache.h"                 // LdSubCache
+#include "swNgsild/ldSubscriptionNotify.h"       // LdNotifyOp, LdNotifyPendingEntry
+#include "swNgsild/ldEntityMerge.h"              // LdMergeReport
 
 
 
 // -----------------------------------------------------------------------------
 //
-// ldNotifyDefer - stash subscription-notification work for later dispatch
+// ldNotifyDefer - append one entity-change candidate to the thread-local queue
 //
-// Replaces an inline call to ldSubscriptionNotify() inside service routines.
-// The args are captured in thread-local state and fired by
-// ldNotifyDispatchPending() once the HTTP response has been delivered to the
-// client (wired via swRestSetPostResponseHook).
+// Called by entity service routines (single-entity and batch). Each call
+// appends an entry to a per-thread dynamic array. For a single-entity
+// request that's one entry; a batch request appends one per merged
+// instance, in order.
 //
-// IMPORTANT: entityP and reportP must stay valid until ldNotifyDispatchPending
-// runs. They do, because both are allocated in the request arena which is
-// released *after* the post-response hook.
+// The queue is drained post-response by ldNotifyDispatchPending() — wired
+// from main via swRestSetPostResponseHook().
+//
+// entityP must stay valid until dispatch. Both the request arena and the
+// tenant's entity store satisfy that; the referenced LdMergeReport is
+// copied by value so the caller's stack frame can go out of scope.
 //
 extern void ldNotifyDefer(LdSubCache*     cacheP,
                           KjNode*         entityP,
@@ -37,10 +40,12 @@ extern void ldNotifyDefer(LdSubCache*     cacheP,
 
 // -----------------------------------------------------------------------------
 //
-// ldNotifyDispatchPending - run any notification deferred by this thread
+// ldNotifyDispatchPending - flush the per-thread queue.
 //
-// Registered via swRestSetPostResponseHook so swRest invokes it after the
-// response has been sent but before the per-request arena is freed.
+// Runs after the HTTP response has been sent. Invokes
+// ldSubscriptionNotifyBatch() which emits one notification per matched
+// subscription with data[] carrying every matched pending entity in
+// encounter-order. Queue is cleared after dispatch.
 //
 extern void ldNotifyDispatchPending(void);
 
