@@ -83,6 +83,8 @@ typedef struct LdSubCacheItem
   char*                     endpointUri;    // notification.endpoint.uri
   char*                     contextUrl;     // jsonldContext URL for notification compaction
   char*                     format;         // notification format: NULL=normalized, "simplified", "concise"
+  bool                      sysAttrs;       // notification.sysAttrs (default false)
+  bool                      showChanges;    // notification.showChanges (default false) — implies previousValue/Object/LanguageMap
 
   // Expiration
   uint64_t                  expiresAt;      // epoch nanoseconds (0 = no expiration)

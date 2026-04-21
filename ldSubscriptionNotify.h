@@ -18,6 +18,7 @@
 // order they were deferred.
 //
 #include <stdbool.h>
+#include <stdint.h>                                    // uint64_t
 #include <string.h>                                    // strcmp (for inline helpers)
 
 #include "kjson/KjNode.h"
@@ -102,6 +103,7 @@ typedef struct LdNotifyPendingEntry
   LdNotifyOp     op;
   bool           hasReport;
   LdMergeReport  report;
+  uint64_t       deletedAtNs;    // epoch-ns when op == LdNotifyEntityDelete; 0 otherwise
 } LdNotifyPendingEntry;
 
 

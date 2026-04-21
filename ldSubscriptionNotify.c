@@ -260,9 +260,84 @@ static bool watchedAttrsMatch(LdSubCacheItem* itemP, KjNode* entityP, LdNotifyOp
 // notification.attributes filter, notification.format. Returns a fresh
 // KjNode suitable for direct insertion into the notification's data[].
 //
-static KjNode* buildNotifDataEntry(LdSubCacheItem* itemP, KjNode* entityP)
+static void nsToIsoLocal(uint64_t epochNs, char* buf, int bufSize)
 {
+  time_t    secs = (time_t) (epochNs / 1000000000ULL);
+  long      ms   = (long) ((epochNs % 1000000000ULL) / 1000000);
+  struct tm tm;
+
+  gmtime_r(&secs, &tm);
+  int n = strftime(buf, bufSize, "%Y-%m-%dT%H:%M:%S", &tm);
+  if (ms > 0)
+    snprintf(buf + n, bufSize - n, ".%03ldZ", ms);
+  else
+  {
+    buf[n++] = 'Z';
+    buf[n]   = 0;
+  }
+}
+
+
+static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
+                                   LdNotifyPendingEntry* penP)
+{
+  KjNode*         entityP     = penP->entityP;
+  LdNotifyOp      op          = penP->op;
+  LdMergeReport*  reportP     = penP->hasReport ? &penP->report : NULL;
+  uint64_t        deletedAtNs = penP->deletedAtNs;
+
+  //
+  // Entity delete (§ 5.8.6): only {id, type, deletedAt}. sysAttrs
+  // adds createdAt/modifiedAt from the pre-delete snapshot.
+  //
+  if (op == LdNotifyEntityDelete)
+  {
+    KjNode* out = kjObject(NULL, NULL);
+
+    KjNode* srcId   = kjLookup(entityP, "id");
+    KjNode* srcType = kjLookup(entityP, "type");
+    if (srcId   != NULL) kjChildAdd(out, kjClone(NULL, srcId));
+    if (srcType != NULL) kjChildAdd(out, kjClone(NULL, srcType));
+
+    if (deletedAtNs != 0)
+    {
+      char iso[48];
+      nsToIsoLocal(deletedAtNs, iso, sizeof(iso));
+      kjChildAdd(out, kjString(NULL, "deletedAt", iso));
+    }
+
+    if (itemP->sysAttrs)
+    {
+      KjNode* srcCreated  = kjLookup(entityP, LD_VOCAB_CREATED_AT);
+      KjNode* srcModified = kjLookup(entityP, LD_VOCAB_MODIFIED_AT);
+      if (srcCreated  != NULL) kjChildAdd(out, kjClone(NULL, srcCreated));
+      if (srcModified != NULL) kjChildAdd(out, kjClone(NULL, srcModified));
+    }
+
+    return out;
+  }
+
   KjNode* entityClone = kjClone(NULL, entityP);
+
+  //
+  // Attribute-delete markers (§ 5.8.6): for every attributeDeleted
+  // change in the report, inject "<attr>": "urn:ngsi-ld:null" into
+  // the clone (the live entity no longer has the attribute).
+  //
+  if (op == LdNotifyEntityUpdate && reportP != NULL && reportP->changes != NULL)
+  {
+    for (KjNode* chP = reportP->changes->value.firstChildP; chP != NULL; chP = chP->next)
+    {
+      KjNode* reasonP = kjLookup(chP, "reason");
+      KjNode* attrP   = kjLookup(chP, "attr");
+      if (reasonP == NULL || reasonP->type != KjString) continue;
+      if (attrP   == NULL || attrP->type   != KjString) continue;
+      if (strcmp(reasonP->value.s, "attributeDeleted") != 0) continue;
+      if (kjLookup(entityClone, attrP->value.s) != NULL)    continue;
+
+      kjChildAdd(entityClone, kjString(NULL, attrP->value.s, "urn:ngsi-ld:null"));
+    }
+  }
 
   //
   // datasetId filter (§ 5.8.6): if the subscription specifies a datasetId
@@ -315,6 +390,55 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem* itemP, KjNode* entityP)
   ldEntityToApi(entityClone, &swRest.kalloc);
   ldStripSysAttrs(entityClone);
 
+  //
+  // showChanges (§ 5.8.6 / § 5.2.14.1): for each report change that
+  // carries a preValue, add previousValue / previousObject /
+  // previousLanguageMap inside the corresponding attr wrapper in
+  // entityClone. showChanges is forbidden with keyValues/simplified
+  // per spec, so we only emit it when format is default/concise.
+  //
+  if (itemP->showChanges && reportP != NULL && reportP->changes != NULL &&
+      (itemP->format == NULL || strcmp(itemP->format, "simplified") != 0))
+  {
+    for (KjNode* chP = reportP->changes->value.firstChildP; chP != NULL; chP = chP->next)
+    {
+      KjNode* attrNameP = kjLookup(chP, "attr");
+      KjNode* preValueP = kjLookup(chP, "preValue");
+      if (attrNameP == NULL || attrNameP->type != KjString) continue;
+      if (preValueP == NULL) continue;
+
+      // preValue is the pre-change dataset-keyed wrapper
+      // ({"@none":{type:..,value:..}, ...}). Pull the @none instance's
+      // current/object/languageMap.
+      KjNode* preInst = kjLookup(preValueP, "@none");
+      if (preInst == NULL && preValueP->type == KjObject)
+        preInst = preValueP->value.firstChildP;
+      if (preInst == NULL || preInst->type != KjObject) continue;
+
+      KjNode* preVal   = kjLookup(preInst, "value");
+      KjNode* preObj   = kjLookup(preInst, "object");
+      KjNode* preLmap  = kjLookup(preInst, "languageMap");
+
+      KjNode* attrOutP = kjLookup(entityClone, attrNameP->value.s);
+      if (attrOutP == NULL)
+      {
+        // attribute was deleted from entity — add a minimal wrapper
+        // carrying only the previousX marker so showChanges sees it.
+        attrOutP = kjObject(NULL, attrNameP->value.s);
+        kjChildRemove(entityClone, kjLookup(entityClone, attrNameP->value.s));
+        kjChildAdd(entityClone, attrOutP);
+        // Set type from the preInst for correctness
+        KjNode* preType = kjLookup(preInst, "type");
+        if (preType != NULL) kjChildAdd(attrOutP, kjClone(NULL, preType));
+      }
+      if (attrOutP->type != KjObject) continue;
+
+      if (preVal  != NULL) { KjNode* c = kjClone(NULL, preVal);  c->name = (char*) "previousValue";       kjChildAdd(attrOutP, c); }
+      if (preObj  != NULL) { KjNode* c = kjClone(NULL, preObj);  c->name = (char*) "previousObject";      kjChildAdd(attrOutP, c); }
+      if (preLmap != NULL) { KjNode* c = kjClone(NULL, preLmap); c->name = (char*) "previousLanguageMap"; kjChildAdd(attrOutP, c); }
+    }
+  }
+
   if (itemP->notifAttrsV != NULL)
   {
     KjNode* childP = entityClone->value.firstChildP;
@@ -362,7 +486,7 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem* itemP, KjNode* entityP)
 // notificationSendMany - build a Notification payload with N entities in data[]
 // and POST it to the subscription's endpoint.
 //
-static void notificationSendMany(LdSubCacheItem* itemP, KjNode** entities, int n)
+static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** entries, int n)
 {
   if (itemP->endpointUri == NULL || itemP->subId == NULL || n == 0)
     return;
@@ -378,7 +502,7 @@ static void notificationSendMany(LdSubCacheItem* itemP, KjNode** entities, int n
 
   KjNode* dataArray = kjArray(NULL, "data");
   for (int i = 0; i < n; i++)
-    kjChildAdd(dataArray, buildNotifDataEntry(itemP, entities[i]));
+    kjChildAdd(dataArray, buildNotifDataEntry(itemP, entries[i]));
   kjChildAdd(notification, dataArray);
 
   // Compact expanded URIs to short names (covers every data[] entry)
@@ -486,8 +610,8 @@ void ldSubscriptionNotifyBatch(LdSubCache*           cacheP,
     //
     // Per-pending match pass
     //
-    KjNode** matched  = (KjNode**) kaAlloc(&swRest.kalloc, pendingN * sizeof(KjNode*));
-    int      matchedN = 0;
+    LdNotifyPendingEntry** matched  = (LdNotifyPendingEntry**) kaAlloc(&swRest.kalloc, pendingN * sizeof(LdNotifyPendingEntry*));
+    int                    matchedN = 0;
 
     for (int i = 0; i < pendingN; i++)
     {
@@ -530,7 +654,7 @@ void ldSubscriptionNotifyBatch(LdSubCache*           cacheP,
           continue;
       }
 
-      matched[matchedN++] = p->entityP;
+      matched[matchedN++] = p;
     }
 
     if (matchedN > 0)

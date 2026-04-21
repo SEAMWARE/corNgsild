@@ -300,6 +300,14 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
   KjNode* formatP = (notifP != NULL) ? kjLookup(notifP, LD_VOCAB_FORMAT) : NULL;
   itemP->format = (formatP != NULL && formatP->type == KjString) ? formatP->value.s : NULL;
 
+  if (notifP != NULL)
+  {
+    KjNode* sysP  = kjLookup(notifP, "sysAttrs");
+    KjNode* showP = kjLookup(notifP, "showChanges");
+    itemP->sysAttrs    = (sysP  != NULL && sysP->type  == KjBoolean && sysP->value.b  == true);
+    itemP->showChanges = (showP != NULL && showP->type == KjBoolean && showP->value.b == true);
+  }
+
   KjNode* jcP = kjLookup(itemP->subTree, "jsonldContext");
   itemP->contextUrl = (jcP != NULL && jcP->type == KjString) ? jcP->value.s : NULL;
 

@@ -8,6 +8,8 @@
 #ifndef SWNGSILD_LDNOTIFYDEFER_H_
 #define SWNGSILD_LDNOTIFYDEFER_H_
 
+#include <stdint.h>                              // uint64_t
+
 #include "kjson/KjNode.h"                        // KjNode
 #include "swNgsild/ldSubCache.h"                 // LdSubCache
 #include "swNgsild/ldSubscriptionNotify.h"       // LdNotifyOp, LdNotifyPendingEntry
@@ -35,6 +37,20 @@ extern void ldNotifyDefer(LdSubCache*     cacheP,
                           KjNode*         entityP,
                           LdNotifyOp      op,
                           LdMergeReport*  reportP);
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldNotifyDeferDelete - variant for LdNotifyEntityDelete carrying deletedAt.
+//
+// entityP should be the pre-delete snapshot (so sysAttrs/showChanges
+// renderers can include its createdAt/modifiedAt and previous values).
+// deletedAtNs is the epoch-ns timestamp to emit on the notification.
+//
+extern void ldNotifyDeferDelete(LdSubCache* cacheP,
+                                KjNode*     entityP,
+                                uint64_t    deletedAtNs);
 
 
 

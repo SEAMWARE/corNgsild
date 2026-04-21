@@ -54,11 +54,42 @@ void ldNotifyDefer(LdSubCache* cacheP, KjNode* entityP, LdNotifyOp op, LdMergeRe
     pendingCap = newCap;
   }
 
-  pendingV[pendingN].entityP   = entityP;
-  pendingV[pendingN].op        = op;
-  pendingV[pendingN].hasReport = (reportP != NULL);
+  pendingV[pendingN].entityP     = entityP;
+  pendingV[pendingN].op          = op;
+  pendingV[pendingN].hasReport   = (reportP != NULL);
+  pendingV[pendingN].deletedAtNs = 0;
   if (reportP != NULL)
-    pendingV[pendingN].report  = *reportP;  // struct copy; referenced change-list tree lives in the request arena
+    pendingV[pendingN].report    = *reportP;  // struct copy; referenced change-list tree lives in the request arena
+  pendingN++;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldNotifyDeferDelete -
+//
+void ldNotifyDeferDelete(LdSubCache* cacheP, KjNode* entityP, uint64_t deletedAtNs)
+{
+  if (cacheP == NULL || entityP == NULL)
+    return;
+
+  pendingCache = cacheP;
+
+  if (pendingN >= pendingCap)
+  {
+    int newCap = (pendingCap == 0) ? LD_NOTIFY_PENDING_INITIAL_CAP : pendingCap * 2;
+    LdNotifyPendingEntry* newV = (LdNotifyPendingEntry*) realloc(pendingV, newCap * sizeof(LdNotifyPendingEntry));
+    if (newV == NULL)
+      return;
+    pendingV   = newV;
+    pendingCap = newCap;
+  }
+
+  pendingV[pendingN].entityP     = entityP;
+  pendingV[pendingN].op          = LdNotifyEntityDelete;
+  pendingV[pendingN].hasReport   = false;
+  pendingV[pendingN].deletedAtNs = deletedAtNs;
   pendingN++;
 }
 
