@@ -200,6 +200,20 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
   KjNode* watchedP = kjLookup(itemP->subTree, LD_VOCAB_WATCHED_ATTRS);
   itemP->watchedAttrsV = watchedAttrsExtract(watchedP);
 
+  // Expand short names in watchedAttrsV — same motivation as notifAttrsV
+  // below. JSON-LD value coercion on array entries is intentionally NOT
+  // applied by swldExpandTree, so the strings stay short after parseHook.
+  // Downstream match paths (entity-side notify, CSR-side notify) compare
+  // against expanded IRIs, so expand once here at cache-ingest time.
+  if (itemP->watchedAttrsV != NULL)
+  {
+    for (int i = 0; itemP->watchedAttrsV[i] != NULL; i++)
+    {
+      if (!swldAlreadyExpanded(itemP->watchedAttrsV[i]))
+        itemP->watchedAttrsV[i] = swldExpand(NULL, itemP->watchedAttrsV[i], &cacheP->alloc, NULL, NULL);
+    }
+  }
+
   // Use pre-parsed tree if provided, otherwise parse from the stored expanded q-string.
   // Note: ldQParse called here will re-expand attrs via swNgsild.contextP, but since
   // the attrs are already expanded IRIs (contain "://"), swldExpand returns them unchanged.
