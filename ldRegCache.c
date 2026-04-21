@@ -730,28 +730,135 @@ int ldRegCacheMatchForRetrieveScoped(LdRegCache*       cacheP,
 
 // -----------------------------------------------------------------------------
 //
+// attrInfoMatches - match attrsV against RegistrationInfo's
+// propertyNames + relationshipNames (§ 5.12). Spec: if no Properties
+// or Relationships are specified in the RegistrationInfo, the Attribute
+// names are considered matching.
+//
+static bool attrInfoMatches(LdRegInfo* riP, char** attrsV)
+{
+  if (attrsV == NULL)                                          return true;
+  if (riP->propertyNamesV == NULL && riP->relationshipNamesV == NULL)
+    return true;
+
+  for (int j = 0; attrsV[j] != NULL; j++)
+  {
+    if (riP->propertyNamesV != NULL)
+    {
+      for (int i = 0; riP->propertyNamesV[i] != NULL; i++)
+        if (strcmp(riP->propertyNamesV[i], attrsV[j]) == 0) return true;
+    }
+    if (riP->relationshipNamesV != NULL)
+    {
+      for (int i = 0; riP->relationshipNamesV[i] != NULL; i++)
+        if (strcmp(riP->relationshipNamesV[i], attrsV[j]) == 0) return true;
+    }
+  }
+  return false;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// riDiscoveryMatches - § 5.12 match of a single RegistrationInfo against
+// the discovery filters: AND across (type, entityId, idRegex, attrsV).
+//
+static bool riDiscoveryMatches(LdRegInfo*     riP,
+                               const char*    entityId,
+                               char**         typeV,
+                               const regex_t* idRegex,
+                               char**         attrsV)
+{
+  if (!attrInfoMatches(riP, attrsV))
+    return false;
+
+  // Spec: if no EntityInfo specified, entity constraint is considered matching.
+  if (riP->entityInfoV == NULL)
+    return true;
+
+  for (LdRegEntityInfo* eiP = riP->entityInfoV; eiP != NULL; eiP = eiP->next)
+  {
+    // type check
+    if (typeV != NULL && eiP->type != NULL)
+    {
+      bool typeOk = false;
+      for (int i = 0; typeV[i] != NULL; i++)
+        if (strcmp(eiP->type, typeV[i]) == 0) { typeOk = true; break; }
+      if (!typeOk) continue;
+    }
+
+    // id exact-match filter (ignored if the EntityInfo has no id constraint —
+    // the reg implicitly covers any id of the matched type, so it matches)
+    if (entityId != NULL && eiP->id != NULL && strcmp(eiP->id, entityId) != 0)
+      continue;
+
+    // idPattern: request-side regex matched against EntityInfo.id (when present)
+    if (idRegex != NULL && eiP->id != NULL)
+    {
+      if (regexec(idRegex, eiP->id, 0, NULL, 0) != 0)
+        continue;
+    }
+
+    return true;
+  }
+  return false;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// itemDiscoveryMatches - CSR matches if ANY RegistrationInfo matches.
+//
+static bool itemDiscoveryMatches(LdRegCacheItem* itemP,
+                                 const char*     entityId,
+                                 char**          typeV,
+                                 const regex_t*  idRegex,
+                                 char**          attrsV)
+{
+  for (LdRegInfo* riP = itemP->infoV; riP != NULL; riP = riP->next)
+  {
+    if (riDiscoveryMatches(riP, entityId, typeV, idRegex, attrsV))
+      return true;
+  }
+  return false;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldRegCacheMatchForDiscovery - § 5.10.2 Query Context Source Registrations.
 //
 // Walks every non-expired CSR in the cache regardless of mode and returns
-// those with at least one RegistrationInfo.EntityInfo matching the
-// requested filters. Caller frees *matchVP with free().
+// those with at least one RegistrationInfo matching the filters. Caller
+// frees *matchVP with free().
 //
 // typeV:      NULL = ignore type filter; else NULL-terminated expanded IRIs
 // entityId:   NULL = ignore id filter; else exact URI
-// idPattern:  NULL = ignore idPattern filter (NOT YET IMPLEMENTED AS A
-//             REQUEST-SIDE regex — current behavior: compare exact string
-//             against each EntityInfo.id and each EntityInfo.idPattern)
+// idPattern:  NULL = ignore; else POSIX regex, matched request-side against
+//             each EntityInfo.id (spec § 6.8.3.2).
+// attrsV:     NULL = ignore; else NULL-terminated expanded attribute IRIs
+//             matched against RegistrationInfo.propertyNames / relationshipNames.
 //
 int ldRegCacheMatchForDiscovery(LdRegCache*       cacheP,
                                 char**            typeV,
                                 const char*       entityId,
                                 const char*       idPattern,
+                                char**            attrsV,
                                 LdRegCacheItem*** matchVP)
 {
-  (void) idPattern;  // v1: idPattern filter not yet honored on the request side
-
   if (cacheP == NULL || matchVP == NULL)
     return 0;
+
+  regex_t  idRegex;
+  bool     haveRegex = false;
+  if (idPattern != NULL && idPattern[0] != 0)
+  {
+    if (regcomp(&idRegex, idPattern, REG_EXTENDED | REG_NOSUB) == 0)
+      haveRegex = true;
+  }
 
   struct timespec ts;
   clock_gettime(CLOCK_REALTIME, &ts);
@@ -762,12 +869,16 @@ int ldRegCacheMatchForDiscovery(LdRegCache*       cacheP,
   {
     if (itemP->expiresAt > 0 && itemP->expiresAt <= nowNs)
       continue;
-    if (itemMatches(itemP, entityId, typeV))
+    if (itemDiscoveryMatches(itemP, entityId, typeV,
+                              haveRegex ? &idRegex : NULL, attrsV))
       count++;
   }
 
   if (count == 0)
+  {
+    if (haveRegex) regfree(&idRegex);
     return 0;
+  }
 
   LdRegCacheItem** v = (LdRegCacheItem**) malloc(count * sizeof(LdRegCacheItem*));
   int ix = 0;
@@ -776,9 +887,12 @@ int ldRegCacheMatchForDiscovery(LdRegCache*       cacheP,
   {
     if (itemP->expiresAt > 0 && itemP->expiresAt <= nowNs)
       continue;
-    if (itemMatches(itemP, entityId, typeV))
+    if (itemDiscoveryMatches(itemP, entityId, typeV,
+                              haveRegex ? &idRegex : NULL, attrsV))
       v[ix++] = itemP;
   }
+
+  if (haveRegex) regfree(&idRegex);
 
   *matchVP = v;
   return count;

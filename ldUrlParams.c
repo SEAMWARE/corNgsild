@@ -140,6 +140,13 @@ void ldParamHook(const char* name, const char* value)
     swNgsild.pick  = (char*) value;
     swNgsild.pickV = ldParamSplit((char*) value, faP);  // expanded later in ldExpandParams
   }
+  else if (strcmp(name, "attrs") == 0)
+  {
+    // § 5.10.2 CSR Discovery honors `attrs` as a deprecated synonym for pick.
+    // On other routes the bitmask LD_PARAMS_* gates whether attrs is allowed.
+    swNgsild.attrs  = (char*) value;
+    swNgsild.attrsV = ldParamSplit((char*) value, faP);
+  }
   else if (strcmp(name, "omit") == 0)
   {
     swNgsild.omit  = (char*) value;

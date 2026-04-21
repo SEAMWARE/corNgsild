@@ -71,6 +71,7 @@ void ldExpandParams(KAlloc* kaP)
   // raw string (may be "T1,T2") — not meaningful as a single expanded IRI.
   expandArray(swNgsild.typeV,             kaP);
   expandArray(swNgsild.pickV,             kaP);
+  expandArray(swNgsild.attrsV,            kaP);
   expandArray(swNgsild.omitV,             kaP);
   expandArray(swNgsild.jsonKeysV,         kaP);
 

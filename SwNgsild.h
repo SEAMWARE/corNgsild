@@ -49,6 +49,11 @@ typedef struct SwNgsild
   char*   pick;
   char**  pickV;         // split + JSON-LD expanded
 
+  // § 5.10.2 CSR Discovery: `attrs` is a deprecated synonym for pick+q.
+  // Both accepted on that route, never together (handler returns 400).
+  char*   attrs;
+  char**  attrsV;        // split + JSON-LD expanded
+
   char*   omit;
   char**  omitV;         // split + JSON-LD expanded
 

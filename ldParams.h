@@ -243,6 +243,7 @@
   | LD_PARAM_ID           \
   | LD_PARAM_ID_PATTERN   \
   | LD_PARAM_ATTRS        \
+  | LD_PARAM_PICK         \
   | LD_PARAM_Q            \
   | LD_PARAM_GEOMETRY     \
   | LD_PARAM_COORDINATES  \
