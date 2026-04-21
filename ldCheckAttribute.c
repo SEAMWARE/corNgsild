@@ -229,10 +229,12 @@ bool ldCheckAttribute(KjNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc*
     return false;
   }
 
-  // Check for urn:ngsi-ld:null on value (not allowed in Create Entity)
+  // urn:ngsi-ld:null on an attribute value is the Merge-delete marker (§ 4.5.5.9,
+  // § 5.6.6). Allow it for Merge Entity and Batch Merge; reject for other ops.
   if (valueNodeP->type == KjString && strcmp(valueNodeP->value.s, "urn:ngsi-ld:null") == 0)
   {
-    if (attrType == LdAttrProperty || attrType == LdAttrRelationship)
+    bool mergeOp = (op == LdOpMergeEntity) || (op == LdOpBatchMerge);
+    if (!mergeOp && (attrType == LdAttrProperty || attrType == LdAttrRelationship))
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Value", "'urn:ngsi-ld:null' is not allowed as the value/object of attribute '%s'", attrP->name);
       return false;
