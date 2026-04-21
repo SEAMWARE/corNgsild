@@ -72,7 +72,14 @@ typedef enum LdOp
   LdOpUpdateRegistration             = 1ULL << 30,
   LdOpRetrieveRegistration           = 1ULL << 31,
   LdOpQueryRegistration              = 1ULL << 32,
-  LdOpDeleteRegistration             = 1ULL << 33
+  LdOpDeleteRegistration             = 1ULL << 33,
+
+  // Context Source Registration Subscription ops (§ 5.11)
+  LdOpCreateCsourceSubscription      = 1ULL << 34,
+  LdOpUpdateCsourceSubscription      = 1ULL << 35,
+  LdOpRetrieveCsourceSubscription    = 1ULL << 36,
+  LdOpQueryCsourceSubscription       = 1ULL << 37,
+  LdOpDeleteCsourceSubscription      = 1ULL << 38
 } LdOp;
 
 

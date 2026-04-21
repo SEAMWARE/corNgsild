@@ -350,7 +350,7 @@ bool ldCheckSubscription(KjNode* subP, LdOp op, KAlloc* kaP)
   //
   // "type" validation
   //
-  if (op == LdOpCreateSubscription)
+  if (op == LdOpCreateSubscription || op == LdOpCreateCsourceSubscription)
   {
     MANDATORY_CHECK(typeP, "Missing Type", "Subscription 'type' is mandatory for create");
 
@@ -372,7 +372,7 @@ bool ldCheckSubscription(KjNode* subP, LdOp op, KAlloc* kaP)
   //
   // "id" — not allowed in PATCH
   //
-  if (op == LdOpUpdateSubscription && idP != NULL)
+  if ((op == LdOpUpdateSubscription || op == LdOpUpdateCsourceSubscription) && idP != NULL)
   {
     ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Read-Only Field", "'id' cannot be modified");
     return false;
@@ -381,7 +381,7 @@ bool ldCheckSubscription(KjNode* subP, LdOp op, KAlloc* kaP)
   //
   // "entities" or "watchedAttributes" required for create
   //
-  if (op == LdOpCreateSubscription)
+  if (op == LdOpCreateSubscription || op == LdOpCreateCsourceSubscription)
   {
     if (entitiesP == NULL && watchedAttrsP == NULL)
     {
@@ -448,7 +448,7 @@ bool ldCheckSubscription(KjNode* subP, LdOp op, KAlloc* kaP)
   //
   // "notification" mandatory for create
   //
-  if (op == LdOpCreateSubscription)
+  if (op == LdOpCreateSubscription || op == LdOpCreateCsourceSubscription)
     MANDATORY_CHECK(notificationP, "Missing Notification", "Subscription 'notification' is mandatory for create");
 
   if (notificationP != NULL)
