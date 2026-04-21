@@ -730,6 +730,64 @@ int ldRegCacheMatchForRetrieveScoped(LdRegCache*       cacheP,
 
 // -----------------------------------------------------------------------------
 //
+// ldRegCacheMatchForDiscovery - § 5.10.2 Query Context Source Registrations.
+//
+// Walks every non-expired CSR in the cache regardless of mode and returns
+// those with at least one RegistrationInfo.EntityInfo matching the
+// requested filters. Caller frees *matchVP with free().
+//
+// typeV:      NULL = ignore type filter; else NULL-terminated expanded IRIs
+// entityId:   NULL = ignore id filter; else exact URI
+// idPattern:  NULL = ignore idPattern filter (NOT YET IMPLEMENTED AS A
+//             REQUEST-SIDE regex — current behavior: compare exact string
+//             against each EntityInfo.id and each EntityInfo.idPattern)
+//
+int ldRegCacheMatchForDiscovery(LdRegCache*       cacheP,
+                                char**            typeV,
+                                const char*       entityId,
+                                const char*       idPattern,
+                                LdRegCacheItem*** matchVP)
+{
+  (void) idPattern;  // v1: idPattern filter not yet honored on the request side
+
+  if (cacheP == NULL || matchVP == NULL)
+    return 0;
+
+  struct timespec ts;
+  clock_gettime(CLOCK_REALTIME, &ts);
+  uint64_t nowNs = (uint64_t) ts.tv_sec * 1000000000ULL + (uint64_t) ts.tv_nsec;
+
+  int count = 0;
+  for (LdRegCacheItem* itemP = cacheP->itemList; itemP != NULL; itemP = itemP->next)
+  {
+    if (itemP->expiresAt > 0 && itemP->expiresAt <= nowNs)
+      continue;
+    if (itemMatches(itemP, entityId, typeV))
+      count++;
+  }
+
+  if (count == 0)
+    return 0;
+
+  LdRegCacheItem** v = (LdRegCacheItem**) malloc(count * sizeof(LdRegCacheItem*));
+  int ix = 0;
+
+  for (LdRegCacheItem* itemP = cacheP->itemList; itemP != NULL; itemP = itemP->next)
+  {
+    if (itemP->expiresAt > 0 && itemP->expiresAt <= nowNs)
+      continue;
+    if (itemMatches(itemP, entityId, typeV))
+      v[ix++] = itemP;
+  }
+
+  *matchVP = v;
+  return count;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldRegCacheRelease -
 //
 void ldRegCacheRelease(LdRegCache* cacheP)

@@ -115,6 +115,25 @@ extern int ldRegCacheMatchForRetrieveScoped(LdRegCache*       cacheP,
 
 // -----------------------------------------------------------------------------
 //
+// ldRegCacheMatchForDiscovery - § 5.10.2 Query Context Source Registrations.
+//
+// Walks every non-expired CSR in the cache regardless of mode and returns
+// those with at least one RegistrationInfo.EntityInfo matching the
+// requested filters. Caller frees *matchVP with free(). typeV is
+// NULL-terminated expanded IRIs; entityId is an exact URI or NULL to
+// skip. idPattern is accepted but not yet honored on the request side
+// (v1 limitation).
+//
+extern int ldRegCacheMatchForDiscovery(LdRegCache*       cacheP,
+                                       char**            typeV,
+                                       const char*       entityId,
+                                       const char*       idPattern,
+                                       LdRegCacheItem*** matchVP);
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldRegOpSupported - true if a registration declares support for opBit
 //
 // opBit is a single LdOp bit (e.g. LdOpCreateEntity), typically the
