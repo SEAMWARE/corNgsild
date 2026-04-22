@@ -47,4 +47,20 @@ extern void ldCsrSubInitialNotify(LdRegCache* regCacheP, LdSubCacheItem* subItem
 //
 extern void ldCsrSubOnRegCreate(LdSubCache* regSubCacheP, LdRegCacheItem* regItemP);
 
+
+
+// -----------------------------------------------------------------------------
+//
+// ldCsrSubOnRegDelete - dispatch § 5.11.7 notifications on CSR deletion
+//
+// Called from deleteCsourceRegistration BEFORE the item is removed
+// from the reg cache — the matcher reads regItemP's pre-parsed fields,
+// which are freed by ldRegCacheItemRemove.
+//
+// Walks regSubCacheP; for each CSR-sub that matches the CSR about to
+// be deleted, fires a single CsourceNotification carrying the CSR
+// with triggerReason="noLongerMatching".
+//
+extern void ldCsrSubOnRegDelete(LdSubCache* regSubCacheP, LdRegCacheItem* regItemP);
+
 #endif  // SWNGSILD_LDCSRSUBNOTIFY_H_

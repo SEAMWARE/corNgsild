@@ -347,9 +347,9 @@ void ldCsrSubInitialNotify(LdRegCache* regCacheP, LdSubCacheItem* subItemP)
 
 // -----------------------------------------------------------------------------
 //
-// ldCsrSubOnRegCreate -
+// fanOutForOneReg - shared helper for on-create / on-delete
 //
-void ldCsrSubOnRegCreate(LdSubCache* regSubCacheP, LdRegCacheItem* regItemP)
+static void fanOutForOneReg(LdSubCache* regSubCacheP, LdRegCacheItem* regItemP, const char* triggerReason)
 {
   if (regSubCacheP == NULL || regItemP == NULL)
     return;
@@ -369,6 +369,28 @@ void ldCsrSubOnRegCreate(LdSubCache* regSubCacheP, LdRegCacheItem* regItemP)
       continue;
 
     LdRegCacheItem* oneItem[1] = { regItemP };
-    sendCsourceNotification(subItemP, oneItem, 1, "newlyMatching");
+    sendCsourceNotification(subItemP, oneItem, 1, triggerReason);
   }
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldCsrSubOnRegCreate -
+//
+void ldCsrSubOnRegCreate(LdSubCache* regSubCacheP, LdRegCacheItem* regItemP)
+{
+  fanOutForOneReg(regSubCacheP, regItemP, "newlyMatching");
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldCsrSubOnRegDelete -
+//
+void ldCsrSubOnRegDelete(LdSubCache* regSubCacheP, LdRegCacheItem* regItemP)
+{
+  fanOutForOneReg(regSubCacheP, regItemP, "noLongerMatching");
 }
