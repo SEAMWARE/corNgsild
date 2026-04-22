@@ -394,3 +394,103 @@ void ldCsrSubOnRegDelete(LdSubCache* regSubCacheP, LdRegCacheItem* regItemP)
 {
   fanOutForOneReg(regSubCacheP, regItemP, "noLongerMatching");
 }
+
+
+
+// -----------------------------------------------------------------------------
+//
+// subEligibleForNotify - paused / expired filter
+//
+static bool subEligibleForNotify(LdSubCacheItem* subItemP)
+{
+  if (subItemP->status != NULL &&
+      (strcmp(subItemP->status, "paused")  == 0 ||
+       strcmp(subItemP->status, "expired") == 0))
+    return false;
+
+  if (subItemP->expiresAt > 0 && swRest.requestStartTime > subItemP->expiresAt)
+    return false;
+
+  return true;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldCsrSubMatchingSubIds -
+//
+char** ldCsrSubMatchingSubIds(LdSubCache* regSubCacheP, LdRegCacheItem* regItemP, KAlloc* allocP)
+{
+  if (regSubCacheP == NULL || regItemP == NULL)
+    return NULL;
+
+  // Pass 1: count
+  int count = 0;
+  for (LdSubCacheItem* s = regSubCacheP->itemList; s != NULL; s = s->next)
+  {
+    if (!subEligibleForNotify(s))        continue;
+    if (!subMatchesReg(s, regItemP))     continue;
+    count++;
+  }
+  if (count == 0)
+    return NULL;
+
+  char** v = (char**) kaAlloc(allocP, (count + 1) * sizeof(char*));
+  int ix = 0;
+  for (LdSubCacheItem* s = regSubCacheP->itemList; s != NULL && ix < count; s = s->next)
+  {
+    if (!subEligibleForNotify(s))        continue;
+    if (!subMatchesReg(s, regItemP))     continue;
+    v[ix++] = s->subId;
+  }
+  v[ix] = NULL;
+  return v;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// wasInSet - linear search in NULL-terminated char**
+//
+static bool wasInSet(char** set, const char* subId)
+{
+  if (set == NULL || subId == NULL) return false;
+  for (int i = 0; set[i] != NULL; i++)
+    if (strcmp(set[i], subId) == 0) return true;
+  return false;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldCsrSubOnRegUpdate -
+//
+void ldCsrSubOnRegUpdate(LdSubCache* regSubCacheP,
+                         LdRegCacheItem* regItemAfterP,
+                         char** wasMatchingIds)
+{
+  if (regSubCacheP == NULL || regItemAfterP == NULL)
+    return;
+
+  LdRegCacheItem* oneItem[1] = { regItemAfterP };
+
+  for (LdSubCacheItem* subItemP = regSubCacheP->itemList; subItemP != NULL; subItemP = subItemP->next)
+  {
+    if (!subEligibleForNotify(subItemP))
+      continue;
+
+    bool wasMatch = wasInSet(wasMatchingIds, subItemP->subId);
+    bool nowMatch = subMatchesReg(subItemP, regItemAfterP);
+
+    const char* triggerReason = NULL;
+    if (wasMatch && nowMatch)       triggerReason = "updated";
+    else if (!wasMatch && nowMatch) triggerReason = "newlyMatching";
+    else if (wasMatch && !nowMatch) triggerReason = "noLongerMatching";
+    else                            continue;
+
+    sendCsourceNotification(subItemP, oneItem, 1, triggerReason);
+  }
+}

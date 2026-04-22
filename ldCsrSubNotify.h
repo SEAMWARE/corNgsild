@@ -18,6 +18,8 @@
 //
 #include <stdbool.h>                                    // bool
 
+#include "kalloc/KAlloc.h"                              // KAlloc
+
 #include "swNgsild/LdSubCache.h"                        // LdSubCacheItem
 #include "swNgsild/LdRegCache.h"                        // LdRegCache
 
@@ -62,5 +64,42 @@ extern void ldCsrSubOnRegCreate(LdSubCache* regSubCacheP, LdRegCacheItem* regIte
 // with triggerReason="noLongerMatching".
 //
 extern void ldCsrSubOnRegDelete(LdSubCache* regSubCacheP, LdRegCacheItem* regItemP);
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldCsrSubMatchingSubIds - snapshot sub ids matching a CSR
+//
+// Returns a NULL-terminated char** (each entry borrowed from the sub
+// cache, stable for cache lifetime) allocated in allocP. NULL when no
+// subs match.
+//
+// Used to capture the "was matching" set before a CSR update so that
+// ldCsrSubOnRegUpdate can emit the right triggerReason per sub.
+//
+extern char** ldCsrSubMatchingSubIds(LdSubCache* regSubCacheP, LdRegCacheItem* regItemP, KAlloc* allocP);
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldCsrSubOnRegUpdate - § 5.11.7 fan-out on CSR update
+//
+// Called from patchCsourceRegistration AFTER the reg cache has been
+// refreshed with the post-update tree. Classifies each CSR-sub by
+// comparing "was matching" (wasMatchingIds, captured before the
+// update) with "now matches" (evaluated against regItemAfterP):
+//
+//   was && now    -> "updated"
+//   !was && now   -> "newlyMatching"
+//   was && !now   -> "noLongerMatching"
+//
+// data[] always carries regItemAfterP's tree — the authoritative
+// current state of the CSR.
+//
+extern void ldCsrSubOnRegUpdate(LdSubCache* regSubCacheP,
+                                LdRegCacheItem* regItemAfterP,
+                                char** wasMatchingIds);
 
 #endif  // SWNGSILD_LDCSRSUBNOTIFY_H_
