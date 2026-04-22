@@ -34,4 +34,17 @@
 //
 extern void ldCsrSubInitialNotify(LdRegCache* regCacheP, LdSubCacheItem* subItemP);
 
+
+
+// -----------------------------------------------------------------------------
+//
+// ldCsrSubOnRegCreate - dispatch § 5.11.7 notifications on CSR creation
+//
+// Called from postCsourceRegistration after the new CSR is added to the
+// reg cache. Walks regSubCacheP; for each CSR-sub that matches the new
+// CSR per § 5.12, fires a single CsourceNotification carrying the CSR
+// with triggerReason="newlyMatching".
+//
+extern void ldCsrSubOnRegCreate(LdSubCache* regSubCacheP, LdRegCacheItem* regItemP);
+
 #endif  // SWNGSILD_LDCSRSUBNOTIFY_H_

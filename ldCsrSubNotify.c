@@ -342,3 +342,33 @@ void ldCsrSubInitialNotify(LdRegCache* regCacheP, LdSubCacheItem* subItemP)
 
   sendCsourceNotification(subItemP, matchV, n, "newlyMatching");
 }
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldCsrSubOnRegCreate -
+//
+void ldCsrSubOnRegCreate(LdSubCache* regSubCacheP, LdRegCacheItem* regItemP)
+{
+  if (regSubCacheP == NULL || regItemP == NULL)
+    return;
+
+  for (LdSubCacheItem* subItemP = regSubCacheP->itemList; subItemP != NULL; subItemP = subItemP->next)
+  {
+    // Skip inactive / expired subs
+    if (subItemP->status != NULL &&
+        (strcmp(subItemP->status, "paused")  == 0 ||
+         strcmp(subItemP->status, "expired") == 0))
+      continue;
+
+    if (subItemP->expiresAt > 0 && swRest.requestStartTime > subItemP->expiresAt)
+      continue;
+
+    if (!subMatchesReg(subItemP, regItemP))
+      continue;
+
+    LdRegCacheItem* oneItem[1] = { regItemP };
+    sendCsourceNotification(subItemP, oneItem, 1, "newlyMatching");
+  }
+}
