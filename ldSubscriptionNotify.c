@@ -42,6 +42,7 @@
 #include "swJsonld/swldInit.h"                          // swldCoreContext
 #include "swJsonld/SwldContext.h"                       // SwldContext
 #include "swNgsild/ldSimplifyEntity.h"                 // ldSimplifyEntity, ldConciseEntity
+#include "swNgsild/ldNotifyStatsHook.h"                // ldNotifyStatsHookInvoke
 #include "swNgsild/ldSubscriptionNotify.h"             // Own interface
 
 
@@ -556,13 +557,16 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   itemP->timesSent       += 1;
   itemP->lastNotification = swRest.requestStartTime;
 
-  if (resp.statusCode >= 200 && resp.statusCode < 300)
+  bool ok = (resp.statusCode >= 200 && resp.statusCode < 300);
+  if (ok)
     itemP->lastSuccess = swRest.requestStartTime;
   else
   {
     itemP->timesFailed += 1;
     itemP->lastFailure  = swRest.requestStartTime;
   }
+
+  ldNotifyStatsHookInvoke(false /*csrSub*/, ok);
 }
 
 

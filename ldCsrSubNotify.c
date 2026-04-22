@@ -42,6 +42,7 @@
 #include "swNgsild/LdSubCache.h"                       // LdSubCacheItem, LdSubEntitySelector
 #include "swNgsild/LdRegCache.h"                       // LdRegCache, LdRegCacheItem, LdRegInfo, LdRegEntityInfo
 #include "swNgsild/swNgsild.h"                         // swNgsild (for tenant access via opaque)
+#include "swNgsild/ldNotifyStatsHook.h"                // ldNotifyStatsHookInvoke
 #include "swNgsild/ldCsrSubNotify.h"                   // Own interface
 
 
@@ -290,13 +291,16 @@ static void sendCsourceNotification(LdSubCacheItem* subItemP,
   subItemP->timesSent++;
   subItemP->lastNotification = swRest.requestStartTime;
 
-  if (resp.statusCode >= 200 && resp.statusCode < 300)
+  bool ok = (resp.statusCode >= 200 && resp.statusCode < 300);
+  if (ok)
     subItemP->lastSuccess = swRest.requestStartTime;
   else
   {
     subItemP->timesFailed++;
     subItemP->lastFailure = swRest.requestStartTime;
   }
+
+  ldNotifyStatsHookInvoke(true /*csrSub*/, ok);
 }
 
 
