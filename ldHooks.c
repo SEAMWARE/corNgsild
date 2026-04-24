@@ -46,6 +46,48 @@ static void ldRequestStartHook(void)
 
 // -----------------------------------------------------------------------------
 //
+// ldFindEmbeddedAtContext - scan tree for any embedded @context child
+//
+// Called AFTER swldExpandTree has already stripped the @context from the
+// permitted positions (root of an object body, first-level of each array
+// element). Anything left with the name "@context" is embedded and must
+// be rejected per § 4.5.1 / § 5.5.7.
+//
+// Returns the offending node, or NULL if none found.
+//
+static KjNode* ldFindEmbeddedAtContext(KjNode* nodeP)
+{
+  if (nodeP == NULL)
+    return NULL;
+
+  if (nodeP->type == KjObject)
+  {
+    for (KjNode* c = nodeP->value.firstChildP; c != NULL; c = c->next)
+    {
+      if (c->name != NULL && strcmp(c->name, "@context") == 0)
+        return c;
+      KjNode* inner = ldFindEmbeddedAtContext(c);
+      if (inner != NULL)
+        return inner;
+    }
+  }
+  else if (nodeP->type == KjArray)
+  {
+    for (KjNode* c = nodeP->value.firstChildP; c != NULL; c = c->next)
+    {
+      KjNode* inner = ldFindEmbeddedAtContext(c);
+      if (inner != NULL)
+        return inner;
+    }
+  }
+
+  return NULL;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldParseHook - validate @context and expand incoming JSON-LD payload
 //
 static void ldParseHook(void)
@@ -172,6 +214,30 @@ static void ldParseHook(void)
   }
 
   swNgsild.contextP = swldExpandTree(swRest.in.requestTree, &swRest.kalloc);
+
+  //
+  // § 4.5.1: "Attributes shall not contain any embedded @context."
+  // § 5.5.7: user @context shall not be embedded into NGSI-LD Attributes and
+  // shall not contain JSON-LD Scoped Contexts — they could rebind Core
+  // terms (type, value, observedAt, ...) and corrupt the data model.
+  //
+  // swldExpandTree has already removed the PERMITTED @contexts (root of an
+  // object body, first-level of each array element). If anything named
+  // @context remains anywhere in the tree it's embedded → 400.
+  //
+  if (swRest.in.requestTree != NULL)
+  {
+    KjNode* offender = ldFindEmbeddedAtContext(swRest.in.requestTree);
+    if (offender != NULL)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Embedded @context",
+              "@context is only allowed at the top of an entity (root for an object body, "
+              "first-level of each element for a batch array) — embedding it inside an "
+              "attribute, sub-attribute, or value is forbidden by § 4.5.1 / § 5.5.7");
+      swNgsild.contextError = true;
+      return;
+    }
+  }
 
   // If a user context URL was provided but expansion fell back to core context, the download failed
   if (swNgsild.userContextUrl != NULL)
