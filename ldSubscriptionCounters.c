@@ -16,11 +16,34 @@
 
 #include "kjson/KjNode.h"                              // KjNode
 #include "kjson/kjLookup.h"                            // kjLookup
-#include "kjson/kjBuilder.h"                           // kjInteger, kjString, kjChildAdd
+#include "kjson/kjBuilder.h"                           // kjInteger, kjString, kjChildAdd, kjChildRemove
 
 #include "swNgsild/LdVocab.h"                          // LD_VOCAB_NOTIFICATION
 #include "swNgsild/LdSubCache.h"                       // LdSubCacheItem
 #include "swNgsild/ldSubscriptionCounters.h"           // Own interface
+
+
+
+// -----------------------------------------------------------------------------
+//
+// stripStoredStats - remove any prior stats fields in the notification
+// object so our cache-authoritative inject can't produce duplicates. The
+// fields may have been loaded by db.subscriptionRetrieve from a mongo doc
+// that was flushed by us (or another broker) at some point.
+//
+static void stripStoredStats(KjNode* notifP)
+{
+  static const char* fields[] = {
+    "timesSent", "timesFailed", "lastNotification", "lastSuccess", "lastFailure"
+  };
+
+  for (int i = 0; i < 5; i++)
+  {
+    KjNode* existing;
+    while ((existing = kjLookup(notifP, fields[i])) != NULL)
+      kjChildRemove(notifP, existing);
+  }
+}
 
 
 
@@ -63,6 +86,11 @@ void ldSubscriptionCountersInject(KjNode* subP, LdSubCacheItem* itemP)
     notifP = kjLookup(subP, "notification");
   if (notifP == NULL || notifP->type != KjObject)
     return;
+
+  // Strip any persisted copies — our in-memory counters are authoritative
+  // (flush writes them back on demand/timer). Unconditional so a zero-count
+  // cache item doesn't leak a stale persisted value either.
+  stripStoredStats(notifP);
 
   // Only add counters if at least one notification has been sent
   if (itemP->timesSent == 0)
@@ -110,6 +138,8 @@ void ldPernotCountersInject(KjNode* subP, LdPernotItem* itemP)
     notifP = kjLookup(subP, "notification");
   if (notifP == NULL || notifP->type != KjObject)
     return;
+
+  stripStoredStats(notifP);
 
   if (itemP->timesSent == 0)
     return;

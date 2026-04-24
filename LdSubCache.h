@@ -95,6 +95,10 @@ typedef struct LdSubCacheItem
   uint64_t                  lastNotification; // epoch nanoseconds
   uint64_t                  lastSuccess;      // epoch nanoseconds
   uint64_t                  lastFailure;      // epoch nanoseconds
+  // Last values flushed to mongo — used to compute deltas so a concurrent
+  // flush from another broker can $inc atomically without clobbering.
+  int                       lastFlushedSent;
+  int                       lastFlushedFailed;
   double                    throttling;       // minimum seconds between notifications
 
   struct LdSubCacheItem*    next;           // linked list chain

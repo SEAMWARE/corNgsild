@@ -16,6 +16,7 @@
 #include "kjson/kjClone.h"                             // kjClone
 #include "kjson/kjFree.h"                              // kjFree
 #include "kjson/kjLookup.h"                            // kjLookup
+#include "kjson/kjBuilder.h"                           // kjChildRemove
 
 #include "swNgsild/LdVocab.h"                          // LD_VOCAB_*
 #include "swNgsild/LdSubCache.h"                       // LdSubCache, LdSubCacheItem
@@ -330,6 +331,51 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
   {
     if (throttlingP->type == KjFloat)  itemP->throttling = throttlingP->value.f;
     if (throttlingP->type == KjInt)    itemP->throttling = (double) throttlingP->value.i;
+  }
+
+  //
+  // Stats fields — present when this item came from a mongo-load (a prior
+  // flush persisted them). Extract into cache fields and remove from the
+  // stored subTree so nothing downstream produces duplicates.
+  //
+  if (notifP != NULL && notifP->type == KjObject)
+  {
+    KjNode* tsP = kjLookup(notifP, "timesSent");
+    KjNode* tfP = kjLookup(notifP, "timesFailed");
+    KjNode* lnP = kjLookup(notifP, "lastNotification");
+    KjNode* lsP = kjLookup(notifP, "lastSuccess");
+    KjNode* lfP = kjLookup(notifP, "lastFailure");
+
+    if (tsP != NULL && tsP->type == KjInt) itemP->timesSent   = (int) tsP->value.i;
+    if (tfP != NULL && tfP->type == KjInt) itemP->timesFailed = (int) tfP->value.i;
+    // last* timestamps are stored as int64 nanoseconds in mongo; tolerate
+    // ISO strings for any older persisted docs.
+    if (lnP != NULL)
+    {
+      if      (lnP->type == KjInt)    itemP->lastNotification = (uint64_t) lnP->value.i;
+      else if (lnP->type == KjString) itemP->lastNotification = ldIsoToNanoseconds(lnP->value.s);
+    }
+    if (lsP != NULL)
+    {
+      if      (lsP->type == KjInt)    itemP->lastSuccess = (uint64_t) lsP->value.i;
+      else if (lsP->type == KjString) itemP->lastSuccess = ldIsoToNanoseconds(lsP->value.s);
+    }
+    if (lfP != NULL)
+    {
+      if      (lfP->type == KjInt)    itemP->lastFailure = (uint64_t) lfP->value.i;
+      else if (lfP->type == KjString) itemP->lastFailure = ldIsoToNanoseconds(lfP->value.s);
+    }
+
+    // Seed the "last flushed" watermarks to match what was just loaded —
+    // no delta to flush yet on this freshly-loaded item.
+    itemP->lastFlushedSent   = itemP->timesSent;
+    itemP->lastFlushedFailed = itemP->timesFailed;
+
+    if (tsP != NULL) kjChildRemove(notifP, tsP);
+    if (tfP != NULL) kjChildRemove(notifP, tfP);
+    if (lnP != NULL) kjChildRemove(notifP, lnP);
+    if (lsP != NULL) kjChildRemove(notifP, lsP);
+    if (lfP != NULL) kjChildRemove(notifP, lfP);
   }
 
   //
