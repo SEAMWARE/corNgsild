@@ -14,6 +14,7 @@
 #include "kjson/KjNode.h"                              // KjNode
 #include "kjson/kjLookup.h"                            // kjLookup
 #include "kjson/kjClone.h"                             // kjClone
+#include "kjson/kjBuilder.h"                           // kjChildRemove
 #include "kjson/kjFree.h"                              // kjFree
 
 #include "swNgsild/LdVocab.h"                          // LD_VOCAB_*
@@ -194,6 +195,47 @@ LdPernotItem* ldPernotCacheItemAdd(LdPernotCache* cacheP, KjNode* subTree,
     itemP->expiresAt = ldIsoToNanoseconds(expiresP->value.s);
 
   itemP->tenantP = tenantP;
+
+  //
+  // Stats fields — present when this item came from a mongo-load (a prior
+  // flush persisted them). Extract into cache fields and remove from the
+  // stored subTree so the GET-response injector owns the final values.
+  //
+  if (notifP != NULL && notifP->type == KjObject)
+  {
+    KjNode* tsP = kjLookup(notifP, "timesSent");
+    KjNode* tfP = kjLookup(notifP, "timesFailed");
+    KjNode* lnP = kjLookup(notifP, "lastNotification");
+    KjNode* lsP = kjLookup(notifP, "lastSuccess");
+    KjNode* lfP = kjLookup(notifP, "lastFailure");
+
+    if (tsP != NULL && tsP->type == KjInt) itemP->timesSent   = (int) tsP->value.i;
+    if (tfP != NULL && tfP->type == KjInt) itemP->timesFailed = (int) tfP->value.i;
+    if (lnP != NULL)
+    {
+      if      (lnP->type == KjInt)    itemP->lastNotification = (uint64_t) lnP->value.i;
+      else if (lnP->type == KjString) itemP->lastNotification = ldIsoToNanoseconds(lnP->value.s);
+    }
+    if (lsP != NULL)
+    {
+      if      (lsP->type == KjInt)    itemP->lastSuccess = (uint64_t) lsP->value.i;
+      else if (lsP->type == KjString) itemP->lastSuccess = ldIsoToNanoseconds(lsP->value.s);
+    }
+    if (lfP != NULL)
+    {
+      if      (lfP->type == KjInt)    itemP->lastFailure = (uint64_t) lfP->value.i;
+      else if (lfP->type == KjString) itemP->lastFailure = ldIsoToNanoseconds(lfP->value.s);
+    }
+
+    itemP->lastFlushedSent   = itemP->timesSent;
+    itemP->lastFlushedFailed = itemP->timesFailed;
+
+    if (tsP != NULL) kjChildRemove(notifP, tsP);
+    if (tfP != NULL) kjChildRemove(notifP, tfP);
+    if (lnP != NULL) kjChildRemove(notifP, lnP);
+    if (lsP != NULL) kjChildRemove(notifP, lsP);
+    if (lfP != NULL) kjChildRemove(notifP, lfP);
+  }
 
   // Append
   if (cacheP->tail == NULL)

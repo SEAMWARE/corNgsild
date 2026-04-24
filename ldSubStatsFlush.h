@@ -20,6 +20,7 @@
 #include <stdint.h>                                   // uint64_t
 
 #include "swNgsild/LdSubCache.h"                      // LdSubCache
+#include "swNgsild/LdPernotCache.h"                   // LdPernotCache
 
 
 
@@ -47,5 +48,20 @@ typedef int (*LdSubStatsFlushFn)(void*        tenantP,
 extern int ldSubStatsFlush(void*              tenantP,
                            LdSubCache*        cacheP,
                            LdSubStatsFlushFn  flushFn);
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldPernotStatsFlush - flush delta counters for every item in one pernot cache
+//
+// Same semantics as ldSubStatsFlush but for LdPernotCache. Pernots share
+// the `subscriptions` collection with entity + CSR subs (tagged by the
+// presence of timeInterval), so the storage callback signature and the
+// on-disk field paths are identical.
+//
+extern int ldPernotStatsFlush(void*              tenantP,
+                              LdPernotCache*     cacheP,
+                              LdSubStatsFlushFn  flushFn);
 
 #endif  // SW_NGSILD_LD_SUB_STATS_FLUSH_H

@@ -76,6 +76,10 @@ typedef struct LdPernotItem
   uint64_t               lastFailure;
   int                    timesSent;
   int                    timesFailed;
+  // Last values flushed to mongo — delta = current - lastFlushed, so a
+  // concurrent $inc from another broker composes atomically.
+  int                    lastFlushedSent;
+  int                    lastFlushedFailed;
   int                    noMatch;         // queries that returned 0 entities
   int                    consecutiveErrors;
 

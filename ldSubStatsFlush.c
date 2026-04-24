@@ -8,6 +8,7 @@
 #include <stddef.h>                                    // NULL
 
 #include "swNgsild/LdSubCache.h"                       // LdSubCache, LdSubCacheItem
+#include "swNgsild/LdPernotCache.h"                    // LdPernotCache, LdPernotItem
 #include "swNgsild/ldSubStatsFlush.h"                  // Own interface
 
 
@@ -58,6 +59,51 @@ int ldSubStatsFlush(void*              tenantP,
     // same delta. Worst case: double-flushed counters on a crash between
     // flushFn returning and us updating watermarks — the $inc semantics
     // in the storage layer still compose correctly.
+  }
+
+  return touched;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldPernotStatsFlush -
+//
+int ldPernotStatsFlush(void*              tenantP,
+                       LdPernotCache*     cacheP,
+                       LdSubStatsFlushFn  flushFn)
+{
+  if (cacheP == NULL)
+    return -1;
+  if (flushFn == NULL)
+    return 0;
+
+  int touched = 0;
+
+  for (LdPernotItem* itemP = cacheP->head; itemP != NULL; itemP = itemP->next)
+  {
+    int deltaSent   = itemP->timesSent   - itemP->lastFlushedSent;
+    int deltaFailed = itemP->timesFailed - itemP->lastFlushedFailed;
+
+    if (deltaSent == 0 && deltaFailed == 0)
+      continue;
+
+    int      snapSent   = itemP->timesSent;
+    int      snapFailed = itemP->timesFailed;
+    uint64_t snapLastN  = itemP->lastNotification;
+    uint64_t snapLastS  = itemP->lastSuccess;
+    uint64_t snapLastF  = itemP->lastFailure;
+
+    int rc = flushFn(tenantP, itemP->subId,
+                     deltaSent, deltaFailed,
+                     snapLastN, snapLastS, snapLastF);
+    if (rc == 0)
+    {
+      itemP->lastFlushedSent   = snapSent;
+      itemP->lastFlushedFailed = snapFailed;
+      touched++;
+    }
   }
 
   return touched;
