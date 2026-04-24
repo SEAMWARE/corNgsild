@@ -151,6 +151,15 @@ static KjNode* getAttrValue(KjNode* entityP, const char* attrName)
   if (wrapperP == NULL || wrapperP->type != KjObject)
     return NULL;
 
+  // Flat API-shape wrapper: { "type": "Property", "value": X }. Used by
+  // CSR regs (§ 5.10.2 q-filter). Try this first; it's harmless when
+  // the wrapper is actually the DB-model instance-map shape because
+  // that shape has no direct "value" child.
+  KjNode* flatValueP = kjLookup(wrapperP, "value");
+  if (flatValueP != NULL)
+    return flatValueP;
+
+  // DB-model nested shape: wrapper.firstChild → instance object → "value"
   KjNode* instP = wrapperP->value.firstChildP;
   if (instP == NULL || instP->type != KjObject)
     return NULL;
