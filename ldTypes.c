@@ -143,6 +143,11 @@ const char* ldOpToString(LdOp op)
   case LdOpRetrieveRegistration:      return "RetrieveRegistration";
   case LdOpQueryRegistration:         return "QueryRegistration";
   case LdOpDeleteRegistration:        return "DeleteRegistration";
+  case LdOpCreateCsourceSubscription:   return "CreateCsourceSubscription";
+  case LdOpUpdateCsourceSubscription:   return "UpdateCsourceSubscription";
+  case LdOpRetrieveCsourceSubscription: return "RetrieveCsourceSubscription";
+  case LdOpQueryCsourceSubscription:    return "QueryCsourceSubscription";
+  case LdOpDeleteCsourceSubscription:   return "DeleteCsourceSubscription";
   }
 
   return "Unknown";
