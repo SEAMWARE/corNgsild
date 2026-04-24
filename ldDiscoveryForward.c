@@ -37,6 +37,7 @@
 #include "swNgsild/ldRegCache.h"                      // ldRegOpSupported
 #include "swNgsild/ldDistOp.h"                        // ldDistOpSendReceive, ldDistOpCsrWouldLoop
 #include "swNgsild/SwNgsild.h"                        // swNgsild (hops)
+#include "swNgsild/ldStripAtContext.h"                // ldStripAtContext
 #include "swNgsild/ldDiscoveryForward.h"              // Own interface
 
 
@@ -206,7 +207,10 @@ static KjNode* forwardGet(LdRegCacheItem* csr, const char* path, bool details, i
   if (status < 200 || status >= 300 || respBody == NULL)
     return NULL;
 
-  return kjParse(swRest.kjsonP, respBody);
+  KjNode* treeP = kjParse(swRest.kjsonP, respBody);
+  if (treeP != NULL)
+    ldStripAtContext(treeP);
+  return treeP;
 }
 
 

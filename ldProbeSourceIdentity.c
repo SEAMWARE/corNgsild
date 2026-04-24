@@ -23,6 +23,7 @@
 
 #include "swNgsild/LdForwarding.h"                      // LdForwardRequest, LdForwardResponse, LdForwardingPlugin
 #include "swNgsild/ldForwarding.h"                      // ldForwardingForEndpoint
+#include "swNgsild/ldStripAtContext.h"                  // ldStripAtContext
 
 #include "swNgsild/ldProbeSourceIdentity.h"             // Own interface
 
@@ -124,6 +125,8 @@ char* ldProbeSourceIdentity(const char* endpoint, const char* tenant, int timeou
     kaBufferReset(&scratchKa, 0);
     return NULL;
   }
+
+  ldStripAtContext(treeP);
 
   KjNode* aliasP = kjLookup(treeP, "contextSourceAlias");
   if (aliasP == NULL || aliasP->type != KjString || aliasP->value.s == NULL)
