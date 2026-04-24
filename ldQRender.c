@@ -15,6 +15,7 @@
 #include "kalloc/kaAlloc.h"                            // kaAlloc
 #include "swJsonld/SwldContext.h"                      // SwldContext
 #include "swJsonld/swldCompact.h"                      // swldCompact
+#include "swJsonld/swldExpand.h"                       // swldAlreadyExpanded
 
 #include "swNgsild/LdQ.h"                              // LdQNode, LdQTerm
 #include "swNgsild/ldQRender.h"                        // Own interface
@@ -72,9 +73,11 @@ static const char* compactOrEncode(const char* iri, SwldContext* contextP, KAllo
 
   const char* compacted = swldCompact(contextP, iri);
 
-  // If compaction succeeded (result differs from input and doesn't contain "://"),
-  // use the compacted form
-  if (compacted != NULL && compacted != iri && strstr(compacted, "://") == NULL)
+  // swldCompact's contract: returns a different pointer for an actual short
+  // term, returns iri unchanged otherwise. Belt-and-suspenders, also reject
+  // any result that is itself still an IRI (urn:, http://, https://) — a
+  // future swldCompact change that re-emits an IRI form mustn't slip past.
+  if (compacted != NULL && compacted != iri && swldAlreadyExpanded(compacted) == false)
     return compacted;
 
   // Can't compact — URL-encode the full IRI
