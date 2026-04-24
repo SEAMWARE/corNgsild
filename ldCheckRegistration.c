@@ -290,17 +290,9 @@ bool ldCheckRegistration(KjNode* regP, LdOp op, KAlloc* faP)
     else if (strcmp(childP->name, "contextSourceInfo")  == 0)  contextSrcInfoP = childP;
   }
 
-  // type — mandatory and fixed for create
-  if (op == LdOpCreateRegistration)
-  {
-    MANDATORY_CHECK(typeP, "Missing Type", "Registration 'type' is mandatory for create");
-
-    if (typeP->type != KjString || strcmp(typeP->value.s, "ContextSourceRegistration") != 0)
-    {
-      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Type", "Registration 'type' must be 'ContextSourceRegistration'");
-      return false;
-    }
-  }
+  // `type` is validated AND stripped by ldParseHook for /csourceRegistrations —
+  // see swNgsild.fixedTypeRecord. Nothing to check here.
+  (void) typeP;
 
   // information — required for create, validated when present
   if (op == LdOpCreateRegistration)

@@ -11,7 +11,8 @@
 #include "kalloc/kaAlloc.h"                             // kaAlloc
 #include "kjson/KjNode.h"                               // KjNode
 #include "kjson/kjLookup.h"                             // kjLookup
-#include "kjson/kjBuilder.h"                        // kjChildRemove
+#include "kjson/kjBuilder.h"                        // kjChildRemove, kjChildAdd
+#include "kjson/kjNodeDecouple.h"                   // kjNodeDecouple
 #include "swRest/swRest.h"                             // swRest
 #include "swJsonld/swldInit.h"                             // swldCoreContext
 #include "swJsonld/swldExpandTree.h"                       // swldExpandTree
@@ -215,17 +216,18 @@ static void ldParseHook(void)
 
   //
   // Fixed-type records — Subscription / ContextSourceRegistration /
-  // ContextSourceSubscription — carry a `type` whose value is a JSON-LD-
-  // mandated constant. We must not let expansion rebind it through the
-  // user @context (a mischievous user ctx could map e.g. "Subscription"
-  // to something else). Snapshot the value before expand, restore it
-  // after — in place, so the node keeps its original position in the
-  // object's child list.
+  // ContextSourceSubscription — carry a `type` whose value is a JSON-LD
+  // -mandated constant. Decouple it (tracking the previous sibling) so
+  // expansion can't rebind its value through the user @context, then
+  // relink it at its original position after expansion. Service-routine
+  // validators don't check `type` for these URLs because this hook has
+  // already done it. DB plugins strip `type` separately at their insert
+  // call sites so it's not stored.
   //
   const char* recordTypeValue = NULL;
-  const char* recordLabel     = NULL;  // for error detail phrasing
+  const char* recordLabel     = NULL;
   KjNode*     typeP           = NULL;
-  const char* savedTypeValue  = NULL;
+  KjNode*     typePrevP       = NULL;
   if (swRest.in.urlPath != NULL && swRest.in.requestTree != NULL && swRest.in.requestTree->type == KjObject)
   {
     const char* p = swRest.in.urlPath;
@@ -235,7 +237,27 @@ static void ldParseHook(void)
 
     if (recordTypeValue != NULL)
     {
-      typeP = kjLookup(swRest.in.requestTree, "type");
+      KjNode* prev = NULL;
+      for (KjNode* c = swRest.in.requestTree->value.firstChildP; c != NULL; c = c->next)
+      {
+        if (c->name != NULL && strcmp(c->name, "type") == 0) { typeP = c; typePrevP = prev; break; }
+        prev = c;
+      }
+      bool isCreate = (swRest.in.verb == SwVerbPost);
+      bool isUpdate = (swRest.in.verb == SwVerbPatch);
+
+      if (isUpdate && typeP != NULL)
+      {
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Read-Only Field", "'type' cannot be modified");
+        swNgsild.contextError = true;
+        return;
+      }
+      if (isCreate && typeP == NULL)
+      {
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Missing Type", "%s 'type' is mandatory for create", recordLabel);
+        swNgsild.contextError = true;
+        return;
+      }
       if (typeP != NULL)
       {
         if (typeP->type != KjString || strcmp(typeP->value.s, recordTypeValue) != 0)
@@ -244,7 +266,7 @@ static void ldParseHook(void)
           swNgsild.contextError = true;
           return;
         }
-        savedTypeValue = typeP->value.s;
+        kjNodeDecouple(swRest.in.requestTree, typeP, typePrevP);
       }
     }
   }
@@ -252,11 +274,26 @@ static void ldParseHook(void)
   swNgsild.contextP = swldExpandTree(swRest.in.requestTree, &swRest.kalloc);
 
   //
-  // If expand rebound the canonical string, restore it — in place, so
-  // the node keeps its original position in the object's child list.
+  // Relink `type` at its original position (right after typePrevP, or at
+  // the head if there was no previous sibling). Tree returns to caller
+  // with `type` back in place — service routines, cache, and render see
+  // a normal tree.
   //
-  if (typeP != NULL && savedTypeValue != NULL)
-    typeP->value.s = (char*) savedTypeValue;
+  if (typeP != NULL)
+  {
+    if (typePrevP == NULL)
+    {
+      typeP->next = swRest.in.requestTree->value.firstChildP;
+      swRest.in.requestTree->value.firstChildP = typeP;
+      if (swRest.in.requestTree->lastChild == NULL) swRest.in.requestTree->lastChild = typeP;
+    }
+    else
+    {
+      typeP->next = typePrevP->next;
+      typePrevP->next = typeP;
+      if (typePrevP == swRest.in.requestTree->lastChild) swRest.in.requestTree->lastChild = typeP;
+    }
+  }
 
   //
   // § 4.5.1: "Attributes shall not contain any embedded @context."

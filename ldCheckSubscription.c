@@ -348,26 +348,10 @@ bool ldCheckSubscription(KjNode* subP, LdOp op, KAlloc* kaP)
   }
 
   //
-  // "type" validation
+  // `type` is validated AND stripped by ldParseHook for these URLs — see
+  // swNgsild.fixedTypeRecord. Nothing to check here.
   //
-  if (op == LdOpCreateSubscription || op == LdOpCreateCsourceSubscription)
-  {
-    MANDATORY_CHECK(typeP, "Missing Type", "Subscription 'type' is mandatory for create");
-
-    if (typeP->type != KjString
-        || (strcmp(typeP->value.s, "Subscription") != 0
-            && strcmp(typeP->value.s, "https://uri.etsi.org/ngsi-ld/Subscription") != 0))
-    {
-      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Type", "Subscription 'type' must be 'Subscription'");
-      return false;
-    }
-  }
-  else if (typeP != NULL)
-  {
-    // PATCH must not modify type
-    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Read-Only Field", "'type' cannot be modified");
-    return false;
-  }
+  (void) typeP;
 
   //
   // "id" — not allowed in PATCH
