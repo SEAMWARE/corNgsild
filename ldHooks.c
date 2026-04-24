@@ -213,7 +213,50 @@ static void ldParseHook(void)
     }
   }
 
+  //
+  // Fixed-type records — Subscription / ContextSourceRegistration /
+  // ContextSourceSubscription — carry a `type` whose value is a JSON-LD-
+  // mandated constant. We must not let expansion rebind it through the
+  // user @context (a mischievous user ctx could map e.g. "Subscription"
+  // to something else). Snapshot the value before expand, restore it
+  // after — in place, so the node keeps its original position in the
+  // object's child list.
+  //
+  const char* recordTypeValue = NULL;
+  const char* recordLabel     = NULL;  // for error detail phrasing
+  KjNode*     typeP           = NULL;
+  const char* savedTypeValue  = NULL;
+  if (swRest.in.urlPath != NULL && swRest.in.requestTree != NULL && swRest.in.requestTree->type == KjObject)
+  {
+    const char* p = swRest.in.urlPath;
+    if      (strncmp(p, "/ngsi-ld/v1/subscriptions",         25) == 0) { recordTypeValue = "Subscription";              recordLabel = "Subscription"; }
+    else if (strncmp(p, "/ngsi-ld/v1/csourceRegistrations",  32) == 0) { recordTypeValue = "ContextSourceRegistration"; recordLabel = "Registration"; }
+    else if (strncmp(p, "/ngsi-ld/v1/csourceSubscriptions",  32) == 0) { recordTypeValue = "Subscription";              recordLabel = "Subscription"; }
+
+    if (recordTypeValue != NULL)
+    {
+      typeP = kjLookup(swRest.in.requestTree, "type");
+      if (typeP != NULL)
+      {
+        if (typeP->type != KjString || strcmp(typeP->value.s, recordTypeValue) != 0)
+        {
+          ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Type", "%s 'type' must be '%s'", recordLabel, recordTypeValue);
+          swNgsild.contextError = true;
+          return;
+        }
+        savedTypeValue = typeP->value.s;
+      }
+    }
+  }
+
   swNgsild.contextP = swldExpandTree(swRest.in.requestTree, &swRest.kalloc);
+
+  //
+  // If expand rebound the canonical string, restore it — in place, so
+  // the node keeps its original position in the object's child list.
+  //
+  if (typeP != NULL && savedTypeValue != NULL)
+    typeP->value.s = (char*) savedTypeValue;
 
   //
   // § 4.5.1: "Attributes shall not contain any embedded @context."
