@@ -107,24 +107,29 @@ extern int ldDistSubCascadeDelete(LdSubCacheItem* itemP,
 
 // -----------------------------------------------------------------------------
 //
-// ldDistSubCascadePatch - propagate a local-sub PATCH to every derivative
+// ldDistSubReconcile - propagate a local-sub PATCH and reconcile overlap
 //
 // fragmentP is the JSON-merge-patch body received on PATCH /subscriptions
-// (post-parseHook, i.e. expanded). It's rendered verbatim — minus
-// "@context" and other broker-internal fields — and PATCHed onto every
-// remote derivative referenced by itemP->subordinateP.
+// (post-parseHook, i.e. expanded). The helper walks both the existing
+// subordinate list and the reg cache and decides per CSR:
 //
-// Intentionally simple: this slice does not recompute reg-overlap; if a
-// patch changes entities[] such that previously-matching CSRs no longer
-// match (or new CSRs become matches), the subordinate list is NOT
-// reconciled. That belongs to the matcher-recompute slice.
+//   * still matches (after patch) and was already subordinated → PATCH
+//     the remote with the merge fragment
+//   * no longer matches (or CSR is gone) → DELETE the remote +
+//     unlink the local subordinate entry
+//   * newly matches and was not subordinated → fanout (POST) a new
+//     derivative
 //
-// Returns the number of remote PATCHes that came back 2xx.
+// Returns the number of mutations applied (PATCHes + DELETEs +
+// fanouts that came back 2xx). persistFunc fires once if the
+// subordinate list changed.
 //
-extern int ldDistSubCascadePatch(LdSubCacheItem* itemP,
-                                 KjNode*         fragmentP,
-                                 LdRegCache*     regCacheP,
-                                 const char*     ownAlias);
+extern int ldDistSubReconcile(LdSubCacheItem*      itemP,
+                              KjNode*              fragmentP,
+                              LdRegCache*          regCacheP,
+                              const char*          ownAlias,
+                              LdDistSubPersistFunc persistFunc,
+                              void*                persistUserData);
 
 
 

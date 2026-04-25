@@ -458,64 +458,140 @@ static char* patchBody(LdSubCacheItem* itemP, KjNode* fragmentP, int* bodyLenP)
 
 
 
+// Forward decl — definition is below, alongside the OnReg* helpers.
+static bool hasSubordinateForReg(LdSubCacheItem* itemP, const char* regId);
+
+
+
 // -----------------------------------------------------------------------------
 //
-// ldDistSubCascadePatch -
+// buildSubUrl - "<csr-endpoint>/ngsi-ld/v1/subscriptions/<remoteSubId>"
 //
-int ldDistSubCascadePatch(LdSubCacheItem* itemP,
-                          KjNode*         fragmentP,
-                          LdRegCache*     regCacheP,
-                          const char*     ownAlias)
+static char* buildSubUrl(LdRegCacheItem* regP, const char* remoteSubId)
+{
+  static const char* subPath = "/ngsi-ld/v1/subscriptions/";
+  int   subPathLen = (int) strlen(subPath);
+  int   regEpLen   = (int) strlen(regP->endpoint);
+  int   idLen      = (int) strlen(remoteSubId);
+  char* url        = (char*) kaAlloc(&swRest.kalloc, regEpLen + subPathLen + idLen + 1);
+  char* cp         = url;
+  memcpy(cp, regP->endpoint, regEpLen); cp += regEpLen;
+  memcpy(cp, subPath,        subPathLen); cp += subPathLen;
+  memcpy(cp, remoteSubId, idLen + 1);
+  return url;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldDistSubReconcile -
+//
+int ldDistSubReconcile(LdSubCacheItem*      itemP,
+                       KjNode*              fragmentP,
+                       LdRegCache*          regCacheP,
+                       const char*          ownAlias,
+                       LdDistSubPersistFunc persistFunc,
+                       void*                persistUserData)
 {
   if (itemP == NULL || regCacheP == NULL || fragmentP == NULL)
     return 0;
-  if (itemP->subordinateP == NULL)
-    return 0;
 
+  bool  touched = false;
+  int   changes = 0;
   int   bodyLen = 0;
-  char* body    = patchBody(itemP, fragmentP, &bodyLen);
-  if (body == NULL)
-    return 0;
+  char* body    = patchBody(itemP, fragmentP, &bodyLen);  // for kept subordinates
 
-  static const char* subPath = "/ngsi-ld/v1/subscriptions/";
-  int                subPathLen = (int) strlen(subPath);
-  int                patched    = 0;
+  //
+  // Pass 1 — walk existing subordinates. If the parent×reg overlap
+  // still holds, PATCH the remote with the user's fragment. If the
+  // CSR is gone or the overlap is now empty, DELETE the remote and
+  // unlink the local mapping.
+  //
+  LdSubSubordinate** prevP = &itemP->subordinateP;
+  LdSubSubordinate*  sub   = itemP->subordinateP;
 
-  for (LdSubSubordinate* sub = itemP->subordinateP; sub != NULL; sub = sub->next)
+  while (sub != NULL)
   {
-    if (sub->regId == NULL || sub->remoteSubId == NULL)
-      continue;
+    LdRegCacheItem* regP = (sub->regId != NULL) ? ldRegCacheItemLookup(regCacheP, sub->regId) : NULL;
 
-    LdRegCacheItem* regP = ldRegCacheItemLookup(regCacheP, sub->regId);
-    if (regP == NULL || regP->endpoint == NULL)
+    bool stillMatches = false;
+    if (regP != NULL && regP->endpoint != NULL)
     {
-      KT_W("dist-sub cascade PATCH: CSR %s for parent %s no longer in cache — skip",
-           sub->regId, (itemP->subId != NULL) ? itemP->subId : "?");
+      KjNode* narrowed = narrowEntities(itemP, regP, swRest.kjsonP);
+      stillMatches = (narrowed != NULL);
+    }
+
+    if (stillMatches && body != NULL && sub->remoteSubId != NULL)
+    {
+      char*       url         = buildSubUrl(regP, sub->remoteSubId);
+      const char* errorDetail = NULL;
+      int status = ldDistOpSendReceive(regP, SwVerbPatch, url, body, bodyLen, ownAlias,
+                                       &errorDetail, NULL, NULL);
+      if (status >= 200 && status < 300)
+        changes++;
+      else
+        KT_W("dist-sub reconcile PATCH: CSR %s remote sub %s for parent %s status=%d (%s)",
+             sub->regId, sub->remoteSubId,
+             (itemP->subId != NULL) ? itemP->subId : "?",
+             status, (errorDetail != NULL) ? errorDetail : "");
+
+      prevP = &sub->next;
+      sub   = sub->next;
       continue;
     }
 
-    int   regEpLen = (int) strlen(regP->endpoint);
-    int   idLen    = (int) strlen(sub->remoteSubId);
-    char* url      = (char*) kaAlloc(&swRest.kalloc, regEpLen + subPathLen + idLen + 1);
-    char* cp       = url;
-    memcpy(cp, regP->endpoint, regEpLen); cp += regEpLen;
-    memcpy(cp, subPath,        subPathLen); cp += subPathLen;
-    memcpy(cp, sub->remoteSubId, idLen + 1);
+    // No longer matching — DELETE remote (best-effort) + unlink.
+    if (regP != NULL && regP->endpoint != NULL && sub->remoteSubId != NULL)
+    {
+      char*       url         = buildSubUrl(regP, sub->remoteSubId);
+      const char* errorDetail = NULL;
+      int status = ldDistOpSendReceive(regP, SwVerbDelete, url, NULL, 0, ownAlias,
+                                       &errorDetail, NULL, NULL);
+      if (status < 200 || status >= 300)
+        KT_W("dist-sub reconcile DELETE: CSR %s remote sub %s for parent %s status=%d (%s)",
+             sub->regId, sub->remoteSubId,
+             (itemP->subId != NULL) ? itemP->subId : "?",
+             status, (errorDetail != NULL) ? errorDetail : "");
+    }
 
-    const char* errorDetail = NULL;
-    int status = ldDistOpSendReceive(regP, SwVerbPatch, url, body, bodyLen, ownAlias,
-                                     &errorDetail, NULL, NULL);
-
-    if (status >= 200 && status < 300)
-      patched++;
-    else
-      KT_W("dist-sub cascade PATCH: CSR %s remote sub %s for parent %s status=%d (%s)",
-           sub->regId, sub->remoteSubId,
-           (itemP->subId != NULL) ? itemP->subId : "?",
-           status, (errorDetail != NULL) ? errorDetail : "");
+    LdSubSubordinate* gone = sub;
+    *prevP = sub->next;
+    sub    = sub->next;
+    free(gone->remoteSubId);
+    free(gone->regId);
+    free(gone);
+    touched = true;
+    changes++;
   }
 
-  return patched;
+  //
+  // Pass 2 — walk the reg cache for newly-matching CSRs that don't
+  // already have a subordinate (parent.entities[] grew, or a CSR was
+  // registered after this sub but before the patch took effect).
+  //
+  if (itemP->subId != NULL && itemP->entitySelectors != NULL && ldBrokerHttpEndpoint != NULL)
+  {
+    for (LdRegCacheItem* regP = regCacheP->itemList; regP != NULL; regP = regP->next)
+    {
+      if (regP->endpoint == NULL)                                continue;
+      if (!ldRegOpSupported(regP, LdOpCreateSubscription))       continue;
+      if (ldDistOpCsrWouldLoop(regP, ownAlias))                  continue;
+      if (hasSubordinateForReg(itemP, regP->regId))              continue;
+      if (!regHasMatchingType(itemP, regP))                      continue;
+
+      if (fanoutToReg(itemP, regP, ownAlias))
+      {
+        changes++;
+        touched = true;
+      }
+    }
+  }
+
+  if (touched && persistFunc != NULL)
+    persistFunc(itemP, persistUserData);
+
+  return changes;
 }
 
 
