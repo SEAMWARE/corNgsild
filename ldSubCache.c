@@ -67,6 +67,7 @@ static LdSubEntitySelector* entitySelectorsExtract(KjNode* entitiesP)
 
       if (regcomp(&ripP->regex, patP->value.s, REG_EXTENDED | REG_NOSUB) == 0)
       {
+        ripP->source       = patP->value.s;   // borrowed from cloned subTree
         esP->idPatternList = ripP;
       }
       else

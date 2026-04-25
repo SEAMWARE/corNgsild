@@ -106,13 +106,23 @@ static bool regHasMatchingType(LdSubCacheItem* itemP, LdRegCacheItem* regP)
 // the rules below. If the resulting array is empty, returns NULL —
 // caller skips the fanout.
 //
-// id-narrowing rules (per pair where types match):
-//   * both have explicit id     → emit only if ids equal (else disjoint)
-//   * parent has id, reg type   → emit parent's id (parent already narrower)
-//   * reg has id, parent type   → emit reg's id   (reg is narrower)
-//   * neither has id            → emit type only
+// Rules (per pair where types match), with idPattern handled as
+// "single-regex restriction" — only the first idPattern from each side
+// is considered (NGSI-LD allows one per selector):
 //
-// idPattern is treated as wildcard for now (no narrowing based on it).
+//   * both have explicit id    → emit if ids equal, else disjoint
+//   * parent.id  + reg.idPat   → emit parent's id if it matches the
+//                                regex, else disjoint
+//   * parent.idPat + reg.id    → emit reg's id   if it matches the
+//                                regex, else disjoint
+//   * parent.id  alone         → emit parent's id   (parent narrower)
+//   * reg.id     alone         → emit reg's id      (reg narrower)
+//   * parent.idPat alone       → emit parent's idPattern
+//   * reg.idPat   alone        → emit reg's idPattern
+//   * both idPats              → emit parent's idPattern (subscriber's
+//                                intent wins; the CSR is free to filter
+//                                more strictly on its side)
+//   * neither id nor idPat     → emit type only
 //
 static KjNode* narrowEntities(LdSubCacheItem* itemP, LdRegCacheItem* regP, Kjson* kjsonP)
 {
@@ -123,6 +133,8 @@ static KjNode* narrowEntities(LdSubCacheItem* itemP, LdRegCacheItem* regP, Kjson
     if (esP->type == NULL)
       continue;
 
+    LdSubIdPattern* esPat = esP->idPatternList;
+
     for (LdRegInfo* infoP = regP->infoV; infoP != NULL; infoP = infoP->next)
     {
       for (LdRegEntityInfo* eiP = infoP->entityInfoV; eiP != NULL; eiP = eiP->next)
@@ -130,19 +142,37 @@ static KjNode* narrowEntities(LdSubCacheItem* itemP, LdRegCacheItem* regP, Kjson
         if (eiP->type == NULL || strcmp(eiP->type, esP->type) != 0)
           continue;
 
-        const char* derivedId = NULL;
+        LdRegIdPattern* eiPat     = eiP->idPatternList;
+        const char*     derivedId = NULL;
+        const char*     derivedIdPattern = NULL;
+
         if (esP->id != NULL && eiP->id != NULL)
         {
-          if (strcmp(esP->id, eiP->id) != 0) continue;     // disjoint slice
+          if (strcmp(esP->id, eiP->id) != 0) continue;     // disjoint
           derivedId = esP->id;
         }
-        else if (esP->id != NULL) derivedId = esP->id;
-        else if (eiP->id != NULL) derivedId = eiP->id;
+        else if (esP->id != NULL && eiPat != NULL)
+        {
+          if (regexec(&eiPat->regex, esP->id, 0, NULL, 0) != 0) continue;
+          derivedId = esP->id;
+        }
+        else if (esPat != NULL && eiP->id != NULL)
+        {
+          if (regexec(&esPat->regex, eiP->id, 0, NULL, 0) != 0) continue;
+          derivedId = eiP->id;
+        }
+        else if (esP->id != NULL)             derivedId         = esP->id;
+        else if (eiP->id != NULL)             derivedId         = eiP->id;
+        else if (esPat != NULL)               derivedIdPattern  = esPat->source;
+        else if (eiPat != NULL)               derivedIdPattern  = eiPat->source;
+        // (both-pattern case falls through esPat branch above)
 
         KjNode* entry = kjObject(kjsonP, NULL);
         kjChildAdd(entry, kjString(kjsonP, "type", esP->type));
         if (derivedId != NULL)
           kjChildAdd(entry, kjString(kjsonP, "id", derivedId));
+        else if (derivedIdPattern != NULL)
+          kjChildAdd(entry, kjString(kjsonP, "idPattern", (char*) derivedIdPattern));
 
         kjChildAdd(arr, entry);
       }

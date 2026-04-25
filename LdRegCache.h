@@ -56,6 +56,7 @@ typedef enum LdRegMode
 typedef struct LdRegIdPattern
 {
   regex_t                regex;
+  const char*            source;  // raw pattern string, borrowed from regTree
   struct LdRegIdPattern* next;
 } LdRegIdPattern;
 

@@ -73,6 +73,7 @@ static LdRegIdPattern* idPatternCompile(const char* pattern)
     return NULL;
   }
 
+  ripP->source = pattern;   // borrowed from regTree (lives as long as the cache item)
   return ripP;
 }
 

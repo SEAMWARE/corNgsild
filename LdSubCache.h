@@ -37,6 +37,7 @@
 typedef struct LdSubIdPattern
 {
   regex_t                regex;
+  const char*            source;  // raw pattern string, borrowed from subTree
   struct LdSubIdPattern* next;
 } LdSubIdPattern;
 
