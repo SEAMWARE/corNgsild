@@ -58,6 +58,26 @@ typedef struct LdSubEntitySelector
 
 // -----------------------------------------------------------------------------
 //
+// LdSubSubordinate - one derived subscription forwarded to a remote CSR
+//
+// When a local subscription's entity filter overlaps a registered Context
+// Source (§ 5.8.1.4), the broker forwards a derived sub to that source.
+// The mapping below lets the originating broker propagate later PATCH /
+// DELETE to the remote copy and re-dispatch incoming notifications back
+// to the parent's subscriber.
+//
+typedef struct LdSubSubordinate
+{
+  char*                    remoteSubId;     // sub-id created on the remote CSR (malloc'd)
+  char*                    regId;           // CSR that owns this remote sub (malloc'd)
+  int                      runNo;           // 1,2,3... — disambiguates multiple CSRs for the same parent
+  struct LdSubSubordinate* next;
+} LdSubSubordinate;
+
+
+
+// -----------------------------------------------------------------------------
+//
 // LdSubCacheItem - single cached subscription
 //
 typedef struct LdSubCacheItem
@@ -100,6 +120,12 @@ typedef struct LdSubCacheItem
   int                       lastFlushedSent;
   int                       lastFlushedFailed;
   double                    throttling;       // minimum seconds between notifications
+
+  // Distributed-subscription mapping (§ 5.8.1.4) — list of derived subs
+  // this local sub has on remote Context Sources. NULL when nothing
+  // matched at create time.
+  LdSubSubordinate*         subordinateP;
+  int                       subordinateRunNo;  // monotonic counter for derived-sub naming
 
   struct LdSubCacheItem*    next;           // linked list chain
 } LdSubCacheItem;

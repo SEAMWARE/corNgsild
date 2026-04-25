@@ -190,6 +190,17 @@ extern long long ldBrokerStartTimeSec;
 
 
 
+// ldBrokerHttpEndpoint - this broker's externally-reachable HTTP base URL,
+// e.g. "http://localhost:1026". Used to build the notification.endpoint.uri
+// of derived subscriptions forwarded to remote Context Sources (§ 5.8.1.4)
+// so their notifications loop back to this broker. Set once at startup
+// from --httpEndpoint (CLI) or auto-derived from --port. NULL disables
+// distributed-subscription fanout.
+//
+extern const char* ldBrokerHttpEndpoint;
+
+
+
 // -----------------------------------------------------------------------------
 //
 // ldParamHook - callback for swRest param validation

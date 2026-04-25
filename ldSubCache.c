@@ -128,6 +128,24 @@ static char** watchedAttrsExtract(KjNode* watchedP)
 
 // -----------------------------------------------------------------------------
 //
+// subordinatesFree - free the linked list of derived-sub mappings
+//
+static void subordinatesFree(LdSubSubordinate* head)
+{
+  while (head != NULL)
+  {
+    LdSubSubordinate* next = head->next;
+    if (head->remoteSubId != NULL) free(head->remoteSubId);
+    if (head->regId       != NULL) free(head->regId);
+    free(head);
+    head = next;
+  }
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // entitySelectorsFree - free a linked list of entity selectors
 //
 static void entitySelectorsFree(LdSubEntitySelector* head)
@@ -379,6 +397,52 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
   }
 
   //
+  // § 5.8.1.4 — distributed-subscription mapping. Persisted as
+  //   _subordinates: [ {"id": <remoteSubId>, "regId": <regId>, "runNo": N}, ... ]
+  //   _subordinateRunNo: N
+  // alongside the rest of the sub doc. Read into cache fields and strip
+  // from subTree so the GET path doesn't echo them.
+  //
+  KjNode* subListP = kjLookup(itemP->subTree, "_subordinates");
+  if (subListP != NULL)
+  {
+    if (subListP->type == KjArray)
+    {
+      LdSubSubordinate* tail = NULL;
+      for (KjNode* entryP = subListP->value.firstChildP; entryP != NULL; entryP = entryP->next)
+      {
+        if (entryP->type != KjObject) continue;
+
+        KjNode* idP    = kjLookup(entryP, "id");
+        KjNode* regIdP = kjLookup(entryP, "regId");
+        KjNode* runP   = kjLookup(entryP, "runNo");
+
+        if (idP    == NULL || idP->type    != KjString) continue;
+        if (regIdP == NULL || regIdP->type != KjString) continue;
+
+        LdSubSubordinate* node = (LdSubSubordinate*) calloc(1, sizeof(LdSubSubordinate));
+        node->remoteSubId = strdup(idP->value.s);
+        node->regId       = strdup(regIdP->value.s);
+        node->runNo       = (runP != NULL && runP->type == KjInt) ? (int) runP->value.i : 0;
+        node->next        = NULL;
+
+        if (tail == NULL) itemP->subordinateP = node;
+        else              tail->next = node;
+        tail = node;
+      }
+    }
+    kjChildRemove(itemP->subTree, subListP);
+  }
+
+  KjNode* runNoP = kjLookup(itemP->subTree, "_subordinateRunNo");
+  if (runNoP != NULL)
+  {
+    if (runNoP->type == KjInt)
+      itemP->subordinateRunNo = (int) runNoP->value.i;
+    kjChildRemove(itemP->subTree, runNoP);
+  }
+
+  //
   // Append to cache linked list
   //
   if (cacheP->last == NULL)
@@ -434,6 +498,8 @@ static void cacheItemFree(LdSubCacheItem* itemP)
 
   if (itemP->datasetIdV != NULL)
     free(itemP->datasetIdV);     // array only — strings are borrowed
+
+  subordinatesFree(itemP->subordinateP);
 
   // qExpr, scopeExpr, geoRel were malloc'd by parsers — need recursive free
   // For now, accept the leak; these are small and the cache lives for the

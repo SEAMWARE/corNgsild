@@ -201,6 +201,13 @@ LdOp ldOpFromName(const char* name)
   if (strcmp(name, "retrieveAttrTypeDetails")   == 0)  return LdOpRetrieveAttrTypeDetails;
   if (strcmp(name, "retrieveAttrTypeInfo")      == 0)  return LdOpRetrieveAttrTypeInfo;
 
+  // Subscription
+  if (strcmp(name, "createSubscription")        == 0)  return LdOpCreateSubscription;
+  if (strcmp(name, "updateSubscription")        == 0)  return LdOpUpdateSubscription;
+  if (strcmp(name, "retrieveSubscription")      == 0)  return LdOpRetrieveSubscription;
+  if (strcmp(name, "querySubscription")         == 0)  return LdOpQuerySubscription;
+  if (strcmp(name, "deleteSubscription")        == 0)  return LdOpDeleteSubscription;
+
   return LdOpNone;
 }
 
