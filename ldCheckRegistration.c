@@ -230,6 +230,239 @@ static bool checkContextSourceInfo(KjNode* arrP)
 
 // -----------------------------------------------------------------------------
 //
+// isIsoDuration - shape-check an ISO 8601 duration string
+//
+// Accepted shape:  P[nY][nM][nW][nD][T[nH][nM][nS]]
+// At least one designator after P (or after T if no date part) is required.
+// We don't enforce ordering of date components beyond P-prefix and T-split,
+// nor numeric ranges — that's the renderer's job.
+//
+static bool isIsoDuration(const char* s)
+{
+  if (s == NULL || s[0] != 'P')
+    return false;
+
+  const char* p             = s + 1;
+  bool        sawComponent  = false;
+  bool        inTime        = false;
+
+  while (*p != 0)
+  {
+    if (*p == 'T')
+    {
+      // 'T' must appear at most once and split date / time parts
+      if (inTime) return false;
+      inTime = true;
+      p++;
+      // 'T' alone (no time components after) is invalid
+      if (*p == 0) return false;
+      continue;
+    }
+
+    // Numeric run
+    if (*p < '0' || *p > '9')
+      return false;
+    while (*p >= '0' && *p <= '9')
+      p++;
+
+    // Optional fraction (S only — but we don't enforce that, just shape)
+    if (*p == '.' || *p == ',')
+    {
+      p++;
+      if (*p < '0' || *p > '9') return false;
+      while (*p >= '0' && *p <= '9')
+        p++;
+    }
+
+    // Designator letter
+    if (inTime)
+    {
+      if (*p != 'H' && *p != 'M' && *p != 'S') return false;
+    }
+    else
+    {
+      if (*p != 'Y' && *p != 'M' && *p != 'W' && *p != 'D') return false;
+    }
+    p++;
+    sawComponent = true;
+  }
+
+  return sawComponent;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// checkTimeInterval - validate an observationInterval / managementInterval
+//
+// TimeInterval shape (§ 5.2.11):
+//   { "startAt": <DateTime>, "endAt": <DateTime>? }
+// startAt is mandatory; endAt is optional. When both present, startAt < endAt.
+//
+static bool checkTimeInterval(KjNode* tiP, const char* fieldName)
+{
+  if (tiP->type != KjObject)
+  {
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
+            "'%s' must be a JSON object", fieldName);
+    return false;
+  }
+
+  KjNode* startP = NULL;
+  KjNode* endP   = NULL;
+  for (KjNode* fP = tiP->value.firstChildP; fP != NULL; fP = fP->next)
+  {
+    if      (strcmp(fP->name, "startAt") == 0) startP = fP;
+    else if (strcmp(fP->name, "endAt")   == 0) endP   = fP;
+  }
+
+  if (startP == NULL)
+  {
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
+            "'%s.startAt' is mandatory", fieldName);
+    return false;
+  }
+  if (startP->type != KjString)
+  {
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
+            "'%s.startAt' must be a DateTime string", fieldName);
+    return false;
+  }
+  if (ldCheckDateTime(startP->value.s) < 0)
+  {
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
+            "'%s.startAt' is not a valid ISO 8601 DateTime", fieldName);
+    return false;
+  }
+
+  if (endP != NULL)
+  {
+    if (endP->type != KjString)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
+              "'%s.endAt' must be a DateTime string", fieldName);
+      return false;
+    }
+    if (ldCheckDateTime(endP->value.s) < 0)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
+              "'%s.endAt' is not a valid ISO 8601 DateTime", fieldName);
+      return false;
+    }
+    if (ldIsoToNanoseconds(endP->value.s) <= ldIsoToNanoseconds(startP->value.s))
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
+              "'%s.endAt' must be after '%s.startAt'", fieldName, fieldName);
+      return false;
+    }
+  }
+
+  return true;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// checkScope - validate scope: string or array of strings
+//
+static bool checkScope(KjNode* scopeP)
+{
+  if (scopeP->type == KjString)
+  {
+    if (scopeP->value.s[0] == 0)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration", "'scope' must not be empty");
+      return false;
+    }
+    return true;
+  }
+  if (scopeP->type == KjArray)
+  {
+    EMPTY_ARRAY_CHECK(scopeP, "'scope' array must not be empty");
+    for (KjNode* sP = scopeP->value.firstChildP; sP != NULL; sP = sP->next)
+    {
+      if (sP->type != KjString || sP->value.s[0] == 0)
+      {
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
+                "'scope' array items must be non-empty strings");
+        return false;
+      }
+    }
+    return true;
+  }
+  ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
+          "'scope' must be a string or array of strings");
+  return false;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// checkManagement - validate the management sub-object (RegistrationManagementInfo)
+//
+// Optional members: cacheDuration (ISO 8601 duration), timeout (positive
+// number), cooldown (positive number), localOnly (boolean).
+//
+static bool checkManagement(KjNode* mgmtP)
+{
+  if (mgmtP->type != KjObject)
+  {
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
+            "'management' must be a JSON object");
+    return false;
+  }
+
+  for (KjNode* fP = mgmtP->value.firstChildP; fP != NULL; fP = fP->next)
+  {
+    if (strcmp(fP->name, "cacheDuration") == 0)
+    {
+      if (fP->type != KjString || !isIsoDuration(fP->value.s))
+      {
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
+                "'management.cacheDuration' must be an ISO 8601 duration string");
+        return false;
+      }
+    }
+    else if (strcmp(fP->name, "timeout") == 0 || strcmp(fP->name, "cooldown") == 0)
+    {
+      double v = 0;
+      if      (fP->type == KjInt)   v = (double) fP->value.i;
+      else if (fP->type == KjFloat) v = fP->value.f;
+      else
+      {
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
+                "'management.%s' must be a positive number", fP->name);
+        return false;
+      }
+      if (v < 0)
+      {
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
+                "'management.%s' must be non-negative", fP->name);
+        return false;
+      }
+    }
+    else if (strcmp(fP->name, "localOnly") == 0)
+    {
+      if (fP->type != KjBoolean)
+      {
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
+                "'management.localOnly' must be a boolean");
+        return false;
+      }
+    }
+    // Unknown keys passed through silently (forward-compat for spec extensions).
+  }
+
+  return true;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // auxiliaryOpsAllowed - operations subset for auxiliary mode (§ 5.9.2)
 //
 // auxiliary registrations may only define operations as one of:
@@ -271,23 +504,41 @@ bool ldCheckRegistration(KjNode* regP, LdOp op, KAlloc* faP)
 
   KLOG_T(LdTCheckReg, "Checking registration payload for op %s", ldOpToString(op));
 
-  KjNode* typeP             = NULL;
-  KjNode* infoP             = NULL;
-  KjNode* endpointP         = NULL;
-  KjNode* modeP             = NULL;
-  KjNode* expiresAtP        = NULL;
-  KjNode* operationsP       = NULL;
-  KjNode* contextSrcInfoP   = NULL;
+  KjNode* typeP                = NULL;
+  KjNode* infoP                = NULL;
+  KjNode* endpointP            = NULL;
+  KjNode* modeP                = NULL;
+  KjNode* expiresAtP           = NULL;
+  KjNode* operationsP          = NULL;
+  KjNode* contextSrcInfoP      = NULL;
+  KjNode* descriptionP         = NULL;
+  KjNode* registrationNameP    = NULL;
+  KjNode* csourceAliasP        = NULL;
+  KjNode* tenantP              = NULL;
+  KjNode* scopeP               = NULL;
+  KjNode* refreshRateP         = NULL;
+  KjNode* observationIntervalP = NULL;
+  KjNode* managementIntervalP  = NULL;
+  KjNode* managementP          = NULL;
 
   for (KjNode* childP = regP->value.firstChildP; childP != NULL; childP = childP->next)
   {
-    if      (strcmp(childP->name, "type")               == 0)  typeP           = childP;
-    else if (strcmp(childP->name, LD_VOCAB_INFORMATION) == 0)  infoP           = childP;
-    else if (strcmp(childP->name, LD_VOCAB_ENDPOINT)    == 0)  endpointP       = childP;
-    else if (strcmp(childP->name, LD_VOCAB_MODE)        == 0)  modeP           = childP;
-    else if (strcmp(childP->name, LD_VOCAB_EXPIRES_AT)  == 0)  expiresAtP      = childP;
-    else if (strcmp(childP->name, "operations")         == 0)  operationsP     = childP;
-    else if (strcmp(childP->name, "contextSourceInfo")  == 0)  contextSrcInfoP = childP;
+    if      (strcmp(childP->name, "type")                 == 0)  typeP                = childP;
+    else if (strcmp(childP->name, LD_VOCAB_INFORMATION)   == 0)  infoP                = childP;
+    else if (strcmp(childP->name, LD_VOCAB_ENDPOINT)      == 0)  endpointP            = childP;
+    else if (strcmp(childP->name, LD_VOCAB_MODE)          == 0)  modeP                = childP;
+    else if (strcmp(childP->name, LD_VOCAB_EXPIRES_AT)    == 0)  expiresAtP           = childP;
+    else if (strcmp(childP->name, "operations")           == 0)  operationsP          = childP;
+    else if (strcmp(childP->name, "contextSourceInfo")    == 0)  contextSrcInfoP      = childP;
+    else if (strcmp(childP->name, "description")          == 0)  descriptionP         = childP;
+    else if (strcmp(childP->name, "registrationName")     == 0)  registrationNameP    = childP;
+    else if (strcmp(childP->name, "contextSourceAlias")   == 0)  csourceAliasP        = childP;
+    else if (strcmp(childP->name, "tenant")               == 0)  tenantP              = childP;
+    else if (strcmp(childP->name, LD_VOCAB_SCOPE)         == 0)  scopeP               = childP;
+    else if (strcmp(childP->name, "refreshRate")          == 0)  refreshRateP         = childP;
+    else if (strcmp(childP->name, "observationInterval")  == 0)  observationIntervalP = childP;
+    else if (strcmp(childP->name, "managementInterval")   == 0)  managementIntervalP  = childP;
+    else if (strcmp(childP->name, "management")           == 0)  managementP          = childP;
   }
 
   // `type` is validated AND stripped by ldParseHook for /csourceRegistrations —
@@ -354,6 +605,54 @@ bool ldCheckRegistration(KjNode* regP, LdOp op, KAlloc* faP)
     if (auxiliaryOpsAllowed(operationsP) == false)
       return false;
   }
+
+  // Optional descriptive strings — non-empty when present.
+  #define NONEMPTY_STRING(field, label)                                                       \
+    do {                                                                                       \
+      if (field != NULL)                                                                       \
+      {                                                                                        \
+        STRING_CHECK(field, "Invalid Registration", "'" label "' must be a string");           \
+        if (field->value.s[0] == 0)                                                            \
+        {                                                                                      \
+          ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",                      \
+                  "'" label "' must not be empty");                                            \
+          return false;                                                                        \
+        }                                                                                      \
+      }                                                                                        \
+    } while (0)
+
+  NONEMPTY_STRING(descriptionP,      "description");
+  NONEMPTY_STRING(registrationNameP, "registrationName");
+  NONEMPTY_STRING(csourceAliasP,     "contextSourceAlias");
+  NONEMPTY_STRING(tenantP,           "tenant");
+
+  #undef NONEMPTY_STRING
+
+  // scope — string or string[] (§ 4.19)
+  if (scopeP != NULL && checkScope(scopeP) == false)
+    return false;
+
+  // refreshRate — ISO 8601 duration string
+  if (refreshRateP != NULL)
+  {
+    STRING_CHECK(refreshRateP, "Invalid Registration", "'refreshRate' must be a string");
+    if (!isIsoDuration(refreshRateP->value.s))
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
+              "'refreshRate' must be an ISO 8601 duration string (e.g. PT5M, PT1H30M, P1D)");
+      return false;
+    }
+  }
+
+  // observationInterval / managementInterval — TimeInterval objects (§ 5.2.11)
+  if (observationIntervalP != NULL && checkTimeInterval(observationIntervalP, "observationInterval") == false)
+    return false;
+  if (managementIntervalP != NULL && checkTimeInterval(managementIntervalP, "managementInterval") == false)
+    return false;
+
+  // management — RegistrationManagementInfo (§ 5.2.34)
+  if (managementP != NULL && checkManagement(managementP) == false)
+    return false;
 
   KLOG_T(LdTCheckReg, "Registration payload valid");
   return true;
