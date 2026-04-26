@@ -12,7 +12,7 @@ CC            = gcc
 PREFIX        = ..
 INCLUDE       = -I$(PREFIX)
 DFLAGS        = -DANSI
-CFLAGS        = -Wall -Werror -O2 -fPIC -Wno-unused-function $(DFLAGS) $(INCLUDE)
+CFLAGS        = -Wall -Werror -O2 -fPIC -Wno-unused-function $(DFLAGS) $(INCLUDE) -MMD -MP
 
 debug: CFLAGS += -g -DDEBUG
 debug: all
@@ -78,6 +78,7 @@ LIB_SOURCES   = swNgsild.c \
                 ldDiscoveryForward.c \
                 ldStripAtContext.c
 LIB_OBJS      = $(LIB_SOURCES:c=o)
+LIB_DEPS      = $(LIB_SOURCES:c=d)
 
 LIBS          = ../swRest/libswRest.a ../swJsonld/libswJsonld.a ../kalloc/libkalloc.a ../kjson/libkjson.a ../kbase/libkbase.a ../klog/libklog.a ../ktrace/libktrace.a ../khash/libkhash.a -lpthread
 
@@ -87,6 +88,7 @@ all: $(LIB_SO) $(LIB)
 
 clean:
 					rm -f $(LIB_OBJS)
+					rm -f $(LIB_DEPS)
 					rm -f $(LIB_SO)
 					rm -f $(LIB)
 
@@ -118,7 +120,9 @@ $(LIB_SO):	$(LIB_OBJS) $(LIB_SOURCES)
 						-Wl,-rpath,'$$ORIGIN/../swRest:$$ORIGIN/../swJsonld:$$ORIGIN/../kalloc:$$ORIGIN/../kjson:$$ORIGIN/../kbase:$$ORIGIN/../klog:$$ORIGIN/../ktrace:$$ORIGIN/../khash'
 
 %.o: %.c
-					$(CC) $(CFLAGS) -c $^ -o $@
+					$(CC) $(CFLAGS) -c $< -o $@
 
 %.i: %.c
 					$(CC) $(CFLAGS) -c $^ -E > $@
+
+-include $(LIB_DEPS)
