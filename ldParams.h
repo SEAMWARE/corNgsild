@@ -258,21 +258,24 @@
 #define LD_PARAMS_POST_CSOURCE_REGISTRATIONS  0
 
 #define LD_PARAMS_GET_CSOURCE_REGISTRATIONS   \
-  ( LD_PARAM_TYPE         \
-  | LD_PARAM_ID           \
-  | LD_PARAM_ID_PATTERN   \
-  | LD_PARAM_ATTRS        \
-  | LD_PARAM_PICK         \
-  | LD_PARAM_Q            \
-  | LD_PARAM_GEOMETRY     \
-  | LD_PARAM_COORDINATES  \
-  | LD_PARAM_GEOREL       \
-  | LD_PARAM_GEOPROPERTY  \
-  | LD_PARAM_CSF          \
-  | LD_PARAM_SCOPE_Q      \
-  | LD_PARAM_LIMIT        \
-  | LD_PARAM_OFFSET       \
-  | LD_PARAM_COUNT        \
+  ( LD_PARAM_TYPE                \
+  | LD_PARAM_ID                  \
+  | LD_PARAM_ID_PATTERN          \
+  | LD_PARAM_ATTRS               \
+  | LD_PARAM_PICK                \
+  | LD_PARAM_OMIT                \
+  | LD_PARAM_Q                   \
+  | LD_PARAM_GEOMETRY            \
+  | LD_PARAM_COORDINATES         \
+  | LD_PARAM_GEOREL              \
+  | LD_PARAM_GEOPROPERTY         \
+  | LD_PARAM_GEOMETRY_PROPERTY   \
+  | LD_PARAM_CSF                 \
+  | LD_PARAM_SCOPE_Q             \
+  | LD_PARAM_LANG                \
+  | LD_PARAM_LIMIT               \
+  | LD_PARAM_OFFSET              \
+  | LD_PARAM_COUNT               \
   )
 
 #define LD_PARAMS_GET_CSOURCE_REGISTRATION    0

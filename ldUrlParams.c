@@ -192,8 +192,11 @@ void ldParamHook(const char* name, const char* value)
   {
     swNgsild.sysAttrs = (value != NULL && strcmp(value, "true") == 0);
   }
-  else if (strcmp(name, "q") == 0)
+  else if (strcmp(name, "q") == 0 || strcmp(name, "csf") == 0)
   {
+    // csf (Context Source Filter) is q-shaped — § 5.10.2 / § 4.9 — and
+    // semantically the CSR-discovery flavour of q. Parse into the same
+    // field; the discovery service routine can use either name.
     swNgsild.q     = (char*) value;
     swNgsild.qExpr = ldQParse(value, faP);
   }
