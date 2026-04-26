@@ -318,9 +318,50 @@ static bool matchTerm(KjNode* entityP, LdQTerm* term)
 
 // -----------------------------------------------------------------------------
 //
-// ldEntityMatchQ -
+// findRelationshipTargetId - locate the target id of a named Relationship attr
 //
-bool ldEntityMatchQ(KjNode* entityP, LdQNode* node)
+// Walks entityP's attribute containers (storage shape: attrP → datasetId →
+// {type, value}) looking for the named relName whose first instance is a
+// Relationship; returns the target uri (borrowed) or NULL if absent.
+//
+static const char* findRelationshipTargetId(KjNode* entityP, const char* relName)
+{
+  if (entityP == NULL || relName == NULL || entityP->type != KjObject)
+    return NULL;
+
+  for (KjNode* attrP = entityP->value.firstChildP; attrP != NULL; attrP = attrP->next)
+  {
+    if (attrP->name == NULL || attrP->type != KjObject)
+      continue;
+    if (strcmp(attrP->name, relName) != 0)
+      continue;
+
+    for (KjNode* instP = attrP->value.firstChildP; instP != NULL; instP = instP->next)
+    {
+      if (instP->type != KjObject)
+        continue;
+
+      KjNode* typeP = kjLookup(instP, "type");
+      if (typeP == NULL || typeP->type != KjString)
+        continue;
+      if (strcmp(typeP->value.s, "Relationship") != 0)
+        continue;
+
+      KjNode* valP = kjLookup(instP, "value");
+      if (valP != NULL && valP->type == KjString)
+        return valP->value.s;
+    }
+  }
+  return NULL;
+}
+
+
+
+//
+// ldEntityMatchQEx -
+//
+bool ldEntityMatchQEx(KjNode* entityP, LdQNode* node,
+                     LdQEntityFetchFunc fetcher, void* userData)
 {
   if (node == NULL)
     return true;
@@ -328,11 +369,28 @@ bool ldEntityMatchQ(KjNode* entityP, LdQNode* node)
   if (node->type == LdQTermNode)
     return matchTerm(entityP, &node->term);
 
+  if (node->type == LdQLinkedNode)
+  {
+    // Need both a fetcher and a target id; either missing → false
+    // (linking entity excluded). Spec § 4.5.23 limits linked retrieval
+    // to locally-stored entities or annotated objectType — same gate
+    // applies here.
+    const char* targetId = findRelationshipTargetId(entityP, node->linked.relName);
+    if (targetId == NULL || fetcher == NULL)
+      return false;
+
+    KjNode* targetP = NULL;
+    if (fetcher(targetId, &targetP, userData) != 0 || targetP == NULL)
+      return false;
+
+    return ldEntityMatchQEx(targetP, node->linked.subQ, fetcher, userData);
+  }
+
   if (node->type == LdQAndNode)
   {
     for (int i = 0; i < node->group.count; i++)
     {
-      if (!ldEntityMatchQ(entityP, node->group.childV[i]))
+      if (!ldEntityMatchQEx(entityP, node->group.childV[i], fetcher, userData))
         return false;
     }
     return true;
@@ -342,11 +400,18 @@ bool ldEntityMatchQ(KjNode* entityP, LdQNode* node)
   {
     for (int i = 0; i < node->group.count; i++)
     {
-      if (ldEntityMatchQ(entityP, node->group.childV[i]))
+      if (ldEntityMatchQEx(entityP, node->group.childV[i], fetcher, userData))
         return true;
     }
     return false;
   }
 
   return false;
+}
+
+
+
+bool ldEntityMatchQ(KjNode* entityP, LdQNode* node)
+{
+  return ldEntityMatchQEx(entityP, node, NULL, NULL);
 }

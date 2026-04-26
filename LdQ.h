@@ -96,8 +96,25 @@ typedef enum LdQNodeType
 {
   LdQTermNode,    // leaf: single comparison or existence check
   LdQAndNode,     // AND group (';' separated)
-  LdQOrNode       // OR group  ('|' separated)
+  LdQOrNode,      // OR group  ('|' separated)
+  LdQLinkedNode   // attrName "{" sub-q "}" — § 4.9 LinkedEntityRelation
 } LdQNodeType;
+
+
+
+// -----------------------------------------------------------------------------
+//
+// LdQLinked - attrName "{" sub-q "}" linked-entity sub-query
+//
+// Evaluated against the *target* of the named Relationship attribute on
+// the entity under test. The sub-query is parsed recursively into its
+// own LdQNode tree.
+//
+typedef struct LdQLinked
+{
+  char*           relName;   // expanded IRI of the Relationship attribute
+  struct LdQNode* subQ;      // sub-expression evaluated against the target entity
+} LdQLinked;
 
 
 
@@ -110,7 +127,8 @@ typedef struct LdQNode
   LdQNodeType type;
   union
   {
-    LdQTerm term;                                                        // LdQTermNode
+    LdQTerm   term;                                                       // LdQTermNode
+    LdQLinked linked;                                                     // LdQLinkedNode
     struct { struct LdQNode** childV; int count; int allocated; } group;  // LdQAndNode / LdQOrNode
   };
 } LdQNode;

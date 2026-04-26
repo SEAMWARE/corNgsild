@@ -39,8 +39,29 @@ extern bool ldEntityMatchScope(KjNode* scopeP, LdScopeExpr* expr);
 
 // -----------------------------------------------------------------------------
 //
+// LdQEntityFetchFunc - callback that resolves a Relationship target id
+//
+// Used by ldEntityMatchQ to evaluate § 4.9 LinkedEntityRelation
+// sub-queries (q=rel{sub-q}) against the *target* of the Relationship.
+// swNgsild stays free of db.* coupling — the broker passes a fetcher
+// that wraps db.entityRetrieve (or a dist-op fallback). Returning
+// non-zero / NULL means the target is unavailable; the linked sub-q
+// then evaluates to false (linking entity is excluded from results).
+//
+typedef int (*LdQEntityFetchFunc)(const char* entityId, KjNode** entityPP, void* userData);
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldEntityMatchQ - evaluate a q-filter expression tree against an entity
 //
-extern bool ldEntityMatchQ(KjNode* entityP, LdQNode* node);
+// Linked sub-queries (LdQLinkedNode) require a fetcher to resolve the
+// Relationship target. ldEntityMatchQ wraps ldEntityMatchQEx with a
+// NULL fetcher — Linked nodes evaluate to false in that mode.
+//
+extern bool ldEntityMatchQ  (KjNode* entityP, LdQNode* node);
+extern bool ldEntityMatchQEx(KjNode* entityP, LdQNode* node,
+                             LdQEntityFetchFunc fetcher, void* userData);
 
 #endif  // SWNGSILD_LDENTITYMATCH_H_

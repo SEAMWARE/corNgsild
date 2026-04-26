@@ -119,7 +119,10 @@ static int scanValueLen(const char* p)
 {
   const char* start = p;
 
-  while (*p != 0 && *p != ';' && *p != '|' && *p != ')')
+  // Stop at the AND/OR group separators, the paren close, and — for
+  // § 4.9 LinkedEntityRelation — the closing '}' of a sub-q. The
+  // surrounding parser handles each terminator separately.
+  while (*p != 0 && *p != ';' && *p != '|' && *p != ')' && *p != '}')
     p++;
 
   return (int)(p - start);
@@ -303,7 +306,7 @@ static LdQNode* parseTerm(const char** pp, KAlloc* kaP)
   //
   const char* attrStart = p;
 
-  while (*p != 0 && *p != '=' && *p != '!' && *p != '>' && *p != '<' && *p != '~' && *p != ';' && *p != '|' && *p != ')' && *p != ' ')
+  while (*p != 0 && *p != '=' && *p != '!' && *p != '>' && *p != '<' && *p != '~' && *p != ';' && *p != '|' && *p != ')' && *p != '{' && *p != '}' && *p != ' ')
     p++;
 
   if (p == attrStart)
@@ -315,6 +318,40 @@ static LdQNode* parseTerm(const char** pp, KAlloc* kaP)
   int attrLen = (int)(p - attrStart);
 
   //
+  // § 4.9 LinkedEntityRelation: attrName "{" sub-q "}" — sub-query is
+  // evaluated against the target of the named Relationship attribute.
+  // Detected before the normal operator scan so the term doesn't first
+  // become an existence check that the surrounding expression has to
+  // re-interpret.
+  //
+  skipWs(&p);
+  if (*p == '{')
+  {
+    p++;  // consume '{'
+
+    LdQNode* subQ = parseOr(&p, kaP);
+    if (subQ == NULL)
+      return NULL;
+
+    skipWs(&p);
+    if (*p != '}')
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid q parameter",
+              "expected '}' after linked-entity sub-query");
+      return NULL;
+    }
+    p++;  // consume '}'
+
+    LdQNode* linkedP        = (LdQNode*) kaAlloc(kaP, sizeof(LdQNode));
+    linkedP->type           = LdQLinkedNode;
+    linkedP->linked.relName = expandAttr(attrStart, attrLen, kaP);
+    linkedP->linked.subQ    = subQ;
+
+    *pp = p;
+    return linkedP;
+  }
+
+  //
   // Allocate the node
   //
   LdQNode* nodeP = (LdQNode*) kaAlloc(kaP, sizeof(LdQNode));
@@ -324,11 +361,9 @@ static LdQNode* parseTerm(const char** pp, KAlloc* kaP)
   //
   // Detect operator
   //
-  skipWs(&p);
-
-  if (*p == 0 || *p == ';' || *p == '|' || *p == ')')
+  if (*p == 0 || *p == ';' || *p == '|' || *p == ')' || *p == '}')
   {
-    // No operator — existence check
+    // No operator — existence check (also matches end-of-sub-q '}')
     nodeP->term.op        = LdQExists;
     nodeP->term.valueType = LdQNoValue;
     *pp = p;
@@ -420,13 +455,13 @@ static LdQNode* parseTerm(const char** pp, KAlloc* kaP)
     nodeP->term.valueType = LdQString;
     nodeP->term.value.s   = s;
   }
-  else if (strncmp(p, "true", 4) == 0 && (p[4] == 0 || p[4] == ';' || p[4] == '|' || p[4] == ')'))
+  else if (strncmp(p, "true", 4) == 0 && (p[4] == 0 || p[4] == ';' || p[4] == '|' || p[4] == ')' || p[4] == '}'))
   {
     nodeP->term.valueType = LdQBool;
     nodeP->term.value.b   = true;
     p += 4;
   }
-  else if (strncmp(p, "false", 5) == 0 && (p[5] == 0 || p[5] == ';' || p[5] == '|' || p[5] == ')'))
+  else if (strncmp(p, "false", 5) == 0 && (p[5] == 0 || p[5] == ';' || p[5] == '|' || p[5] == ')' || p[5] == '}'))
   {
     nodeP->term.valueType = LdQBool;
     nodeP->term.value.b   = false;

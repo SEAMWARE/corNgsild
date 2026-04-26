@@ -188,6 +188,28 @@ static int renderNode(LdQNode* nodeP, SwldContext* contextP, KAlloc* allocP, cha
   if (nodeP->type == LdQTermNode)
     return renderTerm(&nodeP->term, contextP, allocP, buf, bufSize);
 
+  if (nodeP->type == LdQLinkedNode)
+  {
+    // § 4.9 LinkedEntityRelation: attrName "{" sub-q "}"
+    const char* attr = compactOrEncode(nodeP->linked.relName, contextP, allocP);
+    int n = 0;
+
+    int alen = strlen(attr);
+    if (n + alen >= bufSize) return n;
+    memcpy(buf + n, attr, alen); n += alen;
+
+    if (n >= bufSize) return n;
+    buf[n++] = '{';
+
+    n += renderNode(nodeP->linked.subQ, contextP, allocP, buf + n, bufSize - n);
+
+    if (n >= bufSize) return n;
+    buf[n++] = '}';
+
+    if (n < bufSize) buf[n] = 0;
+    return n;
+  }
+
   char sep = (nodeP->type == LdQAndNode) ? ';' : '|';
   int  n   = 0;
 
