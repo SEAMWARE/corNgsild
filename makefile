@@ -71,6 +71,7 @@ LIB_SOURCES   = swNgsild.c \
                 ldExpandParams.c \
                 ldCsourceAlias.c \
                 ldQRender.c \
+                ldQAttrs.c \
                 ldSubscriptionCompactQ.c \
                 ldSubscriptionCounters.c \
                 ldSimplifyEntity.c \
