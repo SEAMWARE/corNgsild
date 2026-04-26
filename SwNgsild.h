@@ -115,6 +115,10 @@ typedef struct SwNgsild
   bool    splitEntitiesSet;   // true if ?splitEntities= was present in URL
   bool    splitEntitiesVal;   // value of ?splitEntities= (only valid if splitEntitiesSet)
 
+  // URL parameters — linked entity retrieval (§ 4.5.23)
+  char*   join;             // "flat" | "inline" | "@none" (default), NULL = absent
+  int     joinLevel;        // depth limit for relationship walk; 0 = absent or @none
+
   // URL parameters — strings
   char*   kind;          // ?kind= for GET /jsonldContexts
 

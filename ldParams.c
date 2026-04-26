@@ -67,6 +67,8 @@ SwRestParam ldParamRegistryV[] =
   { "orderBy",               LD_PARAM_ORDER_BY },
   { "collation",             LD_PARAM_COLLATION },
   { "splitEntities",         LD_PARAM_SPLIT_ENTITIES },
+  { "join",                  LD_PARAM_JOIN },
+  { "joinLevel",             LD_PARAM_JOIN_LEVEL },
   { NULL,                    0 }
 };
 

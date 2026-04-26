@@ -248,6 +248,39 @@ void ldParamHook(const char* name, const char* value)
   {
     swNgsild.kind = (char*) value;
   }
+  else if (strcmp(name, "join") == 0)
+  {
+    // § 4.5.23 — accepted values are "flat", "inline", "@none". Anything
+    // else is BadRequestData. "@none" parses but stays semantically inert
+    // (no relationship walk).
+    if (value == NULL ||
+        (strcmp(value, "flat")   != 0 &&
+         strcmp(value, "inline") != 0 &&
+         strcmp(value, "@none")  != 0))
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid request",
+              "'join' must be 'flat', 'inline' or '@none'");
+      return;
+    }
+    swNgsild.join = (char*) value;
+  }
+  else if (strcmp(name, "joinLevel") == 0)
+  {
+    // § 4.5.23 — strictly positive integer. 0 / negatives / non-numeric
+    // are BadRequestData (the spec implies "depth", which is meaningless
+    // at zero).
+    if (value == NULL)
+      return;
+
+    int n = atoi(value);
+    if (n < 1)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid request",
+              "'joinLevel' must be a positive integer");
+      return;
+    }
+    swNgsild.joinLevel = n;
+  }
   else if (strcmp(name, "options") == 0)
   {
     // Deprecated comma-separated param.  Wrap with commas for safe substring matching:
