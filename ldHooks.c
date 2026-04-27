@@ -399,12 +399,16 @@ static void ldParseHook(void)
     }
   }
 
-  // If a user context URL was provided but expansion fell back to core context, the download failed
+  // If a user context URL was provided but expansion fell back to core context, the download failed.
+  // Exception: when the user-provided URL IS the core context URL (e.g. inter-broker
+  // notifications carrying the core context Link), resolving to coreP is correct, not a failure.
   if (swNgsild.userContextUrl != NULL)
   {
     SwldContext* coreP = swldCoreContext();
+    bool userUrlIsCore = (coreP != NULL && coreP->url != NULL
+                          && strcmp(swNgsild.userContextUrl, coreP->url) == 0);
 
-    if (swNgsild.contextP == NULL || swNgsild.contextP == coreP)
+    if ((swNgsild.contextP == NULL || swNgsild.contextP == coreP) && !userUrlIsCore)
     {
       ldError(503, LD_ERROR_LD_CONTEXT_NOT_AVAILABLE, "Context Not Available",
               "unable to retrieve @context from '%s'", swNgsild.userContextUrl);
