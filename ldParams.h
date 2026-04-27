@@ -273,6 +273,10 @@
   | LD_PARAM_CSF                 \
   | LD_PARAM_SCOPE_Q             \
   | LD_PARAM_LANG                \
+  | LD_PARAM_TIMEREL             \
+  | LD_PARAM_TIMEAT              \
+  | LD_PARAM_ENDTIMEAT           \
+  | LD_PARAM_TIMEPROPERTY        \
   | LD_PARAM_LIMIT               \
   | LD_PARAM_OFFSET              \
   | LD_PARAM_COUNT               \

@@ -80,6 +80,14 @@ typedef struct SwNgsild
   char*      coordinates;  // reference geometry coordinates (JSON array string)
   char*      geoproperty;  // geoproperty to query (expanded IRI, or NULL for default "location")
 
+  // URL parameters — temporal query (§ 4.11)
+  char*      timerel;      // "before" / "after" / "between" — NULL if no temporal query
+  char*      timeAt;       // raw ISO 8601 DateTime string (mandatory when timerel set)
+  uint64_t   timeAtNs;     // timeAt parsed to epoch nanoseconds (0 if unset)
+  char*      endTimeAt;    // raw ISO 8601 DateTime string (only for timerel=between)
+  uint64_t   endTimeAtNs;  // endTimeAt parsed to epoch nanoseconds (0 if unset)
+  char*      timeproperty; // observedAt / createdAt / modifiedAt / deletedAt — NULL = default observedAt
+
   // URL parameters — pagination
   int      limit;        // parsed limit value (default 20, set in requestStartHook)
   int      offset;       // parsed offset value (default 0)

@@ -353,6 +353,49 @@ void ldParamHook(const char* name, const char* value)
   {
     swNgsild.geoproperty = (char*) value;  // expanded later in ldExpandParams
   }
+  else if (strcmp(name, "timerel") == 0)
+  {
+    if (strcmp(value, "before") != 0 && strcmp(value, "after") != 0 && strcmp(value, "between") != 0)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid temporal query",
+              "timerel must be 'before', 'after', or 'between' (got '%s')", value);
+      return;
+    }
+    swNgsild.timerel = (char*) value;
+  }
+  else if (strcmp(name, "timeAt") == 0)
+  {
+    if (ldCheckDateTime(value) < 0)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid temporal query",
+              "timeAt is not a valid ISO 8601 DateTime: '%s'", value);
+      return;
+    }
+    swNgsild.timeAt   = (char*) value;
+    swNgsild.timeAtNs = ldIsoToNanoseconds(value);
+  }
+  else if (strcmp(name, "endTimeAt") == 0)
+  {
+    if (ldCheckDateTime(value) < 0)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid temporal query",
+              "endTimeAt is not a valid ISO 8601 DateTime: '%s'", value);
+      return;
+    }
+    swNgsild.endTimeAt   = (char*) value;
+    swNgsild.endTimeAtNs = ldIsoToNanoseconds(value);
+  }
+  else if (strcmp(name, "timeproperty") == 0)
+  {
+    if (strcmp(value, "observedAt") != 0 && strcmp(value, "createdAt") != 0 &&
+        strcmp(value, "modifiedAt") != 0 && strcmp(value, "deletedAt") != 0)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid temporal query",
+              "timeproperty must be observedAt, createdAt, modifiedAt or deletedAt (got '%s')", value);
+      return;
+    }
+    swNgsild.timeproperty = (char*) value;
+  }
   else if (strcmp(name, "lang") == 0)
   {
     swNgsild.lang = (char*) value;
