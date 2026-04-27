@@ -47,6 +47,74 @@ static void ldRequestStartHook(void)
 
 // -----------------------------------------------------------------------------
 //
+// preExpandCheckCsrEntityTypes - reject empty-string `type` in CSR
+// information[].entities[] BEFORE swldExpandTree runs.
+//
+// JSON-LD @vocab expansion turns "" into the vocab prefix IRI, which
+// then sails past the post-expansion validator's empty-string check.
+// Catching this here, on the raw tree, avoids that whole loop.
+//
+// On reject: ldError raised + swNgsild.contextError set; caller
+// returns immediately. Returns true if a rejection was raised.
+//
+static bool preExpandCheckCsrEntityTypes(KjNode* bodyP)
+{
+  if (bodyP == NULL || bodyP->type != KjObject)
+    return false;
+
+  KjNode* infoP = kjLookup(bodyP, "information");
+  if (infoP == NULL || infoP->type != KjArray)
+    return false;
+
+  for (KjNode* infoElP = infoP->value.firstChildP; infoElP != NULL; infoElP = infoElP->next)
+  {
+    if (infoElP->type != KjObject)
+      continue;
+
+    KjNode* entitiesP = kjLookup(infoElP, "entities");
+    if (entitiesP == NULL || entitiesP->type != KjArray)
+      continue;
+
+    for (KjNode* entP = entitiesP->value.firstChildP; entP != NULL; entP = entP->next)
+    {
+      if (entP->type != KjObject)
+        continue;
+
+      KjNode* typeP = kjLookup(entP, "type");
+      if (typeP == NULL)
+        continue;
+
+      if (typeP->type == KjString)
+      {
+        if (typeP->value.s[0] == 0)
+        {
+          ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
+                  "'entities[].type' must not be empty");
+          return true;
+        }
+      }
+      else if (typeP->type == KjArray)
+      {
+        for (KjNode* elemP = typeP->value.firstChildP; elemP != NULL; elemP = elemP->next)
+        {
+          if (elemP->type == KjString && elemP->value.s[0] == 0)
+          {
+            ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
+                    "'entities[].type' array items must be non-empty strings");
+            return true;
+          }
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldFindEmbeddedAtContext - scan tree for any embedded @context child
 //
 // Called AFTER swldExpandTree has already stripped the @context from the
@@ -268,6 +336,18 @@ static void ldParseHook(void)
         }
         kjNodeDecouple(swRest.in.requestTree, typeP, typePrevP);
       }
+    }
+  }
+
+  // Pre-expansion empty-string check for CSR entities[].type — @vocab
+  // expansion would otherwise launder "" into a bare-prefix IRI and slip
+  // past the post-expansion validator.
+  if (recordTypeValue != NULL && strcmp(recordTypeValue, "ContextSourceRegistration") == 0)
+  {
+    if (preExpandCheckCsrEntityTypes(swRest.in.requestTree))
+    {
+      swNgsild.contextError = true;
+      return;
     }
   }
 
