@@ -492,27 +492,101 @@ static bool checkDatasetIdArray(KjNode* dsP)
 
 // -----------------------------------------------------------------------------
 //
-// auxiliaryOpsAllowed - operations subset for auxiliary mode (§ 5.9.2)
+// isAuxiliaryAllowedOp - subset allowed for auxiliary mode (§ 5.9.2)
 //
-// auxiliary registrations may only define operations as one of:
-// "retrieveOps", "retrieveEntity", "queryEntity", or a combination thereof.
+// auxiliary registrations are retrieve-only and may only declare:
+//   - "retrieveOps" group, or
+//   - the individual ops it expands to: retrieveEntity, queryEntity
 //
-static bool auxiliaryOpsAllowed(KjNode* opsP)
+static bool isAuxiliaryAllowedOp(const char* name)
+{
+  return (strcmp(name, "retrieveOps")    == 0 ||
+          strcmp(name, "retrieveEntity") == 0 ||
+          strcmp(name, "queryEntity")    == 0);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// isKnownRegistrationOp - any individual op or op-group named in § 4.20
+//
+// Tables 4.20-1 and 4.20-2 define the closed set of names that may appear
+// in a CSourceRegistration's `operations` array. Names not in either table
+// (incl. typos like "createEntityz" or batch sub-variants like "deleteAttr")
+// shall be rejected.
+//
+// Some ops in Table 4.20-1 are not yet implemented in this broker but the
+// validator still accepts them — declaring them in a registration is fine,
+// even if a forwarded request to one of them will today fall through to
+// the regular not-implemented path.
+//
+static bool isKnownRegistrationOp(const char* name)
+{
+  // Individual ops + groups already mapped in ldTypes.
+  if (ldOpFromName(name)         != LdOpNone) return true;
+  if (ldOpGroupMaskFromName(name) != 0)        return true;
+
+  // Spec § 4.20 names not (yet) modelled as LdOp enum values.
+  static const char* extra[] = {
+    // Temporal API (§ 5.6.11 – § 5.6.16, § 5.7.3, § 5.7.4)
+    "upsertTemporal", "appendAttrsTemporal", "deleteAttrsTemporal",
+    "updateAttrInstanceTemporal", "deleteAttrInstanceTemporal", "deleteTemporal",
+    "retrieveTemporal", "queryTemporal",
+    // EntityMap (§ 5.7.x)
+    "retrieveEntityMap", "updateEntityMap", "deleteEntityMap", "createEntityMapQueryEntity",
+    // Source identity (§ 5.11.x)
+    "retrieveContextSourceIdentity",
+    NULL
+  };
+  for (int i = 0; extra[i] != NULL; i++)
+  {
+    if (strcmp(name, extra[i]) == 0)
+      return true;
+  }
+
+  return false;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// checkOperations - validate `operations` (§ 5.2.9 / § 4.20)
+//
+// For auxiliary mode the subset is restricted (retrieve-only). For other
+// modes every item must be a name listed in Table 4.20-1 or Table 4.20-2.
+//
+static bool checkOperations(KjNode* opsP, const char* modeStr)
 {
   ARRAY_CHECK(opsP, "Invalid Registration", "'operations' must be an array of strings");
+  EMPTY_ARRAY_CHECK(opsP, "'operations' array must not be empty");
+
+  bool isAux = (strcmp(modeStr, "auxiliary") == 0);
 
   for (KjNode* sP = opsP->value.firstChildP; sP != NULL; sP = sP->next)
   {
     STRING_CHECK(sP, "Invalid Registration", "'operations' items must be strings");
 
-    if (strcmp(sP->value.s, "retrieveOps")    != 0 &&
-        strcmp(sP->value.s, "retrieveEntity") != 0 &&
-        strcmp(sP->value.s, "queryEntity")    != 0)
+    if (isAux)
     {
-      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
-              "auxiliary registration 'operations' must be one of: retrieveOps, retrieveEntity, queryEntity (got '%s')",
-              sP->value.s);
-      return false;
+      if (!isAuxiliaryAllowedOp(sP->value.s))
+      {
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
+                "auxiliary registration 'operations' must be one of: retrieveOps, retrieveEntity, queryEntity (got '%s')",
+                sP->value.s);
+        return false;
+      }
+    }
+    else
+    {
+      if (!isKnownRegistrationOp(sP->value.s))
+      {
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
+                "'operations' contains unknown operation or operation-group name '%s' (see § 4.20)",
+                sP->value.s);
+        return false;
+      }
     }
   }
 
@@ -630,12 +704,10 @@ bool ldCheckRegistration(KjNode* regP, LdOp op, KAlloc* faP)
   if (contextSrcInfoP != NULL && checkContextSourceInfo(contextSrcInfoP) == false)
     return false;
 
-  // auxiliary mode: operations subset (§ 5.9.2)
-  if (strcmp(modeStr, "auxiliary") == 0 && operationsP != NULL)
-  {
-    if (auxiliaryOpsAllowed(operationsP) == false)
-      return false;
-  }
+  // operations — § 5.2.9 / § 4.20. Auxiliary mode (§ 5.9.2) further
+  // restricts to retrieve-only; other modes accept any spec-named op or group.
+  if (operationsP != NULL && checkOperations(operationsP, modeStr) == false)
+    return false;
 
   // Optional descriptive strings — non-empty when present.
   #define NONEMPTY_STRING(field, label)                                                       \
