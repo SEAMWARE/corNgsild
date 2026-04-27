@@ -28,6 +28,34 @@
 
 // -----------------------------------------------------------------------------
 //
+// isWellKnownGeoName - match the three names spec § 4.7 reserves as GeoProperty
+//
+// Per § 4.7, `location`, `observationSpace`, `operationSpace` are well-known
+// GeoProperty attribute names — entities MUST NOT use them for any other
+// attribute type. The validator runs after parseHook expansion so we accept
+// both the short form (raw application/json bodies) and the @vocab-expanded
+// IRI form.
+//
+static bool isWellKnownGeoName(const char* name)
+{
+  if (name == NULL)
+    return false;
+
+  if (strcmp(name, "location")         == 0)  return true;
+  if (strcmp(name, "observationSpace") == 0)  return true;
+  if (strcmp(name, "operationSpace")   == 0)  return true;
+
+  if (strcmp(name, "https://uri.etsi.org/ngsi-ld/location")         == 0)  return true;
+  if (strcmp(name, "https://uri.etsi.org/ngsi-ld/observationSpace") == 0)  return true;
+  if (strcmp(name, "https://uri.etsi.org/ngsi-ld/operationSpace")   == 0)  return true;
+
+  return false;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // valueKeyForType - return the expected value key for an attribute type
 //
 static const char* valueKeyForType(LdAttrType attrType)
@@ -183,6 +211,17 @@ bool ldCheckAttribute(KjNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc*
   LdAttrType attrType = ldAttrTypeDetect(attrP);
 
   KLOG_T(LdTCheckAttr, "Checking attribute '%s', detected type: %s", attrP->name, ldAttrTypeToString(attrType));
+
+  // § 4.7 — `location`, `observationSpace`, `operationSpace` are well-known
+  // GeoProperty names; an attribute carrying one of these names cannot be
+  // declared as anything else. Skip when type is unknown (partial update).
+  if (attrType != LdAttrNone && attrType != LdAttrGeoProperty && isWellKnownGeoName(attrP->name))
+  {
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Attribute",
+            "Attribute '%s' is reserved by spec § 4.7 and must be of type GeoProperty (got %s)",
+            attrP->name, ldAttrTypeToString(attrType));
+    return false;
+  }
 
   // Step 2: Check for attribute type change
   if (attrTypeFromDb != LdAttrNone && attrType != LdAttrNone && attrType != attrTypeFromDb)
