@@ -176,6 +176,16 @@ void ldParamHook(const char* name, const char* value)
   {
     swNgsild.limit = atoi(value);
   }
+  else if (strcmp(name, "lastN") == 0)
+  {
+    swNgsild.lastN = atoi(value);
+    if (swNgsild.lastN < 0)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Bad Request",
+              "lastN must be a positive integer (got '%s')", value);
+      return;
+    }
+  }
   else if (strcmp(name, "offset") == 0)
   {
     swNgsild.offset = atoi(value);

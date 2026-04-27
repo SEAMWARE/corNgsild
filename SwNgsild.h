@@ -87,6 +87,7 @@ typedef struct SwNgsild
   char*      endTimeAt;    // raw ISO 8601 DateTime string (only for timerel=between)
   uint64_t   endTimeAtNs;  // endTimeAt parsed to epoch nanoseconds (0 if unset)
   char*      timeproperty; // observedAt / createdAt / modifiedAt / deletedAt — NULL = default observedAt
+  int        lastN;        // ?lastN= per-attribute instance cap (0 = unset)
 
   // URL parameters — pagination
   int      limit;        // parsed limit value (default 20, set in requestStartHook)

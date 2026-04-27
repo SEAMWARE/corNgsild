@@ -129,6 +129,18 @@
 
 #define LD_PARAMS_POST_ENTITIES  ( LD_PARAM_LOCAL )
 
+// GET /temporal/entities/{id} — § 5.7.4 / § 6.18.3.2
+#define LD_PARAMS_GET_TEMPORAL_ENTITY  \
+  ( LD_PARAM_ATTRS         \
+  | LD_PARAM_OPTIONS       \
+  | LD_PARAM_TIMEPROPERTY  \
+  | LD_PARAM_TIMEREL       \
+  | LD_PARAM_TIMEAT        \
+  | LD_PARAM_ENDTIMEAT     \
+  | LD_PARAM_LAST_N        \
+  | LD_PARAM_DATASETID     \
+  )
+
 #define LD_PARAMS_POST_ENTITY_ATTRS  \
   ( LD_PARAM_TYPE    \
   | LD_PARAM_OPTIONS \
