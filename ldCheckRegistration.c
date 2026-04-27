@@ -26,6 +26,7 @@
 #include "swNgsild/LdCheck.h"                            // OBJECT_CHECK, ARRAY_CHECK, ...
 #include "swNgsild/LdVocab.h"                            // LD_VOCAB_*
 #include "swNgsild/ldCheckDateTime.h"                    // ldIsoToNanoseconds
+#include "swNgsild/ldCheckUri.h"                         // ldCheckUri
 #include "swNgsild/ldTypes.h"                            // ldOpToString
 #include "swNgsild/ldError.h"                            // ldError
 #include "swNgsild/ldCheckRegistration.h"                // Own interface
@@ -463,6 +464,34 @@ static bool checkManagement(KjNode* mgmtP)
 
 // -----------------------------------------------------------------------------
 //
+// checkDatasetIdArray - validate top-level datasetId (§ 5.2.9)
+//
+// Array of valid URIs; the literal "@none" is also accepted to denote the
+// default Attribute instance (§ 4.5.5).
+//
+static bool checkDatasetIdArray(KjNode* dsP)
+{
+  ARRAY_CHECK(dsP, "Invalid Registration", "'datasetId' must be a JSON array");
+  EMPTY_ARRAY_CHECK(dsP, "'datasetId' array must not be empty");
+
+  for (KjNode* sP = dsP->value.firstChildP; sP != NULL; sP = sP->next)
+  {
+    STRING_CHECK(sP, "Invalid Registration", "'datasetId' items must be strings");
+
+    if (strcmp(sP->value.s, "@none") == 0)
+      continue;
+
+    if (ldCheckUri(sP->value.s) == false)
+      return false;
+  }
+
+  return true;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // auxiliaryOpsAllowed - operations subset for auxiliary mode (§ 5.9.2)
 //
 // auxiliary registrations may only define operations as one of:
@@ -520,6 +549,7 @@ bool ldCheckRegistration(KjNode* regP, LdOp op, KAlloc* faP)
   KjNode* observationIntervalP = NULL;
   KjNode* managementIntervalP  = NULL;
   KjNode* managementP          = NULL;
+  KjNode* datasetIdP           = NULL;
 
   for (KjNode* childP = regP->value.firstChildP; childP != NULL; childP = childP->next)
   {
@@ -539,6 +569,7 @@ bool ldCheckRegistration(KjNode* regP, LdOp op, KAlloc* faP)
     else if (strcmp(childP->name, "observationInterval")  == 0)  observationIntervalP = childP;
     else if (strcmp(childP->name, "managementInterval")   == 0)  managementIntervalP  = childP;
     else if (strcmp(childP->name, "management")           == 0)  managementP          = childP;
+    else if (strcmp(childP->name, LD_VOCAB_DATASET_ID)    == 0)  datasetIdP           = childP;
   }
 
   // `type` is validated AND stripped by ldParseHook for /csourceRegistrations —
@@ -652,6 +683,10 @@ bool ldCheckRegistration(KjNode* regP, LdOp op, KAlloc* faP)
 
   // management — RegistrationManagementInfo (§ 5.2.34)
   if (managementP != NULL && checkManagement(managementP) == false)
+    return false;
+
+  // datasetId — array of valid URIs (or "@none") (§ 5.2.9 / § 4.5.5)
+  if (datasetIdP != NULL && checkDatasetIdArray(datasetIdP) == false)
     return false;
 
   KLOG_T(LdTCheckReg, "Registration payload valid");
