@@ -34,10 +34,10 @@
 static void stripStoredStats(KjNode* notifP)
 {
   static const char* fields[] = {
-    "timesSent", "timesFailed", "lastNotification", "lastSuccess", "lastFailure"
+    "timesSent", "timesFailed", "lastNotification", "lastSuccess", "lastFailure", "status"
   };
 
-  for (int i = 0; i < 5; i++)
+  for (int i = 0; i < 6; i++)
   {
     KjNode* existing;
     while ((existing = kjLookup(notifP, fields[i])) != NULL)
@@ -120,6 +120,17 @@ void ldSubscriptionCountersInject(KjNode* subP, LdSubCacheItem* itemP)
     nsToIso(itemP->lastFailure, isoBuf, sizeof(isoBuf));
     kjChildAdd(notifP, kjString(NULL, "lastFailure", isoBuf));
   }
+
+  // notification.status (§ 5.2.14.2): "ok" if the most recent attempt
+  // succeeded, "failed" if it failed. Derived from the timestamps —
+  // whichever lastSuccess/lastFailure is more recent wins. If neither
+  // ever happened (timesSent>0 is the gate that got us here), default
+  // to "ok" — the increment without a success/failure stamp shouldn't
+  // be possible, but stay defensive.
+  const char* statusStr = "ok";
+  if (itemP->lastFailure > itemP->lastSuccess)
+    statusStr = "failed";
+  kjChildAdd(notifP, kjString(NULL, "status", (char*) statusStr));
 }
 
 
@@ -168,4 +179,9 @@ void ldPernotCountersInject(KjNode* subP, LdPernotItem* itemP)
     nsToIso(itemP->lastFailure, isoBuf, sizeof(isoBuf));
     kjChildAdd(notifP, kjString(NULL, "lastFailure", isoBuf));
   }
+
+  const char* statusStr = "ok";
+  if (itemP->lastFailure > itemP->lastSuccess)
+    statusStr = "failed";
+  kjChildAdd(notifP, kjString(NULL, "status", (char*) statusStr));
 }
