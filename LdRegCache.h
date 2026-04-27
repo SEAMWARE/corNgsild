@@ -32,6 +32,7 @@
 #include "kjson/KjNode.h"                              // KjNode
 
 #include "swNgsild/LdOp.h"                             // LdOp
+#include "swNgsild/LdGeoRel.h"                         // LdGeoRel
 
 
 
@@ -168,12 +169,29 @@ typedef struct LdRegCacheItem
 
 // -----------------------------------------------------------------------------
 //
+// LdCsrGeoMatchFunc - geoQ ↔ CSR geo-coverage match callback
+//
+// Used by CSR Discovery (§ 5.10.2.4) and DistOp dispatch (§ 4.3.6) to
+// filter the cache by overlap with the request's geoQ. The implementation
+// lives in the broker (uses GEOS via the shared plugin code); swNgsild
+// only carries the function pointer.
+//
+// `csrGeoP` is the CSR's stored geo node — `location`, `observationSpace`,
+// or `operationSpace`. NULL means the CSR didn't declare that field;
+// implementations should return true (do not filter the CSR out).
+//
+typedef bool (*LdCsrGeoMatchFunc)(KjNode* csrGeoP, LdGeoRel* geoRel, const char* geometry, const char* coordinates);
+
+
+
+//
 // LdRegCache - per-tenant Context Source Registration cache
 //
 typedef struct LdRegCache
 {
   LdRegCacheItem*        itemList;           // linked list head
   LdRegCacheItem*        last;               // tail (O(1) append)
+  LdCsrGeoMatchFunc      csrGeoMatchFunc;    // registered by broker; NULL = skip geo check
   KAlloc                 alloc;              // persistent allocator for parsed shortcuts
   char                   allocBuf[1024];     // initial allocation buffer
 } LdRegCache;
