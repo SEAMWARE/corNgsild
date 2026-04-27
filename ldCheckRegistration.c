@@ -27,6 +27,7 @@
 #include "swNgsild/LdVocab.h"                            // LD_VOCAB_*
 #include "swNgsild/ldCheckDateTime.h"                    // ldIsoToNanoseconds
 #include "swNgsild/ldCheckUri.h"                         // ldCheckUri
+#include "swNgsild/ldCheckGeo.h"                         // ldCheckGeo
 #include "swNgsild/ldTypes.h"                            // ldOpToString
 #include "swNgsild/ldError.h"                            // ldError
 #include "swNgsild/ldCheckRegistration.h"                // Own interface
@@ -624,6 +625,9 @@ bool ldCheckRegistration(KjNode* regP, LdOp op, KAlloc* faP)
   KjNode* managementIntervalP  = NULL;
   KjNode* managementP          = NULL;
   KjNode* datasetIdP           = NULL;
+  KjNode* locationP            = NULL;
+  KjNode* observationSpaceP    = NULL;
+  KjNode* operationSpaceP      = NULL;
 
   for (KjNode* childP = regP->value.firstChildP; childP != NULL; childP = childP->next)
   {
@@ -644,6 +648,9 @@ bool ldCheckRegistration(KjNode* regP, LdOp op, KAlloc* faP)
     else if (strcmp(childP->name, "managementInterval")   == 0)  managementIntervalP  = childP;
     else if (strcmp(childP->name, "management")           == 0)  managementP          = childP;
     else if (strcmp(childP->name, LD_VOCAB_DATASET_ID)    == 0)  datasetIdP           = childP;
+    else if (strcmp(childP->name, "location")             == 0)  locationP            = childP;
+    else if (strcmp(childP->name, "observationSpace")     == 0)  observationSpaceP    = childP;
+    else if (strcmp(childP->name, "operationSpace")       == 0)  operationSpaceP      = childP;
   }
 
   // `type` is validated AND stripped by ldParseHook for /csourceRegistrations —
@@ -760,6 +767,13 @@ bool ldCheckRegistration(KjNode* regP, LdOp op, KAlloc* faP)
   // datasetId — array of valid URIs (or "@none") (§ 5.2.9 / § 4.5.5)
   if (datasetIdP != NULL && checkDatasetIdArray(datasetIdP) == false)
     return false;
+
+  // location / observationSpace / operationSpace — GeoJSON geometry (§ 5.2.9 / § 4.7).
+  // ldCheckGeo enforces type ∈ Point/LineString/Polygon/Multi*, coordinate
+  // shape per type, lat/lon ranges, and polygon-ring closure.
+  if (locationP         != NULL && ldCheckGeo(locationP)         == false)  return false;
+  if (observationSpaceP != NULL && ldCheckGeo(observationSpaceP) == false)  return false;
+  if (operationSpaceP   != NULL && ldCheckGeo(operationSpaceP)   == false)  return false;
 
   KLOG_T(LdTCheckReg, "Registration payload valid");
   return true;
