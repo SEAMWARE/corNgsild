@@ -169,6 +169,12 @@
   | LD_PARAM_VIA                 \
   )
 
+// DELETE /temporal/entities/{id}/attrs/{attr} — § 5.6.13 / § 6.21.3.1.
+#define LD_PARAMS_DELETE_TEMPORAL_ATTR  \
+  ( LD_PARAM_DATASETID  \
+  | LD_PARAM_DELETE_ALL \
+  )
+
 // GET /temporal/entities/{id} — § 5.7.3 / § 6.19.3.1.
 // Note: q is NOT in the spec's URL-parameter table for this route — q
 // belongs to the multi-entity Query Temporal Evolution (§ 5.7.4 /
