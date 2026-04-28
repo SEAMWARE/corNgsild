@@ -129,11 +129,13 @@
 
 #define LD_PARAMS_POST_ENTITIES  ( LD_PARAM_LOCAL )
 
-// GET /temporal/entities/{id} — § 5.7.4 / § 6.18.3.2
+// GET /temporal/entities/{id} — § 5.7.3 / § 6.19.3.1.
+// Note: q is NOT in the spec's URL-parameter table for this route — q
+// belongs to the multi-entity Query Temporal Evolution (§ 5.7.4 /
+// § 6.18.3.2) and to subscriptions (§ 4.9). Don't add it here.
 #define LD_PARAMS_GET_TEMPORAL_ENTITY  \
   ( LD_PARAM_ATTRS         \
   | LD_PARAM_OPTIONS       \
-  | LD_PARAM_Q             \
   | LD_PARAM_TIMEPROPERTY  \
   | LD_PARAM_TIMEREL       \
   | LD_PARAM_TIMEAT        \
