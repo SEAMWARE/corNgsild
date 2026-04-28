@@ -25,6 +25,7 @@
 #include "swNgsild/ldEntityToApi.h"                      // ldEntityToApi
 #include "swNgsild/ldPickOmit.h"                         // ldPickOmit
 #include "swNgsild/ldToTemporalValues.h"                 // ldToTemporalValues
+#include "swNgsild/ldToAggregatedValues.h"               // ldToAggregatedValues, ldIso8601DurationToNs
 #include "swNgsild/ldToGeoJson.h"                        // ldToGeoJson
 #include "swNgsild/ldStripSysAttrs.h"                    // ldStripSysAttrs
 #include "swNgsild/ldLangReduce.h"                       // ldLangReduce
@@ -575,6 +576,20 @@ static void ldRenderHook(void)
     // the resulting object-shaped attrs aren't re-mangled by ldEntityToApi.
     if (swNgsild.format == LdFormatTemporalValues)
       ldToTemporalValues(treeP, swNgsild.timeproperty, swRest.kjsonP, &swRest.kalloc);
+
+    // § 4.5.20: aggregated temporal representation. Numeric Property only
+    // for now. Same renderHook position as temporalValues — runs after
+    // ldEntityToApi so the bucketed-object attrs aren't re-mangled.
+    if (swNgsild.format == LdFormatAggregatedValues &&
+        swNgsild.aggrMethodsV != NULL && swNgsild.aggrPeriodDuration != NULL)
+    {
+      uint64_t periodNs = ldIso8601DurationToNs(swNgsild.aggrPeriodDuration);
+      uint64_t startNs  = swNgsild.timeAtNs;
+      uint64_t endNs    = swNgsild.endTimeAtNs;  // 0 → ldToAggregatedValues uses latest sample seen
+      if (periodNs > 0 && startNs > 0)
+        ldToAggregatedValues(treeP, swNgsild.aggrMethodsV, periodNs, startNs, endNs,
+                             swNgsild.timeproperty, swRest.kjsonP, &swRest.kalloc);
+    }
   }
 
   //

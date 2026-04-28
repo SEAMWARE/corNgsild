@@ -131,10 +131,10 @@
 
 // GET /temporal/entities — § 5.7.4 / § 6.18.3.2.
 // Multi-entity Query Temporal Evolution. Local-only first cut: distop-
-// only params (entityMap, entityMapLifetime, splitEntities) and the
-// aggregation params (aggrMethods, aggrPeriodDuration) are intentionally
-// omitted — they will land with their respective phases. local + via
-// are accepted so requests/tests can opt out of a future distop path.
+// only params (entityMap, entityMapLifetime, splitEntities) are
+// intentionally omitted — they will land with the temporal-distop phase.
+// local + via are accepted so requests/tests can opt out of a future
+// distop path.
 #define LD_PARAMS_QUERY_TEMPORAL_ENTITIES \
   ( LD_PARAM_ID                  \
   | LD_PARAM_TYPE                \
@@ -167,6 +167,8 @@
   | LD_PARAM_COUNT               \
   | LD_PARAM_LOCAL               \
   | LD_PARAM_VIA                 \
+  | LD_PARAM_AGGR_METHODS        \
+  | LD_PARAM_AGGR_PERIOD_DURATION \
   )
 
 // DELETE /temporal/entities/{id}/attrs/{attr} — § 5.6.13 / § 6.21.3.1.

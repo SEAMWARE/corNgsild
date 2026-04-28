@@ -45,6 +45,7 @@ LIB_SOURCES   = swNgsild.c \
                 ldOrderSort.c \
                 ldLangReduce.c \
                 ldToTemporalValues.c \
+                ldToAggregatedValues.c \
                 ldNormalizeInput.c \
                 ldHooks.c \
                 ldPagination.c \

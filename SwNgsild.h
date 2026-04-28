@@ -89,6 +89,11 @@ typedef struct SwNgsild
   char*      timeproperty; // observedAt / createdAt / modifiedAt / deletedAt — NULL = default observedAt
   int        lastN;        // ?lastN= per-attribute instance cap (0 = unset)
 
+  // URL parameters — aggregated temporal representation (§ 4.5.20)
+  char*      aggrMethods;        // raw CSV: e.g. "sum,avg,min"
+  char**     aggrMethodsV;       // split (NULL-terminated)
+  char*      aggrPeriodDuration; // ISO 8601 duration: PT1H, PT5M, P1D, ... (NULL = whole window)
+
   // URL parameters — pagination
   int      limit;        // parsed limit value (default 20, set in requestStartHook)
   int      offset;       // parsed offset value (default 0)

@@ -412,6 +412,15 @@ void ldParamHook(const char* name, const char* value)
   {
     swNgsild.lang = (char*) value;
   }
+  else if (strcmp(name, "aggrMethods") == 0)
+  {
+    swNgsild.aggrMethods  = (char*) value;
+    swNgsild.aggrMethodsV = ldParamSplit((char*) value, faP);
+  }
+  else if (strcmp(name, "aggrPeriodDuration") == 0)
+  {
+    swNgsild.aggrPeriodDuration = (char*) value;
+  }
   else if (strcmp(name, "observedAt") == 0)
   {
     if (ldCheckDateTime(value) < 0)
