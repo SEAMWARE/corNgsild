@@ -53,15 +53,53 @@ static int valueRank(KjNode* valP)
 
 // -----------------------------------------------------------------------------
 //
-// getAttrValue - extract the default instance's "value" from an entity attr
+// getAttrValue - extract a representative "value" for ordering purposes
 //
-// Storage format: entity → attrWrapper → "@none" → { type, value }
-// Returns the "value" KjNode, or NULL if attr/instance/value is missing.
+// Two shapes are supported:
 //
+//   - Current-state (storage): attrWrapper → "@none" → { type, value }
+//   - Temporal API (§ 5.7.3):  attrArray → [ { type, value, observedAt, ... }, ... ]
+//
+// For the temporal shape we walk the array and pick the instance with the
+// largest observedAt (falling back to modifiedAt, then to the last array
+// element). That gives users an intuitive "most recent value" for orderBy
+// rather than the SQL-ordered first/last entry, which would flip with lastN.
+//
+static KjNode* temporalLatestValue(KjNode* arrayP)
+{
+  KjNode* bestP = NULL;
+  const char* bestKey = NULL;
+
+  for (KjNode* instP = arrayP->value.firstChildP; instP != NULL; instP = instP->next)
+  {
+    if (instP->type != KjObject)
+      continue;
+
+    KjNode* obsP = kjLookup(instP, "observedAt");
+    if (obsP == NULL) obsP = kjLookup(instP, "modifiedAt");
+    const char* key = (obsP != NULL && obsP->type == KjString) ? obsP->value.s : "";
+
+    if (bestP == NULL || (bestKey != NULL && strcmp(key, bestKey) > 0))
+    {
+      bestP   = instP;
+      bestKey = key;
+    }
+  }
+
+  return (bestP != NULL) ? kjLookup(bestP, "value") : NULL;
+}
+
+
 static KjNode* getAttrValue(KjNode* entityP, const char* attrName)
 {
   KjNode* wrapperP = kjLookup(entityP, attrName);
-  if (wrapperP == NULL || wrapperP->type != KjObject)
+  if (wrapperP == NULL)
+    return NULL;
+
+  if (wrapperP->type == KjArray)
+    return temporalLatestValue(wrapperP);
+
+  if (wrapperP->type != KjObject)
     return NULL;
 
   KjNode* noneP = kjLookup(wrapperP, "@none");

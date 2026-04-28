@@ -188,6 +188,13 @@
   | LD_PARAM_ENDTIMEAT     \
   | LD_PARAM_LAST_N        \
   | LD_PARAM_DATASETID     \
+  | LD_PARAM_PICK          \
+  | LD_PARAM_OMIT          \
+  | LD_PARAM_LANG          \
+  | LD_PARAM_FORMAT        \
+  | LD_PARAM_SYSATTRS      \
+  | LD_PARAM_EXPAND_VALUES \
+  | LD_PARAM_JSON_KEYS     \
   )
 
 #define LD_PARAMS_POST_ENTITY_ATTRS  \

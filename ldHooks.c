@@ -24,6 +24,7 @@
 #include "swNgsild/ldError.h"                            // ldError
 #include "swNgsild/ldEntityToApi.h"                      // ldEntityToApi
 #include "swNgsild/ldPickOmit.h"                         // ldPickOmit
+#include "swNgsild/ldToTemporalValues.h"                 // ldToTemporalValues
 #include "swNgsild/ldToGeoJson.h"                        // ldToGeoJson
 #include "swNgsild/ldStripSysAttrs.h"                    // ldStripSysAttrs
 #include "swNgsild/ldLangReduce.h"                       // ldLangReduce
@@ -568,6 +569,12 @@ static void ldRenderHook(void)
         formatFn(treeP, &swRest.kalloc);
       }
     }
+
+    // § 4.5.8: simplified temporal representation. Runs after ldEntityToApi
+    // (which is a no-op on temporal trees — attrs are KjArrays, skipped) so
+    // the resulting object-shaped attrs aren't re-mangled by ldEntityToApi.
+    if (swNgsild.format == LdFormatTemporalValues)
+      ldToTemporalValues(treeP, swNgsild.timeproperty, swRest.kjsonP, &swRest.kalloc);
   }
 
   //

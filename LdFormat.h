@@ -20,7 +20,9 @@ typedef enum LdFormat
   LdFormatNone = 0,
   LdFormatNormalized,
   LdFormatConcise,
-  LdFormatSimplified
+  LdFormatSimplified,
+  LdFormatTemporalValues,
+  LdFormatAggregatedValues
 } LdFormat;
 
 #endif

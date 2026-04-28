@@ -309,10 +309,12 @@ void ldParamHook(const char* name, const char* value)
     // Format — only set if ?format= hasn't already set it
     if (swNgsild.format == LdFormatNone)
     {
-      if      (strstr(wrapped, ",keyValues,")   != NULL)  swNgsild.format = LdFormatSimplified;
-      else if (strstr(wrapped, ",simplified,")  != NULL)  swNgsild.format = LdFormatSimplified;
-      else if (strstr(wrapped, ",concise,")     != NULL)  swNgsild.format = LdFormatConcise;
-      else if (strstr(wrapped, ",normalized,")  != NULL)  swNgsild.format = LdFormatNormalized;
+      if      (strstr(wrapped, ",keyValues,")        != NULL)  swNgsild.format = LdFormatSimplified;
+      else if (strstr(wrapped, ",simplified,")       != NULL)  swNgsild.format = LdFormatSimplified;
+      else if (strstr(wrapped, ",concise,")          != NULL)  swNgsild.format = LdFormatConcise;
+      else if (strstr(wrapped, ",normalized,")       != NULL)  swNgsild.format = LdFormatNormalized;
+      else if (strstr(wrapped, ",temporalValues,")   != NULL)  swNgsild.format = LdFormatTemporalValues;
+      else if (strstr(wrapped, ",aggregatedValues,") != NULL)  swNgsild.format = LdFormatAggregatedValues;
     }
 
     if (strstr(wrapped, ",sysAttrs,") != NULL)

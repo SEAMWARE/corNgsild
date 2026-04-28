@@ -244,10 +244,12 @@ const char* ldFormatToString(LdFormat format)
 {
   switch (format)
   {
-  case LdFormatNone:       return "None";
-  case LdFormatNormalized: return "normalized";
-  case LdFormatConcise:    return "concise";
-  case LdFormatSimplified: return "simplified";
+  case LdFormatNone:             return "None";
+  case LdFormatNormalized:       return "normalized";
+  case LdFormatConcise:          return "concise";
+  case LdFormatSimplified:       return "simplified";
+  case LdFormatTemporalValues:   return "temporalValues";
+  case LdFormatAggregatedValues: return "aggregatedValues";
   }
 
   return "Unknown";
@@ -264,10 +266,12 @@ LdFormat ldFormatFromString(const char* str)
   if (str == NULL)
     return LdFormatNone;
 
-  if (strcmp(str, "normalized") == 0)  return LdFormatNormalized;
-  if (strcmp(str, "concise")    == 0)  return LdFormatConcise;
-  if (strcmp(str, "simplified") == 0)  return LdFormatSimplified;
-  if (strcmp(str, "keyValues")  == 0)  return LdFormatSimplified;
+  if (strcmp(str, "normalized")        == 0)  return LdFormatNormalized;
+  if (strcmp(str, "concise")           == 0)  return LdFormatConcise;
+  if (strcmp(str, "simplified")        == 0)  return LdFormatSimplified;
+  if (strcmp(str, "keyValues")         == 0)  return LdFormatSimplified;
+  if (strcmp(str, "temporalValues")    == 0)  return LdFormatTemporalValues;
+  if (strcmp(str, "aggregatedValues")  == 0)  return LdFormatAggregatedValues;
 
   return LdFormatNone;
 }

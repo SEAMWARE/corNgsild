@@ -133,6 +133,10 @@ static void attrLangReduce(KjNode* attrP, const char* lang, KAlloc* faP)
 //
 // ldLangReduce - reduce LanguageProperty attributes to Property with matching language
 //
+// For the temporal API (§ 5.7.3) an attribute is rendered as an array of
+// instance objects rather than a single object. When the entity-level child
+// is an array, walk it and reduce each instance.
+//
 void ldLangReduce(KjNode* entityP, const char* lang, KAlloc* faP)
 {
   if (entityP == NULL || entityP->type != KjObject)
@@ -140,7 +144,17 @@ void ldLangReduce(KjNode* entityP, const char* lang, KAlloc* faP)
 
   for (KjNode* childP = entityP->value.firstChildP; childP != NULL; childP = childP->next)
   {
-    if (childP->name != NULL && ldIsEntityKeyword(childP->name) == false)
+    if (childP->name == NULL || ldIsEntityKeyword(childP->name))
+      continue;
+
+    if (childP->type == KjArray)
+    {
+      for (KjNode* instP = childP->value.firstChildP; instP != NULL; instP = instP->next)
+        attrLangReduce(instP, lang, faP);
+    }
+    else
+    {
       attrLangReduce(childP, lang, faP);
+    }
   }
 }
