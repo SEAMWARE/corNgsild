@@ -146,21 +146,31 @@ static char* nsToIso(uint64_t ns, KAlloc* faP)
 
 // -----------------------------------------------------------------------------
 //
-// Bucket - per-period accumulator (fixed-size growable array).
+// Bucket - per-period accumulator.
 //
+// Per § 4.5.20 the valid methods depend on the Property value type:
+//   Number   → all methods (avg/sum/min/max/stddev/sumsq + totalCount/distinctCount)
+//   Boolean  → totalCount + distinctCount only
+//   String   → totalCount + distinctCount only
+//
+// We track the numeric stats (sum, sumsq, min, max) but only flag them
+// usable (allNumeric) when EVERY value seen in the bucket was numeric.
+// distinctCount is computed across all types via stringified values
+// (numbers via %.17g, booleans as "true"/"false", strings verbatim).
+//
+#define BUCKET_DISTINCT_CAP  64
+#define BUCKET_DISTINCT_LEN  64
+
 typedef struct Bucket
 {
   uint64_t  startNs;
   int       count;
+  bool      allNumeric;
   double    sum;
   double    sumsq;
   double    minV;
   double    maxV;
-
-  // For distinctCount: keep up to a small handful of distinct values.
-  // For numeric Property this is rarely useful, but the spec requires the
-  // method to be supported. Cap to keep this simple.
-  double    distinctV[64];
+  char      distinctV[BUCKET_DISTINCT_CAP][BUCKET_DISTINCT_LEN];
   int       distinctN;
 } Bucket;
 
@@ -169,19 +179,38 @@ typedef struct Bucket
 static void bucketInit(Bucket* b, uint64_t startNs)
 {
   memset(b, 0, sizeof(*b));
-  b->startNs = startNs;
+  b->startNs    = startNs;
+  b->allNumeric = true;
 }
 
 
 
-static void bucketAdd(Bucket* b, double v)
+// Add a stringified value to the distinct set (capped — values past the
+// cap are simply not counted; keeps the bucket fixed-size).
+static void bucketTrackDistinct(Bucket* b, const char* s)
+{
+  if (b->distinctN >= BUCKET_DISTINCT_CAP)
+    return;
+
+  for (int i = 0; i < b->distinctN; i++)
+    if (strcmp(b->distinctV[i], s) == 0)
+      return;
+
+  strncpy(b->distinctV[b->distinctN], s, BUCKET_DISTINCT_LEN - 1);
+  b->distinctV[b->distinctN][BUCKET_DISTINCT_LEN - 1] = 0;
+  b->distinctN++;
+}
+
+
+
+static void bucketAddNumber(Bucket* b, double v)
 {
   if (b->count == 0)
   {
     b->minV = v;
     b->maxV = v;
   }
-  else
+  else if (b->allNumeric)
   {
     if (v < b->minV) b->minV = v;
     if (v > b->maxV) b->maxV = v;
@@ -190,14 +219,25 @@ static void bucketAdd(Bucket* b, double v)
   b->sumsq += v * v;
   b->count++;
 
-  if (b->distinctN < (int)(sizeof(b->distinctV)/sizeof(b->distinctV[0])))
-  {
-    bool seen = false;
-    for (int i = 0; i < b->distinctN; i++)
-      if (b->distinctV[i] == v) { seen = true; break; }
-    if (!seen)
-      b->distinctV[b->distinctN++] = v;
-  }
+  char buf[BUCKET_DISTINCT_LEN];
+  snprintf(buf, sizeof(buf), "%.17g", v);
+  bucketTrackDistinct(b, buf);
+}
+
+
+
+static void bucketAddString(Bucket* b, const char* s)
+{
+  b->allNumeric = false;
+  b->count++;
+  bucketTrackDistinct(b, s);
+}
+
+
+
+static void bucketAddBool(Bucket* b, bool v)
+{
+  bucketAddString(b, v ? "true" : "false");
 }
 
 
@@ -208,23 +248,6 @@ static double bucketStddev(const Bucket* b)
   double mean = b->sum / b->count;
   double var  = (b->sumsq / b->count) - (mean * mean);
   return (var > 0.0) ? sqrt(var) : 0.0;
-}
-
-
-
-// -----------------------------------------------------------------------------
-//
-// extractNumber - read a numeric value out of a "value" KjNode.
-//
-// Returns true with *out filled when the node is numeric, false otherwise
-// (non-Property attrs, or Property with non-numeric value).
-//
-static bool extractNumber(KjNode* valP, double* out)
-{
-  if (valP == NULL) return false;
-  if (valP->type == KjInt)   { *out = (double) valP->value.i; return true; }
-  if (valP->type == KjFloat) { *out = valP->value.f;          return true; }
-  return false;
 }
 
 
@@ -246,6 +269,18 @@ static KjNode* emitValueArray(const char*   method,
   {
     Bucket* b = &buckets[i];
     if (b->count == 0)
+      continue;
+
+    // § 4.5.20: numeric methods are only valid on Number values. Boolean /
+    // string buckets carry only totalCount + distinctCount; emit nothing
+    // for the rest.
+    bool numericMethod = (strcmp(method, "avg")    == 0 ||
+                          strcmp(method, "sum")    == 0 ||
+                          strcmp(method, "min")    == 0 ||
+                          strcmp(method, "max")    == 0 ||
+                          strcmp(method, "stddev") == 0 ||
+                          strcmp(method, "sumsq")  == 0);
+    if (numericMethod && !b->allNumeric)
       continue;
 
     double v;
@@ -298,8 +333,10 @@ static void aggregateAttr(KjNode*      attrP,
   KjNode* typeP = kjLookup(firstP, "type");
   const char* attrType = (typeP != NULL && typeP->type == KjString) ? typeP->value.s : "Property";
 
+  // Aggregation only applies to Property (§ 4.5.20). Relationship,
+  // LanguageProperty, etc. are left as-is.
   if (strcmp(attrType, "Property") != 0)
-    return;  // numeric aggregation only on Property in v1
+    return;
 
   // Establish window end if caller passed 0 → take latest sample seen.
   uint64_t winEnd = endNs;
@@ -324,12 +361,15 @@ static void aggregateAttr(KjNode*      attrP,
   for (int i = 0; i < bucketCount; i++)
     bucketInit(&buckets[i], startNs + (uint64_t) i * periodNs);
 
-  // Second pass: bucket the instances.
+  // Second pass: bucket the instances. Property values may be Number,
+  // Boolean or String — all three contribute to totalCount / distinctCount;
+  // only Number contributes to avg / sum / min / max / stddev / sumsq
+  // (the bucket's allNumeric flag tracks that).
   for (KjNode* instP = firstP; instP != NULL; instP = instP->next)
   {
     if (instP->type != KjObject) continue;
-    double v;
-    if (!extractNumber(kjLookup(instP, "value"), &v)) continue;
+    KjNode* valP = kjLookup(instP, "value");
+    if (valP == NULL) continue;
 
     KjNode* tsP = kjLookup(instP, timeProp);
     if (tsP == NULL || tsP->type != KjString) continue;
@@ -338,7 +378,12 @@ static void aggregateAttr(KjNode*      attrP,
 
     int idx = (int) ((ts - startNs) / periodNs);
     if (idx < 0 || idx >= bucketCount) continue;
-    bucketAdd(&buckets[idx], v);
+
+    if      (valP->type == KjInt)     bucketAddNumber(&buckets[idx], (double) valP->value.i);
+    else if (valP->type == KjFloat)   bucketAddNumber(&buckets[idx], valP->value.f);
+    else if (valP->type == KjBoolean) bucketAddBool  (&buckets[idx], (valP->value.b != 0));
+    else if (valP->type == KjString)  bucketAddString(&buckets[idx], valP->value.s);
+    // Compound (KjObject/KjArray) values aren't in scope for v1 aggregation.
   }
 
   // Replace the array contents with { type, "<method>": [...], ... }.
