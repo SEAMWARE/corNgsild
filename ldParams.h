@@ -133,6 +133,7 @@
 #define LD_PARAMS_GET_TEMPORAL_ENTITY  \
   ( LD_PARAM_ATTRS         \
   | LD_PARAM_OPTIONS       \
+  | LD_PARAM_Q             \
   | LD_PARAM_TIMEPROPERTY  \
   | LD_PARAM_TIMEREL       \
   | LD_PARAM_TIMEAT        \
