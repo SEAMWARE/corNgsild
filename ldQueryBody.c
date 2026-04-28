@@ -232,6 +232,28 @@ bool ldQueryBodyToParams(KjNode* bodyP)
       continue;
     }
 
+    // § 5.2.21 TemporalQuery sub-object — flatten to URL-style params
+    // (timerel, timeAt, endTimeAt, lastN, timeproperty, aggrMethods,
+    // aggrPeriodDuration). Used by POST /temporal/entityOperations/query
+    // (§ 5.7.4 / § 6.24.3.1).
+    if (strcmp(fP->name, "temporalQ") == 0 && fP->type == KjObject)
+    {
+      for (KjNode* tP = fP->value.firstChildP; tP != NULL; tP = tP->next)
+      {
+        if (tP->name == NULL || tP->name[0] == '@') continue;
+
+        if (tP->type == KjString)
+          ldParamHook(tP->name, tP->value.s);
+        else if (tP->type == KjInt)
+        {
+          char buf[32];
+          snprintf(buf, sizeof(buf), "%lld", tP->value.i);
+          ldParamHook(tP->name, buf);
+        }
+      }
+      continue;
+    }
+
     if (strcmp(fP->name, "attrs")     == 0 ||
         strcmp(fP->name, "pick")      == 0 ||
         strcmp(fP->name, "omit")      == 0 ||
