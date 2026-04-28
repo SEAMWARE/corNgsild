@@ -129,6 +129,46 @@
 
 #define LD_PARAMS_POST_ENTITIES  ( LD_PARAM_LOCAL )
 
+// GET /temporal/entities — § 5.7.4 / § 6.18.3.2.
+// Multi-entity Query Temporal Evolution. Local-only first cut: distop-
+// only params (entityMap, entityMapLifetime, splitEntities) and the
+// aggregation params (aggrMethods, aggrPeriodDuration) are intentionally
+// omitted — they will land with their respective phases. local + via
+// are accepted so requests/tests can opt out of a future distop path.
+#define LD_PARAMS_QUERY_TEMPORAL_ENTITIES \
+  ( LD_PARAM_ID                  \
+  | LD_PARAM_TYPE                \
+  | LD_PARAM_ID_PATTERN          \
+  | LD_PARAM_ATTRS               \
+  | LD_PARAM_Q                   \
+  | LD_PARAM_GEOREL              \
+  | LD_PARAM_GEOMETRY            \
+  | LD_PARAM_COORDINATES         \
+  | LD_PARAM_GEOPROPERTY         \
+  | LD_PARAM_SCOPE_Q             \
+  | LD_PARAM_DATASETID           \
+  | LD_PARAM_TIMEPROPERTY        \
+  | LD_PARAM_TIMEREL             \
+  | LD_PARAM_TIMEAT              \
+  | LD_PARAM_ENDTIMEAT           \
+  | LD_PARAM_LAST_N              \
+  | LD_PARAM_PICK                \
+  | LD_PARAM_OMIT                \
+  | LD_PARAM_LANG                \
+  | LD_PARAM_OPTIONS             \
+  | LD_PARAM_FORMAT              \
+  | LD_PARAM_SYSATTRS            \
+  | LD_PARAM_EXPAND_VALUES       \
+  | LD_PARAM_JSON_KEYS           \
+  | LD_PARAM_ORDER_BY            \
+  | LD_PARAM_COLLATION           \
+  | LD_PARAM_LIMIT               \
+  | LD_PARAM_OFFSET              \
+  | LD_PARAM_COUNT               \
+  | LD_PARAM_LOCAL               \
+  | LD_PARAM_VIA                 \
+  )
+
 // GET /temporal/entities/{id} — § 5.7.3 / § 6.19.3.1.
 // Note: q is NOT in the spec's URL-parameter table for this route — q
 // belongs to the multi-entity Query Temporal Evolution (§ 5.7.4 /
