@@ -333,6 +333,14 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
   if (riP != NULL && riP->type == KjArray)
     itemP->receiverInfo = riP;
 
+  // § 5.2.14 notification.join + notification.joinLevel — linked-entity retrieval (§ 4.5.23)
+  KjNode* joinP      = (notifP != NULL) ? kjLookup(notifP, "join")      : NULL;
+  KjNode* joinLevelP = (notifP != NULL) ? kjLookup(notifP, "joinLevel") : NULL;
+  if (joinP != NULL && joinP->type == KjString)
+    itemP->notifJoin = joinP->value.s;
+  if (joinLevelP != NULL && joinLevelP->type == KjInt && joinLevelP->value.i > 0)
+    itemP->notifJoinLevel = (int) joinLevelP->value.i;
+
   KjNode* notifAttrsP = (notifP != NULL) ? kjLookup(notifP, LD_VOCAB_ATTRIBUTES) : NULL;
   itemP->notifAttrsV = watchedAttrsExtract(notifAttrsP);  // reuse same helper (NULL-term string array)
 

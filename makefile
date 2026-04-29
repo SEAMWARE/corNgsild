@@ -81,7 +81,8 @@ LIB_SOURCES   = swNgsild.c \
                 ldDiscoveryForward.c \
                 ldStripAtContext.c \
                 ldDistMerge.c \
-                ldRequestSubstitute.c
+                ldRequestSubstitute.c \
+                ldLinkedEntitiesHook.c
 LIB_OBJS      = $(LIB_SOURCES:c=o)
 LIB_DEPS      = $(LIB_SOURCES:c=d)
 

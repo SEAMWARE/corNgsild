@@ -32,6 +32,7 @@
 
 #include "swNgsild/LdVocab.h"                          // LD_VOCAB_*
 #include "swNgsild/LdPernotCache.h"                    // LdPernotCache, LdPernotItem
+#include "swNgsild/ldLinkedEntitiesHook.h"             // ldLinkedEntitiesHookInvoke
 #include "swNgsild/ldEntityToApi.h"                    // ldEntityToApi
 #include "swNgsild/ldStripSysAttrs.h"                  // ldStripSysAttrs
 #include "swNgsild/ldPernotLoop.h"                     // Own interface
@@ -110,6 +111,13 @@ static bool pernotSendNotification(LdPernotItem* itemP, KjNode* entityArray, KAl
     kjChildAdd(dataArray, entityClone);
   }
   kjChildAdd(notification, dataArray);
+
+  // § 5.2.14 notification.join — linked-entity retrieval (§ 4.5.23)
+  if (itemP->notifJoin != NULL && strcmp(itemP->notifJoin, "@none") != 0)
+  {
+    int level = (itemP->notifJoinLevel > 0) ? itemP->notifJoinLevel : 1;
+    ldLinkedEntitiesHookInvoke(dataArray, itemP->notifJoin, level, itemP->tenantP);
+  }
 
   // Compact
   swldCompactTree(notification);

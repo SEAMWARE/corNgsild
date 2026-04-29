@@ -198,6 +198,14 @@ LdPernotItem* ldPernotCacheItemAdd(LdPernotCache* cacheP, KjNode* subTree,
   if (riP != NULL && riP->type == KjArray)
     itemP->receiverInfo = riP;
 
+  // § 5.2.14 notification.join + notification.joinLevel — linked-entity retrieval (§ 4.5.23)
+  KjNode* joinP      = (notifP != NULL) ? kjLookup(notifP, "join")      : NULL;
+  KjNode* joinLevelP = (notifP != NULL) ? kjLookup(notifP, "joinLevel") : NULL;
+  if (joinP != NULL && joinP->type == KjString)
+    itemP->notifJoin = joinP->value.s;
+  if (joinLevelP != NULL && joinLevelP->type == KjInt && joinLevelP->value.i > 0)
+    itemP->notifJoinLevel = (int) joinLevelP->value.i;
+
   KjNode* formatP = (notifP != NULL) ? kjLookup(notifP, LD_VOCAB_FORMAT) : NULL;
   itemP->format = (formatP != NULL && formatP->type == KjString) ? formatP->value.s : NULL;
 

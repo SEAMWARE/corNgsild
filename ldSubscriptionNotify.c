@@ -34,6 +34,7 @@
 #include "swJsonld/swldCompactTree.h"                  // swldCompactTree
 
 #include "swNgsild/LdVocab.h"                          // LD_VOCAB_*
+#include "swNgsild/SwNgsild.h"                         // swNgsild
 #include "swNgsild/LdSubCache.h"                       // LdSubCache, LdSubCacheItem
 #include "swNgsild/ldEntityToApi.h"                    // ldEntityToApi
 #include "swNgsild/ldStripSysAttrs.h"                  // ldStripSysAttrs
@@ -46,6 +47,7 @@
 #include "swNgsild/ldLangReduce.h"                     // ldLangReduce
 #include "swNgsild/ldNotifyStatsHook.h"                // ldNotifyStatsHookInvoke
 #include "swNgsild/ldRequestSubstitute.h"              // ldRequestSubstitute
+#include "swNgsild/ldLinkedEntitiesHook.h"             // ldLinkedEntitiesHookInvoke
 #include "swNgsild/ldSubscriptionNotify.h"             // Own interface
 
 
@@ -529,6 +531,15 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   for (int i = 0; i < n; i++)
     kjChildAdd(dataArray, buildNotifDataEntry(itemP, entries[i]));
   kjChildAdd(notification, dataArray);
+
+  // § 5.2.14 notification.join — linked-entity retrieval (§ 4.5.23).
+  // Hook is installed by the broker (it owns db.* and the reg cache);
+  // a no-op when the broker hasn't registered or join is "@none".
+  if (itemP->notifJoin != NULL && strcmp(itemP->notifJoin, "@none") != 0)
+  {
+    int level = (itemP->notifJoinLevel > 0) ? itemP->notifJoinLevel : 1;
+    ldLinkedEntitiesHookInvoke(dataArray, itemP->notifJoin, level, swNgsild.tenantP);
+  }
 
   // Compact expanded URIs to short names (covers every data[] entry)
   swldCompactTree(notification);
