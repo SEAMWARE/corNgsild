@@ -530,10 +530,6 @@ static bool isKnownRegistrationOp(const char* name)
 
   // Spec § 4.20 names not (yet) modelled as LdOp enum values.
   static const char* extra[] = {
-    // Temporal API (§ 5.6.11 – § 5.6.16, § 5.7.3, § 5.7.4)
-    "upsertTemporal", "appendAttrsTemporal", "deleteAttrsTemporal",
-    "updateAttrInstanceTemporal", "deleteAttrInstanceTemporal", "deleteTemporal",
-    "retrieveTemporal", "queryTemporal",
     // EntityMap (§ 5.7.x)
     "retrieveEntityMap", "updateEntityMap", "deleteEntityMap", "createEntityMapQueryEntity",
     // Source identity (§ 5.11.x)

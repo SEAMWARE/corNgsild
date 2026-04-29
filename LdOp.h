@@ -79,7 +79,20 @@ typedef enum LdOp
   LdOpUpdateCsourceSubscription      = 1ULL << 35,
   LdOpRetrieveCsourceSubscription    = 1ULL << 36,
   LdOpQueryCsourceSubscription       = 1ULL << 37,
-  LdOpDeleteCsourceSubscription      = 1ULL << 38
+  LdOpDeleteCsourceSubscription      = 1ULL << 38,
+
+  // Temporal API (§ 5.6.11-§ 5.6.16, § 5.7.3, § 5.7.4). Per § 4.20
+  // Table 4.20-2 these are NOT in any default group — a CSR must
+  // explicitly list them in operations[] to receive temporal forwards.
+  LdOpUpsertTemporal                 = 1ULL << 39,   // § 5.6.11 — POST /temporal/entities
+  LdOpAppendAttrsTemporal            = 1ULL << 40,   // § 5.6.12 — POST /temporal/entities/{id}/attrs
+  LdOpDeleteAttrsTemporal            = 1ULL << 41,   // § 5.6.13 — DELETE /temporal/entities/{id}/attrs/{attr}
+  LdOpUpdateAttrInstanceTemporal     = 1ULL << 42,   // § 5.6.14 — PATCH instance
+  LdOpDeleteAttrInstanceTemporal     = 1ULL << 43,   // § 5.6.15 — DELETE instance
+  LdOpDeleteTemporal                 = 1ULL << 44,   // § 5.6.16 — DELETE /temporal/entities/{id}
+  LdOpRetrieveTemporal               = 1ULL << 45,   // § 5.7.3 — GET /temporal/entities/{id}
+  LdOpQueryTemporal                  = 1ULL << 46,   // § 5.7.4 — GET /temporal/entities
+  LdOpCreateEntityMapQueryTemporal   = 1ULL << 47    // § 5.14.5 — entity-map for temporal query
 } LdOp;
 
 

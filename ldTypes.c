@@ -148,6 +148,15 @@ const char* ldOpToString(LdOp op)
   case LdOpRetrieveCsourceSubscription: return "RetrieveCsourceSubscription";
   case LdOpQueryCsourceSubscription:    return "QueryCsourceSubscription";
   case LdOpDeleteCsourceSubscription:   return "DeleteCsourceSubscription";
+  case LdOpUpsertTemporal:                  return "UpsertTemporal";
+  case LdOpAppendAttrsTemporal:             return "AppendAttrsTemporal";
+  case LdOpDeleteAttrsTemporal:             return "DeleteAttrsTemporal";
+  case LdOpUpdateAttrInstanceTemporal:      return "UpdateAttrInstanceTemporal";
+  case LdOpDeleteAttrInstanceTemporal:      return "DeleteAttrInstanceTemporal";
+  case LdOpDeleteTemporal:                  return "DeleteTemporal";
+  case LdOpRetrieveTemporal:                return "RetrieveTemporal";
+  case LdOpQueryTemporal:                   return "QueryTemporal";
+  case LdOpCreateEntityMapQueryTemporal:    return "CreateEntityMapQueryTemporal";
   }
 
   return "Unknown";
@@ -207,6 +216,17 @@ LdOp ldOpFromName(const char* name)
   if (strcmp(name, "retrieveSubscription")      == 0)  return LdOpRetrieveSubscription;
   if (strcmp(name, "querySubscription")         == 0)  return LdOpQuerySubscription;
   if (strcmp(name, "deleteSubscription")        == 0)  return LdOpDeleteSubscription;
+
+  // Temporal API (§ 4.20 Table 4.20-1, § 5.6.11-§ 5.6.16, § 5.7.3-§ 5.7.4)
+  if (strcmp(name, "upsertTemporal")              == 0)  return LdOpUpsertTemporal;
+  if (strcmp(name, "appendAttrsTemporal")         == 0)  return LdOpAppendAttrsTemporal;
+  if (strcmp(name, "deleteAttrsTemporal")         == 0)  return LdOpDeleteAttrsTemporal;
+  if (strcmp(name, "updateAttrInstanceTemporal")  == 0)  return LdOpUpdateAttrInstanceTemporal;
+  if (strcmp(name, "deleteAttrInstanceTemporal")  == 0)  return LdOpDeleteAttrInstanceTemporal;
+  if (strcmp(name, "deleteTemporal")              == 0)  return LdOpDeleteTemporal;
+  if (strcmp(name, "retrieveTemporal")            == 0)  return LdOpRetrieveTemporal;
+  if (strcmp(name, "queryTemporal")               == 0)  return LdOpQueryTemporal;
+  if (strcmp(name, "createEntityMapQueryTemporal") == 0) return LdOpCreateEntityMapQueryTemporal;
 
   return LdOpNone;
 }
