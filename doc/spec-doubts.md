@@ -483,6 +483,34 @@ response bodies rendered as ld+json arrays.
 
 ---
 
+## 17. § 6.3.8 / § 6.3.9 — `urn:ngsi-ld:request` substitution for receiverInfo
+
+**Hit:** § 4.3.6.5 mandates that a CSR's `contextSourceInfo` value of
+`"urn:ngsi-ld:request"` be replaced by the same-named header from the
+*triggering* request. § 6.3.18 spells the HTTP-binding rule out. The
+receiverInfo paragraphs (§ 6.3.8 entity notifications, § 6.3.9 csource
+notifications) describe an identically-shaped KeyValuePair[] but are
+silent on `"urn:ngsi-ld:request"`. Reading strictly, the value must be
+forwarded verbatim — defeating the same auth-forwarding use case the
+contextSourceInfo wording was added for.
+
+**Spec:** silent — § 6.3.8/§ 6.3.9 only say "set equal to the content of
+the corresponding 'value' member of the KeyValuePair".
+
+**Our call:** symmetrically apply the substitution to receiverInfo on
+the event-driven and CSR-side notify paths. Periodic-notification path
+(§ 5.8 / § 5.2.14.1) has no triggering request so a placeholder is
+silently dropped there.
+
+**Fix wanted:** § 6.3.8 / § 6.3.9 should reuse the § 6.3.18 sentence:
+"unless the special value `urn:ngsi-ld:request` has been set, in which
+case the value is to be taken from the triggering request, if present
+there." The data-model section (§ 5.2.15 receiverInfo) should also
+mention the binding-specific substitution like § 4.3.6.5 does for
+contextSourceInfo.
+
+---
+
 ## Template for new entries
 
 ```
