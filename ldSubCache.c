@@ -328,6 +328,11 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
       itemP->timeoutMs = (int) ms;
   }
 
+  // § 5.2.15 endpoint.receiverInfo — KeyValuePair[] forwarded as outbound headers.
+  KjNode* riP = (endpointP != NULL) ? kjLookup(endpointP, "receiverInfo") : NULL;
+  if (riP != NULL && riP->type == KjArray)
+    itemP->receiverInfo = riP;
+
   KjNode* notifAttrsP = (notifP != NULL) ? kjLookup(notifP, LD_VOCAB_ATTRIBUTES) : NULL;
   itemP->notifAttrsV = watchedAttrsExtract(notifAttrsP);  // reuse same helper (NULL-term string array)
 

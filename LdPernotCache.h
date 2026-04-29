@@ -71,6 +71,7 @@ typedef struct LdPernotItem
   uint64_t               expiresAt;       // epoch nanoseconds (0 = never)
   uint64_t               cooldownNs;      // notification.endpoint.cooldown (§ 5.2.15) in ns; 0 = use 30s default
   int                    timeoutMs;       // notification.endpoint.timeout  (§ 5.2.15) in ms; 0 = use 10s default
+  KjNode*                receiverInfo;    // notification.endpoint.receiverInfo (§ 5.2.15) — Array of {key, value} from subTree, NULL if none
 
   // Timestamps + counters (updated by the pernot loop thread)
   uint64_t               lastNotification; // epoch nanoseconds

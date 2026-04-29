@@ -21,6 +21,7 @@
 #include "kjson/kjRenderSize.h"                        // kjFastRenderSize
 #include "kjson/kjRender.h"                            // kjFastRender
 #include "kjson/kjClone.h"                             // kjClone
+#include "kjson/kjLookup.h"                            // kjLookup
 
 #include "swRest/SwRestState.h"                        // swRest (for thread-local init)
 #include "swRest/swRestClient.h"                       // SwRestClientRequest, swRestClientSend
@@ -134,6 +135,19 @@ static bool pernotSendNotification(LdPernotItem* itemP, KjNode* entityArray, KAl
              "<%s>; rel=\"http://www.w3.org/ns/json-ld#context\"; type=\"application/ld+json\"",
              itemP->contextUrl ? itemP->contextUrl : ctxP->url);
     swRestClientRequestHeader(&req, "Link", linkBuf);
+  }
+
+  // § 5.2.15 endpoint.receiverInfo — emit each {key,value} as a request header
+  if (itemP->receiverInfo != NULL && itemP->receiverInfo->type == KjArray)
+  {
+    for (KjNode* kvP = itemP->receiverInfo->value.firstChildP; kvP != NULL; kvP = kvP->next)
+    {
+      if (kvP->type != KjObject) continue;
+      KjNode* kP = kjLookup(kvP, "key");
+      KjNode* vP = kjLookup(kvP, "value");
+      if (kP != NULL && kP->type == KjString && vP != NULL && vP->type == KjString)
+        swRestClientRequestHeader(&req, kP->value.s, vP->value.s);
+    }
   }
 
   swRestClientRequestBody(&req, body, strlen(body));

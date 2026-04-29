@@ -193,6 +193,11 @@ LdPernotItem* ldPernotCacheItemAdd(LdPernotCache* cacheP, KjNode* subTree,
       itemP->timeoutMs = (int) ms;
   }
 
+  // § 5.2.15 endpoint.receiverInfo — KeyValuePair[] forwarded as outbound headers.
+  KjNode* riP = (endpointP != NULL) ? kjLookup(endpointP, "receiverInfo") : NULL;
+  if (riP != NULL && riP->type == KjArray)
+    itemP->receiverInfo = riP;
+
   KjNode* formatP = (notifP != NULL) ? kjLookup(notifP, LD_VOCAB_FORMAT) : NULL;
   itemP->format = (formatP != NULL && formatP->type == KjString) ? formatP->value.s : NULL;
 

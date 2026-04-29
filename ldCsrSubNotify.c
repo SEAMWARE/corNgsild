@@ -30,6 +30,7 @@
 #include "kjson/KjNode.h"                              // KjNode
 #include "kjson/kjBuilder.h"                           // kjObject, kjString, kjArray, kjChildAdd
 #include "kjson/kjClone.h"                             // kjClone
+#include "kjson/kjLookup.h"                            // kjLookup
 #include "kjson/kjRenderSize.h"                        // kjFastRenderSize
 #include "kjson/kjRender.h"                            // kjFastRender
 
@@ -282,6 +283,19 @@ static void sendCsourceNotification(LdSubCacheItem* subItemP,
              "<%s>; rel=\"http://www.w3.org/ns/json-ld#context\"; type=\"application/ld+json\"",
              ctxUrl);
     swRestClientRequestHeader(&req, "Link", linkBuf);
+  }
+
+  // § 5.2.15 endpoint.receiverInfo — emit each {key,value} as a request header
+  if (subItemP->receiverInfo != NULL && subItemP->receiverInfo->type == KjArray)
+  {
+    for (KjNode* kvP = subItemP->receiverInfo->value.firstChildP; kvP != NULL; kvP = kvP->next)
+    {
+      if (kvP->type != KjObject) continue;
+      KjNode* kP = kjLookup(kvP, "key");
+      KjNode* vP = kjLookup(kvP, "value");
+      if (kP != NULL && kP->type == KjString && vP != NULL && vP->type == KjString)
+        swRestClientRequestHeader(&req, kP->value.s, vP->value.s);
+    }
   }
 
   swRestClientRequestBody(&req, body, strlen(body));

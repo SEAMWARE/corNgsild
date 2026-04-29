@@ -569,6 +569,19 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
     swRestClientRequestHeader(&req, "Link", linkBuf);
   }
 
+  // § 5.2.15 endpoint.receiverInfo — emit each {key,value} as a request header
+  if (itemP->receiverInfo != NULL && itemP->receiverInfo->type == KjArray)
+  {
+    for (KjNode* kvP = itemP->receiverInfo->value.firstChildP; kvP != NULL; kvP = kvP->next)
+    {
+      if (kvP->type != KjObject) continue;
+      KjNode* kP = kjLookup(kvP, "key");
+      KjNode* vP = kjLookup(kvP, "value");
+      if (kP != NULL && kP->type == KjString && vP != NULL && vP->type == KjString)
+        swRestClientRequestHeader(&req, kP->value.s, vP->value.s);
+    }
+  }
+
   swRestClientRequestBody(&req, body, strlen(body));
   // § 5.2.15 endpoint.timeout — per-sub override; default 10s
   int reqTmoMs = (itemP->timeoutMs > 0) ? itemP->timeoutMs : 10000;
