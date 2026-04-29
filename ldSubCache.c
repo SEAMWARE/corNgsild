@@ -322,6 +322,29 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
     }
   }
 
+  // notification.pick / notification.omit (§ 5.2.14, § 4.21). Same expansion
+  // semantics as notifAttrsV — short attribute names get IRI-expanded; the
+  // "id"/"type"/"scope" keywords pass through unchanged.
+  KjNode* pickP = (notifP != NULL) ? kjLookup(notifP, "pick") : NULL;
+  KjNode* omitP = (notifP != NULL) ? kjLookup(notifP, "omit") : NULL;
+  itemP->notifPickV = watchedAttrsExtract(pickP);
+  itemP->notifOmitV = watchedAttrsExtract(omitP);
+  for (int j = 0; j < 2; j++)
+  {
+    char** v = (j == 0) ? itemP->notifPickV : itemP->notifOmitV;
+    if (v == NULL) continue;
+    for (int i = 0; v[i] != NULL; i++)
+    {
+      if (strcmp(v[i], "id") == 0 || strcmp(v[i], "type") == 0 || strcmp(v[i], "scope") == 0) continue;
+      if (!swldAlreadyExpanded(v[i]))
+        v[i] = swldExpand(NULL, v[i], &cacheP->alloc, NULL, NULL);
+    }
+  }
+
+  // Subscription-level lang (§ 4.15) — applied to LanguageMap attrs at notify time.
+  KjNode* langP = kjLookup(itemP->subTree, "lang");
+  itemP->lang = (langP != NULL && langP->type == KjString) ? langP->value.s : NULL;
+
   // datasetId: list of dataset IDs to include in notifications (NULL = all instances)
   // Values are URIs or "@none" (default instance) — no expansion needed.
   KjNode* datasetIdP = kjLookup(itemP->subTree, LD_VOCAB_DATASET_ID);

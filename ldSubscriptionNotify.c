@@ -42,6 +42,8 @@
 #include "swJsonld/swldInit.h"                          // swldCoreContext
 #include "swJsonld/SwldContext.h"                       // SwldContext
 #include "swNgsild/ldSimplifyEntity.h"                 // ldSimplifyEntity, ldConciseEntity
+#include "swNgsild/ldPickOmit.h"                       // ldPickOmit
+#include "swNgsild/ldLangReduce.h"                     // ldLangReduce
 #include "swNgsild/ldNotifyStatsHook.h"                // ldNotifyStatsHookInvoke
 #include "swNgsild/ldSubscriptionNotify.h"             // Own interface
 
@@ -468,6 +470,17 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
       childP = nextP;
     }
   }
+
+  // notification.pick / notification.omit (§ 5.2.14, § 4.21) — entity-member
+  // projection on the notification body. Applied before format conversion
+  // so the chosen format operates on the already-reduced entity.
+  if (itemP->notifPickV != NULL || itemP->notifOmitV != NULL)
+    ldPickOmit(entityClone, itemP->notifPickV, itemP->notifOmitV);
+
+  // Subscription-level lang (§ 4.15) — collapse LanguageMap attrs to the
+  // selected language before format conversion.
+  if (itemP->lang != NULL && itemP->lang[0] != 0)
+    ldLangReduce(entityClone, itemP->lang, &swRest.kalloc);
 
   if (itemP->format != NULL)
   {

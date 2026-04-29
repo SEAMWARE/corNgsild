@@ -96,6 +96,9 @@ typedef struct LdSubCacheItem
   char*                     geoCoordinates; // geoQ.coordinates as JSON string (NULL if no geoQ)
   char*                     geoProperty;    // geoQ.geoproperty expanded IRI (default: location)
   char**                    notifAttrsV;    // NULL-terminated array of notification attribute IRIs (NULL = all)
+  char**                    notifPickV;     // NULL-terminated; notification.pick — entity-member projection (NULL = all)
+  char**                    notifOmitV;     // NULL-terminated; notification.omit — entity-member exclusion (NULL = none)
+  char*                     lang;           // BCP-47 language code; LanguageMap reduction on notification (NULL = no reduction)
   char**                    datasetIdV;    // NULL-terminated array of datasetId URIs + "@none" (NULL = all instances)
   int                       triggerMask;    // bitmask of LD_TRIGGER_* values (0 = use LD_TRIGGER_DEFAULT)
 
