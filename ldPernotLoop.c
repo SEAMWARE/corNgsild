@@ -137,7 +137,9 @@ static bool pernotSendNotification(LdPernotItem* itemP, KjNode* entityArray, KAl
   }
 
   swRestClientRequestBody(&req, body, strlen(body));
-  swRestClientRequestTimeout(&req, 5000, 10000);
+  // § 5.2.15 endpoint.timeout — per-sub override; default 10s
+  int reqTmoMs = (itemP->timeoutMs > 0) ? itemP->timeoutMs : 10000;
+  swRestClientRequestTimeout(&req, 5000, reqTmoMs);
 
   int rc = swRestClientSend(&req, &resp);
 

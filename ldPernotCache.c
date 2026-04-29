@@ -184,6 +184,15 @@ LdPernotItem* ldPernotCacheItemAdd(LdPernotCache* cacheP, KjNode* subTree,
       itemP->cooldownNs = (uint64_t) (ms * 1000000.0);
   }
 
+  // § 5.2.15 endpoint.timeout — max ms to wait for a notification reply.
+  KjNode* tmoP = (endpointP != NULL) ? kjLookup(endpointP, "timeout") : NULL;
+  if (tmoP != NULL && (tmoP->type == KjInt || tmoP->type == KjFloat))
+  {
+    double ms = (tmoP->type == KjInt) ? (double) tmoP->value.i : tmoP->value.f;
+    if (ms > 0)
+      itemP->timeoutMs = (int) ms;
+  }
+
   KjNode* formatP = (notifP != NULL) ? kjLookup(notifP, LD_VOCAB_FORMAT) : NULL;
   itemP->format = (formatP != NULL && formatP->type == KjString) ? formatP->value.s : NULL;
 

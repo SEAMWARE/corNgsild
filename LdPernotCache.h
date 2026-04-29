@@ -70,6 +70,7 @@ typedef struct LdPernotItem
   LdPernotState          state;
   uint64_t               expiresAt;       // epoch nanoseconds (0 = never)
   uint64_t               cooldownNs;      // notification.endpoint.cooldown (§ 5.2.15) in ns; 0 = use 30s default
+  int                    timeoutMs;       // notification.endpoint.timeout  (§ 5.2.15) in ms; 0 = use 10s default
 
   // Timestamps + counters (updated by the pernot loop thread)
   uint64_t               lastNotification; // epoch nanoseconds

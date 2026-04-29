@@ -319,6 +319,15 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
       itemP->cooldownNs = (uint64_t) (ms * 1000000.0);
   }
 
+  // § 5.2.15 endpoint.timeout — maximum ms to wait for a notification reply.
+  KjNode* tmoP = (endpointP != NULL) ? kjLookup(endpointP, "timeout") : NULL;
+  if (tmoP != NULL && (tmoP->type == KjInt || tmoP->type == KjFloat))
+  {
+    double ms = (tmoP->type == KjInt) ? (double) tmoP->value.i : tmoP->value.f;
+    if (ms > 0)
+      itemP->timeoutMs = (int) ms;
+  }
+
   KjNode* notifAttrsP = (notifP != NULL) ? kjLookup(notifP, LD_VOCAB_ATTRIBUTES) : NULL;
   itemP->notifAttrsV = watchedAttrsExtract(notifAttrsP);  // reuse same helper (NULL-term string array)
 

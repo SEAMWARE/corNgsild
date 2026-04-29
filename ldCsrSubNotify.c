@@ -285,7 +285,9 @@ static void sendCsourceNotification(LdSubCacheItem* subItemP,
   }
 
   swRestClientRequestBody(&req, body, strlen(body));
-  swRestClientRequestTimeout(&req, 5000, 10000);
+  // § 5.2.15 endpoint.timeout — per-sub override; default 10s
+  int reqTmoMs = (subItemP->timeoutMs > 0) ? subItemP->timeoutMs : 10000;
+  swRestClientRequestTimeout(&req, 5000, reqTmoMs);
   swRestClientSend(&req, &resp);
 
   subItemP->timesSent++;

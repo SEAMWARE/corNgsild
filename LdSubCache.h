@@ -125,6 +125,7 @@ typedef struct LdSubCacheItem
   int                       lastFlushedFailed;
   double                    throttling;       // minimum seconds between notifications
   uint64_t                  cooldownNs;       // notification.endpoint.cooldown (§ 5.2.15) in ns; 0 = use 30s default
+  int                       timeoutMs;        // notification.endpoint.timeout  (§ 5.2.15) in ms; 0 = use 10s default
 
   // Distributed-subscription mapping (§ 5.8.1.4) — list of derived subs
   // this local sub has on remote Context Sources. NULL when nothing
