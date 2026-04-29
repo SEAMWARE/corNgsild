@@ -27,6 +27,8 @@
 #include "kjson/KjNode.h"                               // KjNode
 #include "kjson/kjBuilder.h"                            // kjObject, kjArray, kjString, kjFloat, kjChildAdd
 #include "kjson/kjLookup.h"                             // kjLookup
+#include "kjson/kjRender.h"                             // kjFastRender
+#include "kjson/kjRenderSize.h"                         // kjFastRenderSize
 
 #include "swNgsild/ldIsEntityKeyword.h"                  // ldIsEntityKeyword
 #include "swNgsild/ldToAggregatedValues.h"               // Own interface
@@ -148,30 +150,50 @@ static char* nsToIso(uint64_t ns, KAlloc* faP)
 //
 // Bucket - per-period accumulator.
 //
-// Per § 4.5.20 the valid methods depend on the Property value type:
-//   Number   → all methods (avg/sum/min/max/stddev/sumsq + totalCount/distinctCount)
-//   Boolean  → totalCount + distinctCount only
-//   String   → totalCount + distinctCount only
+// Per § 4.5.19.1 (tables 1 and 3) each method is valid only for certain
+// value types. The bucket carries three parallel sub-accumulators so that
+// methods can read whichever is appropriate:
 //
-// We track the numeric stats (sum, sumsq, min, max) but only flag them
-// usable (allNumeric) when EVERY value seen in the bucket was numeric.
-// distinctCount is computed across all types via stringified values
-// (numbers via %.17g, booleans as "true"/"false", strings verbatim).
+//   - numeric:  Number, Boolean (true=1/false=0, per the table's note),
+//               and Array (stores the array SIZE — "max array size in the
+//               period", etc., per the JSON-Array column of table 1).
+//   - string:   String values; tracks lexicographic min/max.
+//   - object:   Compound JSON Object Property values; only contributes
+//               to totalCount + distinctCount per the spec.
+//
+// distinctCount is computed across all kinds via stringified values
+// (numbers → %.17g, bools → "true"/"false", strings verbatim, arrays/
+// objects → compact JSON via kjFastRender).
+//
+// Relationships (table 3) only allow totalCount / distinctCount and are
+// fed into the string accumulator using the relationship's `object` URI
+// — emitValueArray gates by attrType so the lex methods aren't exposed.
 //
 #define BUCKET_DISTINCT_CAP  64
-#define BUCKET_DISTINCT_LEN  64
 
 typedef struct Bucket
 {
   uint64_t  startNs;
-  int       count;
-  bool      allNumeric;
+
+  // Numeric sub-accumulator (Number / Boolean-as-0-1 / Array-size).
+  int       numericCount;
   double    sum;
   double    sumsq;
   double    minV;
   double    maxV;
-  char      distinctV[BUCKET_DISTINCT_CAP][BUCKET_DISTINCT_LEN];
-  int       distinctN;
+
+  // String sub-accumulator (Property String values + Relationship object).
+  int       stringCount;
+  const char* lexMin;
+  const char* lexMax;
+
+  // Compound JSON Object Property values — only count, no per-value math.
+  int       objectCount;
+
+  // Distinct accumulator across all kinds — pointers into the per-request
+  // alloc arena, capped at BUCKET_DISTINCT_CAP.
+  const char* distinctV[BUCKET_DISTINCT_CAP];
+  int         distinctN;
 } Bucket;
 
 
@@ -179,14 +201,21 @@ typedef struct Bucket
 static void bucketInit(Bucket* b, uint64_t startNs)
 {
   memset(b, 0, sizeof(*b));
-  b->startNs    = startNs;
-  b->allNumeric = true;
+  b->startNs = startNs;
 }
 
 
 
-// Add a stringified value to the distinct set (capped — values past the
-// cap are simply not counted; keeps the bucket fixed-size).
+static int bucketTotalCount(const Bucket* b)
+{
+  return b->numericCount + b->stringCount + b->objectCount;
+}
+
+
+
+// Add a stringified canonical value to the distinct set (capped — values
+// past the cap are simply not counted; keeps the bucket fixed-size).
+// `s` must have lifetime ≥ this request (caller allocates from the arena).
 static void bucketTrackDistinct(Bucket* b, const char* s)
 {
   if (b->distinctN >= BUCKET_DISTINCT_CAP)
@@ -196,57 +225,105 @@ static void bucketTrackDistinct(Bucket* b, const char* s)
     if (strcmp(b->distinctV[i], s) == 0)
       return;
 
-  strncpy(b->distinctV[b->distinctN], s, BUCKET_DISTINCT_LEN - 1);
-  b->distinctV[b->distinctN][BUCKET_DISTINCT_LEN - 1] = 0;
-  b->distinctN++;
+  b->distinctV[b->distinctN++] = s;
 }
 
 
 
-static void bucketAddNumber(Bucket* b, double v)
+static void bucketAddNumber(Bucket* b, double v, KAlloc* faP)
 {
-  if (b->count == 0)
+  if (b->numericCount == 0)
   {
     b->minV = v;
     b->maxV = v;
   }
-  else if (b->allNumeric)
+  else
   {
     if (v < b->minV) b->minV = v;
     if (v > b->maxV) b->maxV = v;
   }
   b->sum   += v;
   b->sumsq += v * v;
-  b->count++;
+  b->numericCount++;
 
-  char buf[BUCKET_DISTINCT_LEN];
-  snprintf(buf, sizeof(buf), "%.17g", v);
+  char* buf = (char*) kaAlloc(faP, 32);
+  snprintf(buf, 32, "%.17g", v);
   bucketTrackDistinct(b, buf);
+}
+
+
+
+// Per § 4.5.19.1 note: "true is considered as a value of 1, false as 0".
+static void bucketAddBool(Bucket* b, bool v, KAlloc* faP)
+{
+  bucketAddNumber(b, v ? 1.0 : 0.0, faP);
 }
 
 
 
 static void bucketAddString(Bucket* b, const char* s)
 {
-  b->allNumeric = false;
-  b->count++;
+  b->stringCount++;
+
+  if (b->lexMin == NULL || strcmp(s, b->lexMin) < 0) b->lexMin = s;
+  if (b->lexMax == NULL || strcmp(s, b->lexMax) > 0) b->lexMax = s;
+
   bucketTrackDistinct(b, s);
 }
 
 
 
-static void bucketAddBool(Bucket* b, bool v)
+// Render a JSON node (compact) into a fresh kalloc buffer. Used for arrays
+// and objects to feed distinctCount.
+static const char* renderNodeJson(KjNode* nP, KAlloc* faP)
 {
-  bucketAddString(b, v ? "true" : "false");
+  // kjFastRender's contract for KjArray/KjObject is "open with [ or {, walk
+  // children, close" — the parent name is NOT emitted, exactly what we want.
+  int   sz  = kjFastRenderSize(nP) + 1;
+  char* buf = (char*) kaAlloc(faP, sz);
+  kjFastRender(nP, buf);
+  return buf;
+}
+
+
+
+// Array: feed the size into the numeric sub-accumulator (per table 1's
+// JSON-Array column: avg/sum/min/max are all "of the sizes"); feed the
+// canonical JSON into distinctCount.
+static void bucketAddArray(Bucket* b, KjNode* arrayP, KAlloc* faP)
+{
+  int sz = 0;
+  for (KjNode* p = arrayP->value.firstChildP; p != NULL; p = p->next)
+    sz++;
+
+  // Replicate the numeric accumulator update without growing distinct
+  // (we add the canonical-JSON form to distinct below).
+  double v = (double) sz;
+  if (b->numericCount == 0) { b->minV = v; b->maxV = v; }
+  else { if (v < b->minV) b->minV = v; if (v > b->maxV) b->maxV = v; }
+  b->sum   += v;
+  b->sumsq += v * v;
+  b->numericCount++;
+
+  bucketTrackDistinct(b, renderNodeJson(arrayP, faP));
+}
+
+
+
+// Object: only totalCount and distinctCount per table 1.
+static void bucketAddObject(Bucket* b, KjNode* objP, KAlloc* faP)
+{
+  b->objectCount++;
+  bucketTrackDistinct(b, renderNodeJson(objP, faP));
 }
 
 
 
 static double bucketStddev(const Bucket* b)
 {
-  if (b->count < 2) return 0.0;
-  double mean = b->sum / b->count;
-  double var  = (b->sumsq / b->count) - (mean * mean);
+  if (b->numericCount < 2) return 0.0;
+  double mean = b->sum / b->numericCount;
+  double var  = (b->sumsq / b->numericCount) - (mean * mean);
   return (var > 0.0) ? sqrt(var) : 0.0;
 }
 
@@ -260,43 +337,83 @@ static KjNode* emitValueArray(const char*   method,
                               Bucket*       buckets,
                               int           bucketCount,
                               uint64_t      periodNs,
+                              const char*   attrType,
                               Kjson*        kjsonP,
                               KAlloc*       faP)
 {
   KjNode* arr = kjArray(kjsonP, method);
 
+  // § 4.5.19.1 table 3: Relationships only support totalCount and
+  // distinctCount; everything else is N/A.
+  bool isRelationship = (strcmp(attrType, "Relationship") == 0);
+
   for (int i = 0; i < bucketCount; i++)
   {
     Bucket* b = &buckets[i];
-    if (b->count == 0)
+    int totalCount = bucketTotalCount(b);
+    if (totalCount == 0)
       continue;
 
-    // § 4.5.20: numeric methods are only valid on Number values. Boolean /
-    // string buckets carry only totalCount + distinctCount; emit nothing
-    // for the rest.
-    bool numericMethod = (strcmp(method, "avg")    == 0 ||
-                          strcmp(method, "sum")    == 0 ||
-                          strcmp(method, "min")    == 0 ||
-                          strcmp(method, "max")    == 0 ||
-                          strcmp(method, "stddev") == 0 ||
-                          strcmp(method, "sumsq")  == 0);
-    if (numericMethod && !b->allNumeric)
+    // tupleNumeric carries the row's first element for tuples whose value
+    // is a number (every method except min/max-on-strings). tupleString
+    // is set when the row's first element is a lex result.
+    double tupleNumeric = 0.0;
+    const char* tupleString = NULL;
+
+    bool isCount      = (strcmp(method, "totalCount")    == 0 ||
+                         strcmp(method, "count")         == 0 ||
+                         strcmp(method, "distinctCount") == 0);
+
+    if (isRelationship && !isCount)
       continue;
 
-    double v;
-    if      (strcmp(method, "avg")           == 0)  v = b->sum / b->count;
-    else if (strcmp(method, "sum")           == 0)  v = b->sum;
-    else if (strcmp(method, "min")           == 0)  v = b->minV;
-    else if (strcmp(method, "max")           == 0)  v = b->maxV;
-    else if (strcmp(method, "totalCount")    == 0)  v = (double) b->count;
-    else if (strcmp(method, "count")         == 0)  v = (double) b->count;
-    else if (strcmp(method, "distinctCount") == 0)  v = (double) b->distinctN;
-    else if (strcmp(method, "stddev")        == 0)  v = bucketStddev(b);
-    else if (strcmp(method, "sumsq")         == 0)  v = b->sumsq;
-    else                                            continue;
+    if      (strcmp(method, "totalCount")    == 0)  tupleNumeric = (double) totalCount;
+    else if (strcmp(method, "count")         == 0)  tupleNumeric = (double) totalCount;
+    else if (strcmp(method, "distinctCount") == 0)  tupleNumeric = (double) b->distinctN;
+    else if (strcmp(method, "avg")           == 0)
+    {
+      if (b->numericCount == 0) continue;
+      tupleNumeric = b->sum / b->numericCount;
+    }
+    else if (strcmp(method, "sum")           == 0)
+    {
+      if (b->numericCount == 0) continue;
+      tupleNumeric = b->sum;
+    }
+    else if (strcmp(method, "stddev")        == 0)
+    {
+      if (b->numericCount < 2) continue;
+      tupleNumeric = bucketStddev(b);
+    }
+    else if (strcmp(method, "sumsq")         == 0)
+    {
+      if (b->numericCount == 0) continue;
+      tupleNumeric = b->sumsq;
+    }
+    else if (strcmp(method, "min") == 0 || strcmp(method, "max") == 0)
+    {
+      // Number/Bool/Array all feed numericMin/Max; pure-string buckets
+      // use lex min/max. Spec doesn't define mixed buckets — when both
+      // exist, the numeric answer wins (it covers the broader range of
+      // common workloads).
+      bool wantMin = (method[1] == 'i');
+      if (b->numericCount > 0)
+        tupleNumeric = wantMin ? b->minV : b->maxV;
+      else if (b->stringCount > 0)
+        tupleString = wantMin ? b->lexMin : b->lexMax;
+      else
+        continue;
+    }
+    else
+    {
+      continue;
+    }
 
     KjNode* tuple = kjArray(kjsonP, NULL);
-    kjChildAdd(tuple, kjFloat(kjsonP, NULL, v));
+    if (tupleString != NULL)
+      kjChildAdd(tuple, kjString(kjsonP, NULL, tupleString));
+    else
+      kjChildAdd(tuple, kjFloat(kjsonP, NULL, tupleNumeric));
     kjChildAdd(tuple, kjString(kjsonP, NULL, nsToIso(b->startNs, faP)));
     kjChildAdd(tuple, kjString(kjsonP, NULL, nsToIso(b->startNs + periodNs, faP)));
     kjChildAdd(arr, tuple);
@@ -333,10 +450,16 @@ static void aggregateAttr(KjNode*      attrP,
   KjNode* typeP = kjLookup(firstP, "type");
   const char* attrType = (typeP != NULL && typeP->type == KjString) ? typeP->value.s : "Property";
 
-  // Aggregation only applies to Property (§ 4.5.20). Relationship,
-  // LanguageProperty, etc. are left as-is.
-  if (strcmp(attrType, "Property") != 0)
+  // § 4.5.19.1 covers only Property (table 1) and Relationship (table 3).
+  // GeoProperty / LanguageProperty / VocabProperty / List* / Json are
+  // left as-is in this slice.
+  bool isProperty     = (strcmp(attrType, "Property")     == 0);
+  bool isRelationship = (strcmp(attrType, "Relationship") == 0);
+  if (!isProperty && !isRelationship)
     return;
+
+  // The instance field carrying the aggregated value.
+  const char* valueKey = isRelationship ? "object" : "value";
 
   // Establish window end if caller passed 0 → take latest sample seen.
   uint64_t winEnd = endNs;
@@ -361,14 +484,14 @@ static void aggregateAttr(KjNode*      attrP,
   for (int i = 0; i < bucketCount; i++)
     bucketInit(&buckets[i], startNs + (uint64_t) i * periodNs);
 
-  // Second pass: bucket the instances. Property values may be Number,
-  // Boolean or String — all three contribute to totalCount / distinctCount;
-  // only Number contributes to avg / sum / min / max / stddev / sumsq
-  // (the bucket's allNumeric flag tracks that).
+  // Bucket the instances. Per § 4.5.19.1:
+  //   Property:     Number / Boolean / String / Array / Object — different
+  //                 sub-accumulators per kind (the bucket holds all three).
+  //   Relationship: object URI → string sub-accumulator only.
   for (KjNode* instP = firstP; instP != NULL; instP = instP->next)
   {
     if (instP->type != KjObject) continue;
-    KjNode* valP = kjLookup(instP, "value");
+    KjNode* valP = kjLookup(instP, valueKey);
     if (valP == NULL) continue;
 
     KjNode* tsP = kjLookup(instP, timeProp);
@@ -378,12 +501,24 @@ static void aggregateAttr(KjNode*      attrP,
 
     int idx = (int) ((ts - startNs) / periodNs);
     if (idx < 0 || idx >= bucketCount) continue;
+    Bucket* b = &buckets[idx];
 
-    if      (valP->type == KjInt)     bucketAddNumber(&buckets[idx], (double) valP->value.i);
-    else if (valP->type == KjFloat)   bucketAddNumber(&buckets[idx], valP->value.f);
-    else if (valP->type == KjBoolean) bucketAddBool  (&buckets[idx], (valP->value.b != 0));
-    else if (valP->type == KjString)  bucketAddString(&buckets[idx], valP->value.s);
-    // Compound (KjObject/KjArray) values aren't in scope for v1 aggregation.
+    if (isRelationship)
+    {
+      if (valP->type == KjString) bucketAddString(b, valP->value.s);
+      continue;
+    }
+
+    switch (valP->type)
+    {
+      case KjInt:     bucketAddNumber(b, (double) valP->value.i, faP); break;
+      case KjFloat:   bucketAddNumber(b, valP->value.f, faP);          break;
+      case KjBoolean: bucketAddBool  (b, valP->value.b != 0, faP);     break;
+      case KjString:  bucketAddString(b, valP->value.s);               break;
+      case KjArray:   bucketAddArray (b, valP, faP);                   break;
+      case KjObject:  bucketAddObject(b, valP, faP);                   break;
+      default: break;
+    }
   }
 
   // Replace the array contents with { type, "<method>": [...], ... }.
@@ -394,7 +529,8 @@ static void aggregateAttr(KjNode*      attrP,
 
   for (int m = 0; methodsV != NULL && methodsV[m] != NULL; m++)
   {
-    KjNode* methodArr = emitValueArray(methodsV[m], buckets, bucketCount, periodNs, kjsonP, faP);
+    KjNode* methodArr = emitValueArray(methodsV[m], buckets, bucketCount,
+                                       periodNs, attrType, kjsonP, faP);
     kjChildAdd(attrP, methodArr);
   }
 }
@@ -403,7 +539,8 @@ static void aggregateAttr(KjNode*      attrP,
 
 // -----------------------------------------------------------------------------
 //
-// aggregateEntity - apply aggregateAttr to every numeric Property of one entity.
+// aggregateEntity - apply aggregateAttr to every Property and Relationship
+//                   attribute of one entity.
 //
 static void aggregateEntity(KjNode*       entityP,
                             char**        methodsV,
