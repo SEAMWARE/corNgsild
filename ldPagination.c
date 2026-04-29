@@ -93,13 +93,17 @@ void ldPaginationLinkHeader(bool hasMore)
   char* buf = (char*) kaAlloc(&swRest.kalloc, bufSize);
   int  bLen = 0;
 
-  // prev link (when offset > 0)
+  // first + prev links (when offset > 0). Total count isn't tracked here
+  // so rel=last cannot be emitted; entityMap-paginated paths emit it
+  // separately where the count is known.
   if (offset > 0)
   {
     int prevOffset = offset - limit;
     if (prevOffset < 0)
       prevOffset = 0;
 
+    bLen += snprintf(buf + bLen, bufSize - bLen, "<%s?%slimit=%d&offset=0>; rel=\"first\"; type=\"application/json\", ",
+                     swRest.in.urlPath, params, limit);
     bLen += snprintf(buf + bLen, bufSize - bLen, "<%s?%slimit=%d&offset=%d>; rel=\"prev\"; type=\"application/json\"",
                      swRest.in.urlPath, params, limit, prevOffset);
   }
