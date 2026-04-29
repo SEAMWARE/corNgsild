@@ -175,6 +175,15 @@ LdPernotItem* ldPernotCacheItemAdd(LdPernotCache* cacheP, KjNode* subTree,
   KjNode* uriP      = (endpointP != NULL) ? kjLookup(endpointP, LD_VOCAB_URI) : NULL;
   itemP->endpointUri = (uriP != NULL && uriP->type == KjString) ? uriP->value.s : NULL;
 
+  // § 5.2.15 endpoint.cooldown — minimum ms before retrying after failure.
+  KjNode* coolP = (endpointP != NULL) ? kjLookup(endpointP, "cooldown") : NULL;
+  if (coolP != NULL && (coolP->type == KjInt || coolP->type == KjFloat))
+  {
+    double ms = (coolP->type == KjInt) ? (double) coolP->value.i : coolP->value.f;
+    if (ms > 0)
+      itemP->cooldownNs = (uint64_t) (ms * 1000000.0);
+  }
+
   KjNode* formatP = (notifP != NULL) ? kjLookup(notifP, LD_VOCAB_FORMAT) : NULL;
   itemP->format = (formatP != NULL && formatP->type == KjString) ? formatP->value.s : NULL;
 

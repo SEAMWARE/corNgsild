@@ -175,8 +175,10 @@ static void* pernotLoopThread(void* vP)
 
       if (itemP->state == LdPernotErroneous)
       {
-        // Cooldown: 30 seconds after last failure
-        if (itemP->lastFailure + 30000000000ULL > now)
+        // § 5.2.15 endpoint.cooldown — minimum delay before retrying after
+        // a failure. Default 30s when unspecified.
+        uint64_t cool = (itemP->cooldownNs != 0) ? itemP->cooldownNs : 30000000000ULL;
+        if (itemP->lastFailure + cool > now)
           continue;
         itemP->state = LdPernotActive;
       }

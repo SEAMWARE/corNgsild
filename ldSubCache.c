@@ -309,6 +309,16 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
   KjNode* uriP      = (endpointP != NULL) ? kjLookup(endpointP, LD_VOCAB_URI) : NULL;
   itemP->endpointUri = (uriP != NULL && uriP->type == KjString) ? uriP->value.s : NULL;
 
+  // § 5.2.15 endpoint.cooldown — minimum delay (ms) before retrying after
+  // a failure on the same endpoint. Convert to ns; 0 means "use the default".
+  KjNode* coolP = (endpointP != NULL) ? kjLookup(endpointP, "cooldown") : NULL;
+  if (coolP != NULL && (coolP->type == KjInt || coolP->type == KjFloat))
+  {
+    double ms = (coolP->type == KjInt) ? (double) coolP->value.i : coolP->value.f;
+    if (ms > 0)
+      itemP->cooldownNs = (uint64_t) (ms * 1000000.0);
+  }
+
   KjNode* notifAttrsP = (notifP != NULL) ? kjLookup(notifP, LD_VOCAB_ATTRIBUTES) : NULL;
   itemP->notifAttrsV = watchedAttrsExtract(notifAttrsP);  // reuse same helper (NULL-term string array)
 

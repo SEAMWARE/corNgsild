@@ -505,6 +505,16 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   if (itemP->endpointUri == NULL || itemP->subId == NULL || n == 0)
     return;
 
+  // § 5.2.15 endpoint.cooldown — skip if inside the cooldown window after
+  // the last failure. Default 30s when notification.endpoint.cooldown is
+  // unspecified.
+  if (itemP->lastFailure > 0)
+  {
+    uint64_t cool = (itemP->cooldownNs != 0) ? itemP->cooldownNs : 30000000000ULL;
+    if (itemP->lastFailure + cool > swRest.requestStartTime)
+      return;
+  }
+
   char isoTimeBuf[64];
   isoNow(isoTimeBuf, sizeof(isoTimeBuf));
 

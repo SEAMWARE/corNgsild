@@ -412,7 +412,7 @@ static void ldParseHook(void)
 
     if ((swNgsild.contextP == NULL || swNgsild.contextP == coreP) && !userUrlIsCore)
     {
-      ldError(503, LD_ERROR_LD_CONTEXT_NOT_AVAILABLE, "Context Not Available",
+      ldError(504, LD_ERROR_LD_CONTEXT_NOT_AVAILABLE, "Context Not Available",
               "unable to retrieve @context from '%s'", swNgsild.userContextUrl);
       swNgsild.contextError = true;
       return;
