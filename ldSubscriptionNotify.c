@@ -45,6 +45,7 @@
 #include "swNgsild/ldPickOmit.h"                       // ldPickOmit
 #include "swNgsild/ldLangReduce.h"                     // ldLangReduce
 #include "swNgsild/ldNotifyStatsHook.h"                // ldNotifyStatsHookInvoke
+#include "swNgsild/ldRequestSubstitute.h"              // ldRequestSubstitute
 #include "swNgsild/ldSubscriptionNotify.h"             // Own interface
 
 
@@ -578,7 +579,11 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
       KjNode* kP = kjLookup(kvP, "key");
       KjNode* vP = kjLookup(kvP, "value");
       if (kP != NULL && kP->type == KjString && vP != NULL && vP->type == KjString)
-        swRestClientRequestHeader(&req, kP->value.s, vP->value.s);
+      {
+        const char* hv = ldRequestSubstitute(kP->value.s, vP->value.s);
+        if (hv != NULL)
+          swRestClientRequestHeader(&req, kP->value.s, hv);
+      }
     }
   }
 

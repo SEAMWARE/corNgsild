@@ -137,7 +137,9 @@ static bool pernotSendNotification(LdPernotItem* itemP, KjNode* entityArray, KAl
     swRestClientRequestHeader(&req, "Link", linkBuf);
   }
 
-  // § 5.2.15 endpoint.receiverInfo — emit each {key,value} as a request header
+  // § 5.2.15 endpoint.receiverInfo — emit each {key,value} as a request header.
+  // Periodic notifications run on a background thread with no triggering
+  // request, so any "urn:ngsi-ld:request" placeholder is silently dropped.
   if (itemP->receiverInfo != NULL && itemP->receiverInfo->type == KjArray)
   {
     for (KjNode* kvP = itemP->receiverInfo->value.firstChildP; kvP != NULL; kvP = kvP->next)
@@ -145,8 +147,9 @@ static bool pernotSendNotification(LdPernotItem* itemP, KjNode* entityArray, KAl
       if (kvP->type != KjObject) continue;
       KjNode* kP = kjLookup(kvP, "key");
       KjNode* vP = kjLookup(kvP, "value");
-      if (kP != NULL && kP->type == KjString && vP != NULL && vP->type == KjString)
-        swRestClientRequestHeader(&req, kP->value.s, vP->value.s);
+      if (kP == NULL || kP->type != KjString || vP == NULL || vP->type != KjString) continue;
+      if (strcmp(vP->value.s, "urn:ngsi-ld:request") == 0) continue;
+      swRestClientRequestHeader(&req, kP->value.s, vP->value.s);
     }
   }
 

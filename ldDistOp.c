@@ -24,6 +24,7 @@
 #include "swNgsild/ldForwarding.h"                     // ldForwardingForEndpoint
 #include "swNgsild/LdRegCache.h"                       // LdRegCacheItem
 #include "swNgsild/ldCsourceAlias.h"                   // ldViaHasAlias
+#include "swNgsild/ldRequestSubstitute.h"              // ldRequestSubstitute
 #include "swNgsild/ldDistOp.h"                         // Own interface
 
 
@@ -218,8 +219,13 @@ static SwRestKeyValue* buildHeaders(SwRestVerb   verb,
       if (strcasecmp(k, "jsonldContext")     == 0) continue;   // handled via Link + Content-Type (§ 6.3.19)
       if (strcasecmp(k, "ngsildConformance") == 0) continue;   // TODO
 
+      // § 4.3.6.5 — "urn:ngsi-ld:request" → take from the triggering
+      // request's same-named header (or skip if absent).
+      const char* v = ldRequestSubstitute(k, csrInfoKV[i + 1]);
+      if (v == NULL) continue;
+
       hv[hc].key   = (char*) k;
-      hv[hc].value = csrInfoKV[i + 1];
+      hv[hc].value = (char*) v;
       hc++;
     }
   }

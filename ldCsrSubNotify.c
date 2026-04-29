@@ -44,6 +44,7 @@
 #include "swNgsild/LdRegCache.h"                       // LdRegCache, LdRegCacheItem, LdRegInfo, LdRegEntityInfo
 #include "swNgsild/swNgsild.h"                         // swNgsild (for tenant access via opaque)
 #include "swNgsild/ldNotifyStatsHook.h"                // ldNotifyStatsHookInvoke
+#include "swNgsild/ldRequestSubstitute.h"              // ldRequestSubstitute
 #include "swNgsild/ldCsrSubNotify.h"                   // Own interface
 
 
@@ -294,7 +295,11 @@ static void sendCsourceNotification(LdSubCacheItem* subItemP,
       KjNode* kP = kjLookup(kvP, "key");
       KjNode* vP = kjLookup(kvP, "value");
       if (kP != NULL && kP->type == KjString && vP != NULL && vP->type == KjString)
-        swRestClientRequestHeader(&req, kP->value.s, vP->value.s);
+      {
+        const char* hv = ldRequestSubstitute(kP->value.s, vP->value.s);
+        if (hv != NULL)
+          swRestClientRequestHeader(&req, kP->value.s, hv);
+      }
     }
   }
 

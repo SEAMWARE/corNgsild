@@ -80,7 +80,8 @@ LIB_SOURCES   = swNgsild.c \
                 ldDiscovery.c \
                 ldDiscoveryForward.c \
                 ldStripAtContext.c \
-                ldDistMerge.c
+                ldDistMerge.c \
+                ldRequestSubstitute.c
 LIB_OBJS      = $(LIB_SOURCES:c=o)
 LIB_DEPS      = $(LIB_SOURCES:c=d)
 
