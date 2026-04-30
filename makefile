@@ -81,6 +81,7 @@ LIB_SOURCES   = swNgsild.c \
                 ldDiscoveryForward.c \
                 ldStripAtContext.c \
                 ldDistMerge.c \
+                ldDatasetIdDedup.c \
                 ldRequestSubstitute.c \
                 ldLinkedEntitiesHook.c \
                 ldExpiresAtPropagate.c \

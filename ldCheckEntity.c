@@ -11,6 +11,8 @@
 
 #include "kbase/kLibLog.h"                             // KLOG_T
 #include "kalloc/KAlloc.h"                             // KAlloc
+
+#include "swRest/swRest.h"                              // swRest
 #include "kjson/KjNode.h"                               // KjNode
 #include "kjson/kjLookup.h"                             // kjLookup
 #include "kjson/kjBuilder.h"                            // kjChildRemove
@@ -22,6 +24,7 @@
 #include "swNgsild/ldError.h"                            // ldError
 #include "swNgsild/ldAttrTypeDetect.h"                   // ldAttrTypeDetect
 #include "swNgsild/ldCheckAttribute.h"                   // ldCheckAttribute
+#include "swNgsild/ldDatasetIdDedup.h"                    // ldDatasetIdDedup
 #include "swNgsild/ldIsEntityKeyword.h"                   // ldIsEntityKeyword
 #include "swNgsild/ldCheckEntity.h"                      // Own interface
 #include "swNgsild/ldTraceLevels.h"                      // LdTCheckEnt
@@ -300,8 +303,7 @@ bool ldCheckEntity(KjNode* entityP, LdOp op, KjNode* dbEntityP, KAlloc* faP)
         return false;
       }
 
-      bool hasDefault = false;
-
+      // Each element must be an object (shape check before dedup).
       for (KjNode* instP = childP->value.firstChildP; instP != NULL; instP = instP->next)
       {
         if (instP->type != KjObject)
@@ -309,35 +311,16 @@ bool ldCheckEntity(KjNode* entityP, LdOp op, KjNode* dbEntityP, KAlloc* faP)
           ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Multi-Attribute", "Multi-attribute '%s': each instance must be a JSON object", childP->name);
           return false;
         }
+      }
 
-        // Check datasetId uniqueness
-        KjNode* dsP = kjLookup(instP, LD_VOCAB_DATASET_ID);
+      // § 4.5.5.3 — dedup duplicate datasetIds (and dup default instances)
+      // in-place using the spec tiebreaker. Spec mandates resolution, not
+      // rejection.
+      ldDatasetIdDedup(childP, swRest.requestStartTime);
 
-        if (dsP == NULL)
-        {
-          if (hasDefault)
-          {
-            ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Duplicate Default Instance", "Multi-attribute '%s': only one instance without datasetId allowed", childP->name);
-            return false;
-          }
-          hasDefault = true;
-        }
-        else
-        {
-          // Check for duplicate datasetId values among prior instances
-          for (KjNode* otherP = childP->value.firstChildP; otherP != instP; otherP = otherP->next)
-          {
-            KjNode* otherDsP = kjLookup(otherP, LD_VOCAB_DATASET_ID);
-
-            if (otherDsP != NULL && strcmp(dsP->value.s, otherDsP->value.s) == 0)
-            {
-              ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Duplicate datasetId", "Multi-attribute '%s': duplicate datasetId '%s'", childP->name, dsP->value.s);
-              return false;
-            }
-          }
-        }
-
-        // Validate the attribute instance itself
+      // Validate each surviving instance.
+      for (KjNode* instP = childP->value.firstChildP; instP != NULL; instP = instP->next)
+      {
         instP->name = childP->name;
         if (ldCheckAttribute(instP, op, dbAttrType, faP) == false)
           return false;
