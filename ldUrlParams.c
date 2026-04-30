@@ -38,6 +38,7 @@ char*       ldDefaultContextUrl  = NULL;
 const char* ldCsourceAliasBase   = NULL;
 long long   ldBrokerStartTimeSec = 0;
 const char* ldBrokerHttpEndpoint = NULL;
+KjNode*     ldContextSourceExtras = NULL;
 
 
 

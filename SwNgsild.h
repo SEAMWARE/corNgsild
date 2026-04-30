@@ -12,6 +12,8 @@
 #include <stdbool.h>                                     // bool
 #include <stdint.h>                                      // uint64_t
 
+#include "kjson/KjNode.h"                              // KjNode
+
 #include "swJsonld/SwldContext.h"                     // SwldContext
 #include "swNgsild/LdFormat.h"                           // LdFormat
 #include "swNgsild/LdGeoRel.h"                           // LdGeoRel
@@ -216,6 +218,16 @@ extern long long ldBrokerStartTimeSec;
 // distributed-subscription fanout.
 //
 extern const char* ldBrokerHttpEndpoint;
+
+
+
+// ldContextSourceExtras - optional opaque JSON config (§ 5.2.40) rendered
+// verbatim under /info/sourceIdentity → "contextSourceExtras". The spec
+// is explicit that this content shall NOT be expanded as JSON-LD, so the
+// tree is parsed once at startup and cloned into the response arena on
+// each request without going through @context. NULL when not configured.
+//
+extern KjNode* ldContextSourceExtras;
 
 
 
