@@ -25,6 +25,7 @@
 #include "swNgsild/SwNgsild.h"                           // swNgsild, ldParamHook
 #include "swNgsild/ldError.h"                            // ldError
 #include "swNgsild/ldEntityToApi.h"                      // ldEntityToApi
+#include "swNgsild/ldNameContentCheck.h"                 // ldCheckNamesAndContent
 #include "swNgsild/ldPickOmit.h"                         // ldPickOmit
 #include "swNgsild/ldToTemporalValues.h"                 // ldToTemporalValues
 #include "swNgsild/ldToAggregatedValues.h"               // ldToAggregatedValues, ldIso8601DurationToNs
@@ -353,6 +354,26 @@ static void ldParseHook(void)
     {
       swNgsild.contextError = true;
       return;
+    }
+  }
+
+  // § 4.6.2 / § 4.6.4 — name + content validation on the raw, pre-
+  // expansion entity tree. Only for entity payloads — Subscription /
+  // CSR carry idPattern regexes and other strings that legitimately
+  // include spec-forbidden chars.
+  {
+    bool isEntityPayloadPath = (swRest.in.urlPath != NULL
+                                && strncmp(swRest.in.urlPath, "/ngsi-ld/v1/entities", 20) == 0
+                                && strstr(swRest.in.urlPath, "/attrs/") == NULL);
+    bool isEntityBatchPath   = (swRest.in.urlPath != NULL
+                                && strncmp(swRest.in.urlPath, "/ngsi-ld/v1/entityOperations/", 29) == 0);
+    if (isEntityPayloadPath || isEntityBatchPath)
+    {
+      if (!ldCheckNamesAndContent(swRest.in.requestTree))
+      {
+        swNgsild.contextError = true;
+        return;
+      }
     }
   }
 
