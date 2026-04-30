@@ -14,12 +14,14 @@
 #include "kjson/kjBuilder.h"                        // kjChildRemove, kjChildAdd
 #include "kjson/kjNodeDecouple.h"                   // kjNodeDecouple
 #include "swRest/swRest.h"                             // swRest
+#include "swRest/SwRestService.h"                      // SwRestService.ldOp
 #include "swJsonld/swldInit.h"                             // swldCoreContext
 #include "swJsonld/swldExpandTree.h"                       // swldExpandTree
 #include "swJsonld/swldCompactTree.h"                      // swldCompactTree
 
 #include "swNgsild/LdProblem.h"                          // LD_ERROR_*
 #include "swNgsild/LdVocab.h"                            // LD_VOCAB_*
+#include "swNgsild/LdOp.h"                               // LdOpRetrieveEntity, LdOpQueryEntities
 #include "swNgsild/SwNgsild.h"                           // swNgsild, ldParamHook
 #include "swNgsild/ldError.h"                            // ldError
 #include "swNgsild/ldEntityToApi.h"                      // ldEntityToApi
@@ -596,10 +598,29 @@ static void ldRenderHook(void)
   //
   // § 6.3.4 Accept negotiation — q-weighted across the three NGSI-LD
   // media types. Highest q wins; equal q falls back to first-listed.
-  // Runs BEFORE compaction — geometryProperty is an expanded IRI and the
-  // tree still has expanded attr names at this point.
+  //
+  // 406 carve-out: geo+json by itself is acceptable on Retrieve Entity
+  // (§ 5.7.1) and Query Entities (§ 5.7.2) only; on every other operation
+  // a geo+json-only Accept is "Not Acceptable".
+  //
+  // None of the three is acceptable → 406 across the board.
+  //
+  // The check runs in the renderHook because read ops don't mutate
+  // state — replacing a 200 body with a 406 here is safe.
   //
   LdAcceptType acceptType    = ldAcceptParse(swRest.in.accept);
+  uint64_t     ldOp          = (swRest.serviceP != NULL) ? swRest.serviceP->ldOp : 0;
+  bool         entityReadOp  = (ldOp & (LdOpRetrieveEntity | LdOpQueryEntities)) != 0;
+
+  if (acceptType == LdAcceptNone ||
+      (acceptType == LdAcceptGeoJson && !entityReadOp))
+  {
+    ldError(406, LD_ERROR_INVALID_REQUEST, "Not Acceptable",
+            "supported response media types: application/json, application/ld+json%s",
+            entityReadOp ? ", application/geo+json" : "");
+    return;
+  }
+
   bool         acceptGeoJson = (acceptType == LdAcceptGeoJson);
   if (acceptGeoJson && treeP != NULL)
   {

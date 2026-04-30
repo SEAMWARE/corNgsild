@@ -149,9 +149,10 @@ LdAcceptType ldAcceptParse(const char* acceptHeader)
   if (qLdJson  == 0) qLdJson  = -1.0;
   if (qGeoJson == 0) qGeoJson = -1.0;
 
-  // No acceptable type → fall back to the spec's default representation.
+  // No acceptable type — § 6.3.4 mandates HTTP 406. The route layer
+  // makes that decision; we just signal "none acceptable".
   if (qJson < 0 && qLdJson < 0 && qGeoJson < 0)
-    return LdAcceptJson;
+    return LdAcceptNone;
 
   // Pick the highest q. Equal q → smallest first-appearance order wins.
   // Initialise with json as the spec-default to bias ties towards it
