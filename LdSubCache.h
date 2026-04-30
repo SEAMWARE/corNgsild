@@ -127,6 +127,7 @@ typedef struct LdSubCacheItem
   uint64_t                  cooldownNs;       // notification.endpoint.cooldown (§ 5.2.15) in ns; 0 = use 30s default
   int                       timeoutMs;        // notification.endpoint.timeout  (§ 5.2.15) in ms; 0 = use 10s default
   KjNode*                   receiverInfo;     // notification.endpoint.receiverInfo (§ 5.2.15) — Array of {key, value} from subTree, NULL if none
+  KjNode*                   notifierInfo;     // notification.endpoint.notifierInfo (§ 5.2.15) — used by transport-specific params (e.g. MQTT-QoS per § 7.2)
   char*                     notifJoin;        // notification.join (§ 5.2.14) — "flat" / "inline" / "@none" / NULL = absent
   int                       notifJoinLevel;   // notification.joinLevel (§ 5.2.14) — depth; 0 = absent (use spec default 1)
 

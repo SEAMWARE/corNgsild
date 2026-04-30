@@ -333,6 +333,12 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
   if (riP != NULL && riP->type == KjArray)
     itemP->receiverInfo = riP;
 
+  // § 5.2.15 endpoint.notifierInfo — KeyValuePair[] used by transport-
+  // specific protocol parameters (e.g. MQTT-QoS, MQTT-Version per § 7.2).
+  KjNode* niP = (endpointP != NULL) ? kjLookup(endpointP, "notifierInfo") : NULL;
+  if (niP != NULL && niP->type == KjArray)
+    itemP->notifierInfo = niP;
+
   // § 5.2.14 notification.join + notification.joinLevel — linked-entity retrieval (§ 4.5.23)
   KjNode* joinP      = (notifP != NULL) ? kjLookup(notifP, "join")      : NULL;
   KjNode* joinLevelP = (notifP != NULL) ? kjLookup(notifP, "joinLevel") : NULL;

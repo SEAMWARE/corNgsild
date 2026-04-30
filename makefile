@@ -83,6 +83,7 @@ LIB_SOURCES   = swNgsild.c \
                 ldDistMerge.c \
                 ldDatasetIdDedup.c \
                 ldNameContentCheck.c \
+                ldMqttNotify.c \
                 ldRequestSubstitute.c \
                 ldLinkedEntitiesHook.c \
                 ldExpiresAtPropagate.c \
@@ -126,7 +127,7 @@ $(LIB):			$(LIB_OBJS) $(LIB_SOURCES)
 $(LIB_SO):	$(LIB_OBJS) $(LIB_SOURCES)
 					$(CC) -shared $(LIB_OBJS) -o $(LIB_SO) \
 						-L../swRest -L../swJsonld -L../kalloc -L../kjson -L../kbase -L../klog -L../ktrace -L../khash \
-						-lswRest -lswJsonld -lkalloc -lkjson -lkbase -lklog -lktrace -lkhash -lmicrohttpd -lssl -lcrypto -lpthread \
+						-lswRest -lswJsonld -lkalloc -lkjson -lkbase -lklog -lktrace -lkhash -lmicrohttpd -lssl -lcrypto -lpthread -lmosquitto \
 						-Wl,-rpath,'$$ORIGIN/../swRest:$$ORIGIN/../swJsonld:$$ORIGIN/../kalloc:$$ORIGIN/../kjson:$$ORIGIN/../kbase:$$ORIGIN/../klog:$$ORIGIN/../ktrace:$$ORIGIN/../khash'
 
 %.o: %.c

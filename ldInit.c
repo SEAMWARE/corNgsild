@@ -16,6 +16,7 @@
 #include "swNgsild/ldError.h"                            // ldError
 #include "swNgsild/LdProblem.h"                          // LD_ERROR_BAD_REQUEST_DATA
 #include "swNgsild/ldHooks.h"                            // ldHooksRegister
+#include "swNgsild/ldMqttNotify.h"                       // ldMqttInit
 #include "swNgsild/ldInit.h"                             // Own interface
 
 
@@ -96,6 +97,10 @@ int ldInit(void)
 
   ldHooksRegister();
   swldSetVocabExpandCheck(ldVocabNameCheck);
+
+  // libmosquitto global init for MQTT notifications (§ 7).
+  if (ldMqttInit() != 0)
+    return -1;
 
   ldInitialized = true;
   return 0;

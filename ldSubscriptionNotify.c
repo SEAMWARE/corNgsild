@@ -48,6 +48,7 @@
 #include "swNgsild/ldNotifyStatsHook.h"                // ldNotifyStatsHookInvoke
 #include "swNgsild/ldRequestSubstitute.h"              // ldRequestSubstitute
 #include "swNgsild/ldLinkedEntitiesHook.h"             // ldLinkedEntitiesHookInvoke
+#include "swNgsild/ldMqttNotify.h"                     // ldIsMqttUri, ldMqttNotify
 #include "swNgsild/ldSubscriptionNotify.h"             // Own interface
 
 
@@ -553,16 +554,7 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   kjFastRender(notification, body);
 
   //
-  // Send HTTP POST
-  //
-  SwRestClientRequest  req;
-  SwRestClientResponse resp;
-
-  swRestClientRequestInit(&req, SwVerbPost, itemP->endpointUri, NULL);
-  swRestClientRequestHeader(&req, "Content-Type", "application/json");
-
-  //
-  // Link header with the @context URL for the notification
+  // Compute Link header — needed for both HTTP and MQTT paths.
   //
   const char* ctxUrl = itemP->contextUrl;
   if (ctxUrl == NULL)
@@ -572,14 +564,50 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
       ctxUrl = coreP->url;
   }
 
+  char linkBuf[512];
+  linkBuf[0] = 0;
   if (ctxUrl != NULL)
   {
-    char linkBuf[512];
     snprintf(linkBuf, sizeof(linkBuf),
              "<%s>; rel=\"http://www.w3.org/ns/json-ld#context\"; type=\"application/ld+json\"",
              ctxUrl);
-    swRestClientRequestHeader(&req, "Link", linkBuf);
   }
+
+  //
+  // MQTT delivery path (§ 7) — when endpoint.uri is mqtt[s]://...
+  //
+  if (ldIsMqttUri(itemP->endpointUri))
+  {
+    bool ok = ldMqttNotify(itemP->endpointUri, body,
+                           "application/json",
+                           (linkBuf[0] != 0) ? linkBuf : NULL,
+                           itemP->receiverInfo,
+                           itemP->notifierInfo);
+
+    itemP->timesSent       += 1;
+    itemP->lastNotification = swRest.requestStartTime;
+    if (ok)
+      itemP->lastSuccess = swRest.requestStartTime;
+    else
+    {
+      itemP->timesFailed += 1;
+      itemP->lastFailure  = swRest.requestStartTime;
+    }
+    ldNotifyStatsHookInvoke(false /*csrSub*/, ok);
+    return;
+  }
+
+  //
+  // Send HTTP POST
+  //
+  SwRestClientRequest  req;
+  SwRestClientResponse resp;
+
+  swRestClientRequestInit(&req, SwVerbPost, itemP->endpointUri, NULL);
+  swRestClientRequestHeader(&req, "Content-Type", "application/json");
+
+  if (linkBuf[0] != 0)
+    swRestClientRequestHeader(&req, "Link", linkBuf);
 
   // § 5.2.15 endpoint.receiverInfo — emit each {key,value} as a request header
   if (itemP->receiverInfo != NULL && itemP->receiverInfo->type == KjArray)
