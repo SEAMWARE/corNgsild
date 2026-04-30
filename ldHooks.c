@@ -29,6 +29,7 @@
 #include "swNgsild/ldToGeoJson.h"                        // ldToGeoJson
 #include "swNgsild/ldStripSysAttrs.h"                    // ldStripSysAttrs
 #include "swNgsild/ldLangReduce.h"                       // ldLangReduce
+#include "swNgsild/ldAcceptParse.h"                      // ldAcceptParse, LdAcceptType
 #include "swNgsild/ldRender.h"                           // ldToSimplified, ldToConcise
 #include "swNgsild/LdNormalizeInput.h"                    // ldNormalizeInput
 #include "swNgsild/ldHooks.h"                            // Own interface
@@ -593,11 +594,13 @@ static void ldRenderHook(void)
   }
 
   //
-  // GeoJSON representation: Accept: application/geo+json
+  // § 6.3.4 Accept negotiation — q-weighted across the three NGSI-LD
+  // media types. Highest q wins; equal q falls back to first-listed.
   // Runs BEFORE compaction — geometryProperty is an expanded IRI and the
   // tree still has expanded attr names at this point.
   //
-  bool acceptGeoJson = (swRest.in.accept != NULL && strstr(swRest.in.accept, "application/geo+json") != NULL);
+  LdAcceptType acceptType    = ldAcceptParse(swRest.in.accept);
+  bool         acceptGeoJson = (acceptType == LdAcceptGeoJson);
   if (acceptGeoJson && treeP != NULL)
   {
     ldToGeoJson(&swRest.out.responseTree, swNgsild.geometryProperty, swRest.kjsonP);
@@ -628,7 +631,7 @@ static void ldRenderHook(void)
 
   SwldContext* ctxP   = (swNgsild.contextP != NULL) ? swNgsild.contextP : swldCoreContext();
   const char*  ctxUrl = (ctxP != NULL) ? ctxP->url : NULL;
-  bool         acceptLdJson = (swRest.in.accept != NULL && strstr(swRest.in.accept, "application/ld+json") != NULL);
+  bool         acceptLdJson = (acceptType == LdAcceptLdJson);
 
   if (acceptLdJson && ctxUrl != NULL)
   {
