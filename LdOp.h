@@ -92,7 +92,15 @@ typedef enum LdOp
   LdOpDeleteTemporal                 = 1ULL << 44,   // § 5.6.16 — DELETE /temporal/entities/{id}
   LdOpRetrieveTemporal               = 1ULL << 45,   // § 5.7.3 — GET /temporal/entities/{id}
   LdOpQueryTemporal                  = 1ULL << 46,   // § 5.7.4 — GET /temporal/entities
-  LdOpCreateEntityMapQueryTemporal   = 1ULL << 47    // § 5.14.5 — entity-map for temporal query
+  LdOpCreateEntityMapQueryTemporal   = 1ULL << 47,   // § 5.14.5 — entity-map for temporal query
+
+  // Snapshot ops (§ 5.16). Implicitly local; not forwardable.
+  LdOpCreateSnapshot                 = 1ULL << 48,   // § 5.16.1
+  LdOpCloneSnapshot                  = 1ULL << 49,   // § 5.16.2
+  LdOpRetrieveSnapshot               = 1ULL << 50,   // § 5.16.3
+  LdOpUpdateSnapshot                 = 1ULL << 51,   // § 5.16.4
+  LdOpDeleteSnapshot                 = 1ULL << 52,   // § 5.16.5
+  LdOpPurgeSnapshots                 = 1ULL << 53    // § 5.16.7
 } LdOp;
 
 

@@ -157,6 +157,12 @@ const char* ldOpToString(LdOp op)
   case LdOpRetrieveTemporal:                return "RetrieveTemporal";
   case LdOpQueryTemporal:                   return "QueryTemporal";
   case LdOpCreateEntityMapQueryTemporal:    return "CreateEntityMapQueryTemporal";
+  case LdOpCreateSnapshot:                  return "CreateSnapshot";
+  case LdOpCloneSnapshot:                   return "CloneSnapshot";
+  case LdOpRetrieveSnapshot:                return "RetrieveSnapshot";
+  case LdOpUpdateSnapshot:                  return "UpdateSnapshot";
+  case LdOpDeleteSnapshot:                  return "DeleteSnapshot";
+  case LdOpPurgeSnapshots:                  return "PurgeSnapshots";
   }
 
   return "Unknown";
