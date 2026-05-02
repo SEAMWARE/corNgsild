@@ -105,7 +105,12 @@ typedef struct LdSubCacheItem
   // Subscription state (borrowed pointers into subTree)
   char*                     status;         // "active", "paused", "expired"
   char*                     endpointUri;    // notification.endpoint.uri
+  char*                     endpointAccept; // notification.endpoint.accept (§ 5.2.15): application/json | application/ld+json | application/geo+json (NULL = json)
   char*                     contextUrl;     // jsonldContext URL for notification compaction
+  // ngsildConformance (§ 5.2.12 / § 4.3.6.8) — request notifications conformant
+  // to an older NGSI-LD spec version. 0/0 = absent (no downgrade).
+  short                     conformanceMajor;
+  short                     conformanceMinor;
   char*                     format;         // notification format: NULL=normalized, "simplified", "concise"
   bool                      sysAttrs;       // notification.sysAttrs (default false)
   bool                      showChanges;    // notification.showChanges (default false) — implies previousValue/Object/LanguageMap
@@ -124,6 +129,7 @@ typedef struct LdSubCacheItem
   int                       lastFlushedSent;
   int                       lastFlushedFailed;
   double                    throttling;       // minimum seconds between notifications
+  int                       timeInterval;     // § 5.11.7 periodic CSR-Sub notification period in seconds (0 = change-driven only)
   uint64_t                  cooldownNs;       // notification.endpoint.cooldown (§ 5.2.15) in ns; 0 = use 30s default
   int                       timeoutMs;        // notification.endpoint.timeout  (§ 5.2.15) in ms; 0 = use 10s default
   KjNode*                   receiverInfo;     // notification.endpoint.receiverInfo (§ 5.2.15) — Array of {key, value} from subTree, NULL if none

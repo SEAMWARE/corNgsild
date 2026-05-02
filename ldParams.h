@@ -67,6 +67,7 @@
 #define LD_PARAM_KEEP                  (1ULL << 45)  // Purge § 6.4.3.3 — exclusionary attr list
 #define LD_PARAM_JOIN                  (1ULL << 46)  // § 4.5.23 — flat | inline | @none
 #define LD_PARAM_JOIN_LEVEL            (1ULL << 47)  // § 4.5.23 — depth limit for linked-entity walk
+#define LD_PARAM_CONTAINED_BY          (1ULL << 48)  // § 5.7.1.4 — visited-set seed for cycle prevention in linked-entity retrieval
 
 
 
@@ -107,6 +108,7 @@
   | LD_PARAM_SPLIT_ENTITIES      \
   | LD_PARAM_JOIN                \
   | LD_PARAM_JOIN_LEVEL          \
+  | LD_PARAM_CONTAINED_BY        \
   )
 
 #define LD_PARAMS_GET_ENTITY     \
@@ -125,6 +127,7 @@
   | LD_PARAM_LOCAL               \
   | LD_PARAM_JOIN                \
   | LD_PARAM_JOIN_LEVEL          \
+  | LD_PARAM_CONTAINED_BY        \
   )
 
 #define LD_PARAMS_POST_ENTITIES  ( LD_PARAM_LOCAL )
@@ -175,6 +178,7 @@
 #define LD_PARAMS_DELETE_TEMPORAL_ATTR  \
   ( LD_PARAM_DATASETID  \
   | LD_PARAM_DELETE_ALL \
+  | LD_PARAM_LOCAL      \
   )
 
 // GET /temporal/entities/{id} — § 5.7.3 / § 6.19.3.1.
@@ -197,6 +201,7 @@
   | LD_PARAM_SYSATTRS      \
   | LD_PARAM_EXPAND_VALUES \
   | LD_PARAM_JSON_KEYS     \
+  | LD_PARAM_LOCAL         \
   )
 
 #define LD_PARAMS_POST_ENTITY_ATTRS  \
@@ -233,6 +238,16 @@
 #define LD_PARAMS_REPLACE_ENTITY  ( LD_PARAM_TYPE | LD_PARAM_LOCAL )
 
 #define LD_PARAMS_DELETE_ENTITY   ( LD_PARAM_TYPE | LD_PARAM_LOCAL )
+
+// Purge Snapshots (§ 5.16.7) — only `q` is meaningful (selects which
+// snapshots to purge based on members of the Snapshot data type).
+#define LD_PARAMS_PURGE_SNAPSHOTS  ( LD_PARAM_Q )
+
+// Create Snapshot (§ 5.16.1). splitEntities=false skips the split-mode
+// post-merge filter scan during capture (only valid if every entity is
+// fully held by one source — see --noSplitEntities broker flag for the
+// system-wide default).
+#define LD_PARAMS_POST_SNAPSHOT  ( LD_PARAM_SPLIT_ENTITIES )
 
 // Purge Entities (§ 5.6.21 / § 6.4.3.3)
 #define LD_PARAMS_PURGE_ENTITIES  \

@@ -62,6 +62,7 @@ LIB_SOURCES   = swNgsild.c \
                 ldStatsFlushLoop.c \
                 ldPernotCache.c \
                 ldPernotLoop.c \
+                ldPeriodicLoop.c \
                 ldEntityMap.c \
                 ldQueryBody.c \
                 ldRegCache.c \
@@ -85,10 +86,13 @@ LIB_SOURCES   = swNgsild.c \
                 ldNameContentCheck.c \
                 ldMqttNotify.c \
                 ldSnapshotCache.c \
+                ldSnapshotNotify.c \
+                ldIso8601Duration.c \
                 ldRequestSubstitute.c \
                 ldLinkedEntitiesHook.c \
                 ldExpiresAtPropagate.c \
-                ldAcceptParse.c
+                ldAcceptParse.c \
+                ldConformanceDowngrade.c
 LIB_OBJS      = $(LIB_SOURCES:c=o)
 LIB_DEPS      = $(LIB_SOURCES:c=d)
 

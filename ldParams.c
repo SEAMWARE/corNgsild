@@ -69,6 +69,7 @@ SwRestParam ldParamRegistryV[] =
   { "splitEntities",         LD_PARAM_SPLIT_ENTITIES },
   { "join",                  LD_PARAM_JOIN },
   { "joinLevel",             LD_PARAM_JOIN_LEVEL },
+  { "containedBy",           LD_PARAM_CONTAINED_BY },
   { NULL,                    0 }
 };
 

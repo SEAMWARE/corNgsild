@@ -295,6 +295,30 @@ void ldParamHook(const char* name, const char* value)
     }
     swNgsild.joinLevel = n;
   }
+  else if (strcmp(name, "containedBy") == 0)
+  {
+    // § 5.7.1.4 — entity ids already encountered while traversing the
+    // entity graph. Empty array is explicitly forbidden.
+    if (value == NULL || value[0] == 0)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid request",
+              "'containedBy' shall not be empty");
+      return;
+    }
+
+    swNgsild.containedByV = ldParamSplit((char*) value, faP);
+
+    int n = 0;
+    if (swNgsild.containedByV != NULL)
+      while (swNgsild.containedByV[n] != NULL) n++;
+    if (n == 0)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid request",
+              "'containedBy' shall not be empty");
+      return;
+    }
+    swNgsild.containedByCount = n;
+  }
   else if (strcmp(name, "options") == 0)
   {
     // Deprecated comma-separated param.  Wrap with commas for safe substring matching:

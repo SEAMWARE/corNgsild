@@ -36,6 +36,24 @@ typedef struct LdEntityMapEntry
 
 // -----------------------------------------------------------------------------
 //
+// LdEntityMapLink - one (CSR id → remote EntityMap id) mapping
+//
+// § 5.14.4.4: when a distributed EntityMap creation forwards POST /entityMap
+// to a CSR, the CP returns its own (local-to-it) EntityMap. The local broker
+// records the (CSR.regId → remote-EntityMap.id) pair so that subsequent
+// pagination can re-use the CP's frozen snapshot instead of re-querying.
+//
+typedef struct LdEntityMapLink
+{
+  char*                    csrId;         // CSR registration id (malloc'd)
+  char*                    remoteMapId;   // remote EntityMap id at that CSR (malloc'd)
+  struct LdEntityMapLink*  next;
+} LdEntityMapLink;
+
+
+
+// -----------------------------------------------------------------------------
+//
 // LdEntityMap - cached entity map
 //
 typedef struct LdEntityMap
@@ -45,6 +63,8 @@ typedef struct LdEntityMap
   LdEntityMapEntry*    head;           // linked list of entries
   LdEntityMapEntry*    tail;
   int                  entryCount;     // total entries
+  LdEntityMapLink*     linkedHead;     // linked-maps list (CSR → remote map)
+  LdEntityMapLink*     linkedTail;
   void*                tenantP;        // owning tenant (opaque)
   struct LdEntityMap*  next;           // linked list in store
 } LdEntityMap;

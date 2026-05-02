@@ -42,6 +42,7 @@
 
 #include "swNgsild/LdSubCache.h"                       // LdSubCacheItem, LdSubEntitySelector
 #include "swNgsild/LdRegCache.h"                       // LdRegCache, LdRegCacheItem, LdRegInfo, LdRegEntityInfo
+#include "swNgsild/ldPeriodicLoop.h"                   // ldPeriodicLoopRegister
 #include "swNgsild/swNgsild.h"                         // swNgsild (for tenant access via opaque)
 #include "swNgsild/ldNotifyStatsHook.h"                // ldNotifyStatsHookInvoke
 #include "swNgsild/ldRequestSubstitute.h"              // ldRequestSubstitute
@@ -518,4 +519,98 @@ void ldCsrSubOnRegUpdate(LdSubCache* regSubCacheP,
 
     sendCsourceNotification(subItemP, oneItem, 1, triggerReason);
   }
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldCsrSubPeriodicTick - § 5.11.7 periodic CSR-Subscription notifications.
+//
+// Registered with the periodic-dispatch engine. Walks the CSR-Sub cache;
+// for each item with timeInterval > 0 whose lastNotification + interval
+// has elapsed, collects the currently-matching CSRs and POSTs a single
+// CsourceNotification with triggerReason="updated".
+//
+// `ctx` is the LdSubCache* (regSubCacheP) passed at registration time;
+// the regCacheP is read out of the same tenant via the cached `tenantP`
+// field of the cache wrapper. We pass it through cacheP->regCacheP which
+// the registration site sets for us (see ldCsrSubPeriodicLoopRegister).
+//
+// `kaP` is per-tick scratch from the engine (already reset before this
+// callback fires).
+//
+typedef struct
+{
+  LdSubCache*  regSubCache;
+  LdRegCache*  regCache;
+} CsrSubTickCtx;
+
+
+static CsrSubTickCtx tickCtxStorage;
+
+
+static void csrSubPeriodicTick(void* ctx, uint64_t now, KAlloc* kaP)
+{
+  (void) kaP;  // sendCsourceNotification reaches into swRest.kalloc directly
+
+  CsrSubTickCtx* tcP = (CsrSubTickCtx*) ctx;
+  if (tcP == NULL || tcP->regSubCache == NULL || tcP->regCache == NULL) return;
+
+  for (LdSubCacheItem* subItemP = tcP->regSubCache->itemList;
+       subItemP != NULL;
+       subItemP = subItemP->next)
+  {
+    // Periodic-only path: skip change-driven CSR-subs.
+    if (subItemP->timeInterval <= 0) continue;
+
+    // Status / expiration gating (mirror of pernot tick — same § 5.2.12 rules).
+    if (subItemP->status != NULL && strcmp(subItemP->status, "active") != 0)
+      continue;
+    if (subItemP->expiresAt > 0 && subItemP->expiresAt <= now)
+      continue;
+    if (subItemP->endpointUri == NULL)
+      continue;
+
+    uint64_t intervalNs = (uint64_t) subItemP->timeInterval * 1000000000ULL;
+    if (subItemP->lastNotification + intervalNs > now)
+      continue;
+
+    // Collect currently-matching CSRs.
+    int cap = 16;
+    LdRegCacheItem** matchV = (LdRegCacheItem**) kaAlloc(&swRest.kalloc, cap * sizeof(LdRegCacheItem*));
+    int n = 0;
+    for (LdRegCacheItem* regItemP = tcP->regCache->itemList; regItemP != NULL; regItemP = regItemP->next)
+    {
+      if (!subMatchesReg(subItemP, regItemP)) continue;
+      if (n == cap)
+      {
+        int newCap = cap * 2;
+        LdRegCacheItem** nv = (LdRegCacheItem**) kaAlloc(&swRest.kalloc, newCap * sizeof(LdRegCacheItem*));
+        for (int i = 0; i < n; i++) nv[i] = matchV[i];
+        matchV = nv;
+        cap    = newCap;
+      }
+      matchV[n++] = regItemP;
+    }
+
+    if (n > 0)
+      sendCsourceNotification(subItemP, matchV, n, "updated");
+    else
+      // No matches — still update lastNotification so we honour the
+      // cadence rather than busy-looping every tick on an empty match set.
+      subItemP->lastNotification = now;
+  }
+}
+
+
+
+void ldCsrSubPeriodicLoopRegister(LdSubCache* regSubCacheP, LdRegCache* regCacheP)
+{
+  // Single-tenant for now (broker-wide tenant0). Multi-tenant requires
+  // either one registration per tenant or a shared lookup keyed on
+  // subItem->tenantP — defer until multi-tenant CSR-subs are exercised.
+  tickCtxStorage.regSubCache = regSubCacheP;
+  tickCtxStorage.regCache    = regCacheP;
+  ldPeriodicLoopRegister(csrSubPeriodicTick, &tickCtxStorage);
 }

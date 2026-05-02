@@ -10,11 +10,13 @@
 //
 // In-memory cache of NGSI-LD Snapshots (§ 5.16, § 5.2.41).
 //
-// Phase 1: bare CRUD store. Each snapshot is held as a deep-cloned
-// KjNode tree owned by the cache's allocator, plus a couple of
-// hot-access fields broken out for fast lookup. No async query
-// execution, no entity storage tied to the snapshot, no
-// snapshot-aware querying yet. Those land in later phases.
+// The cache holds metadata only — the snapshot tree (id, status,
+// query criteria, timestamps, priority) and a borrowed pointer to
+// the snapshot's own tenant (`snapTenantP`). Frozen entity bodies
+// live in the DB tenant identified by snapTenantP; reads route
+// through it via the standard db.entityQuery / db.entityRetrieve
+// path. This keeps the cache size bounded regardless of the
+// snapshot's entity count (TB-scale captures stream straight to DB).
 //
 // One cache per tenant, hung off Tenant::snapshotCacheP.
 //
@@ -53,6 +55,8 @@ typedef struct LdSnapshotCacheItem
 {
   char*                         id;             // URI; either client-supplied or auto-generated
   KjNode*                       tree;           // canonical Snapshot doc (clone owned by cache alloc)
+  void*                         snapTenantP;    // Tenant* — the snapshot's own DB tenant (entity store)
+  int                           snapSeq;        // monotonic per-tenant sequence; suffixes the snap-tenant name
   LdSnapshotStatus              status;
   uint64_t                      createdAt;      // ns since epoch
   uint64_t                      modifiedAt;     // ns since epoch
@@ -72,6 +76,7 @@ typedef struct LdSnapshotCache
 {
   LdSnapshotCacheItem*  head;
   int                   count;
+  int                   nextSnapSeq;     // assigned to itemP->snapSeq on add; bumped at boot reload to max+1
   KAlloc                alloc;
   char                  allocBuf[16 * 1024];
 } LdSnapshotCache;

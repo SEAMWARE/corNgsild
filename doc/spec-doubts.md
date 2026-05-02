@@ -511,6 +511,53 @@ contextSourceInfo.
 
 ---
 
+## 18. § 5.16.1.4 — snapshot capture from CSRs in no-split deployments
+
+**Hit:** § 5.16.1.4 says snapshot queries are executed "following the
+behaviour described in clause 5.7.2.4" (the distributed-query path).
+§ 5.7.2.4 in turn covers two regimes:
+1. *split entities*: each Entity may be sharded across multiple CSRs;
+   the broker must forward queries unfiltered, merge per-Attribute (§
+   4.5.5.3), and re-apply filters post-assembly (§ 5.5.9.3).
+2. *no-split*: every Entity is fully held by one source — used by the
+   `splitEntities=false` URL param (§ 5.2.23) and indirectly by some
+   broker-wide configuration switches.
+
+For *snapshot creation* in particular, the no-split regime is enormously
+faster because:
+- the query can be forwarded WITH filters to each CSR,
+- responses are simple inserts into the snapshot's storage (no merge),
+- no post-merge filter scan over the captured set is needed.
+
+**Spec:** § 5.16.1.4 doesn't acknowledge the split/no-split distinction
+at all, just defers to § 5.7.2.4. Nothing forbids a broker from honouring
+`splitEntities=false` on snapshot creation, but it's also not made
+explicit. § 5.2.41 (Snapshot data type) doesn't list `splitEntities` as
+a member of the Snapshot doc, and § 6.3.22 (NGSILD-Snapshot binding)
+defines no URL params for the create endpoint.
+
+**Our call:** allow `?splitEntities=true|false` on `POST /snapshots`,
+parsed into the same `swNgsild.splitEntitiesSet/Val` used by `GET
+/entities`. Default is the broker's `--noSplitEntities` setting. In
+no-split mode capture forwards filters to CSRs, dedupes by id when
+streaming into the snap-tenant ("first writer wins"), and skips the
+post-merge filter scan. Split-mode is a follow-up.
+
+**Fix wanted:**
+- § 5.16.1 should say explicitly that snapshot creation MAY accept
+  `splitEntities` per § 5.2.23, with the same semantics as on `GET
+  /entities`.
+- § 6.3.22 should list URL params accepted on `POST /snapshots`, or
+  point to § 5.7.2 / § 5.2.23 for the allowed set (so brokers don't
+  diverge on which params apply where).
+- § 5.16.1.4 step "execute the Queries … following clause 5.7.2.4"
+  should make the split / no-split branches of 5.7.2.4 explicit, since
+  the implementations are very different on capture cost (TB-scale
+  snapshots are practical only in no-split mode without Phase-2c
+  per-attribute-merge work).
+
+---
+
 ## Template for new entries
 
 ```

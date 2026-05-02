@@ -250,6 +250,28 @@ int ldDistOpSendReceive(LdRegCacheItem*  csr,
                         char**           responseBodyPP,
                         int*             responseBodyLenP)
 {
+  return ldDistOpSendReceiveEx(csr, verb, url, body, bodyLen, ownAlias,
+                               NULL, 0, errorDetailPP, responseBodyPP, responseBodyLenP);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldDistOpSendReceiveEx -
+//
+int ldDistOpSendReceiveEx(LdRegCacheItem*  csr,
+                          SwRestVerb       verb,
+                          const char*      url,
+                          const char*      body,
+                          int              bodyLen,
+                          const char*      ownAlias,
+                          SwRestKeyValue*  extraHeaderV,
+                          int              extraHeaderCount,
+                          const char**     errorDetailPP,
+                          char**           responseBodyPP,
+                          int*             responseBodyLenP)
+{
   if (errorDetailPP   != NULL) *errorDetailPP   = NULL;
   if (responseBodyPP  != NULL) *responseBodyPP  = NULL;
   if (responseBodyLenP != NULL) *responseBodyLenP = 0;
@@ -264,6 +286,16 @@ int ldDistOpSendReceive(LdRegCacheItem*  csr,
 
   int             hc = 0;
   SwRestKeyValue* hv = buildHeaders(verb, ownAlias, csr->tenant, csr->contextSourceInfoKV, &hc);
+
+  // Append optional extra headers (e.g. NGSILD-EntityMap for entity-map distops)
+  if (extraHeaderV != NULL && extraHeaderCount > 0)
+  {
+    SwRestKeyValue* merged = (SwRestKeyValue*) kaAlloc(&swRest.kalloc, (hc + extraHeaderCount) * sizeof(SwRestKeyValue));
+    for (int i = 0; i < hc; i++) merged[i] = hv[i];
+    for (int i = 0; i < extraHeaderCount; i++) merged[hc + i] = extraHeaderV[i];
+    hv = merged;
+    hc += extraHeaderCount;
+  }
 
   LdForwardRequest  req;
   LdForwardResponse resp;

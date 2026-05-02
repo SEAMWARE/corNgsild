@@ -25,6 +25,7 @@
 #include "swNgsild/ldCheckDateTime.h"                  // ldCheckDateTime
 #include "swJsonld/swldExpand.h"                       // swldExpand, swldAlreadyExpanded
 #include "swNgsild/ldSubscriptionNotify.h"              // ldTriggerFromString
+#include "swNgsild/ldConformanceDowngrade.h"            // ldConformanceParse
 #include "swNgsild/ldQParse.h"                         // ldQParse
 #include "swNgsild/ldSubCache.h"                       // Own interface
 
@@ -308,6 +309,23 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
   KjNode* endpointP = (notifP != NULL) ? kjLookup(notifP, LD_VOCAB_ENDPOINT) : NULL;
   KjNode* uriP      = (endpointP != NULL) ? kjLookup(endpointP, LD_VOCAB_URI) : NULL;
   itemP->endpointUri = (uriP != NULL && uriP->type == KjString) ? uriP->value.s : NULL;
+
+  // § 5.2.15 endpoint.accept — application/json | application/ld+json |
+  // application/geo+json. Accepted both expanded and short forms.
+  KjNode* acceptP = NULL;
+  if (endpointP != NULL)
+  {
+    acceptP = kjLookup(endpointP, "https://uri.etsi.org/ngsi-ld/accept");
+    if (acceptP == NULL) acceptP = kjLookup(endpointP, "accept");
+  }
+  itemP->endpointAccept = (acceptP != NULL && acceptP->type == KjString) ? acceptP->value.s : NULL;
+
+  // § 5.2.12 / § 4.3.6.8 ngsildConformance — back-compat target version
+  KjNode* ncP = kjLookup(itemP->subTree, "ngsildConformance");
+  itemP->conformanceMajor = 0;
+  itemP->conformanceMinor = 0;
+  if (ncP != NULL && ncP->type == KjString)
+    ldConformanceParse(ncP->value.s, &itemP->conformanceMajor, &itemP->conformanceMinor);
 
   // § 5.2.15 endpoint.cooldown — minimum delay (ms) before retrying after
   // a failure on the same endpoint. Convert to ns; 0 means "use the default".

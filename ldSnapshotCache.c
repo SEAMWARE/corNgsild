@@ -123,6 +123,12 @@ LdSnapshotCacheItem* ldSnapshotCacheItemAdd(LdSnapshotCache* cacheP, KjNode* sna
   // expiresAt computed by caller; default to 1h from now.
   itemP->expiresAt  = swRest.requestStartTime + 3600ULL * 1000000000ULL;
 
+  // Monotonic per-tenant sequence — used to name the snap-tenant DB
+  // (see snapshotTenantCreate). Reload at boot bumps nextSnapSeq to
+  // max(persisted snapSeq) + 1 so newly-created snapshots never reuse
+  // a name that's still on disk.
+  itemP->snapSeq = cacheP->nextSnapSeq++;
+
   itemP->next  = cacheP->head;
   cacheP->head = itemP;
   cacheP->count++;

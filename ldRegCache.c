@@ -762,10 +762,12 @@ static bool attrInfoMatches(LdRegInfo* riP, char** attrsV)
 
 // -----------------------------------------------------------------------------
 //
-// riDiscoveryMatches - § 5.12 match of a single RegistrationInfo against
-// the discovery filters: AND across (type, entityId, idRegex, attrsV).
+// ldRegInfoDiscoveryMatches - § 5.12 match of a single RegistrationInfo
+// against the discovery filters: AND across (type, entityId, idRegex,
+// attrsV). Public so getCsourceRegistrations can reuse the same logic
+// for per-RegInfo response filtering (§ 5.10.2.5).
 //
-static bool riDiscoveryMatches(LdRegInfo*     riP,
+bool ldRegInfoDiscoveryMatches(LdRegInfo*     riP,
                                const char*    entityId,
                                char**         typeV,
                                const regex_t* idRegex,
@@ -820,7 +822,7 @@ static bool itemDiscoveryMatches(LdRegCacheItem* itemP,
 {
   for (LdRegInfo* riP = itemP->infoV; riP != NULL; riP = riP->next)
   {
-    if (riDiscoveryMatches(riP, entityId, typeV, idRegex, attrsV))
+    if (ldRegInfoDiscoveryMatches(riP, entityId, typeV, idRegex, attrsV))
       return true;
   }
   return false;

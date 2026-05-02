@@ -12,6 +12,7 @@
 #include "kbase/kLibLog.h"                             // KLOG_T
 #include "kalloc/KAlloc.h"                             // KAlloc
 #include "kjson/KjNode.h"                               // KjNode
+#include "kjson/kjLookup.h"                            // kjLookup
 
 #include "swNgsild/LdOp.h"                               // LdOp
 #include "swNgsild/LdCheck.h"                            // OBJECT_CHECK, STRING_CHECK, ...
@@ -19,7 +20,67 @@
 #include "swNgsild/ldTypes.h"                            // ldOpToString
 #include "swNgsild/ldError.h"                            // ldError
 #include "swNgsild/ldCheckSubscription.h"                // Own interface
+#include "swNgsild/ldConformanceDowngrade.h"             // ldConformanceParse
 #include "swNgsild/ldTraceLevels.h"                      // LdTCheckSub
+
+
+
+// -----------------------------------------------------------------------------
+//
+// checkNotifierInfo - validate notification.endpoint.notifierInfo (§ 5.2.15 / § 7.2 Table 7.2-1)
+//
+// Each item must be {key:string, value:string}. MQTT-QoS must be 0/1/2;
+// MQTT-Version must be mqtt3.1.1 or mqtt5.0.
+//
+static bool checkNotifierInfo(KjNode* niP)
+{
+  ARRAY_CHECK(niP, "Invalid Subscription", "'notification.endpoint.notifierInfo' must be an array");
+
+  for (KjNode* kvP = niP->value.firstChildP; kvP != NULL; kvP = kvP->next)
+  {
+    if (kvP->type != KjObject)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
+              "'notification.endpoint.notifierInfo' items must be objects");
+      return false;
+    }
+
+    KjNode* kP = kjLookup(kvP, "key");
+    KjNode* vP = kjLookup(kvP, "value");
+
+    if (kP == NULL || kP->type != KjString || vP == NULL || vP->type != KjString)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
+              "'notification.endpoint.notifierInfo' items must be {key:string, value:string}");
+      return false;
+    }
+
+    if (strcasecmp(kP->value.s, "MQTT-QoS") == 0)
+    {
+      if (strcmp(vP->value.s, "0") != 0 &&
+          strcmp(vP->value.s, "1") != 0 &&
+          strcmp(vP->value.s, "2") != 0)
+      {
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
+                "'MQTT-QoS' must be '0', '1', or '2'");
+        return false;
+      }
+    }
+    else if (strcasecmp(kP->value.s, "MQTT-Version") == 0)
+    {
+      if (strcasecmp(vP->value.s, "mqtt3.1.1") != 0 &&
+          strcasecmp(vP->value.s, "mqtt5.0")   != 0)
+      {
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
+                "'MQTT-Version' must be 'mqtt3.1.1' or 'mqtt5.0'");
+        return false;
+      }
+    }
+    // Other keys: accept transparently (forward to subscriber broker as-is).
+  }
+
+  return true;
+}
 
 
 
@@ -53,7 +114,11 @@ static bool checkEndpoint(KjNode* endpointP)
       DUPLICATE_CHECK(acceptP, "notification.endpoint.accept", childP);
       STRING_CHECK(childP, "Invalid Subscription", "'notification.endpoint.accept' must be a string");
     }
-    // receiverInfo and notifierInfo — accept but don't validate deeply for now
+    else if (strcmp(childP->name, "notifierInfo") == 0)
+    {
+      if (!checkNotifierInfo(childP)) return false;
+    }
+    // receiverInfo — forwarded as outbound headers, validated downstream.
   }
 
   MANDATORY_CHECK(uriP, "Invalid Subscription", "'notification.endpoint.uri' is mandatory");
@@ -93,12 +158,21 @@ static bool checkNotification(KjNode* notifP)
       ARRAY_CHECK(childP, "Invalid Subscription", "'notification.attributes' must be an array");
       EMPTY_ARRAY_CHECK(childP, "'notification.attributes' must not be empty");
 
-      // Each item must be a string
+      // Each item must be a string. Per § 5.2.12 Table 5.2.12-1, the
+      // attributes alias for pick disallows "id", "type", "scope".
       for (KjNode* attrP = childP->value.firstChildP; attrP != NULL; attrP = attrP->next)
       {
         if (attrP->type != KjString)
         {
           ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription", "'notification.attributes' items must be strings");
+          return false;
+        }
+        if (strcmp(attrP->value.s, "id") == 0 ||
+            strcmp(attrP->value.s, "type") == 0 ||
+            strcmp(attrP->value.s, "scope") == 0)
+        {
+          ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
+                  "'notification.attributes' must not include '%s' (§ 5.2.12)", attrP->value.s);
           return false;
         }
       }
@@ -344,6 +418,19 @@ bool ldCheckSubscription(KjNode* subP, LdOp op, KAlloc* kaP)
     else if (strcmp(name, "jsonldContext") == 0)
     {
       // Internal field — ignore silently
+    }
+    else if (strcmp(name, "ngsildConformance") == 0)
+    {
+      // § 5.2.12 / § 4.3.6.8: backwards-compat target. Format "M.m".
+      STRING_CHECK(childP, "Invalid Subscription", "'ngsildConformance' must be a string");
+      short m, n;
+      if (!ldConformanceParse(childP->value.s, &m, &n))
+      {
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
+                "'ngsildConformance' must be a 'major.minor' version string (got '%s')",
+                childP->value.s);
+        return false;
+      }
     }
   }
 

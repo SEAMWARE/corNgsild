@@ -134,6 +134,8 @@ typedef struct SwNgsild
   // URL parameters — linked entity retrieval (§ 4.5.23)
   char*   join;             // "flat" | "inline" | "@none" (default), NULL = absent
   int     joinLevel;        // depth limit for relationship walk; 0 = absent or @none
+  char**  containedByV;     // § 5.7.1.4 — entity ids already encountered (cycle prevention); NULL-terminated, NULL = absent
+  int     containedByCount; // count for convenience
 
   // URL parameters — strings
   char*   kind;          // ?kind= for GET /jsonldContexts

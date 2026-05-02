@@ -118,6 +118,48 @@ void ldEntityMapAddEntry(LdEntityMap* mapP, const char* entityId,
 
 
 
+// ldEntityMapLinkedMapLookup
+const char* ldEntityMapLinkedMapLookup(LdEntityMap* mapP, const char* csrId)
+{
+  if (mapP == NULL || csrId == NULL) return NULL;
+  for (LdEntityMapLink* p = mapP->linkedHead; p != NULL; p = p->next)
+    if (p->csrId != NULL && strcmp(p->csrId, csrId) == 0)
+      return p->remoteMapId;
+  return NULL;
+}
+
+
+
+// ldEntityMapAddLinkedMap
+void ldEntityMapAddLinkedMap(LdEntityMap* mapP, const char* csrId, const char* remoteMapId)
+{
+  if (mapP == NULL || csrId == NULL || remoteMapId == NULL)
+    return;
+
+  // Dedup: same csrId only carries one remote map id (the most recent wins).
+  for (LdEntityMapLink* p = mapP->linkedHead; p != NULL; p = p->next)
+  {
+    if (p->csrId != NULL && strcmp(p->csrId, csrId) == 0)
+    {
+      free(p->remoteMapId);
+      p->remoteMapId = strdup(remoteMapId);
+      return;
+    }
+  }
+
+  LdEntityMapLink* linkP = (LdEntityMapLink*) calloc(1, sizeof(LdEntityMapLink));
+  linkP->csrId       = strdup(csrId);
+  linkP->remoteMapId = strdup(remoteMapId);
+
+  if (mapP->linkedTail == NULL)
+    mapP->linkedHead = linkP;
+  else
+    mapP->linkedTail->next = linkP;
+  mapP->linkedTail = linkP;
+}
+
+
+
 // ldEntityMapSetExpiresAt
 void ldEntityMapSetExpiresAt(LdEntityMap* mapP, uint64_t expiresAtNs)
 {
@@ -164,6 +206,15 @@ static void mapFree(LdEntityMap* mapP)
     LdEntityMapEntry* next = p->next;
     entryFree(p);
     p = next;
+  }
+  LdEntityMapLink* lp = mapP->linkedHead;
+  while (lp != NULL)
+  {
+    LdEntityMapLink* next = lp->next;
+    free(lp->csrId);
+    free(lp->remoteMapId);
+    free(lp);
+    lp = next;
   }
   free(mapP);
 }
@@ -218,8 +269,15 @@ KjNode* ldEntityMapToTree(LdEntityMap* mapP)
   }
   kjChildAdd(treeP, emObj);
 
-  // linkedMaps: empty for now (no cascaded entity maps)
-  kjChildAdd(treeP, kjObject(NULL, "linkedMaps"));
+  // linkedMaps: { "<csrId>": "<remoteMapId>", ... }  (§ 5.14.4.4)
+  KjNode* linkedObj = kjObject(NULL, "linkedMaps");
+  for (LdEntityMapLink* linkP = mapP->linkedHead; linkP != NULL; linkP = linkP->next)
+  {
+    if (linkP->csrId == NULL || linkP->remoteMapId == NULL)
+      continue;
+    kjChildAdd(linkedObj, kjString(NULL, linkP->csrId, linkP->remoteMapId));
+  }
+  kjChildAdd(treeP, linkedObj);
 
   return treeP;
 }

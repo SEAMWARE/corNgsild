@@ -5,17 +5,14 @@
 //
 // Copyright 2026 Seamware
 //
-#include <pthread.h>                                   // pthread_create, pthread_join
 #include <stdbool.h>                                   // bool
 #include <stdint.h>                                    // uint64_t
 #include <string.h>                                    // strcmp, strlen, strcpy
 #include <stdio.h>                                     // snprintf
-#include <time.h>                                      // clock_gettime, nanosleep
+#include <time.h>                                      // clock_gettime
 #include <stdlib.h>                                    // malloc, free
 
 #include "kalloc/KAlloc.h"                             // KAlloc, kaAlloc
-#include "kalloc/kaBufferInit.h"                       // kaBufferInit
-#include "kalloc/kaBufferReset.h"                      // kaBufferReset
 #include "kjson/KjNode.h"                              // KjNode
 #include "kjson/kjBuilder.h"                           // kjObject, kjString, kjArray, kjChildAdd
 #include "kjson/kjRenderSize.h"                        // kjFastRenderSize
@@ -35,12 +32,11 @@
 #include "swNgsild/ldLinkedEntitiesHook.h"             // ldLinkedEntitiesHookInvoke
 #include "swNgsild/ldEntityToApi.h"                    // ldEntityToApi
 #include "swNgsild/ldStripSysAttrs.h"                  // ldStripSysAttrs
+#include "swNgsild/ldPeriodicLoop.h"                   // ldPeriodicLoopRegister
 #include "swNgsild/ldPernotLoop.h"                     // Own interface
 
 
 
-static volatile bool       loopRunning = false;
-static pthread_t           loopThread;
 static LdPernotCache*      loopCache   = NULL;
 static LdPernotQueryFunc   loopQueryFn = NULL;
 
@@ -177,100 +173,93 @@ static bool pernotSendNotification(LdPernotItem* itemP, KjNode* entityArray, KAl
 
 // -----------------------------------------------------------------------------
 //
-// pernotLoopThread -
+// pernotTick - registered with the periodic-dispatch engine; called
+// once per second. Walks the LdPernotCache and fires any due item.
 //
-static void* pernotLoopThread(void* vP)
+// `ctx` is the LdPernotCache* passed at registration time. `kaP` is
+// scratch from the engine; reset before every consumer's tick call.
+//
+static void pernotTick(void* ctx, uint64_t now, KAlloc* kaP)
 {
-  char           allocBuffer[8192];
-  KAlloc         ka;
-  struct timespec sleepTime = { 1, 0 };   // 1 second
+  LdPernotCache* cacheP = (LdPernotCache*) ctx;
+  if (cacheP == NULL || loopQueryFn == NULL) return;
 
-  while (loopRunning)
+  for (LdPernotItem* itemP = cacheP->head; itemP != NULL; itemP = itemP->next)
   {
-    uint64_t now = nowNanos();
+    if (itemP->state == LdPernotPaused || itemP->state == LdPernotExpired)
+      continue;
 
-    for (LdPernotItem* itemP = loopCache->head; itemP != NULL; itemP = itemP->next)
+    if (itemP->expiresAt > 0 && itemP->expiresAt <= now)
     {
-      if (itemP->state == LdPernotPaused || itemP->state == LdPernotExpired)
-        continue;
-
-      if (itemP->expiresAt > 0 && itemP->expiresAt <= now)
-      {
-        itemP->state = LdPernotExpired;
-        continue;
-      }
-
-      if (itemP->state == LdPernotErroneous)
-      {
-        // § 5.2.15 endpoint.cooldown — minimum delay before retrying after
-        // a failure. Default 30s when unspecified.
-        uint64_t cool = (itemP->cooldownNs != 0) ? itemP->cooldownNs : 30000000000ULL;
-        if (itemP->lastFailure + cool > now)
-          continue;
-        itemP->state = LdPernotActive;
-      }
-
-      uint64_t intervalNs = (uint64_t) itemP->timeInterval * 1000000000ULL;
-      if (itemP->lastNotification + intervalNs > now)
-        continue;
-
-      // Due — query and send
-      kaBufferInit(&ka, allocBuffer, sizeof(allocBuffer), 16384, NULL, "pernot-query");
-
-      KjNode* entityArray = loopQueryFn(itemP->tenantP, itemP, &ka);
-
-      itemP->lastNotification = now;
-      itemP->timesSent++;
-
-      if (entityArray == NULL || entityArray->value.firstChildP == NULL)
-      {
-        itemP->noMatch++;
-        kaBufferReset(&ka, true);
-        continue;
-      }
-
-      bool ok = pernotSendNotification(itemP, entityArray, &ka);
-
-      if (ok)
-      {
-        itemP->lastSuccess = now;
-        itemP->consecutiveErrors = 0;
-      }
-      else
-      {
-        itemP->timesFailed++;
-        itemP->lastFailure = now;
-        itemP->consecutiveErrors++;
-        if (itemP->consecutiveErrors >= 3)
-          itemP->state = LdPernotErroneous;
-      }
-
-      kaBufferReset(&ka, true);
+      itemP->state = LdPernotExpired;
+      continue;
     }
 
-    nanosleep(&sleepTime, NULL);
-  }
+    if (itemP->state == LdPernotErroneous)
+    {
+      // § 5.2.15 endpoint.cooldown — minimum delay before retrying after
+      // a failure. Default 30s when unspecified.
+      uint64_t cool = (itemP->cooldownNs != 0) ? itemP->cooldownNs : 30000000000ULL;
+      if (itemP->lastFailure + cool > now)
+        continue;
+      itemP->state = LdPernotActive;
+    }
 
-  return NULL;
+    uint64_t intervalNs = (uint64_t) itemP->timeInterval * 1000000000ULL;
+    if (itemP->lastNotification + intervalNs > now)
+      continue;
+
+    KjNode* entityArray = loopQueryFn(itemP->tenantP, itemP, kaP);
+
+    itemP->lastNotification = now;
+    itemP->timesSent++;
+
+    if (entityArray == NULL || entityArray->value.firstChildP == NULL)
+    {
+      itemP->noMatch++;
+      continue;
+    }
+
+    bool ok = pernotSendNotification(itemP, entityArray, kaP);
+
+    if (ok)
+    {
+      itemP->lastSuccess = now;
+      itemP->consecutiveErrors = 0;
+    }
+    else
+    {
+      itemP->timesFailed++;
+      itemP->lastFailure = now;
+      itemP->consecutiveErrors++;
+      if (itemP->consecutiveErrors >= 3)
+        itemP->state = LdPernotErroneous;
+    }
+  }
 }
 
 
 
-// ldPernotLoopStart
+// -----------------------------------------------------------------------------
+//
+// ldPernotLoopStart / ldPernotLoopStop -
+//
+// Now thin wrappers: register the pernot tick with the shared engine,
+// store the cacheP + query callback. The thread itself comes from the
+// engine, started by the broker app once at boot via ldPeriodicLoopStart.
+//
+// Stop is a no-op — the engine outlives any single consumer.
+//
 void ldPernotLoopStart(LdPernotCache* cacheP, LdPernotQueryFunc queryFn)
 {
   loopCache   = cacheP;
   loopQueryFn = queryFn;
-  loopRunning = true;
-
-  pthread_create(&loopThread, NULL, pernotLoopThread, NULL);
+  ldPeriodicLoopRegister(pernotTick, cacheP);
 }
 
 
 
-// ldPernotLoopStop
 void ldPernotLoopStop(void)
 {
-  loopRunning = false;
-  pthread_join(loopThread, NULL);
+  // Engine shutdown is owned by the broker app via ldPeriodicLoopStop.
 }

@@ -12,6 +12,7 @@
 //
 #include <stdbool.h>                                   // bool
 #include <stdint.h>                                    // uint64_t
+#include <regex.h>                                     // regex_t
 
 #include "swNgsild/LdOp.h"                             // LdOp
 #include "swNgsild/LdRegCache.h"                       // LdRegCache, LdRegCacheItem
@@ -136,6 +137,22 @@ extern int ldRegCacheMatchForDiscovery(LdRegCache*       cacheP,
                                        const char*       idPattern,
                                        char**            attrsV,
                                        LdRegCacheItem*** matchVP);
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldRegInfoDiscoveryMatches - § 5.12 match of a single RegistrationInfo
+// against the discovery filters: AND across (type, entityId, idRegex,
+// attrsV). Used by getCsourceRegistrations to filter the response's
+// information[] array (§ 5.10.2.5) so only matching entries are
+// returned.
+//
+extern bool ldRegInfoDiscoveryMatches(LdRegInfo*     riP,
+                                      const char*    entityId,
+                                      char**         typeV,
+                                      const regex_t* idRegex,
+                                      char**         attrsV);
 
 
 

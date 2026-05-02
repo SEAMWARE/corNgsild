@@ -115,6 +115,22 @@ extern int ldDistOpSendReceive(LdRegCacheItem*  csr,
                                char**           responseBodyPP,
                                int*             responseBodyLenP);
 
+// ldDistOpSendReceiveEx - same as ldDistOpSendReceive but also injects
+// an additional set of request headers (e.g. NGSILD-EntityMap on
+// distributed entity-map pagination per § 6.4.3.2 / § 5.14.4.4).
+// Pass extraHeaderV=NULL, extraHeaderCount=0 for no extras.
+extern int ldDistOpSendReceiveEx(LdRegCacheItem*  csr,
+                                 SwRestVerb       verb,
+                                 const char*      url,
+                                 const char*      body,
+                                 int              bodyLen,
+                                 const char*      ownAlias,
+                                 SwRestKeyValue*  extraHeaderV,
+                                 int              extraHeaderCount,
+                                 const char**     errorDetailPP,
+                                 char**           responseBodyPP,
+                                 int*             responseBodyLenP);
+
 
 
 // -----------------------------------------------------------------------------

@@ -23,6 +23,13 @@ extern LdEntityMap* ldEntityMapCreate(LdEntityMapStore* storeP, uint64_t lifetim
 extern void ldEntityMapAddEntry(LdEntityMap* mapP, const char* entityId,
                                  const char** sourceIdV, int sourceCount);
 
+// ldEntityMapAddLinkedMap - add a (CSR id → remote EntityMap id) pair to linkedMaps (§ 5.14.4.4)
+extern void ldEntityMapAddLinkedMap(LdEntityMap* mapP, const char* csrId, const char* remoteMapId);
+
+// ldEntityMapLinkedMapLookup - find the remote EntityMap id stored for a CSR
+// (returns NULL when not present)
+extern const char* ldEntityMapLinkedMapLookup(LdEntityMap* mapP, const char* csrId);
+
 // ldEntityMapLookup - find a map by ID
 extern LdEntityMap* ldEntityMapLookup(LdEntityMapStore* storeP, const char* mapId);
 

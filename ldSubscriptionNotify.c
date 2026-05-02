@@ -24,6 +24,7 @@
 #include "kalloc/kaAlloc.h"                            // kaAlloc
 #include "kjson/KjNode.h"                              // KjNode
 #include "kjson/kjBuilder.h"                           // kjObject, kjString, kjArray, kjChildAdd
+#include "kjson/kjChildReplace.h"                      // kjChildReplace
 #include "kjson/kjClone.h"                             // kjClone
 #include "kjson/kjLookup.h"                            // kjLookup
 #include "kjson/kjRenderSize.h"                        // kjFastRenderSize
@@ -39,6 +40,8 @@
 #include "swNgsild/ldEntityToApi.h"                    // ldEntityToApi
 #include "swNgsild/ldStripSysAttrs.h"                  // ldStripSysAttrs
 #include "swNgsild/ldEntityMatch.h"                    // ldEntityMatchQ
+#include "swNgsild/ldToGeoJson.h"                     // ldToGeoJson
+#include "swNgsild/ldConformanceDowngrade.h"          // ldConformanceDowngrade
 #include "swNgsild/ldEntityMerge.h"                    // LdMergeReport
 #include "swJsonld/swldInit.h"                          // swldCoreContext
 #include "swJsonld/SwldContext.h"                       // SwldContext
@@ -545,6 +548,39 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   // Compact expanded URIs to short names (covers every data[] entry)
   swldCompactTree(notification);
 
+  // § 5.2.12 / § 4.3.6.8: backwards-compat downgrade of entity payloads
+  // when the subscription requested an older NGSI-LD version.
+  if (itemP->conformanceMajor != 0 || itemP->conformanceMinor != 0)
+  {
+    KjNode* dataP = kjLookup(notification, "data");
+    if (dataP != NULL)
+      ldConformanceDowngrade(dataP, itemP->conformanceMajor, itemP->conformanceMinor, swRest.kjsonP);
+  }
+
+  // § 5.2.14: when endpoint.accept is application/geo+json, replace the
+  // `data` array with a FeatureCollection. Each entity becomes a Feature
+  // with id at the top level, geometry from the GeoProperty, and the rest
+  // of the entity as `properties`.
+  bool acceptGeoJson = (itemP->endpointAccept != NULL &&
+                        strcmp(itemP->endpointAccept, "application/geo+json") == 0);
+  bool acceptLdJson  = (itemP->endpointAccept != NULL &&
+                        strcmp(itemP->endpointAccept, "application/ld+json") == 0);
+
+  if (acceptGeoJson)
+  {
+    KjNode* oldDataP = kjLookup(notification, "data");
+    if (oldDataP != NULL && oldDataP->type == KjArray)
+    {
+      KjNode* newDataP = oldDataP;
+      ldToGeoJson(&newDataP, NULL /* default "location" */, swRest.kjsonP);
+      if (newDataP != NULL && newDataP != oldDataP)
+      {
+        newDataP->name = (char*) "data";
+        kjChildReplace(notification, oldDataP, newDataP);
+      }
+    }
+  }
+
   //
   // Render to JSON
   //
@@ -574,12 +610,22 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   }
 
   //
+  // Content-Type negotiation (§ 5.2.14 endpoint.accept):
+  //   application/ld+json  → JSON-LD (Link header omitted; @context inline if any)
+  //   application/geo+json → GeoJSON FeatureCollection (already converted above)
+  //   default              → application/json (Link header carries @context)
+  //
+  const char* contentType = "application/json";
+  if (acceptGeoJson)      contentType = "application/geo+json";
+  else if (acceptLdJson)  contentType = "application/ld+json";
+
+  //
   // MQTT delivery path (§ 7) — when endpoint.uri is mqtt[s]://...
   //
   if (ldIsMqttUri(itemP->endpointUri))
   {
     bool ok = ldMqttNotify(itemP->endpointUri, body,
-                           "application/json",
+                           contentType,
                            (linkBuf[0] != 0) ? linkBuf : NULL,
                            itemP->receiverInfo,
                            itemP->notifierInfo);
@@ -604,7 +650,7 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   SwRestClientResponse resp;
 
   swRestClientRequestInit(&req, SwVerbPost, itemP->endpointUri, NULL);
-  swRestClientRequestHeader(&req, "Content-Type", "application/json");
+  swRestClientRequestHeader(&req, "Content-Type", contentType);
 
   if (linkBuf[0] != 0)
     swRestClientRequestHeader(&req, "Link", linkBuf);

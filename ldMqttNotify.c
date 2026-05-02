@@ -272,6 +272,15 @@ bool ldMqttNotify(const char* uri,
     if (q >= 0 && q <= 2) qos = (int) q;
   }
 
+  // MQTT version: notifierInfo "MQTT-Version" or default mqtt5.0 (§ 7.2 Table 7.2-1).
+  int protocolVersion = MQTT_PROTOCOL_V5;
+  const char* versionStr = notifierInfoLookup(notifierInfo, "MQTT-Version");
+  if (versionStr != NULL)
+  {
+    if      (strcasecmp(versionStr, "mqtt3.1.1") == 0) protocolVersion = MQTT_PROTOCOL_V311;
+    else if (strcasecmp(versionStr, "mqtt5.0")   == 0) protocolVersion = MQTT_PROTOCOL_V5;
+  }
+
   // Build the wrapped {metadata, body} payload.
   char* payload = buildMqttMessage(notifBodyJson, contentType, linkHeader, receiverInfo);
   if (payload == NULL) return false;
@@ -285,6 +294,10 @@ bool ldMqttNotify(const char* uri,
 
   do
   {
+    // Protocol version must be set before connect.
+    if (mosquitto_int_option(mosq, MOSQ_OPT_PROTOCOL_VERSION, protocolVersion) != MOSQ_ERR_SUCCESS)
+      break;
+
     if (parsed.user != NULL)
     {
       if (mosquitto_username_pw_set(mosq, parsed.user, parsed.pass) != MOSQ_ERR_SUCCESS)

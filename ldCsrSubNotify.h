@@ -102,4 +102,23 @@ extern void ldCsrSubOnRegUpdate(LdSubCache* regSubCacheP,
                                 LdRegCacheItem* regItemAfterP,
                                 char** wasMatchingIds);
 
+
+
+// -----------------------------------------------------------------------------
+//
+// ldCsrSubPeriodicLoopRegister - § 5.11.7 periodic CSR-Sub notifications.
+//
+// Registers a tick callback with the shared periodic-dispatch engine
+// (ldPeriodicLoop). Each second, the engine fires the callback which
+// walks regSubCacheP looking for CSR-Subs with timeInterval > 0 whose
+// interval has elapsed; for each such sub it collects the matching
+// CSRs from regCacheP and POSTs a CsourceNotification (triggerReason
+// "updated").
+//
+// Single-tenant (broker-wide tenant0). Multi-tenant would either
+// register once per tenant or look the right caches up via subItem
+// tenantP — defer.
+//
+extern void ldCsrSubPeriodicLoopRegister(LdSubCache* regSubCacheP, LdRegCache* regCacheP);
+
 #endif  // SWNGSILD_LDCSRSUBNOTIFY_H_
