@@ -56,6 +56,45 @@ static inline bool isNgsildNull(const KjNode* nodeP)
 
 // -----------------------------------------------------------------------------
 //
+// instancePrimaryMember - return the primary-value-member name for an
+// attribute instance, derived from its "type" field.
+//
+// Per spec § 4.5.1 / § 4.5.21, every attribute instance carries exactly one
+// primary value member determined by its type. If the merge result strips
+// that member, the instance is no longer a valid attribute instance and
+// must be removed (and if all instances are gone, the whole attribute is
+// considered deleted — fires "attributeDeleted" instead of "attributeModified").
+//
+// Returns NULL when the instance has no recognisable type or the type has
+// no single primary member (defensive — caller treats as "leave alone").
+//
+static const char* instancePrimaryMember(KjNode* instanceP)
+{
+  if (instanceP == NULL || instanceP->type != KjObject)
+    return NULL;
+
+  KjNode* typeP = kjLookup(instanceP, "type");
+  if (typeP == NULL || typeP->type != KjString)
+    return NULL;
+
+  switch (ldAttrTypeFromString(typeP->value.s))
+  {
+    case LdAttrProperty:         return "value";
+    case LdAttrRelationship:     return "object";
+    case LdAttrGeoProperty:      return "value";
+    case LdAttrLanguageProperty: return "languageMap";
+    case LdAttrVocabProperty:    return "vocab";
+    case LdAttrListProperty:     return "valueList";
+    case LdAttrListRelationship: return "objectList";
+    case LdAttrJsonProperty:     return "json";
+    default:                     return NULL;
+  }
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // bumpModifiedAt - set or add a modifiedAt timestamp on an object node
 //
 // If the object already has a modifiedAt child, its integer value is updated
@@ -567,6 +606,33 @@ static bool mergeAttrWrapper(KjNode* target, KjNode* fragment, uint64_t ts, Kjso
     pChild = pNext;
   }
 
+  //
+  // Per spec § 4.5.21: setting a Property's `value`, a Relationship's `object`,
+  // a LanguageProperty's `languageMap` (and other type-specific primary value
+  // members) to "urn:ngsi-ld:null" inside a merge means that instance is being
+  // deleted. The recursive merge above already removed the null'd member from
+  // the target instance — sweep the wrapper now for any instance that no longer
+  // has its primary value member, and remove those instances entirely. The
+  // caller (the per-attribute branch in ldEntityMerge) handles the case where
+  // the wrapper ends up with zero instances by re-classifying the merge report
+  // entry from "attributeModified" to "attributeDeleted".
+  //
+  KjNode* iChild = target->value.firstChildP;
+  while (iChild != NULL)
+  {
+    KjNode* iNext = iChild->next;
+    if (iChild->type == KjObject)
+    {
+      const char* primary = instancePrimaryMember(iChild);
+      if (primary != NULL && kjLookup(iChild, primary) == NULL)
+      {
+        kjChildRemove(target, iChild);
+        mutated = true;
+      }
+    }
+    iChild = iNext;
+  }
+
   return mutated;
 }
 
@@ -699,7 +765,20 @@ bool ldEntityMerge(KjNode*        target,
       KjNode* preClone = kjClone(swRest.kjsonP, tAttr);
       if (mergeAttrWrapper(tAttr, fragWrapper, ts, targetAllocP))
       {
-        reportAdd(reportP, name, "attributeModified", preClone);
+        // mergeAttrWrapper may have stripped instances whose primary value
+        // member was set to "urn:ngsi-ld:null" (§ 4.5.21). When all instances
+        // are gone, the attribute itself is gone — remove it from the target
+        // and report this as "attributeDeleted" so subscriptions with
+        // notificationTrigger=["attributeDeleted"] match (ETSI 046_22_*).
+        if (tAttr->value.firstChildP == NULL)
+        {
+          kjChildRemove(target, tAttr);
+          reportAdd(reportP, name, "attributeDeleted", preClone);
+        }
+        else
+        {
+          reportAdd(reportP, name, "attributeModified", preClone);
+        }
         entityMutated = true;
       }
     }
