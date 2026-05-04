@@ -511,6 +511,50 @@ contextSourceInfo.
 
 ---
 
+## 19. § 5.5.4 / § 5.5.5 + § 6.3.2 — InvalidRequest vs. BadRequestData for invalid URL-param values
+
+**Hit:** A `GET /csourceSubscriptions?limit=-5&page=2` (or any URL with a
+syntactically OK but semantically invalid pagination/value query param)
+must be rejected. Both `InvalidRequest` and `BadRequestData` are
+defensible per the wording in § 5.5; the ETSI test suite consistently
+expects `BadRequestData` (e.g. 041_04_01/02/03, 039_05_01).
+
+**Spec:** Two different sections give two different rules:
+
+- § 5.5.4 (BadRequestData): "The request includes input data which does
+  not meet the requirements of the operation." — URL-param values are
+  arguably "input data".
+- § 5.5.5 (InvalidRequest): "The request associated to the operation is
+  syntactically invalid or includes wrong content."
+- § 6.3.2: "If an HTTP request for an operation contains parameters that
+  are incompatible with the operation, or it contains values of the
+  options parameter that are not supported by the operation, an HTTP
+  error response of type InvalidRequest should be returned." — but the
+  qualifier "of the *options* parameter" ties this specifically to the
+  `options=` URL param, not to `limit=` / `offset=` / `q=` / etc.
+
+So the spec narrows InvalidRequest to (a) malformed-request-line cases
+and (b) values of `options=`. Everything else lands in the wide
+"input data does not meet the requirements" bucket → BadRequestData.
+
+**Our call:** Initially returned InvalidRequest for any unknown or
+out-of-range URL param value (uniform handling, less branching).
+Switching to BadRequestData per § 5.5.4 + the test suite's expectations.
+
+**Fix wanted:** § 6.3.2 / § 5.5.4 / § 5.5.5 should make the split
+explicit:
+
+- BadRequestData: invalid value for any URL param defined by NGSI-LD
+  (limit, offset, q, attrs, georel, …) — i.e. "data wrong".
+- InvalidRequest: unrecognized URL param OR an `options=` value that
+  the implementation doesn't support — i.e. "request doesn't make
+  sense".
+
+Right now § 5.5.4 wording overlaps with § 5.5.5 wording closely enough
+that two implementations can both quote the spec and still disagree.
+
+---
+
 ## 18. § 5.16.1.4 — snapshot capture from CSRs in no-split deployments
 
 **Hit:** § 5.16.1.4 says snapshot queries are executed "following the
