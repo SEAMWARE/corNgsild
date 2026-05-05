@@ -441,7 +441,27 @@ bool ldCheckSubscription(KjNode* subP, LdOp op, KAlloc* kaP)
   (void) typeP;
 
   //
-  // "id" — not allowed in PATCH
+  // "id" — when present, must be a valid URI. Spec § 5.2.12 (Subscription)
+  // says id is a "Valid URI" (mandatory on create, immutable on update).
+  // Without this check the broker accepts garbage like ?id="invalidId"
+  // (ETSI 028_03_01 / 028_03_02 — InvalidId / EmptyId).
+  //
+  if (idP != NULL)
+  {
+    STRING_CHECK(idP, "Invalid Subscription", "'id' must be a string");
+    if (idP->value.s[0] == 0)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription", "'id' must not be empty");
+      return false;
+    }
+    URI_CHECK(idP->value.s);
+  }
+
+  //
+  // PATCH bodies that include id are tolerated when the id matches the
+  // URL — but we don't have the URL id here without weaving in
+  // swRest.in.wildcard[0]. For now keep the strict reject on update
+  // (matches prior behaviour); ETSI 029 doesn't exercise this path.
   //
   if ((op == LdOpUpdateSubscription || op == LdOpUpdateCsourceSubscription) && idP != NULL)
   {
