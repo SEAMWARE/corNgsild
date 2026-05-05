@@ -321,12 +321,14 @@ static void ldParseHook(void)
       bool isCreate = (swRest.in.verb == SwVerbPost);
       bool isUpdate = (swRest.in.verb == SwVerbPatch);
 
-      if (isUpdate && typeP != NULL)
-      {
-        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Read-Only Field", "'type' cannot be modified");
-        swNgsild.contextError = true;
-        return;
-      }
+      // Update / PATCH: the spec doesn't forbid the body from carrying
+      // type — only forbids changing it. ETSI 029_05_*/06_*/07_*/08_*/
+      // 09_*/10_* PATCH /subscriptions/{id} bodies include
+      // `"type": "Subscription"` for completeness; rejecting that as
+      // read-only-violation would block all subscription updates. The
+      // mismatch check below (line ~336) catches the actual "tried to
+      // change type" case.
+      (void) isUpdate;
       if (isCreate && typeP == NULL)
       {
         ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Missing Type", "%s 'type' is mandatory for create", recordLabel);
