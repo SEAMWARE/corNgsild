@@ -273,6 +273,11 @@ bool ldCheckAttribute(KjNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc*
   // Update Entity / Update Attributes (the spec allows instance-level
   // deletion via null in those flows). Rejected for other ops (Create,
   // Append, Replace) where null markers have no defined meaning.
+  //
+  // When the marker is permitted, short-circuit the rest of the value
+  // validation — the type-specific checks below (ldCheckGeo for
+  // GeoProperty, checkLanguageMap, etc.) would reject the bare string
+  // as the wrong shape (ETSI 011_07_03 / 012_05_03 / 056_03_03 etc.).
   if (valueNodeP->type == KjString && strcmp(valueNodeP->value.s, "urn:ngsi-ld:null") == 0)
   {
     bool nullAllowed = (op == LdOpMergeEntity) || (op == LdOpBatchMerge) ||
@@ -282,6 +287,8 @@ bool ldCheckAttribute(KjNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc*
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Value", "'urn:ngsi-ld:null' is not allowed as the value/object of attribute '%s'", attrP->name);
       return false;
     }
+    if (nullAllowed)
+      return true;  // skip type-specific shape checks for the marker
   }
 
   // Step 4: Type-specific value validation
