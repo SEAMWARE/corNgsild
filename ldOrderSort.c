@@ -90,15 +90,57 @@ static KjNode* temporalLatestValue(KjNode* arrayP)
 }
 
 
-static KjNode* getAttrValue(KjNode* entityP, const char* attrName)
+// lookupSeg - linear lookup of a child by exact name in a KjObject.
+static KjNode* lookupSeg(KjNode* base, const char* seg)
 {
-  KjNode* wrapperP = kjLookup(entityP, attrName);
+  if (base == NULL || base->type != KjObject || seg == NULL)
+    return NULL;
+  for (KjNode* c = base->value.firstChildP; c != NULL; c = c->next)
+    if (c->name != NULL && strcmp(c->name, seg) == 0)
+      return c;
+  return NULL;
+}
+
+
+
+// getAttrValueByPath - resolve an orderBy term's already-expanded segments.
+// Walking by string path is unsafe — expanded IRIs contain dots themselves
+// (`https://uri.etsi.org/...`). The expansion step pre-splits and stores the
+// segments as a NULL-terminated array.
+//
+//   orderBy=id                              → segV=["id"]                    → entity[id]
+//   orderBy=name                            → segV=["<iri-name>"]            → @none.value
+//   orderBy=name.createdAt                  → segV=["<iri-name>", "createdAt"]
+//   orderBy=name.subProperty                → segV=["<iri-name>", "<iri-sub>"] → sub.value
+//
+static KjNode* getAttrValueByPath(KjNode* entityP, char** segV, int segN)
+{
+  if (entityP == NULL || segV == NULL || segN <= 0)
+    return NULL;
+
+  const char* first = segV[0];
+
+  // Reserved entity members are first-class fields on the entity (not
+  // wrapped). Only valid as a single-segment path.
+  if (segN == 1 &&
+      (strcmp(first, "id")         == 0 ||
+       strcmp(first, "type")       == 0 ||
+       strcmp(first, "scope")      == 0 ||
+       strcmp(first, "createdAt")  == 0 ||
+       strcmp(first, "modifiedAt") == 0))
+  {
+    return kjLookup(entityP, first);
+  }
+
+  KjNode* wrapperP = kjLookup(entityP, first);
   if (wrapperP == NULL)
     return NULL;
 
-  if (wrapperP->type == KjArray)
+  if (wrapperP->type == KjArray)            // temporal store
+  {
+    if (segN > 1) return NULL;              // path-into-temporal not supported here
     return temporalLatestValue(wrapperP);
-
+  }
   if (wrapperP->type != KjObject)
     return NULL;
 
@@ -106,7 +148,32 @@ static KjNode* getAttrValue(KjNode* entityP, const char* attrName)
   if (noneP == NULL || noneP->type != KjObject)
     return NULL;
 
-  return kjLookup(noneP, "value");
+  if (segN == 1)
+    return kjLookup(noneP, "value");
+
+  // Walk remaining segments inside @none.
+  KjNode* cur = noneP;
+  for (int i = 1; i < segN; i++)
+  {
+    cur = lookupSeg(cur, segV[i]);
+    if (cur == NULL) return NULL;
+
+    // If more segments follow, peel any nested @none wrapper.
+    if (i + 1 < segN && cur->type == KjObject)
+    {
+      KjNode* none = kjLookup(cur, "@none");
+      if (none != NULL && none->type == KjObject)
+        cur = none;
+    }
+  }
+
+  // Leaf: a Property-shaped object → return its scalar `value`.
+  if (cur != NULL && cur->type == KjObject)
+  {
+    KjNode* v = kjLookup(cur, "value");
+    if (v != NULL) return v;
+  }
+  return cur;
 }
 
 
@@ -157,8 +224,8 @@ static int entityCompare(const void* pa, const void* pb)
 
   for (int i = 0; i < sortTermCount; i++)
   {
-    KjNode* va = getAttrValue(a, sortTerms[i].attrName);
-    KjNode* vb = getAttrValue(b, sortTerms[i].attrName);
+    KjNode* va = getAttrValueByPath(a, sortTerms[i].pathSegV, sortTerms[i].pathSegN);
+    KjNode* vb = getAttrValueByPath(b, sortTerms[i].pathSegV, sortTerms[i].pathSegN);
 
     int cmp = compareValues(va, vb);
     if (cmp != 0)

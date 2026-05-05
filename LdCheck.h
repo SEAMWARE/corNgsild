@@ -38,6 +38,26 @@ do                                                                              
 
 // -----------------------------------------------------------------------------
 //
+// OBJECT_CHECK_IR - same as OBJECT_CHECK but emits InvalidRequest.
+//
+// § 4.9: a wrong-shape body (e.g. `[]` where an object is required) is
+// InvalidRequest, not BadRequestData (which is reserved for semantic errors
+// inside a syntactically-valid payload).
+//
+#define OBJECT_CHECK_IR(nodeP, title, detail)                                                                       \
+do                                                                                                                 \
+{                                                                                                                  \
+  if ((nodeP) == NULL || (nodeP)->type != KjObject)                                                                \
+  {                                                                                                                \
+    ldError(400, LD_ERROR_INVALID_REQUEST, title, "%s", detail);                                                   \
+    return false;                                                                                                  \
+  }                                                                                                                \
+} while (0)
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ARRAY_CHECK -
 //
 #define ARRAY_CHECK(nodeP, title, detail)                                                                           \

@@ -49,9 +49,14 @@ static bool inStringV(const char* name, char** strV)
 
 // -----------------------------------------------------------------------------
 //
-// ldPickOmit -
+// pickOmitImpl - shared body. Always pure pick/omit semantics.
 //
-void ldPickOmit(KjNode* entityP, char** pickV, char** omitV)
+// Per § 6.3.6: "the Entity is reduced down to only contain the listed Entity
+// members" — `id`/`type`/`scope` count as Entity members and ARE filtered if
+// the user didn't list them. Only `@context` is left alone (added at render
+// time, not part of the storage entity).
+//
+static void pickOmitImpl(KjNode* entityP, char** pickV, char** omitV)
 {
   if (entityP == NULL)
     return;
@@ -62,7 +67,7 @@ void ldPickOmit(KjNode* entityP, char** pickV, char** omitV)
   {
     KjNode* nextP = childP->next;
 
-    if (childP->name != NULL && !isProtected(childP->name))
+    if (childP->name != NULL && strcmp(childP->name, "@context") != 0)
     {
       bool remove = false;
 
@@ -77,4 +82,29 @@ void ldPickOmit(KjNode* entityP, char** pickV, char** omitV)
 
     childP = nextP;
   }
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldPickOmit -
+//
+void ldPickOmit(KjNode* entityP, char** pickV, char** omitV)
+{
+  pickOmitImpl(entityP, pickV, omitV);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldPickOmitNested -
+//
+// Identical semantics to ldPickOmit; kept as a separate symbol so callers
+// can document intent (linked-entity vs root) without rebinding.
+//
+void ldPickOmitNested(KjNode* entityP, char** pickV, char** omitV)
+{
+  pickOmitImpl(entityP, pickV, omitV);
 }

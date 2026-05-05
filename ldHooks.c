@@ -17,7 +17,8 @@
 #include "swRest/SwRestService.h"                      // SwRestService.ldOp
 #include "swJsonld/swldInit.h"                             // swldCoreContext
 #include "swJsonld/swldExpandTree.h"                       // swldExpandTree
-#include "swJsonld/swldCompactTree.h"                      // swldCompactTree
+#include "swJsonld/swldCompactTree.h"                      // swldCompactTree, swldCompactTreeWith
+#include "swJsonld/swldDownload.h"                         // swldContextFromUrl
 
 #include "swNgsild/LdProblem.h"                          // LD_ERROR_*
 #include "swNgsild/LdVocab.h"                            // LD_VOCAB_*
@@ -650,7 +651,60 @@ static void ldRenderHook(void)
     swRest.out.contentType = "application/geo+json";
   }
 
-  swldCompactTree(swRest.out.responseTree);
+  // Resolve the response context. Honors (in order):
+  //   - body @context already parsed into swNgsild.contextP (ld+json POSTs),
+  //   - Link header URL captured into swNgsild.userContextUrl
+  //     (json POSTs/PATCHes — captured by ldParseHook when a body is present),
+  //   - Link header parsed here (json GETs / DELETEs — no body, so the
+  //     parse hook never ran the URL-capture branch),
+  //   - core context (last-resort).
+  // The same context is used both to compact the response and to advertise
+  // it via Link / inline @context further below.
+  SwldContext* respCtxP = NULL;
+  if (swNgsild.contextP != NULL)
+  {
+    respCtxP = swNgsild.contextP;
+    if (respCtxP->url == NULL && respCtxP->isArray && respCtxP->contexts == 1
+        && respCtxP->contextV != NULL && respCtxP->contextV[0] != NULL)
+      respCtxP = respCtxP->contextV[0];
+  }
+  if (respCtxP == NULL || respCtxP->url == NULL)
+  {
+    const char* linkUrl = swNgsild.userContextUrl;
+    if (linkUrl == NULL)
+    {
+      for (int i = 0; i < swRest.in.httpHeaderCount; i++)
+      {
+        if (strcasecmp(swRest.in.httpHeaderV[i].key, "Link") == 0 &&
+            strstr(swRest.in.httpHeaderV[i].value, "json-ld#context") != NULL)
+        {
+          char* v = swRest.in.httpHeaderV[i].value;
+          if (v[0] == '<')
+          {
+            char* end = strchr(v + 1, '>');
+            if (end != NULL)
+            {
+              int   len = end - (v + 1);
+              char* url = kaAlloc(&swRest.kalloc, len + 1);
+              memcpy(url, v + 1, len);
+              url[len] = '\0';
+              linkUrl = url;
+            }
+          }
+          break;
+        }
+      }
+    }
+    if (linkUrl != NULL)
+      respCtxP = swldContextFromUrl(linkUrl, &swRest.kalloc);
+  }
+  if (respCtxP == NULL)
+    respCtxP = swldCoreContext();
+
+  if (respCtxP != NULL)
+    swldCompactTreeWith(swRest.out.responseTree, respCtxP);
+  else
+    swldCompactTree(swRest.out.responseTree);
 
   // Apply lang reduction after compaction (languageMap keys are BCP47 tags, not JSON-LD terms)
   if (swNgsild.lang != NULL)
@@ -671,7 +725,7 @@ static void ldRenderHook(void)
   if (treeP == NULL)
     return;
 
-  SwldContext* ctxP   = (swNgsild.contextP != NULL) ? swNgsild.contextP : swldCoreContext();
+  SwldContext* ctxP   = respCtxP;
   const char*  ctxUrl = (ctxP != NULL) ? ctxP->url : NULL;
   bool         acceptLdJson = (acceptType == LdAcceptLdJson);
 

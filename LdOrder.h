@@ -29,12 +29,22 @@ typedef enum LdOrderDir
 //
 // LdOrderTerm - one element of the orderBy expression
 //
-// ?orderBy=speed;desc,name → two terms: {speed, desc}, {name, asc}
+//   ?orderBy=speed;desc,name           → two terms (one path segment each)
+//   ?orderBy=name.subProperty          → one term, two path segments
+//
+// `attrName`     joined dotted form (after ldExpandParams), kept for legacy
+//                callers / logging — DO NOT walk it with strchr('.'), the
+//                expanded IRIs contain dots themselves.
+// `pathSegV`     NULL-terminated array of expanded segments (allocated from
+//                the request arena). Use this for sort lookups.
+// `pathSegN`     count of segments (== 1 for a flat orderBy term).
 //
 typedef struct LdOrderTerm
 {
-  char*       attrName;   // expanded IRI (after ldExpandParams)
-  LdOrderDir  dir;        // asc or desc
+  char*       attrName;
+  char**      pathSegV;
+  int         pathSegN;
+  LdOrderDir  dir;
 } LdOrderTerm;
 
 #endif  // SWNGSILD_LDORDER_H_

@@ -11,6 +11,8 @@
 
 #include "kalloc/KAlloc.h"                             // kaAlloc
 #include "kalloc/kaAlloc.h"                            // kaAlloc
+#include "kalloc/kaStrdup.h"                           // kaStrdup
+#include "swNgsild/LdProj.h"                              // LdProjItem, ldProjectionParse, ldProjectionTopLevelNames
 #include "swRest/swRest.h"                             // swRest
 #include "swJsonld/swldDownload.h"                         // swldContextFromUrl
 #include "swJsonld/swldExpand.h"                           // swldExpand
@@ -139,8 +141,21 @@ void ldParamHook(const char* name, const char* value)
   }
   else if (strcmp(name, "pick") == 0)
   {
-    swNgsild.pick  = (char*) value;
-    swNgsild.pickV = ldParamSplit((char*) value, faP);  // expanded later in ldExpandParams
+    // § 4.21 NGSI-LD Attribute Projection Language. Parse with brace
+    // awareness so `pick=id,locatedAt{id,name}` builds a nested tree.
+    // pickV[] is derived from the top level for back-compat with code
+    // that still walks a flat array.
+    const char* errMsg = NULL;
+    char*       valCopy = kaStrdup(faP, value);   // parser writes NULs in-place
+    swNgsild.pick     = (char*) value;
+    swNgsild.pickTree = ldProjectionParse(valCopy, faP, &errMsg);
+    if (errMsg != NULL)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Bad Request Data",
+              "?pick=: %s", errMsg);
+      return;
+    }
+    swNgsild.pickV    = ldProjectionTopLevelNames(swNgsild.pickTree, faP, true);
   }
   else if (strcmp(name, "attrs") == 0)
   {
@@ -151,8 +166,17 @@ void ldParamHook(const char* name, const char* value)
   }
   else if (strcmp(name, "omit") == 0)
   {
-    swNgsild.omit  = (char*) value;
-    swNgsild.omitV = ldParamSplit((char*) value, faP);  // expanded later in ldExpandParams
+    const char* errMsg = NULL;
+    char*       valCopy = kaStrdup(faP, value);
+    swNgsild.omit     = (char*) value;
+    swNgsild.omitTree = ldProjectionParse(valCopy, faP, &errMsg);
+    if (errMsg != NULL)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Bad Request Data",
+              "?omit=: %s", errMsg);
+      return;
+    }
+    swNgsild.omitV    = ldProjectionTopLevelNames(swNgsild.omitTree, faP, false);
   }
   else if (strcmp(name, "expandValues") == 0)
   {
@@ -193,7 +217,17 @@ void ldParamHook(const char* name, const char* value)
   }
   else if (strcmp(name, "format") == 0)
   {
+    // § 6.3.18: 'format' must be one of the spec-defined values; an
+    // unknown value is InvalidRequest, not silently ignored (which would
+    // bury the error behind a downstream "not supported" 422).
     swNgsild.format = ldFormatFromString(value);
+    if (swNgsild.format == LdFormatNone && value != NULL && value[0] != 0)
+    {
+      ldError(400, LD_ERROR_INVALID_REQUEST, "Invalid Request",
+              "unknown 'format' value '%s' (expected: normalized, concise, "
+              "simplified|keyValues, temporalValues, aggregatedValues)", value);
+      return;
+    }
   }
   else if (strcmp(name, "count") == 0)
   {
@@ -353,6 +387,34 @@ void ldParamHook(const char* name, const char* value)
 
     if (strstr(wrapped, ",update,") != NULL)
       swNgsild.upsertUpdate = true;
+
+    // § 6.3.18: validate every comma-separated token; an unknown one is
+    // InvalidRequest, not silently ignored.
+    static const char* validOptions[] = {
+      "keyValues", "simplified", "concise", "normalized",
+      "temporalValues", "aggregatedValues",
+      "sysAttrs", "noOverwrite", "update",
+      NULL
+    };
+    char* tok = (char*) value;
+    while (tok != NULL && *tok != 0)
+    {
+      char* end   = strchr(tok, ',');
+      int   tlen  = (end != NULL) ? (int)(end - tok) : (int) strlen(tok);
+      bool  known = false;
+      for (int i = 0; validOptions[i] != NULL; i++)
+      {
+        int vl = (int) strlen(validOptions[i]);
+        if (vl == tlen && strncmp(tok, validOptions[i], tlen) == 0) { known = true; break; }
+      }
+      if (!known)
+      {
+        ldError(400, LD_ERROR_INVALID_REQUEST, "Invalid Request",
+                "unknown 'options' token '%.*s'", tlen, tok);
+        return;
+      }
+      tok = (end != NULL) ? end + 1 : NULL;
+    }
   }
   else if (strcmp(name, "georel") == 0)
   {

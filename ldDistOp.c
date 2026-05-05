@@ -14,6 +14,8 @@
 
 #include "kjson/KjNode.h"                              // KjNode
 #include "kjson/kjBuilder.h"                           // kjObject, kjString, kjChildAdd
+#include "kjson/kjLookup.h"                            // kjLookup
+#include "kjson/kjClone.h"                             // kjClone
 
 #include "kalloc/kaAlloc.h"                            // kaAlloc
 #include "swRest/SwRestState.h"                        // swRest
@@ -401,6 +403,105 @@ void ldDistOpBatchErrorAdd(KjNode*      errorsArrayP,
     kjChildAdd(entry, kjString(swRest.kjsonP, "registrationId", regId));
 
   kjChildAdd(errorsArrayP, entry);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldBatchErrorsSingleStatus -
+//
+// Spec § 6.14/6.15/6.16/6.17/6.20 reserve 207 Multi-Status for partial /
+// mixed-error batches. The all-failed case isn't covered explicitly, so 207
+// is the closest fit — except for the ALL-NOT-FOUND case: when every entry
+// in errors[] is ResourceNotFound, replying with a plain 404 is equivalent
+// in meaning ("nothing to operate on") and easier on clients than wrapping
+// a uniform 404 in a 207 envelope. Returns 404 in that case, -1 otherwise.
+//
+// Other uniform-error cases (all-400, all-409, etc.) intentionally still
+// produce 207 — they tend to carry per-entity detail worth surfacing.
+//
+int ldBatchErrorsSingleStatus(KjNode* errorsArrayP)
+{
+  if (errorsArrayP == NULL || errorsArrayP->value.firstChildP == NULL)
+    return -1;
+
+  for (KjNode* entry = errorsArrayP->value.firstChildP; entry != NULL; entry = entry->next)
+  {
+    KjNode* errP = kjLookup(entry, "error");
+    if (errP == NULL || errP->type != KjObject) return -1;
+
+    KjNode* tP = kjLookup(errP, "type");
+    if (tP == NULL || tP->type != KjString) return -1;
+
+    if (strcmp(tP->value.s, "https://uri.etsi.org/ngsi-ld/errors/ResourceNotFound") != 0)
+      return -1;
+  }
+
+  return 404;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldBatchErrorAsProblemDetails -
+//
+// Build a plain ProblemDetails tree from a uniform-error errors[] array.
+// Used together with ldBatchErrorsSingleStatus when a batch op collapses a
+// uniform-error response to a single HTTP status — the body shape switches
+// from BatchOperationResult to plain ProblemDetails so it matches what a
+// non-batch op would return.
+//
+// The clone takes type/title from the first error.error block; the detail
+// stays generic ("Not Found" alone is clear enough). entityId(s) are
+// echoed back as an extension field — `entityId` (string) if a single entry,
+// `entityIds` (array) if more — so the client knows WHICH entity(ies)
+// caused the failure without parsing the multi-status envelope.
+//
+KjNode* ldBatchErrorAsProblemDetails(KjNode* errorsArrayP)
+{
+  if (errorsArrayP == NULL || errorsArrayP->value.firstChildP == NULL)
+    return NULL;
+
+  KjNode* first = errorsArrayP->value.firstChildP;
+  KjNode* errP  = kjLookup(first, "error");
+  if (errP == NULL || errP->type != KjObject)
+    return NULL;
+
+  KjNode* pd = kjObject(swRest.kjsonP, NULL);
+
+  // type / title — clone from the first error so the body looks like a
+  // standalone ProblemDetails. Drop "detail" (the per-entity detail strings
+  // become noise once we collapse — title alone is clear).
+  KjNode* typeP  = kjLookup(errP, "type");
+  KjNode* titleP = kjLookup(errP, "title");
+  if (typeP  != NULL) kjChildAdd(pd, kjClone(swRest.kjsonP, typeP));
+  if (titleP != NULL) kjChildAdd(pd, kjClone(swRest.kjsonP, titleP));
+
+  // entityId(s) — extension field (anticipated ETSI ProblemDetails extension).
+  int n = 0;
+  for (KjNode* e = errorsArrayP->value.firstChildP; e != NULL; e = e->next) n++;
+
+  if (n == 1)
+  {
+    KjNode* idP = kjLookup(first, "entityId");
+    if (idP != NULL && idP->type == KjString)
+      kjChildAdd(pd, kjString(swRest.kjsonP, "entityId", idP->value.s));
+  }
+  else
+  {
+    KjNode* idsArr = kjArray(swRest.kjsonP, "entityIds");
+    for (KjNode* e = errorsArrayP->value.firstChildP; e != NULL; e = e->next)
+    {
+      KjNode* idP = kjLookup(e, "entityId");
+      if (idP != NULL && idP->type == KjString)
+        kjChildAdd(idsArr, kjString(swRest.kjsonP, NULL, idP->value.s));
+    }
+    kjChildAdd(pd, idsArr);
+  }
+
+  return pd;
 }
 
 

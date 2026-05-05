@@ -154,6 +154,25 @@ extern void ldDistOpBatchErrorAdd(KjNode*      errorsArrayP,
 
 // -----------------------------------------------------------------------------
 //
+// ldBatchErrorsSingleStatus - if every entry in errors[] has the same error
+// type, return the corresponding HTTP status; otherwise -1 (caller -> 207).
+//
+extern int ldBatchErrorsSingleStatus(KjNode* errorsArrayP);
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldBatchErrorAsProblemDetails - clone the first error[].error into a
+// standalone ProblemDetails tree (type/title/detail), suitable as the body
+// of a single-status response.
+//
+extern KjNode* ldBatchErrorAsProblemDetails(KjNode* errorsArrayP);
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldDistOpForwardFailureReason - canonical "reason" string for notCreated
 //
 // Returns a thread-local buffer (safe for immediate use; overwritten on

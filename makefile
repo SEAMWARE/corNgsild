@@ -42,6 +42,7 @@ LIB_SOURCES   = swNgsild.c \
                 ldQParse.c \
                 ldGeoRelParse.c \
                 ldUrlParams.c \
+                ldProj.c \
                 ldOrderSort.c \
                 ldLangReduce.c \
                 ldToTemporalValues.c \

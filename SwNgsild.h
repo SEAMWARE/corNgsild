@@ -48,16 +48,19 @@ typedef struct SwNgsild
   char*     q;
   LdQNode*  qExpr;             // parsed q expression tree (or NULL)
 
-  char*   pick;
-  char**  pickV;         // split + JSON-LD expanded
+  char*               pick;
+  char**              pickV;     // top-level names, split + JSON-LD expanded
+  struct LdProjItem*  pickTree;  // § 4.21 NGSI-LD Attribute Projection Language —
+                                 // full tree (with linked-entity nesting), expanded.
 
   // § 5.10.2 CSR Discovery: `attrs` is a deprecated synonym for pick+q.
   // Both accepted on that route, never together (handler returns 400).
   char*   attrs;
   char**  attrsV;        // split + JSON-LD expanded
 
-  char*   omit;
-  char**  omitV;         // split + JSON-LD expanded
+  char*               omit;
+  char**              omitV;     // top-level names, split + JSON-LD expanded
+  struct LdProjItem*  omitTree;  // full tree, expanded.
 
   char*   lang;          // language filter for LanguageProperty reduction
 
