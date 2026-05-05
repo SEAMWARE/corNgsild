@@ -627,6 +627,22 @@ static void ldRenderHook(void)
     if (swNgsild.sysAttrs == false)
       ldStripSysAttrs(swRest.out.responseTree);
 
+    // Apply lang reduction BEFORE format simplification — the simplification
+    // strips the LanguageProperty wrapper, leaving the languageMap dict.
+    // Reducing afterwards would have nothing to reduce.
+    if (swNgsild.lang != NULL)
+    {
+      if (treeP != NULL && treeP->type == KjArray)
+      {
+        for (KjNode* itemP = treeP->value.firstChildP; itemP != NULL; itemP = itemP->next)
+          ldLangReduce(itemP, swNgsild.lang, &swRest.kalloc);
+      }
+      else
+      {
+        ldLangReduce(treeP, swNgsild.lang, &swRest.kalloc);
+      }
+    }
+
     // Apply representation format (simplified/concise/normalized)
     if (swNgsild.format == LdFormatSimplified || swNgsild.format == LdFormatConcise)
     {
@@ -754,19 +770,7 @@ static void ldRenderHook(void)
   else
     swldCompactTree(swRest.out.responseTree);
 
-  // Apply lang reduction after compaction (languageMap keys are BCP47 tags, not JSON-LD terms)
-  if (swNgsild.lang != NULL)
-  {
-    if (treeP != NULL && treeP->type == KjArray)
-    {
-      for (KjNode* itemP = treeP->value.firstChildP; itemP != NULL; itemP = itemP->next)
-        ldLangReduce(itemP, swNgsild.lang, &swRest.kalloc);
-    }
-    else
-    {
-      ldLangReduce(treeP, swNgsild.lang, &swRest.kalloc);
-    }
-  }
+  // (lang reduction now happens earlier — before format simplification)
 
   // @context in response: either in body (ld+json) or via Link header (json)
   //
