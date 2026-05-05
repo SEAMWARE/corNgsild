@@ -36,4 +36,17 @@ extern void ldPickOmit(KjNode* entityP, char** pickV, char** omitV);
 //
 extern void ldPickOmitNested(KjNode* entityP, char** pickV, char** omitV);
 
+
+
+// -----------------------------------------------------------------------------
+//
+// ldAttrsFilter - apply ?attrs= response filter (deprecated alias of pick)
+//
+// § 6.4.3.2 / § 5.10.2: `attrs` only filters Attributes — entity members
+// (id, type, scope, @context, createdAt, modifiedAt, ...) are always
+// preserved. This is the key difference vs. ldPickOmit, which strips
+// id/type/scope when not listed in pickV.
+//
+extern void ldAttrsFilter(KjNode* entityP, char** attrsV);
+
 #endif  // SWNGSILD_LDPICKOMIT_H_

@@ -13,6 +13,7 @@
 #include "kjson/KjNode.h"                           // KjNode
 #include "kjson/kjBuilder.h"                    // kjChildRemove
 
+#include "swNgsild/ldIsEntityKeyword.h"          // ldIsEntityKeyword
 #include "swNgsild/ldPickOmit.h"                     // Own interface
 
 
@@ -107,4 +108,36 @@ void ldPickOmit(KjNode* entityP, char** pickV, char** omitV)
 void ldPickOmitNested(KjNode* entityP, char** pickV, char** omitV)
 {
   pickOmitImpl(entityP, pickV, omitV);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldAttrsFilter - § 6.4.3.2 / § 5.10.2 ?attrs= response filter
+//
+// Unlike pick (§ 6.3.6), `attrs` only filters Attributes — entity members
+// (id, type, scope, @context, createdAt, modifiedAt, ...) are always
+// preserved. The filter walks the entity's children once and removes any
+// non-keyword child whose name is not in attrsV.
+//
+void ldAttrsFilter(KjNode* entityP, char** attrsV)
+{
+  if (entityP == NULL || attrsV == NULL)
+    return;
+
+  KjNode* childP = entityP->value.firstChildP;
+
+  while (childP != NULL)
+  {
+    KjNode* nextP = childP->next;
+
+    if (childP->name != NULL && !ldIsEntityKeyword(childP->name))
+    {
+      if (!inStringV(childP->name, attrsV))
+        kjChildRemove(entityP, childP);
+    }
+
+    childP = nextP;
+  }
 }
