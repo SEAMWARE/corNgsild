@@ -18,6 +18,7 @@
 #include "kjson/kjLookup.h"                            // kjLookup
 #include "kjson/kjBuilder.h"                           // kjChildRemove
 
+#include "swNgsild/SwNgsild.h"                         // swNgsild (contextP)
 #include "swNgsild/LdVocab.h"                          // LD_VOCAB_*
 #include "swNgsild/LdSubCache.h"                       // LdSubCache, LdSubCacheItem
 #include "swNgsild/LdScopeExpr.h"                      // ldScopeExprParse
@@ -226,12 +227,23 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
   // applied by swldExpandTree, so the strings stay short after parseHook.
   // Downstream match paths (entity-side notify, CSR-side notify) compare
   // against expanded IRIs, so expand once here at cache-ingest time.
+  //
+  // Use the REQUEST's @context (swNgsild.contextP) — passing NULL would
+  // fall back to the broker's core context which doesn't define
+  // user-vocab terms like "name". For sub-create paths swNgsild.contextP
+  // is the @context the client supplied; for cache-reload at boot the
+  // sub's persisted jsonldContext URL has already been resolved into
+  // swNgsild.contextP by the reload driver. Without this, ETSI 046_22_*
+  // tests with watchedAttributes silently never match attributeDeleted
+  // events because the cache stores "name" while the merge report carries
+  // the IRI "https://ngsi-ld-test-suite/context#name".
   if (itemP->watchedAttrsV != NULL)
   {
     for (int i = 0; itemP->watchedAttrsV[i] != NULL; i++)
     {
       if (!swldAlreadyExpanded(itemP->watchedAttrsV[i]))
-        itemP->watchedAttrsV[i] = swldExpand(NULL, itemP->watchedAttrsV[i], &cacheP->alloc, NULL, NULL);
+        itemP->watchedAttrsV[i] = swldExpand(swNgsild.contextP, itemP->watchedAttrsV[i],
+                                             &cacheP->alloc, NULL, NULL);
     }
   }
 
@@ -368,13 +380,15 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
   KjNode* notifAttrsP = (notifP != NULL) ? kjLookup(notifP, LD_VOCAB_ATTRIBUTES) : NULL;
   itemP->notifAttrsV = watchedAttrsExtract(notifAttrsP);  // reuse same helper (NULL-term string array)
 
-  // Expand short names in notifAttrsV (values aren't expanded by JSON-LD processing)
+  // Expand short names in notifAttrsV using the request's @context — see
+  // the watchedAttrsV block above for rationale.
   if (itemP->notifAttrsV != NULL)
   {
     for (int i = 0; itemP->notifAttrsV[i] != NULL; i++)
     {
       if (!swldAlreadyExpanded(itemP->notifAttrsV[i]))
-        itemP->notifAttrsV[i] = swldExpand(NULL, itemP->notifAttrsV[i], &cacheP->alloc, NULL, NULL);
+        itemP->notifAttrsV[i] = swldExpand(swNgsild.contextP, itemP->notifAttrsV[i],
+                                           &cacheP->alloc, NULL, NULL);
     }
   }
 
