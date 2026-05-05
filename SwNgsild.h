@@ -148,6 +148,13 @@ typedef struct SwNgsild
   SwldContext*       contextP;
   const char*        userContextUrl;  // URL from Link header or default context (NULL if none)
 
+  // Per-element errors raised at parse time on batch ops — array of
+  // BatchEntityError objects. Set in ldParseHook for cases the framework
+  // catches before the service routine sees the body (e.g. ld+json array
+  // element missing @context). The batch handler drains this list into
+  // its own errors[] before normal processing.
+  KjNode*  batchPreErrors;
+
   // Response flags
   bool    rawResponse;  // true => renderHook skips ldEntityToApi (used for subscription responses)
   bool    entityMapOnly; // true => GET|POST /entityMaps: query + return the EntityMap (not entities)

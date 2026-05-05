@@ -195,7 +195,14 @@ static void ldParseHook(void)
   bool isArrayBody = (swRest.in.requestTree != NULL &&
                       swRest.in.requestTree->type == KjArray);
 
-  if (isLdJson && isArrayBody)
+  // Per-element check policy:
+  //   non-batch  → whole request 400 (one missing @context = whole body bad)
+  //   batch      → per-entity error in batchPreErrors, batch handler folds
+  //                them into its errors[] (§ 6.14.3.1 multi-status response)
+  uint64_t ldOp = (swRest.serviceP != NULL) ? swRest.serviceP->ldOp : 0;
+  bool     isBatchOp = (ldOp & LD_OP_GROUP_BATCH) != 0;
+
+  if (isLdJson && isArrayBody && !isBatchOp)
   {
     for (KjNode* elemP = swRest.in.requestTree->value.firstChildP; elemP != NULL; elemP = elemP->next)
     {
@@ -210,7 +217,45 @@ static void ldParseHook(void)
       }
     }
   }
-  else if (isLdJson && atCtx == NULL)
+  else if (isLdJson && isArrayBody && isBatchOp)
+  {
+    // Walk the array, mark elements missing @context as pre-rejected so the
+    // batch handler emits a per-entity BatchEntityError for them. Rejected
+    // elements are removed from the tree so expansion ignores them.
+    KjNode* prev = NULL;
+    KjNode* elemP = swRest.in.requestTree->value.firstChildP;
+    while (elemP != NULL)
+    {
+      KjNode* nextP = elemP->next;
+      if (elemP->type == KjObject && kjLookup(elemP, "@context") == NULL)
+      {
+        if (swNgsild.batchPreErrors == NULL)
+          swNgsild.batchPreErrors = kjArray(swRest.kjsonP, NULL);
+
+        const char* eid = "";
+        KjNode* idP = kjLookup(elemP, "id");
+        if (idP != NULL && idP->type == KjString) eid = idP->value.s;
+
+        KjNode* entry = kjObject(swRest.kjsonP, NULL);
+        kjChildAdd(entry, kjString(swRest.kjsonP, "entityId", eid));
+        KjNode* errObj = kjObject(swRest.kjsonP, "error");
+        kjChildAdd(errObj, kjString(swRest.kjsonP, "type",   LD_ERROR_BAD_REQUEST_DATA));
+        kjChildAdd(errObj, kjString(swRest.kjsonP, "title",  "Missing @context"));
+        kjChildAdd(errObj, kjString(swRest.kjsonP, "detail", "@context is mandatory on every element of an application/ld+json array body"));
+        kjChildAdd(entry, errObj);
+        kjChildAdd(swNgsild.batchPreErrors, entry);
+
+        // Splice elemP out of the tree.
+        kjNodeDecouple(swRest.in.requestTree, elemP, prev);
+      }
+      else
+      {
+        prev = elemP;
+      }
+      elemP = nextP;
+    }
+  }
+  else if (isLdJson && atCtx == NULL && !isArrayBody)
   {
     ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Missing @context",
             "@context is mandatory for Content-Type application/ld+json");
