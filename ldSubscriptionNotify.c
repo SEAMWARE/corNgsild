@@ -776,6 +776,24 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   bool acceptLdJson  = (itemP->endpointAccept != NULL &&
                         strcmp(itemP->endpointAccept, "application/ld+json") == 0);
 
+  // ld+json notification body: per § 5.8.6 + § 6.3.5, each entity in data[]
+  // (and the FeatureCollection / each Feature for geo+json — § 6.3.7) shall
+  // carry @context inline. Plain application/json puts @context in the Link
+  // header only; we emit that further down regardless of body shape.
+  // ETSI 046_19, 046_20.
+  if ((acceptLdJson || acceptGeoJson) && itemP->contextUrl != NULL)
+  {
+    KjNode* dataP = kjLookup(notification, "data");
+    if (dataP != NULL && dataP->type == KjArray)
+    {
+      for (KjNode* ep = dataP->value.firstChildP; ep != NULL; ep = ep->next)
+      {
+        if (ep->type == KjObject && kjLookup(ep, "@context") == NULL)
+          kjChildAdd(ep, kjString(NULL, "@context", itemP->contextUrl));
+      }
+    }
+  }
+
   if (acceptGeoJson)
   {
     KjNode* oldDataP = kjLookup(notification, "data");
