@@ -140,6 +140,8 @@ static bool checkNotification(KjNode* notifP)
   KjNode* endpointP   = NULL;
   KjNode* formatP     = NULL;
   KjNode* attributesP = NULL;
+  KjNode* pickP       = NULL;
+  KjNode* omitP       = NULL;
 
   for (KjNode* childP = notifP->value.firstChildP; childP != NULL; childP = childP->next)
   {
@@ -177,6 +179,36 @@ static bool checkNotification(KjNode* notifP)
         }
       }
     }
+    else if (strcmp(childP->name, "pick") == 0)
+    {
+      DUPLICATE_CHECK(pickP, "notification.pick", childP);
+      ARRAY_CHECK(childP, "Invalid Subscription", "'notification.pick' must be an array");
+      EMPTY_ARRAY_CHECK(childP, "'notification.pick' must not be empty");
+      for (KjNode* itemP = childP->value.firstChildP; itemP != NULL; itemP = itemP->next)
+      {
+        if (itemP->type != KjString)
+        {
+          ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
+                  "'notification.pick' items must be strings");
+          return false;
+        }
+      }
+    }
+    else if (strcmp(childP->name, "omit") == 0)
+    {
+      DUPLICATE_CHECK(omitP, "notification.omit", childP);
+      ARRAY_CHECK(childP, "Invalid Subscription", "'notification.omit' must be an array");
+      EMPTY_ARRAY_CHECK(childP, "'notification.omit' must not be empty");
+      for (KjNode* itemP = childP->value.firstChildP; itemP != NULL; itemP = itemP->next)
+      {
+        if (itemP->type != KjString)
+        {
+          ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
+                  "'notification.omit' items must be strings");
+          return false;
+        }
+      }
+    }
     else if (strcmp(childP->name, "status") == 0 ||
              strcmp(childP->name, "timesSent") == 0 ||
              strcmp(childP->name, "timesFailed") == 0 ||
@@ -187,6 +219,40 @@ static bool checkNotification(KjNode* notifP)
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Read-Only Field",
               "'notification.%s' is read-only and cannot be set", childP->name);
       return false;
+    }
+  }
+
+  // § 4.21 — pick / omit / attributes are mutually exclusive.
+  // attributes is the deprecated alias for pick; combining either with
+  // attributes is BadRequestData.
+  if (attributesP != NULL && pickP != NULL)
+  {
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
+            "'notification.pick' and 'notification.attributes' are mutually exclusive");
+    return false;
+  }
+  if (attributesP != NULL && omitP != NULL)
+  {
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
+            "'notification.omit' and 'notification.attributes' are mutually exclusive");
+    return false;
+  }
+
+  // pick + omit may co-occur, but no member may appear in both.
+  if (pickP != NULL && omitP != NULL)
+  {
+    for (KjNode* pP = pickP->value.firstChildP; pP != NULL; pP = pP->next)
+    {
+      for (KjNode* oP = omitP->value.firstChildP; oP != NULL; oP = oP->next)
+      {
+        if (strcmp(pP->value.s, oP->value.s) == 0)
+        {
+          ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
+                  "'notification.pick' and 'notification.omit' must not share member '%s'",
+                  pP->value.s);
+          return false;
+        }
+      }
     }
   }
 
