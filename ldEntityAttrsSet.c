@@ -319,11 +319,17 @@ void ldEntityAttrsSet(KjNode* target, KjNode* fragment,
     {
       applyType(target, fP, targetAllocP);
       anyChange = true;
+      // Signal the entity-level type change to the DB plugin via the
+      // merge report so the surgical $set picks it up. Without this,
+      // a fragment carrying ONLY ?type= (no attrs) wouldn't trigger
+      // hasSet, and the in-memory union wouldn't persist (ETSI 011_06_*).
+      addReportEntry(reportP, "type", "entityModified", NULL);
     }
     else if (strcmp(fP->name, LD_VOCAB_SCOPE) == 0)
     {
       applyScope(target, fP, overwriteScope, targetAllocP);
       anyChange = true;
+      addReportEntry(reportP, LD_VOCAB_SCOPE, "entityModified", NULL);
     }
   }
 
