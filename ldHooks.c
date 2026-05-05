@@ -729,9 +729,20 @@ static void ldRenderHook(void)
   const char*  ctxUrl = (ctxP != NULL) ? ctxP->url : NULL;
   bool         acceptLdJson = (acceptType == LdAcceptLdJson);
 
-  if (acceptLdJson && ctxUrl != NULL)
+  // application/ld+json: @context lives in the body. Content-Type set to
+  // application/ld+json.
+  //
+  // application/geo+json: per § 5.7.1.4 / § 6.3.7, when the Prefer header
+  // is omitted or set to body=ld+json (the default), the Feature(Collection)
+  // shall ALSO carry @context in the body in addition to the Link header.
+  // We follow the default; an explicit Prefer body=json would suppress the
+  // body @context (not yet wired — TODO).
+  //
+  // application/json: @context only via Link header (§ 6.3.5).
+  bool injectCtxIntoBody = (acceptLdJson || acceptGeoJson);
+
+  if (injectCtxIntoBody && ctxUrl != NULL)
   {
-    // Inject @context into response body and set Content-Type
     if (treeP->type == KjArray)
     {
       for (KjNode* itemP = treeP->value.firstChildP; itemP != NULL; itemP = itemP->next)
@@ -749,11 +760,16 @@ static void ldRenderHook(void)
       kjChildAdd(treeP, ctxNode);
     }
 
-    swRest.out.contentType = "application/ld+json";
+    if (acceptLdJson)
+      swRest.out.contentType = "application/ld+json";
+    // (geo+json content-type was already set above when ldToGeoJson ran)
   }
-  else if (ctxUrl != NULL)
+
+  if (ctxUrl != NULL)
   {
-    // Add Link header for application/json responses
+    // Always advertise the context via Link header — required for json,
+    // recommended for ld+json/geo+json so non-Link-aware clients can
+    // discover it without parsing the body.
     const char* suffix  = ">; rel=\"http://www.w3.org/ns/json-ld#context\"; type=\"application/ld+json\"";
     int         linkLen = 1 + strlen(ctxUrl) + strlen(suffix) + 1;
     char*       linkBuf = kaAlloc(&swRest.kalloc, linkLen);
