@@ -50,6 +50,7 @@
 // Timestamps
 #define LD_VOCAB_CREATED_AT        "createdAt"
 #define LD_VOCAB_MODIFIED_AT       "modifiedAt"
+#define LD_VOCAB_DELETED_AT        "deletedAt"
 
 // Entity-level
 #define LD_VOCAB_SCOPE             "scope"

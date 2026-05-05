@@ -54,11 +54,34 @@ static inline bool isNgsildNull(const KjNode* nodeP)
 // (Property.value, Relationship.object, LanguageProperty.languageMap, ...
 // all normalized).
 //
+// Two shapes count as null:
+//   - bare string  "value": "urn:ngsi-ld:null"   (Property, Relationship,
+//                                                 GeoProperty, ...)
+//   - LanguageProperty:  "value": { "@none": "urn:ngsi-ld:null" }
+//     per § 4.5.5.9 — the languageMap container's @none entry carries the
+//     marker; presence of that single entry means the attribute is being
+//     deleted.
+//
 static bool instanceValueIsNull(KjNode* instP)
 {
   if (instP == NULL || instP->type != KjObject)
     return false;
-  return isNgsildNull(kjLookup(instP, "value"));
+
+  KjNode* valP = kjLookup(instP, "value");
+  if (valP == NULL)
+    return false;
+
+  if (isNgsildNull(valP))
+    return true;
+
+  if (valP->type == KjObject)
+  {
+    KjNode* noneP = kjLookup(valP, "@none");
+    if (isNgsildNull(noneP))
+      return true;
+  }
+
+  return false;
 }
 
 
@@ -376,8 +399,17 @@ void ldEntityAttrsSet(KjNode* target, KjNode* fragment,
       KjNode* tInstP = kjLookup(tAttrP, fInstP->name);
 
       //
-      // Instance-level null-marker → delete that dsKey from target
-      // (§ 5.6.2.4 Update Attributes). Only matters if target has it.
+      // Instance-level null-marker (§ 5.6.2.4 Update Attributes): the
+      // primary value member of an instance set to "urn:ngsi-ld:null"
+      // means delete that dsKey from the target.
+      //
+      // After ldApiEntityToDbModel the primary member is always renamed
+      // to "value" (Property.value, Relationship.object,
+      // LanguageProperty.languageMap → all "value"), so the check is
+      // simple. If the wrapper ends up with zero instances, the loop
+      // tail re-classifies the report entry from attributeModified to
+      // attributeDeleted so subscriptions with notificationTrigger
+      // ["attributeDeleted"] match (ETSI 046_22_*).
       //
       if (instanceValueIsNull(fInstP))
       {
@@ -426,8 +458,18 @@ void ldEntityAttrsSet(KjNode* target, KjNode* fragment,
     }
 
     // The attr wrapper (dsKey-keyed map) holds no timestamps — only
-    // individual instances do, which were stamped above.
-    addReportEntry(reportP, fAttrP->name, "attributeModified", preClone);
+    // individual instances do, which were stamped above. If every
+    // instance was null'd away, the attribute itself is gone — drop
+    // the empty wrapper from the target and report attributeDeleted.
+    if (tAttrP->value.firstChildP == NULL)
+    {
+      kjChildRemove(target, tAttrP);
+      addReportEntry(reportP, fAttrP->name, "attributeDeleted", preClone);
+    }
+    else
+    {
+      addReportEntry(reportP, fAttrP->name, "attributeModified", preClone);
+    }
     anyChange = true;
   }
 

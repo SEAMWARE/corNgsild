@@ -32,7 +32,8 @@
 
 #include "swRest/SwRestState.h"                        // swRest
 #include "swRest/swRestClient.h"                       // SwRestClientRequest, etc.
-#include "swJsonld/swldCompactTree.h"                  // swldCompactTree
+#include "swJsonld/swldCompactTree.h"                  // swldCompactTree, swldCompactTreeWith
+#include "swJsonld/swldDownload.h"                     // swldContextFromUrl
 
 #include "swNgsild/LdVocab.h"                          // LD_VOCAB_*
 #include "swNgsild/SwNgsild.h"                         // swNgsild
@@ -330,12 +331,36 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
   KjNode* entityClone = kjClone(NULL, entityP);
 
   //
-  // Attribute-delete markers (§ 5.8.6): for every attributeDeleted
-  // change in the report, inject "<attr>": "urn:ngsi-ld:null" into
-  // the clone (the live entity no longer has the attribute).
+  // Attribute-delete markers (§ 5.8.6): for every attributeDeleted change
+  // in the report, inject the attribute back into the clone (the live
+  // entity no longer has it).
+  //
+  // Shape used:
+  //   "<attr>": { "@none": { "type": <T>, "value": "urn:ngsi-ld:null",
+  //                          [ "deletedAt": <ns> when sysAttrs ] } }
+  //
+  // The `value` key is renamed to object/languageMap/... by
+  // restoreValueKey based on <T>. The showChanges block below appends
+  // previousValue/previousObject/previousLanguageMap onto the wrapper
+  // when its trigger applies.
+  //
+  // SPEC NOTE — § 5.8.6 says the bare string  "<attr>": "urn:ngsi-ld:null"
+  // is the minimum representation, with the object form required only when
+  // sysAttrs / showChanges / datasetId triggers it. The ETSI test suite
+  // (the 13 attribute-deletion fixtures under data/subscriptions/expectations
+  // tagged since_v1.6.1) demands the object form unconditionally and there
+  // is no upstream fix yet — so the broker emits the object form always,
+  // matching the de-facto compliance bar. Flip back to a conditional default
+  // once the fixtures align with v1.9.1.
+  //
+  // datasetId-driven multi-instance handling is not yet implemented — would
+  // require emitting one wrapper per deleted dataset instance.
   //
   if (op == LdNotifyEntityUpdate && reportP != NULL && reportP->changes != NULL)
   {
+    KjNode*   modAtP    = kjLookup(entityClone, LD_VOCAB_MODIFIED_AT);
+    long long deletedNs = (modAtP != NULL && modAtP->type == KjInt) ? modAtP->value.i : 0;
+
     for (KjNode* chP = reportP->changes->value.firstChildP; chP != NULL; chP = chP->next)
     {
       KjNode* reasonP = kjLookup(chP, "reason");
@@ -345,7 +370,38 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
       if (strcmp(reasonP->value.s, "attributeDeleted") != 0) continue;
       if (kjLookup(entityClone, attrP->value.s) != NULL)    continue;
 
-      kjChildAdd(entityClone, kjString(NULL, attrP->value.s, "urn:ngsi-ld:null"));
+      const char* typeStr  = "Property";
+      KjNode*     preValP  = kjLookup(chP, "preValue");
+      if (preValP != NULL && preValP->type == KjObject && preValP->value.firstChildP != NULL)
+      {
+        KjNode* anyInstP = preValP->value.firstChildP;
+        KjNode* tNodeP   = (anyInstP->type == KjObject) ? kjLookup(anyInstP, "type") : NULL;
+        if (tNodeP != NULL && tNodeP->type == KjString)
+          typeStr = tNodeP->value.s;
+      }
+
+      KjNode* wrapper = kjObject(NULL, attrP->value.s);
+      KjNode* inst    = kjObject(NULL, "@none");
+      kjChildAdd(inst, kjString(NULL, "type", typeStr));
+
+      // Per § 5.8.6, LanguageProperty deletion uses `languageMap:
+      // {"@none": "urn:ngsi-ld:null"}`, not the bare null marker. All
+      // other types put the null marker directly as the value.
+      if (strcmp(typeStr, "LanguageProperty") == 0)
+      {
+        KjNode* lmap = kjObject(NULL, "value");
+        kjChildAdd(lmap, kjString(NULL, "@none", LD_VOCAB_NGSILD_NULL));
+        kjChildAdd(inst, lmap);
+      }
+      else
+      {
+        kjChildAdd(inst, kjString(NULL, "value", LD_VOCAB_NGSILD_NULL));
+      }
+
+      if (itemP->sysAttrs == true && deletedNs != 0)
+        kjChildAdd(inst, kjInteger(NULL, LD_VOCAB_DELETED_AT, deletedNs));
+      kjChildAdd(wrapper, inst);
+      kjChildAdd(entityClone, wrapper);
     }
   }
 
@@ -545,8 +601,17 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
     ldLinkedEntitiesHookInvoke(dataArray, itemP->notifJoin, level, swNgsild.tenantP);
   }
 
-  // Compact expanded URIs to short names (covers every data[] entry)
-  swldCompactTree(notification);
+  // Compact expanded URIs to short names (covers every data[] entry).
+  // Use the sub's jsonldContext when set so user-vocabulary terms (e.g.
+  // "Building", "name") compact too — without it only core-context names
+  // (id/type/...) collapse and the body ships as expanded IRIs.
+  SwldContext* notifCtx = NULL;
+  if (itemP->contextUrl != NULL)
+    notifCtx = swldContextFromUrl(itemP->contextUrl, &swRest.kalloc);
+  if (notifCtx != NULL)
+    swldCompactTreeWith(notification, notifCtx);
+  else
+    swldCompactTree(notification);
 
   // § 5.2.12 / § 4.3.6.8: backwards-compat downgrade of entity payloads
   // when the subscription requested an older NGSI-LD version.

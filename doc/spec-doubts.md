@@ -602,6 +602,57 @@ post-merge filter scan. Split-mode is a follow-up.
 
 ---
 
+## 20. § 5.8.6 — attributeDeleted notification representation: bare-string default vs. ETSI fixtures
+
+**Hit:** ETSI test cluster 046_22_* (attributeDeleted notifications) ships
+13 expectation fixtures under `data/subscriptions/expectations/` that
+unconditionally expect the **object form**:
+
+```json
+"locatedAt": { "type": "Relationship", "object": "urn:ngsi-ld:null" }
+```
+
+The tested subscriptions set neither `sysAttrs`, `showChanges`, nor a
+multi-instance `datasetId`.
+
+**Spec:** § 5.8.6, third bullet under "If a Subscription does not define a
+timeInterval...":
+
+> "If an Attribute has been deleted, **only the name of the attribute as
+> key and the URI 'urn:ngsi-ld:null' as value shall be provided**, unless
+> more information is required. The latter is the case, if:
+>
+> - a datasetId needs to be provided;
+> - the notification.sysAttrs is set to true and thus the system generated
+>   sub-attributes [...] have to be provided;
+> - notification.showChanges is set to true and thus a previous value or
+>   object has to be provided."
+
+So the spec mandates the **bare string** as the default; the object form
+is only required when one of those three triggers fires.
+
+**Our call:** We ship the object form unconditionally (matches every
+ETSI fixture). The bare-string default would be strictly conformant but
+fails ~50% of 046_22_*. A code comment in
+`ldSubscriptionNotify.c::buildNotifDataEntry` and a feedback memory record
+the deviation so we can flip back when the fixtures are aligned.
+
+**Fix wanted:** Either
+
+- ETSI updates the 13 fixtures to use the bare-string form (then v1.9.1
+  brokers pass without a deviation), **or**
+- ETSI clarifies that § 5.8.6 always requires the object form regardless
+  of sysAttrs/showChanges/datasetId (then the spec text needs amending —
+  the "shall" + "unless more information is required" wording today
+  unambiguously mandates bare string as the minimum).
+
+The `since_v1.6.1` tag on the affected tests suggests these fixtures may
+predate a § 5.8.6 wording change; the framework's
+`SystemGeneratedTemporalPropertyOperator` already includes a `deletedAt`
+hook, hinting at half-finished alignment.
+
+---
+
 ## Template for new entries
 
 ```

@@ -76,6 +76,7 @@ static void timestampsToIsoStrings(KjNode* objP, KAlloc* allocP)
     if (childP->type == KjInt &&
         (strcmp(childP->name, LD_VOCAB_CREATED_AT)  == 0 ||
          strcmp(childP->name, LD_VOCAB_MODIFIED_AT) == 0 ||
+         strcmp(childP->name, LD_VOCAB_DELETED_AT)  == 0 ||
          strcmp(childP->name, LD_VOCAB_OBSERVED_AT) == 0 ||
          strcmp(childP->name, LD_VOCAB_EXPIRES_AT)  == 0))
     {

@@ -106,7 +106,7 @@ static bool hasDuplicateSibling(KjNode* container, KjNode* nodeP)
 //
 bool ldCheckEntity(KjNode* entityP, LdOp op, KjNode* dbEntityP, KAlloc* faP)
 {
-  OBJECT_CHECK(entityP, "Invalid Entity", "Entity payload must be a JSON object");
+  OBJECT_CHECK_IR(entityP, "Invalid Entity", "Entity payload must be a JSON object");
 
   KLOG_T(LdTCheckEnt, "Checking entity payload for op %s", ldOpToString(op));
 
@@ -187,13 +187,16 @@ bool ldCheckEntity(KjNode* entityP, LdOp op, KjNode* dbEntityP, KAlloc* faP)
     STRING_CHECK(idNodeP, "Invalid Entity Id", "Entity 'id' must be a string");
     URI_CHECK(idNodeP->value.s);
 
-    // Update ops take the id from the URL; forbidding it in the body
-    // prevents id-modification attempts and removes the match/mismatch
-    // ambiguity entirely.
-    if (isUpdateOp(op))
+    // Update ops take the entity id from the URL. The body MAY repeat the
+    // id (the ETSI test suite and some clients do), but if it doesn't
+    // match the URL id the request is ambiguous about which entity to
+    // mutate — reject only that case.
+    if (isUpdateOp(op) && swRest.in.wildcard[0] != NULL &&
+        strcmp(idNodeP->value.s, swRest.in.wildcard[0]) != 0)
     {
-      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Entity Id In Body",
-              "Entity 'id' must not appear in the payload of %s", ldOpToString(op));
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Entity Id Mismatch",
+              "Entity 'id' in body ('%s') does not match URL ('%s')",
+              idNodeP->value.s, swRest.in.wildcard[0]);
       return false;
     }
   }
