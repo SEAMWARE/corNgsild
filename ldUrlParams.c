@@ -244,7 +244,10 @@ void ldParamHook(const char* name, const char* value)
   }
   else if (strcmp(name, "deleteAll") == 0)
   {
-    swNgsild.deleteAll = (value != NULL && strcmp(value, "true") == 0);
+    // Case-insensitive boolean parse — Python's requests serialises a Python
+    // True as the string "True", and tooling commonly varies. Spec doesn't
+    // pin down the case explicitly for bool URL params.
+    swNgsild.deleteAll = (value != NULL && strcasecmp(value, "true") == 0);
   }
   else if (strcmp(name, "entityMap") == 0)
   {

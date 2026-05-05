@@ -38,7 +38,7 @@
 
 #include "kjson/KjNode.h"                              // KjNode
 #include "kjson/kjLookup.h"                            // kjLookup
-#include "kjson/kjBuilder.h"                           // kjChildRemove
+#include "kjson/kjBuilder.h"                           // kjChildRemove, kjObject, kjChildAdd
 
 #include "swNgsild/ldSimplifyEntity.h"                 // Own interface
 
@@ -92,7 +92,31 @@ static int attrSubAttrCount(KjNode* attrP, const char* typeStr)
 
 // -----------------------------------------------------------------------------
 //
+// primaryValueKey - the simplified-value key name for a given attribute type
+//
+static const char* primaryValueKey(const char* typeStr)
+{
+  if (strcmp(typeStr, "Property")         == 0) return "value";
+  if (strcmp(typeStr, "GeoProperty")      == 0) return "value";
+  if (strcmp(typeStr, "Relationship")     == 0) return "object";
+  if (strcmp(typeStr, "LanguageProperty") == 0) return "languageMap";
+  if (strcmp(typeStr, "VocabProperty")    == 0) return "vocab";
+  if (strcmp(typeStr, "JsonProperty")     == 0) return "json";
+  if (strcmp(typeStr, "ListProperty")     == 0) return "valueList";
+  if (strcmp(typeStr, "ListRelationship") == 0) return "objectList";
+  return NULL;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldSimplifyEntity -
+//
+// Per spec § 4.5.4:
+//   - Single-instance attribute  → just the value
+//   - Multi-instance (array)     → { "dataset": { <dsKey>: <simplifiedValue>, ... } }
+//     where dsKey is the datasetId or "@none" for the default instance.
 //
 void ldSimplifyEntity(KjNode* entityP)
 {
@@ -105,7 +129,57 @@ void ldSimplifyEntity(KjNode* entityP)
   {
     KjNode* nextP = childP->next;
 
-    if (childP->name == NULL || isEntityKeyword(childP->name) || childP->type != KjObject)
+    if (childP->name == NULL || isEntityKeyword(childP->name))
+    {
+      childP = nextP;
+      continue;
+    }
+
+    //
+    // Multi-instance: KjArray of attribute objects (one per datasetId).
+    // Build a `dataset` map keyed by datasetId / "@none".
+    //
+    if (childP->type == KjArray)
+    {
+      KjNode* datasetMap = kjObject(NULL, "dataset");
+
+      for (KjNode* instP = childP->value.firstChildP; instP != NULL; instP = instP->next)
+      {
+        if (instP->type != KjObject)
+          continue;
+
+        KjNode* typeP = kjLookup(instP, "type");
+        if (typeP == NULL || typeP->type != KjString)
+          continue;
+
+        const char* valKey = primaryValueKey(typeP->value.s);
+        if (valKey == NULL)
+          continue;
+
+        KjNode* valP = kjLookup(instP, valKey);
+        if (valP == NULL)
+          continue;
+
+        KjNode* dsP  = kjLookup(instP, "datasetId");
+        const char* dsKey = (dsP != NULL && dsP->type == KjString) ? dsP->value.s : "@none";
+
+        // Detach the value node and rename it to the dsKey.
+        kjChildRemove(instP, valP);
+        valP->name = (char*) dsKey;
+        kjChildAdd(datasetMap, valP);
+      }
+
+      // Replace the array with an object  { "dataset": <map> }.
+      childP->type            = KjObject;
+      childP->value.firstChildP = NULL;
+      childP->lastChild       = NULL;
+      kjChildAdd(childP, datasetMap);
+
+      childP = nextP;
+      continue;
+    }
+
+    if (childP->type != KjObject)
     {
       childP = nextP;
       continue;
@@ -118,23 +192,8 @@ void ldSimplifyEntity(KjNode* entityP)
       continue;
     }
 
-    const char* typeStr = typeP->value.s;
-    KjNode* valueNode = NULL;
-
-    if (strcmp(typeStr, "Property") == 0 || strcmp(typeStr, "GeoProperty") == 0)
-      valueNode = kjLookup(childP, "value");
-    else if (strcmp(typeStr, "Relationship") == 0)
-      valueNode = kjLookup(childP, "object");
-    else if (strcmp(typeStr, "LanguageProperty") == 0)
-      valueNode = kjLookup(childP, "languageMap");
-    else if (strcmp(typeStr, "VocabProperty") == 0)
-      valueNode = kjLookup(childP, "vocab");
-    else if (strcmp(typeStr, "JsonProperty") == 0)
-      valueNode = kjLookup(childP, "json");
-    else if (strcmp(typeStr, "ListProperty") == 0)
-      valueNode = kjLookup(childP, "valueList");
-    else if (strcmp(typeStr, "ListRelationship") == 0)
-      valueNode = kjLookup(childP, "objectList");
+    const char* valKey    = primaryValueKey(typeP->value.s);
+    KjNode*     valueNode = (valKey != NULL) ? kjLookup(childP, valKey) : NULL;
 
     if (valueNode != NULL)
     {

@@ -39,6 +39,7 @@
 #include "swNgsild/SwNgsild.h"                         // swNgsild
 #include "swNgsild/LdSubCache.h"                       // LdSubCache, LdSubCacheItem
 #include "swNgsild/ldEntityToApi.h"                    // ldEntityToApi
+#include "swNgsild/ldIsEntityKeyword.h"                // ldIsEntityKeyword
 #include "swNgsild/ldStripSysAttrs.h"                  // ldStripSysAttrs
 #include "swNgsild/ldEntityMatch.h"                    // ldEntityMatchQ
 #include "swNgsild/ldToGeoJson.h"                     // ldToGeoJson
@@ -115,9 +116,16 @@ static bool triggerMatches(LdSubCacheItem* itemP, LdNotifyOp op, LdMergeReport* 
   if (op == LdNotifyEntityUpdate && (mask & LD_TRIGGER_ENTITY_UPDATED)) return true;
 
   //
-  // Entity create also triggers attributeCreated (all attrs are new)
+  // Entity create also triggers attributeCreated (all attrs are new) and
+  // entity delete also triggers attributeDeleted (all attrs are gone).
+  // The spec is silent on the symmetry — § 5.2.12 only says entityUpdated
+  // = attrCreated + attrUpdated + attrDeleted — but the ETSI 046_22_12/13
+  // fixtures expect the create/delete symmetry, so we follow them. When the
+  // spec clarifies, we can revisit.
   //
   if (op == LdNotifyEntityCreate && (mask & LD_TRIGGER_ATTR_CREATED))
+    return true;
+  if (op == LdNotifyEntityDelete && (mask & LD_TRIGGER_ATTR_DELETED))
     return true;
 
   //
@@ -298,8 +306,16 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
   uint64_t        deletedAtNs = penP->deletedAtNs;
 
   //
-  // Entity delete (§ 5.8.6): only {id, type, deletedAt}. sysAttrs
-  // adds createdAt/modifiedAt from the pre-delete snapshot.
+  // Entity delete (§ 5.8.6): {id, type, deletedAt}. sysAttrs adds
+  // createdAt/modifiedAt from the pre-delete snapshot.
+  //
+  // When the subscription matched via attributeDeleted (because deleting
+  // an entity also deletes its attributes — see triggerMatches comment),
+  // additionally include each watched attribute as the extended null-marker
+  // form { type, value/object/languageMap: "urn:ngsi-ld:null" }, matching
+  // ETSI 046_22_12/13. Subscriptions watching all attributes (no
+  // watchedAttributes filter) get every attribute the pre-delete entity
+  // carried.
   //
   if (op == LdNotifyEntityDelete)
   {
@@ -310,19 +326,119 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
     if (srcId   != NULL) kjChildAdd(out, kjClone(NULL, srcId));
     if (srcType != NULL) kjChildAdd(out, kjClone(NULL, srcType));
 
+    char     deletedIso[48];
+    deletedIso[0] = 0;
     if (deletedAtNs != 0)
     {
-      char iso[48];
-      nsToIsoLocal(deletedAtNs, iso, sizeof(iso));
-      kjChildAdd(out, kjString(NULL, "deletedAt", iso));
+      nsToIsoLocal(deletedAtNs, deletedIso, sizeof(deletedIso));
+      kjChildAdd(out, kjString(NULL, "deletedAt", deletedIso));
     }
 
     if (itemP->sysAttrs)
     {
+      // Storage holds createdAt/modifiedAt as KjInt (nanoseconds since
+      // epoch); the entity-delete body skips the ldEntityToApi pipeline
+      // that normally rewrites these to ISO 8601 strings, so do the
+      // conversion inline here.
       KjNode* srcCreated  = kjLookup(entityP, LD_VOCAB_CREATED_AT);
       KjNode* srcModified = kjLookup(entityP, LD_VOCAB_MODIFIED_AT);
-      if (srcCreated  != NULL) kjChildAdd(out, kjClone(NULL, srcCreated));
-      if (srcModified != NULL) kjChildAdd(out, kjClone(NULL, srcModified));
+      if (srcCreated != NULL && srcCreated->type == KjInt)
+      {
+        char iso[48];
+        nsToIsoLocal((uint64_t) srcCreated->value.i, iso, sizeof(iso));
+        kjChildAdd(out, kjString(NULL, LD_VOCAB_CREATED_AT, iso));
+      }
+      else if (srcCreated != NULL)
+        kjChildAdd(out, kjClone(NULL, srcCreated));
+      if (srcModified != NULL && srcModified->type == KjInt)
+      {
+        char iso[48];
+        nsToIsoLocal((uint64_t) srcModified->value.i, iso, sizeof(iso));
+        kjChildAdd(out, kjString(NULL, LD_VOCAB_MODIFIED_AT, iso));
+      }
+      else if (srcModified != NULL)
+        kjChildAdd(out, kjClone(NULL, srcModified));
+    }
+
+    int triggerMask = (itemP->triggerMask != 0) ? itemP->triggerMask : LD_TRIGGER_DEFAULT;
+    if ((triggerMask & LD_TRIGGER_ATTR_DELETED) != 0)
+    {
+      for (KjNode* attrP = entityP->value.firstChildP; attrP != NULL; attrP = attrP->next)
+      {
+        if (attrP->name == NULL || attrP->type != KjObject) continue;
+        if (ldIsEntityKeyword(attrP->name))                 continue;
+
+        // watchedAttributes filter (already-expanded IRIs in the cache).
+        if (itemP->watchedAttrsV != NULL)
+        {
+          bool watched = false;
+          for (int i = 0; itemP->watchedAttrsV[i] != NULL; i++)
+          {
+            if (strcmp(attrP->name, itemP->watchedAttrsV[i]) == 0) { watched = true; break; }
+          }
+          if (!watched) continue;
+        }
+
+        // Pull the type from any instance (all share the same type).
+        const char* typeStr = "Property";
+        KjNode* anyInstP = attrP->value.firstChildP;
+        if (anyInstP != NULL && anyInstP->type == KjObject)
+        {
+          KjNode* tNodeP = kjLookup(anyInstP, "type");
+          if (tNodeP != NULL && tNodeP->type == KjString)
+            typeStr = tNodeP->value.s;
+        }
+
+        KjNode* nullAttr = kjObject(NULL, attrP->name);
+        kjChildAdd(nullAttr, kjString(NULL, "type", typeStr));
+        if (strcmp(typeStr, "LanguageProperty") == 0)
+        {
+          KjNode* lmap = kjObject(NULL, "languageMap");
+          kjChildAdd(lmap, kjString(NULL, "@none", LD_VOCAB_NGSILD_NULL));
+          kjChildAdd(nullAttr, lmap);
+        }
+        else
+        {
+          const char* primaryKey = "value";
+          if      (strcmp(typeStr, "Relationship")     == 0) primaryKey = "object";
+          else if (strcmp(typeStr, "VocabProperty")    == 0) primaryKey = "vocab";
+          else if (strcmp(typeStr, "JsonProperty")     == 0) primaryKey = "json";
+          else if (strcmp(typeStr, "ListProperty")     == 0) primaryKey = "valueList";
+          else if (strcmp(typeStr, "ListRelationship") == 0) primaryKey = "objectList";
+          kjChildAdd(nullAttr, kjString(NULL, primaryKey, LD_VOCAB_NGSILD_NULL));
+        }
+
+        if (itemP->sysAttrs && anyInstP != NULL && anyInstP->type == KjObject)
+        {
+          // Per-attribute sysAttrs: pull createdAt/modifiedAt from the
+          // pre-delete instance (storage form is KjInt nanoseconds — convert
+          // to ISO 8601 here since the entity-delete branch bypasses
+          // ldEntityToApi). Attach a fresh deletedAt mirroring the
+          // entity-level one.
+          KjNode* aCreated  = kjLookup(anyInstP, LD_VOCAB_CREATED_AT);
+          KjNode* aModified = kjLookup(anyInstP, LD_VOCAB_MODIFIED_AT);
+          if (aCreated != NULL && aCreated->type == KjInt)
+          {
+            char iso[48];
+            nsToIsoLocal((uint64_t) aCreated->value.i, iso, sizeof(iso));
+            kjChildAdd(nullAttr, kjString(NULL, LD_VOCAB_CREATED_AT, iso));
+          }
+          else if (aCreated != NULL)
+            kjChildAdd(nullAttr, kjClone(NULL, aCreated));
+          if (aModified != NULL && aModified->type == KjInt)
+          {
+            char iso[48];
+            nsToIsoLocal((uint64_t) aModified->value.i, iso, sizeof(iso));
+            kjChildAdd(nullAttr, kjString(NULL, LD_VOCAB_MODIFIED_AT, iso));
+          }
+          else if (aModified != NULL)
+            kjChildAdd(nullAttr, kjClone(NULL, aModified));
+          if (deletedIso[0] != 0)
+            kjChildAdd(nullAttr, kjString(NULL, "deletedAt", deletedIso));
+        }
+
+        kjChildAdd(out, nullAttr);
+      }
     }
 
     return out;
@@ -368,10 +484,16 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
       if (reasonP == NULL || reasonP->type != KjString) continue;
       if (attrP   == NULL || attrP->type   != KjString) continue;
       if (strcmp(reasonP->value.s, "attributeDeleted") != 0) continue;
-      if (kjLookup(entityClone, attrP->value.s) != NULL)    continue;
 
-      const char* typeStr  = "Property";
-      KjNode*     preValP  = kjLookup(chP, "preValue");
+      KjNode* dsKeyP        = kjLookup(chP, "datasetId");
+      const char* deletedDs = (dsKeyP != NULL && dsKeyP->type == KjString) ? dsKeyP->value.s : NULL;
+
+      KjNode* existingAttr = kjLookup(entityClone, attrP->value.s);
+
+      // Determine the attribute type. preValue (when present) is the
+      // pre-merge wrapper; otherwise read from a surviving instance.
+      const char* typeStr = "Property";
+      KjNode*     preValP = kjLookup(chP, "preValue");
       if (preValP != NULL && preValP->type == KjObject && preValP->value.firstChildP != NULL)
       {
         KjNode* anyInstP = preValP->value.firstChildP;
@@ -379,11 +501,17 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
         if (tNodeP != NULL && tNodeP->type == KjString)
           typeStr = tNodeP->value.s;
       }
+      else if (existingAttr != NULL && existingAttr->type == KjObject && existingAttr->value.firstChildP != NULL)
+      {
+        KjNode* anyInstP = existingAttr->value.firstChildP;
+        KjNode* tNodeP   = (anyInstP->type == KjObject) ? kjLookup(anyInstP, "type") : NULL;
+        if (tNodeP != NULL && tNodeP->type == KjString)
+          typeStr = tNodeP->value.s;
+      }
 
-      KjNode* wrapper = kjObject(NULL, attrP->value.s);
-      KjNode* inst    = kjObject(NULL, "@none");
+      // Build the deleted-instance node: { type, value/lmap=null, [deletedAt] }.
+      KjNode* inst = kjObject(NULL, NULL);
       kjChildAdd(inst, kjString(NULL, "type", typeStr));
-
       // Per § 5.8.6, LanguageProperty deletion uses `languageMap:
       // {"@none": "urn:ngsi-ld:null"}`, not the bare null marker. All
       // other types put the null marker directly as the value.
@@ -397,11 +525,28 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
       {
         kjChildAdd(inst, kjString(NULL, "value", LD_VOCAB_NGSILD_NULL));
       }
-
       if (itemP->sysAttrs == true && deletedNs != 0)
         kjChildAdd(inst, kjInteger(NULL, LD_VOCAB_DELETED_AT, deletedNs));
-      kjChildAdd(wrapper, inst);
-      kjChildAdd(entityClone, wrapper);
+
+      if (existingAttr != NULL && deletedDs != NULL)
+      {
+        // Per-instance deletion (§ 5.8.6 datasetId trigger): the wrapper
+        // still holds surviving instances. Add the deleted instance as
+        // a fresh dsKey-keyed entry so the array form rendered downstream
+        // includes it as the null-marker entry.
+        inst->name = (char*) deletedDs;
+        kjChildAdd(existingAttr, inst);
+      }
+      else if (existingAttr == NULL)
+      {
+        // Whole-attribute deletion: inject a new wrapper with a single
+        // @none instance carrying the null marker.
+        inst->name = (char*) "@none";
+        KjNode* wrapper = kjObject(NULL, attrP->value.s);
+        kjChildAdd(wrapper, inst);
+        kjChildAdd(entityClone, wrapper);
+      }
+      // else: attribute still present and no datasetId — nothing to inject.
     }
   }
 

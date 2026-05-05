@@ -653,6 +653,93 @@ hook, hinting at half-finished alignment.
 
 ---
 
+## 21. § 5.2.12 — entityDeleted/attributeDeleted trigger symmetry on entity delete
+
+**Hit:** ETSI tests 046_22_12 / 046_22_13 (entity-delete cluster) configure
+subscriptions with `notificationTrigger: ["attributeDeleted"]` only — no
+`entityDeleted`. The fixture expects the subscription to fire when the
+entity is deleted, with body shape:
+
+```json
+{
+  "id": "...",
+  "type": "Building",
+  "deletedAt": "<iso>",
+  "name": { "type": "Property", "value": "urn:ngsi-ld:null" }
+}
+```
+
+(046_22_13 adds `sysAttrs` → entity-level + per-attribute
+`createdAt`/`modifiedAt` from the pre-delete snapshot.)
+
+**Spec:** § 5.2.12 enumerates six triggers — `entityCreated`,
+`entityUpdated`, `entityDeleted`, `attributeCreated`, `attributeUpdated`,
+`attributeDeleted`. **Only** `entityUpdated` is explicitly stated to
+subsume sub-events:
+
+> "entityUpdated" is equivalent to the combination "attributeCreated",
+> "attributeUpdated" and "attributeDeleted".
+
+There is **no equivalent statement** for `entityDeleted` ⇒
+`attributeDeleted` (or `entityCreated` ⇒ `attributeCreated`, though we
+already do that side too).
+
+§ 5.8.6 then says, for the body, "If the notification was triggered by
+the deletion of an Entity and the notification.showChanges member is not
+set to true, **only the deletedAt system property shall be provided**."
+The fixtures contradict this — they include the watched attribute as a
+null-marker entry alongside `deletedAt`.
+
+**Our call:** Two deviations layered on each other to match the test:
+
+1. `triggerMatches` — `LdNotifyEntityDelete` also fires for subs with
+   `attributeDeleted` trigger (symmetric to the existing
+   `LdNotifyEntityCreate` ⇒ `attributeCreated` mapping). Comment in
+   `ldSubscriptionNotify.c` flags the spec gap.
+2. `buildNotifDataEntry` — for `LdNotifyEntityDelete` events, append each
+   non-keyword attribute the pre-delete entity had (subject to the sub's
+   `watchedAttributes` filter) as a null-marker wrapper
+   `{ type, value/object/languageMap: "urn:ngsi-ld:null" }`. With
+   `sysAttrs`, also forward each attribute's `createdAt`/`modifiedAt` and
+   inject a fresh `deletedAt` per attribute.
+
+**Fix wanted:**
+
+- Either add the `entityDeleted` ⇒ `attributeDeleted` symmetry statement
+  to § 5.2.12, **and** update § 5.8.6's "only the deletedAt" rule to
+  describe the watched-attribute body case explicitly, **or**
+- Update the fixtures to use `notificationTrigger: ["entityDeleted"]` and
+  drop the per-attribute body content (just `{id, type, deletedAt}`).
+
+Either resolution would let us flip the deviation back to spec-strict
+behaviour. Until then, our broker matches what `046_22_12/13` demand.
+
+---
+
+## 22. § 5.6.5 — `?deleteAll=` boolean parsing case-sensitivity
+
+**Hit:** Python's `requests` library serialises a Python `True` to the
+literal string `"True"` (capital T) on URL query params. ETSI test
+046_22_08 sends `?deleteAll=True`. The broker was strict-`strcmp("true")`
+and silently treated it as false (deleted only `@none` instead of all
+instances), causing the wrong notification.
+
+**Spec:** § 6.3.2 / § 5.6.5 don't pin down the case for boolean URL
+parameters. The "Boolean" datatype reference (§ 5.2.16) likewise leaves
+case unspecified for query-string serialisation.
+
+**Our call:** Case-insensitive parse (`strcasecmp`). Same change should
+probably apply to other bool URL params (`details`, etc.) — currently
+done only for `deleteAll`.
+
+**Fix wanted:** Spec clarification on whether bool URL params must be
+strict lower-case `true`/`false`, or whether implementations should
+accept any case. If strict, the test framework should fix
+`requests.delete(..., params={"deleteAll": "true"})` to send the
+lower-case literal instead of letting Python serialise `True`.
+
+---
+
 ## Template for new entries
 
 ```
