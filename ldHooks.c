@@ -669,8 +669,9 @@ static void ldRenderHook(void)
   // media types. Highest q wins; equal q falls back to first-listed.
   //
   // 406 carve-out: geo+json by itself is acceptable on Retrieve Entity
-  // (§ 5.7.1) and Query Entities (§ 5.7.2) only; on every other operation
-  // a geo+json-only Accept is "Not Acceptable".
+  // (§ 5.7.1), Query Entities (§ 5.7.2) and the POST-body variant of
+  // Query Entities (§ 5.7.3, /entityOperations/query) only; on every
+  // other operation a geo+json-only Accept is "Not Acceptable".
   //
   // None of the three is acceptable → 406 across the board.
   //
@@ -679,7 +680,7 @@ static void ldRenderHook(void)
   //
   LdAcceptType acceptType    = ldAcceptParse(swRest.in.accept);
   uint64_t     ldOp          = (swRest.serviceP != NULL) ? swRest.serviceP->ldOp : 0;
-  bool         entityReadOp  = (ldOp & (LdOpRetrieveEntity | LdOpQueryEntities)) != 0;
+  bool         entityReadOp  = (ldOp & (LdOpRetrieveEntity | LdOpQueryEntities | LdOpBatchQuery)) != 0;
 
   if (acceptType == LdAcceptNone ||
       (acceptType == LdAcceptGeoJson && !entityReadOp))
