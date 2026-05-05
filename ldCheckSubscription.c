@@ -8,6 +8,7 @@
 //
 #include <stdbool.h>                                     // bool
 #include <string.h>                                      // strcmp
+#include <time.h>                                        // time
 
 #include "kbase/kLibLog.h"                             // KLOG_T
 #include "kalloc/KAlloc.h"                             // KAlloc
@@ -483,7 +484,18 @@ bool ldCheckSubscription(KjNode* subP, LdOp op, KAlloc* kaP)
     }
     else if (strcmp(name, "jsonldContext") == 0)
     {
-      // Internal field — ignore silently
+      // § 5.2.12 — jsonldContext is a URL from which the broker shall
+      // retrieve the JSON-LD @context, so it must be dereferenceable —
+      // http:// or https:// only. A URN, a bare short name, or anything
+      // else is BadRequestData.
+      STRING_CHECK(childP, "Invalid Subscription", "'jsonldContext' must be a string");
+      const char* s = childP->value.s;
+      if (strncmp(s, "http://", 7) != 0 && strncmp(s, "https://", 8) != 0)
+      {
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
+                "'jsonldContext' must be an http(s) URL: '%s'", s);
+        return false;
+      }
     }
     else if (strcmp(name, "ngsildConformance") == 0)
     {
@@ -629,7 +641,25 @@ bool ldCheckSubscription(KjNode* subP, LdOp op, KAlloc* kaP)
   if (expiresAtP != NULL)
   {
     STRING_CHECK(expiresAtP, "Invalid Subscription", "'expiresAt' must be a DateTime string");
-    DATETIME_CHECK(expiresAtP->value.s, "'expiresAt' is not a valid ISO 8601 DateTime");
+    double expiresAtSec = ldCheckDateTime(expiresAtP->value.s);
+    if (expiresAtSec < 0)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
+              "'expiresAt' is not a valid ISO 8601 DateTime");
+      return false;
+    }
+
+    // § 5.2.12 — at create time, expiresAt must be in the future.
+    // Update is allowed to set a past timestamp (used to expire-immediately).
+    if (op == LdOpCreateSubscription || op == LdOpCreateCsourceSubscription)
+    {
+      if (expiresAtSec <= (double) time(NULL))
+      {
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
+                "'expiresAt' must be in the future");
+        return false;
+      }
+    }
   }
 
   //
