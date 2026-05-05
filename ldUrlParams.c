@@ -274,7 +274,13 @@ void ldParamHook(const char* name, const char* value)
   }
   else if (strcmp(name, "details") == 0)
   {
-    swNgsild.details = (value != NULL && strcmp(value, "true") == 0);
+    if (value == NULL || (strcmp(value, "true") != 0 && strcmp(value, "false") != 0))
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid request",
+              "'details' must be 'true' or 'false'");
+      return;
+    }
+    swNgsild.details = (strcmp(value, "true") == 0);
   }
   else if (strcmp(name, "deleteAll") == 0)
   {
@@ -297,6 +303,16 @@ void ldParamHook(const char* name, const char* value)
   }
   else if (strcmp(name, "kind") == 0)
   {
+    // § 5.13.3: only "Hosted", "Cached", "ImplicitlyCreated" are valid.
+    if (value == NULL ||
+        (strcmp(value, "Hosted")            != 0 &&
+         strcmp(value, "Cached")            != 0 &&
+         strcmp(value, "ImplicitlyCreated") != 0))
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid request",
+              "'kind' must be 'Hosted', 'Cached' or 'ImplicitlyCreated'");
+      return;
+    }
     swNgsild.kind = (char*) value;
   }
   else if (strcmp(name, "join") == 0)
