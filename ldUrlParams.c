@@ -390,10 +390,18 @@ void ldParamHook(const char* name, const char* value)
 
     // § 6.3.18: validate every comma-separated token; an unknown one is
     // InvalidRequest, not silently ignored.
+    // Tokens spec'd across § 6.3.18 / batch ops § 5.6.7-11 / temporal § 5.7.3+ /
+    // pagination § 5.5.4 / TRoE § 5.5.5. Per-route applicability is enforced
+    // downstream — this list only rejects truly unknown tokens (typos / malicious
+    // input) per spec's "InvalidRequest" rather than silently dropping them.
     static const char* validOptions[] = {
       "keyValues", "simplified", "concise", "normalized",
       "temporalValues", "aggregatedValues",
-      "sysAttrs", "noOverwrite", "update",
+      "sysAttrs",
+      "noOverwrite",
+      "update", "replace",
+      "count",
+      "audit",
       NULL
     };
     char* tok = (char*) value;
