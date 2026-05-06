@@ -425,7 +425,12 @@ static void ldParseHook(void)
     }
   }
 
-  swNgsild.contextP = swldExpandTree(swRest.in.requestTree, &swRest.kalloc);
+  // ldUrlParams.c has already set swNgsild.contextP from the Link header
+  // (or to the core context if no Link). swldExpandTree uses that as the
+  // base context; an in-body @context overrides it for the body subtree
+  // and becomes the new effective context (returned and chained back
+  // into swNgsild.contextP).
+  swNgsild.contextP = swldExpandTree(swRest.in.requestTree, swNgsild.contextP, &swRest.kalloc);
 
   //
   // Relink `type` at its original position (right after typePrevP, or at
