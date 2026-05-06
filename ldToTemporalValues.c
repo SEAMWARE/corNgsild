@@ -178,18 +178,15 @@ static void transformAttr(KjNode* attrP, const char* timeProp, Kjson* kjsonP, KA
   const char* firstKey  = firstElementKey(attrType);
   bool        wrapped   = firstElementWrapped(attrType);
 
-  // Group instances by datasetId. Use a small fixed-capacity bucket
-  // table keyed by datasetId string (NULL → "default" group).
-  // Spec § 4.5.5 caps the number of independent series at the size of
-  // distinct datasetId values plus the default — typical entities have
-  // < 10 distinct series, so 32 is more than enough.
+  // Group instances by datasetId, lazily — buckets are created only as
+  // instances are seen, so an upstream datasetId filter that excludes
+  // the default-dataset rows doesn't leave an empty default bucket
+  // dangling in the response (§ 4.5.5).
+  // Cap at 32 distinct series — typical entities have <10.
   enum { MAX_DATASETS = 32 };
-  const char* dsId[MAX_DATASETS];        // NULL slot 0 = default
+  const char* dsId[MAX_DATASETS];        // NULL = default-dataset bucket
   KjNode*     valuesArrV[MAX_DATASETS];
   int         dsCount = 0;
-  dsId[0]       = NULL;
-  valuesArrV[0] = kjArray(kjsonP, valuesKey);
-  dsCount       = 1;
 
   for (KjNode* instP = firstP; instP != NULL; instP = instP->next)
   {
@@ -218,16 +215,29 @@ static void transformAttr(KjNode* attrP, const char* timeProp, Kjson* kjsonP, KA
     addPair(valuesArrV[slot], instP, firstKey, wrapped, timeProp, kjsonP);
   }
 
-  // Determine output shape: single object if only the default bucket is
-  // populated, array of per-datasetId objects otherwise.
-  bool singleSeries = (dsCount == 1);
+  if (dsCount == 0)
+  {
+    // No instances at all (every one was malformed). Render an empty
+    // single-bucket shape for consistency with the no-instances guard
+    // above.
+    attrP->type              = KjObject;
+    attrP->value.firstChildP = NULL;
+    attrP->lastChild         = NULL;
+    kjChildAdd(attrP, kjString(kjsonP, "type", attrType));
+    kjChildAdd(attrP, kjArray(kjsonP, valuesKey));
+    return;
+  }
 
-  if (singleSeries)
+  // Determine output shape: single object when one bucket survives,
+  // array of per-datasetId objects when more than one.
+  if (dsCount == 1)
   {
     attrP->type              = KjObject;
     attrP->value.firstChildP = NULL;
     attrP->lastChild         = NULL;
     kjChildAdd(attrP, kjString(kjsonP, "type", attrType));
+    if (dsId[0] != NULL)
+      kjChildAdd(attrP, kjString(kjsonP, "datasetId", (char*) dsId[0]));
     kjChildAdd(attrP, valuesArrV[0]);
     return;
   }
