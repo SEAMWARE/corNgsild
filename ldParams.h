@@ -186,22 +186,24 @@
 // belongs to the multi-entity Query Temporal Evolution (§ 5.7.4 /
 // § 6.18.3.2) and to subscriptions (§ 4.9). Don't add it here.
 #define LD_PARAMS_GET_TEMPORAL_ENTITY  \
-  ( LD_PARAM_ATTRS         \
-  | LD_PARAM_OPTIONS       \
-  | LD_PARAM_TIMEPROPERTY  \
-  | LD_PARAM_TIMEREL       \
-  | LD_PARAM_TIMEAT        \
-  | LD_PARAM_ENDTIMEAT     \
-  | LD_PARAM_LAST_N        \
-  | LD_PARAM_DATASETID     \
-  | LD_PARAM_PICK          \
-  | LD_PARAM_OMIT          \
-  | LD_PARAM_LANG          \
-  | LD_PARAM_FORMAT        \
-  | LD_PARAM_SYSATTRS      \
-  | LD_PARAM_EXPAND_VALUES \
-  | LD_PARAM_JSON_KEYS     \
-  | LD_PARAM_LOCAL         \
+  ( LD_PARAM_ATTRS                \
+  | LD_PARAM_OPTIONS              \
+  | LD_PARAM_TIMEPROPERTY         \
+  | LD_PARAM_TIMEREL              \
+  | LD_PARAM_TIMEAT               \
+  | LD_PARAM_ENDTIMEAT            \
+  | LD_PARAM_LAST_N               \
+  | LD_PARAM_DATASETID            \
+  | LD_PARAM_PICK                 \
+  | LD_PARAM_OMIT                 \
+  | LD_PARAM_LANG                 \
+  | LD_PARAM_FORMAT               \
+  | LD_PARAM_SYSATTRS             \
+  | LD_PARAM_EXPAND_VALUES        \
+  | LD_PARAM_JSON_KEYS            \
+  | LD_PARAM_LOCAL                \
+  | LD_PARAM_AGGR_METHODS         \
+  | LD_PARAM_AGGR_PERIOD_DURATION \
   )
 
 #define LD_PARAMS_POST_ENTITY_ATTRS  \

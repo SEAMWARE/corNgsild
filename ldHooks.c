@@ -677,9 +677,9 @@ static void ldRenderHook(void)
         swNgsild.aggrMethodsV != NULL && swNgsild.aggrPeriodDuration != NULL)
     {
       uint64_t periodNs = ldIso8601DurationToNs(swNgsild.aggrPeriodDuration);
-      uint64_t startNs  = swNgsild.timeAtNs;
-      uint64_t endNs    = swNgsild.endTimeAtNs;  // 0 → ldToAggregatedValues uses latest sample seen
-      if (periodNs > 0 && startNs > 0)
+      uint64_t startNs  = swNgsild.timeAtNs;       // 0 → ldToAggregatedValues uses earliest sample seen
+      uint64_t endNs    = swNgsild.endTimeAtNs;    // 0 → ldToAggregatedValues uses latest sample seen
+      if (periodNs > 0)
         ldToAggregatedValues(treeP, swNgsild.aggrMethodsV, periodNs, startNs, endNs,
                              swNgsild.timeproperty, swRest.kjsonP, &swRest.kalloc);
     }

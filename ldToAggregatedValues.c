@@ -128,19 +128,31 @@ static uint64_t isoToNs(const char* iso)
 
 // -----------------------------------------------------------------------------
 //
-// nsToIso - format an epoch-ns timestamp as ISO 8601 (UTC, ms precision).
+// nsToIso - format an epoch-ns timestamp as ISO 8601 (UTC). Emits the
+// `.SSS` fractional second only when the sub-second component is non-zero,
+// so a clean second renders as `2020-08-01T12:03:00Z` (matching the
+// canonical fixtures used by ETSI's aggregated-representation tests).
 //
 static char* nsToIso(uint64_t ns, KAlloc* faP)
 {
   const int sz = 64;
   char* buf = (char*) kaAlloc(faP, sz);
   time_t t  = (time_t) (ns / 1000000000ULL);
-  long   us = (long) ((ns % 1000000000ULL) / 1000);
+  long   ms = (long) ((ns % 1000000000ULL) / 1000000);
   struct tm tmv;
   gmtime_r(&t, &tmv);
-  snprintf(buf, sz, "%04d-%02d-%02dT%02d:%02d:%02d.%03ldZ",
-           tmv.tm_year + 1900, tmv.tm_mon + 1, tmv.tm_mday,
-           tmv.tm_hour, tmv.tm_min, tmv.tm_sec, us / 1000);
+  if (ms == 0)
+  {
+    snprintf(buf, sz, "%04d-%02d-%02dT%02d:%02d:%02dZ",
+             tmv.tm_year + 1900, tmv.tm_mon + 1, tmv.tm_mday,
+             tmv.tm_hour, tmv.tm_min, tmv.tm_sec);
+  }
+  else
+  {
+    snprintf(buf, sz, "%04d-%02d-%02dT%02d:%02d:%02d.%03ldZ",
+             tmv.tm_year + 1900, tmv.tm_mon + 1, tmv.tm_mday,
+             tmv.tm_hour, tmv.tm_min, tmv.tm_sec, ms);
+  }
   return buf;
 }
 
@@ -462,27 +474,41 @@ static void aggregateAttr(KjNode*      attrP,
   const char* valueKey = isRelationship ? "object" : "value";
 
   // Establish window end if caller passed 0 → take latest sample seen.
-  uint64_t winEnd = endNs;
-  if (winEnd == 0)
+  // Establish window start if caller passed 0 → take earliest sample seen.
+  // (timerel/timeAt are optional on the single-entity GET, so startNs may
+  // be unset; aggregating over the full data range is the natural default.)
+  uint64_t winEnd   = endNs;
+  uint64_t winStart = startNs;
+  if (winEnd == 0 || winStart == 0)
   {
+    uint64_t earliest = UINT64_MAX;
+    uint64_t latest   = 0;
     for (KjNode* instP = firstP; instP != NULL; instP = instP->next)
     {
       if (instP->type != KjObject) continue;
       KjNode* tsP = kjLookup(instP, timeProp);
       if (tsP == NULL || tsP->type != KjString) continue;
       uint64_t ts = isoToNs(tsP->value.s);
-      if (ts > winEnd) winEnd = ts;
+      if (ts > latest)   latest   = ts;
+      if (ts < earliest) earliest = ts;
     }
+    // Bump winEnd by 1 ns when derived from latest sample so the bucket
+    // window includes that sample (the per-instance gate below uses a
+    // half-open [start,end) check — without the bump, an attr whose
+    // latest instance lands exactly on the implicit end would lose a
+    // bucket and be off-by-one vs. § 4.5.19.1).
+    if (winEnd   == 0) winEnd   = latest + 1;
+    if (winStart == 0) winStart = earliest == UINT64_MAX ? 0 : earliest;
   }
-  if (winEnd <= startNs || periodNs == 0)
+  if (winEnd <= winStart || periodNs == 0)
     return;
 
-  int bucketCount = (int) ((winEnd - startNs + periodNs - 1) / periodNs);
+  int bucketCount = (int) ((winEnd - winStart + periodNs - 1) / periodNs);
   if (bucketCount <= 0) bucketCount = 1;
 
   Bucket* buckets = (Bucket*) kaAlloc(faP, sizeof(Bucket) * bucketCount);
   for (int i = 0; i < bucketCount; i++)
-    bucketInit(&buckets[i], startNs + (uint64_t) i * periodNs);
+    bucketInit(&buckets[i], winStart + (uint64_t) i * periodNs);
 
   // Bucket the instances. Per § 4.5.19.1:
   //   Property:     Number / Boolean / String / Array / Object — different
@@ -497,9 +523,9 @@ static void aggregateAttr(KjNode*      attrP,
     KjNode* tsP = kjLookup(instP, timeProp);
     if (tsP == NULL || tsP->type != KjString) continue;
     uint64_t ts = isoToNs(tsP->value.s);
-    if (ts < startNs || ts >= winEnd) continue;
+    if (ts < winStart || ts >= winEnd) continue;
 
-    int idx = (int) ((ts - startNs) / periodNs);
+    int idx = (int) ((ts - winStart) / periodNs);
     if (idx < 0 || idx >= bucketCount) continue;
     Bucket* b = &buckets[idx];
 
