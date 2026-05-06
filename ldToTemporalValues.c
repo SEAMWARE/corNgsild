@@ -24,20 +24,26 @@
 
 // -----------------------------------------------------------------------------
 //
-// valuesKeyForType - "values" / "objects" / "languageMaps" per attr type.
+// valuesKeyForType - the temporal-values container key for each attr type.
 //
-// Spec § 4.5.8: Property → "values", GeoProperty → "values",
-// VocabProperty → "values", JsonProperty → "values",
-// ListProperty → "values", ListRelationship → "objects",
-// Relationship → "objects", LanguageProperty → "languageMaps".
+//   § 4.5.7  Property         → "values"
+//   § 4.5.8  GeoProperty       → "values"
+//   § 4.5.7  ListProperty      → "valueLists"
+//   § 4.5.7  JsonProperty      → "jsons"
+//   § 4.5.18 LanguageProperty  → "languageMaps"
+//   § 4.5.x  VocabProperty     → "vocabs"
+//   § 4.5.7  Relationship      → "objects"
+//   § 4.5.7  ListRelationship  → "objectLists"
 //
 static const char* valuesKeyForType(const char* attrType)
 {
-  if (attrType == NULL)
-    return "values";
-  if (strcmp(attrType, "Relationship")     == 0)  return "objects";
-  if (strcmp(attrType, "ListRelationship") == 0)  return "objects";
-  if (strcmp(attrType, "LanguageProperty") == 0)  return "languageMaps";
+  if (attrType == NULL)                            return "values";
+  if (strcmp(attrType, "Relationship")     == 0)   return "objects";
+  if (strcmp(attrType, "ListRelationship") == 0)   return "objectLists";
+  if (strcmp(attrType, "LanguageProperty") == 0)   return "languageMaps";
+  if (strcmp(attrType, "ListProperty")     == 0)   return "valueLists";
+  if (strcmp(attrType, "JsonProperty")     == 0)   return "jsons";
+  if (strcmp(attrType, "VocabProperty")    == 0)   return "vocabs";
   return "values";
 }
 
@@ -45,21 +51,46 @@ static const char* valuesKeyForType(const char* attrType)
 
 // -----------------------------------------------------------------------------
 //
-// firstElementKey - the key under each instance whose value is the first
-// element of the [value, timestamp] pair.
+// firstElementKey - the key under each instance carrying the value
+// (matches storage shape, NOT necessarily the wire shape — for the
+// wrapped types JsonProperty / VocabProperty, the wire pair includes
+// the {key: value} object, but the instance still stores just the
+// value under that key).
 //
-//   Property/GeoProperty/JsonProperty/ListProperty/VocabProperty → "value"
-//   Relationship/ListRelationship                                → "object"
-//   LanguageProperty                                             → "languageMap"
+//   Property / GeoProperty             → "value"
+//   ListProperty                       → "valueList"
+//   JsonProperty                       → "json"
+//   VocabProperty                      → "vocab"
+//   LanguageProperty                   → "languageMap"
+//   Relationship                       → "object"
+//   ListRelationship                   → "objectList"
 //
 static const char* firstElementKey(const char* attrType)
 {
-  if (attrType == NULL)
-    return "value";
-  if (strcmp(attrType, "Relationship")     == 0)  return "object";
-  if (strcmp(attrType, "ListRelationship") == 0)  return "object";
-  if (strcmp(attrType, "LanguageProperty") == 0)  return "languageMap";
+  if (attrType == NULL)                            return "value";
+  if (strcmp(attrType, "Relationship")     == 0)   return "object";
+  if (strcmp(attrType, "ListRelationship") == 0)   return "objectList";
+  if (strcmp(attrType, "LanguageProperty") == 0)   return "languageMap";
+  if (strcmp(attrType, "ListProperty")     == 0)   return "valueList";
+  if (strcmp(attrType, "JsonProperty")     == 0)   return "json";
+  if (strcmp(attrType, "VocabProperty")    == 0)   return "vocab";
   return "value";
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// firstElementWrapped - true when the wire pair's first element must be
+// the wrapped {key: value} object instead of a bare value (§ 4.5.7 for
+// JsonProperty, § 4.5.x for VocabProperty).
+//
+static bool firstElementWrapped(const char* attrType)
+{
+  if (attrType == NULL) return false;
+  if (strcmp(attrType, "JsonProperty")  == 0) return true;
+  if (strcmp(attrType, "VocabProperty") == 0) return true;
+  return false;
 }
 
 
@@ -88,9 +119,10 @@ static void transformAttr(KjNode* attrP, const char* timeProp, Kjson* kjsonP, KA
   }
 
   KjNode* typeP = kjLookup(firstP, "type");
-  const char* attrType = (typeP != NULL && typeP->type == KjString) ? typeP->value.s : "Property";
+  const char* attrType  = (typeP != NULL && typeP->type == KjString) ? typeP->value.s : "Property";
   const char* valuesKey = valuesKeyForType(attrType);
   const char* firstKey  = firstElementKey(attrType);
+  bool        wrapped   = firstElementWrapped(attrType);
 
   // Build the new "values" array by walking each instance.
   KjNode* valuesArray = kjArray(kjsonP, valuesKey);
@@ -108,8 +140,19 @@ static void transformAttr(KjNode* attrP, const char* timeProp, Kjson* kjsonP, KA
     if (valP != NULL)
     {
       KjNode* clone = kjClone(kjsonP, valP);
-      clone->name = NULL;
-      kjChildAdd(pair, clone);
+      if (wrapped)
+      {
+        // JsonProperty / VocabProperty: pair is [{json/vocab: value}, ts].
+        clone->name = (char*) firstKey;
+        KjNode* wrapper = kjObject(kjsonP, NULL);
+        kjChildAdd(wrapper, clone);
+        kjChildAdd(pair, wrapper);
+      }
+      else
+      {
+        clone->name = NULL;
+        kjChildAdd(pair, clone);
+      }
     }
     else
     {
