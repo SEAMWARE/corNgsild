@@ -425,6 +425,46 @@ static void ldParseHook(void)
     }
   }
 
+  // § 5.2.2 / § 6.3.4 — pre-resolve every URL referenced by an in-body
+  // @context. swldExpandTree silently falls back to the broker's core
+  // context when a download fails; without this check that produces a
+  // (wrongly-)successful 201 with the entity stored under the default
+  // context. ETSI 043_01_* expects 504 LdContextNotAvailable for an
+  // unreachable @context URL — pre-fetching gives us the offending URL
+  // so we can fail fast with a precise error.
+  if (atCtx != NULL)
+  {
+    const char* offendingUrl = NULL;
+    KjNode* itemArr[1] = { atCtx };
+    int     arrCount   = 1;
+    if (atCtx->type == KjArray) { itemArr[0] = atCtx; }   // walk children
+    for (int ai = 0; ai < arrCount && offendingUrl == NULL; ai++)
+    {
+      KjNode* node = itemArr[ai];
+      if (node->type == KjString)
+      {
+        if (swldContextFromUrl(node->value.s, &swRest.kalloc) == NULL)
+          offendingUrl = node->value.s;
+      }
+      else if (node->type == KjArray)
+      {
+        for (KjNode* c = node->value.firstChildP; c != NULL; c = c->next)
+        {
+          if (c->type == KjString && swldContextFromUrl(c->value.s, &swRest.kalloc) == NULL)
+          { offendingUrl = c->value.s; break; }
+        }
+      }
+      // KjObject (inline @context) needs no fetch.
+    }
+    if (offendingUrl != NULL)
+    {
+      ldError(504, LD_ERROR_LD_CONTEXT_NOT_AVAILABLE, "Context Not Available",
+              "unable to retrieve @context from '%s'", offendingUrl);
+      swNgsild.contextError = true;
+      return;
+    }
+  }
+
   // ldUrlParams.c has already set swNgsild.contextP from the Link header
   // (or to the core context if no Link). swldExpandTree uses that as the
   // base context; an in-body @context overrides it for the body subtree

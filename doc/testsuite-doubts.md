@@ -306,3 +306,40 @@ without forcing the implementation into a unified-entity architecture
 that the spec doesn't mandate.
 
 ---
+
+## 10. `043_01_*` expects HTTP 503 for `LdContextNotAvailable`; spec says 504
+
+**Hit:** `043_01_01`, `043_01_02`, `043_01_03`, `043_01_04`, `043_01_05`
+— "Verify receiving 503 - LdContextNotAvailable error if remote
+JSON-LD @context cannot be retrieved" across Create Entity / Create
+Subscription / Create Temporal Representation / Batch Create / CSR
+Create. All five hard-code:
+
+```
+${expected_status_code}=        503
+```
+
+**Where:** `TP/NGSI-LD/CommonBehaviours/CommonResponses/VerifyLdContextNotAvailable/043_01.robot`
+
+**Why it's wrong:** § 6.3.4 Table 6.3.4-1 of v1.9.1 explicitly maps
+`LdContextNotAvailable` to HTTP **504**, not 503:
+
+```
+https://uri.etsi.org/ngsi-ld/errors/LdContextNotAvailable    504
+```
+
+§ 6.30.3.2 (Delete and Reload) likewise pairs the same problem type
+with 504 Gateway Timeout. There's no place in v1.9.1 that maps it to
+503.
+
+**Impact:** All five tests fail with `expected 503, got 504`. Our
+broker also previously failed silently (returned 201) because the
+URL-prefix shortcut for the broker's own core context was loose
+enough to swallow `ngsi-ld-core-context-non-existing.jsonld` —
+that's now fixed; we emit the spec-correct 504 + ProblemDetails.
+
+**Fix wanted:** The fixture should set `${expected_status_code}=504`
+and rename the test docstring to match. Until then the suite keeps
+failing 5 tests for a spec-correct broker.
+
+---
