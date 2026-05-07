@@ -465,6 +465,16 @@ static void ldParseHook(void)
     }
   }
 
+  // Capture the raw in-body @context node BEFORE swldExpandTree strips
+  // it. § 5.5.5 / § 5.8.1.4: a Subscription with an inline-array or
+  // inline-object @context becomes an ImplicitlyCreated @context whose
+  // served URL is the subscription's `jsonldContext`. postSubscriptions
+  // reads userContextBody to do that auto-population. A bare-string
+  // @context already carries its own URL, so we don't need to capture
+  // anything for that case.
+  if (atCtx != NULL && (atCtx->type == KjArray || atCtx->type == KjObject))
+    swNgsild.userContextBody = atCtx;
+
   // ldUrlParams.c has already set swNgsild.contextP from the Link header
   // (or to the core context if no Link). swldExpandTree uses that as the
   // base context; an in-body @context overrides it for the body subtree

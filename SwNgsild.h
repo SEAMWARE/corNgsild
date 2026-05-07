@@ -147,6 +147,13 @@ typedef struct SwNgsild
   bool              contextError;
   SwldContext*       contextP;
   const char*        userContextUrl;  // URL from Link header or default context (NULL if none)
+  KjNode*            userContextBody; // Pointer to the in-body @context node, captured BEFORE
+                                      // swldExpandTree strips it from the tree. Set when the
+                                      // user supplied an @context array or inline-object body
+                                      // form; NULL for a single-URL or absent @context. Used
+                                      // by postSubscriptions to auto-populate jsonldContext —
+                                      // an array/object @context becomes an ImplicitlyCreated
+                                      // @context entry whose served URL is the field's value.
 
   // Per-element errors raised at parse time on batch ops — array of
   // BatchEntityError objects. Set in ldParseHook for cases the framework
