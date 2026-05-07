@@ -343,3 +343,40 @@ and rename the test docstring to match. Until then the suite keeps
 failing 5 tests for a spec-correct broker.
 
 ---
+
+## 11. `051_07_01` extracts the full URL field instead of the localId for DELETE
+
+**Hit:** `TP/NGSI-LD/jsonldContext/Provision/DeleteContext/051_07.robot`
+"Delete A ImplicitlyCreated @contexts With A Valid Id And Reload Set To
+True". Expects 400 BadRequestData; broker returns 404 ResourceNotFound.
+
+**Where:** the test's setup keyword extracts the identifier with
+```robot
+${data}=    Get From List    ${response.json()}    0
+${implicit_id}=    Get From Dictionary    ${data}    URL
+```
+
+That `URL` field in the List-@contexts response is the full broker URL
+(e.g. `http://localhost:8080/ngsi-ld/v1/jsonldContexts/urn:ngsi-ld:Context:1-NNN`).
+The companion test `051_06` does it correctly:
+```robot
+${implicit_id}=    Get From Dictionary    ${response.json()}    jsonldContext
+${implicit_id}=    Evaluate    '${implicit_id}'.split('/')[-1]
+```
+i.e. takes the last path segment (the locally unique identifier).
+
+**Why it's wrong:** § 5.13.5.3 says the operation takes "the locally
+unique identifier that identifies the desired @context in the broker's
+internal storage. For @contexts of kind 'Cached' this can also be the
+original URL the broker downloaded the @context from." The URL form is
+explicitly NOT supported for Hosted/Implicit, only Cached. So the test
+ought to extract the localId (e.g. via the `localId` field of the list
+entry, or by splitting `URL`).
+
+**Impact:** broker correctly 404s (the URL-encoded full URL doesn't
+match any cache key for an Implicit context), but the test expects 400
+which would only fire after a successful lookup. One PASS→FAIL.
+
+**Fix wanted:** mirror `051_06`'s pattern — take the `localId` field, or
+split `URL` on `/` and take the last segment.
+
