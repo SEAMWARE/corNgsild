@@ -24,17 +24,24 @@
 //
 // expandString - expand a single string field, return expanded or original
 //
-// Reserved entity-member names (id / type / scope / @context) are kept as-is:
-// the broker stores them under those bare names (not the @id / @type IRIs the
-// JSON-LD core context would map them to), so a downstream string compare
-// against an attribute name in storage form must match the bare form.
+// Reserved entity-member names (id / type / scope / @context / sysAttrs)
+// are kept as-is: the broker stores them under those bare names (not the
+// @id / @type IRIs the JSON-LD core context would map them to), so a
+// downstream string compare against an attribute name in storage form
+// must match the bare form. createdAt / modifiedAt / observedAt /
+// deletedAt likewise: they're spec-defined keywords with bare names —
+// expanding them as default-context terms would mis-route lookups.
 //
 static bool isReservedMember(const char* s)
 {
-  return (strcmp(s, "id")       == 0 ||
-          strcmp(s, "type")     == 0 ||
-          strcmp(s, "scope")    == 0 ||
-          strcmp(s, "@context") == 0);
+  return (strcmp(s, "id")         == 0 ||
+          strcmp(s, "type")       == 0 ||
+          strcmp(s, "scope")      == 0 ||
+          strcmp(s, "@context")   == 0 ||
+          strcmp(s, "createdAt")  == 0 ||
+          strcmp(s, "modifiedAt") == 0 ||
+          strcmp(s, "observedAt") == 0 ||
+          strcmp(s, "deletedAt")  == 0);
 }
 
 static char* expandString(char* s, KAlloc* kaP)

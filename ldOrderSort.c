@@ -65,7 +65,7 @@ static int valueRank(KjNode* valP)
 // element). That gives users an intuitive "most recent value" for orderBy
 // rather than the SQL-ordered first/last entry, which would flip with lastN.
 //
-static KjNode* temporalLatestValue(KjNode* arrayP)
+static KjNode* temporalLatestInstance(KjNode* arrayP)
 {
   KjNode* bestP = NULL;
   const char* bestKey = NULL;
@@ -86,6 +86,13 @@ static KjNode* temporalLatestValue(KjNode* arrayP)
     }
   }
 
+  return bestP;
+}
+
+
+static KjNode* temporalLatestValue(KjNode* arrayP)
+{
+  KjNode* bestP = temporalLatestInstance(arrayP);
   return (bestP != NULL) ? kjLookup(bestP, "value") : NULL;
 }
 
@@ -138,8 +145,28 @@ static KjNode* getAttrValueByPath(KjNode* entityP, char** segV, int segN)
 
   if (wrapperP->type == KjArray)            // temporal store
   {
-    if (segN > 1) return NULL;              // path-into-temporal not supported here
-    return temporalLatestValue(wrapperP);
+    if (segN == 1)
+      return temporalLatestValue(wrapperP);
+
+    // segN > 1: path-into-temporal — drill into the most-recent instance
+    // and resolve segments[1..] inside it (e.g. orderBy=name.createdAt
+    // sorts by the createdAt of the latest `name` instance).
+    KjNode* instP = temporalLatestInstance(wrapperP);
+    if (instP == NULL)
+      return NULL;
+
+    KjNode* cur = instP;
+    for (int i = 1; i < segN; i++)
+    {
+      cur = kjLookup(cur, segV[i]);
+      if (cur == NULL) return NULL;
+    }
+    if (cur != NULL && cur->type == KjObject)
+    {
+      KjNode* v = kjLookup(cur, "value");
+      if (v != NULL) return v;
+    }
+    return cur;
   }
   if (wrapperP->type != KjObject)
     return NULL;
