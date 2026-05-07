@@ -412,19 +412,33 @@ void ldDistOpBatchErrorAdd(KjNode*      errorsArrayP,
 // ldBatchErrorsSingleStatus -
 //
 // Spec § 6.14/6.15/6.16/6.17/6.20 reserve 207 Multi-Status for partial /
-// mixed-error batches. The all-failed case isn't covered explicitly, so 207
-// is the closest fit — except for the ALL-NOT-FOUND case: when every entry
-// in errors[] is ResourceNotFound, replying with a plain 404 is equivalent
-// in meaning ("nothing to operate on") and easier on clients than wrapping
-// a uniform 404 in a 207 envelope. Returns 404 in that case, -1 otherwise.
+// mixed-error batches. The all-failed case isn't covered explicitly, so
+// 207 is the closest fit — EXCEPT when every entry carries the same
+// "global" failure reason that doesn't benefit from per-entity surfacing:
 //
-// Other uniform-error cases (all-400, all-409, etc.) intentionally still
-// produce 207 — they tend to carry per-entity detail worth surfacing.
+//   - ResourceNotFound  → 404  (every entity in the batch was unknown)
+//   - Conflict          → 409  (e.g. exclusive CSR refusing the op for all)
+//
+// In those cases a plain ProblemDetails reply is clearer than wrapping
+// a uniform error in a 207 envelope. Returns the matching status when the
+// errors[] array is uniformly one of those types, -1 otherwise.
+//
+// Other uniform-error cases (all-400, all-422, …) still produce 207 —
+// they tend to carry per-entity detail worth surfacing.
 //
 int ldBatchErrorsSingleStatus(KjNode* errorsArrayP)
 {
   if (errorsArrayP == NULL || errorsArrayP->value.firstChildP == NULL)
     return -1;
+
+  static const struct { const char* type; int status; } collapsable[] = {
+    { "https://uri.etsi.org/ngsi-ld/errors/ResourceNotFound", 404 },
+    { "https://uri.etsi.org/ngsi-ld/errors/Conflict",         409 },
+  };
+  const int N = (int) (sizeof(collapsable) / sizeof(collapsable[0]));
+
+  int         matchedStatus = -1;
+  const char* matchedType   = NULL;
 
   for (KjNode* entry = errorsArrayP->value.firstChildP; entry != NULL; entry = entry->next)
   {
@@ -434,11 +448,26 @@ int ldBatchErrorsSingleStatus(KjNode* errorsArrayP)
     KjNode* tP = kjLookup(errP, "type");
     if (tP == NULL || tP->type != KjString) return -1;
 
-    if (strcmp(tP->value.s, "https://uri.etsi.org/ngsi-ld/errors/ResourceNotFound") != 0)
+    if (matchedType == NULL)
+    {
+      for (int i = 0; i < N; i++)
+      {
+        if (strcmp(tP->value.s, collapsable[i].type) == 0)
+        {
+          matchedType   = collapsable[i].type;
+          matchedStatus = collapsable[i].status;
+          break;
+        }
+      }
+      if (matchedType == NULL) return -1;
+    }
+    else if (strcmp(tP->value.s, matchedType) != 0)
+    {
       return -1;
+    }
   }
 
-  return 404;
+  return matchedStatus;
 }
 
 
