@@ -740,6 +740,55 @@ lower-case literal instead of letting Python serialise `True`.
 
 ---
 
+## 23. § 6.3.10 — 206 Partial Content vs 200 OK on temporal queries: ETSI tests are mutually inconsistent
+
+**Hit:** ETSI temporal tests have contradictory expectations for the
+HTTP status code on `GET /temporal/entities` and
+`GET /temporal/entities/{id}`:
+
+- *Most* of the suite — `020_01..12`, `020_16`, `020_21`,
+  `021_01..14`, `021_17..19`, `021_21..23` (≈ 60 tests) —
+  expects **200 OK** for any successful temporal retrieve, *even when
+  the result has many instances and even when `lastN` was clipping*.
+- A subset — `020_13_01..09`, `021_15_04..07`, `021_16_01` (≈ 11
+  tests) — expects **206 + Content-Range** in shapes where no
+  truncation should have occurred (e.g. `020_13_01` retrieves an
+  entity with 20 instances per attribute, no `lastN`, no `timerel`,
+  default broker cap = 100, so the broker has all the data the user
+  could possibly want — yet the test asserts 206).
+- A third subset — `020_05_01/02`, `021_03_01` — sets `lastN`
+  smaller than the actual instance count and *also* expects **200**
+  (i.e. expects no Content-Range even though clipping by `lastN`
+  did occur).
+
+**Spec:** § 6.3.10 says "implementations *shall* use the Partial
+Content Response (206) ... if the implementation is not able to respond
+with the full representation at once". The natural reading is that 206
+is conditional on the broker actually clipping the result. Under that
+reading **none** of the three subsets is internally consistent with
+the others; there is no single broker policy that satisfies the whole
+suite simultaneously.
+
+**Our call:** Stick with the strict-spec interpretation:
+**206 only when the implementation actually had to clip** (default-cap
+overflow, or `lastN` smaller than the number of available instances);
+**200** otherwise. This satisfies the largest cluster (~60 tests)
+but loses the 11 in 020_13/021_15/021_16 that demand "always 206 even
+on full responses", plus the 3 in 020_05/021_03 that demand "200 even
+when lastN clipped".
+
+We tried the alternative ("always 206 when there's any temporal data")
+during this session — it won 11 tests and flipped 62 PASS→FAIL, so
+we reverted.
+
+**Fix wanted:** ETSI tests need to be reconciled internally. The most
+defensible policy is the strict spec reading; the 020_13/021_15/021_16
+fixtures should be relaxed to accept either 200 or 206, and the
+020_05/021_03 fixtures should be updated to expect 206 when clipping
+occurs.
+
+---
+
 ## Template for new entries
 
 ```

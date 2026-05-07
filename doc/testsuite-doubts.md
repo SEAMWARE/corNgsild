@@ -257,3 +257,52 @@ and forgets the rewrite step gets unhelpful failures.
 step prominently.
 
 ---
+
+## 9. `020_17 / 020_18 / 020_19 / 020_20` (and similar) `Test Setup` is incomplete — POST `/temporal/entities` is not enough to make `DELETE /entities/{id}/attrs/{name}` succeed
+
+**Hit:** `020_17_01..03`, `020_18_01..03`, `020_19_01`, `020_20_01`,
+`020_15_01/02`, `020_12_02`, `021_09_01/02` — every test in the
+"deleted attribute leaves a `deletedAt` tombstone" cluster.
+
+**Where:** `TP/NGSI-LD/ContextInformation/Consumption/TemporalEntity/RetrieveTemporalEvolutionOfEntity/020_{15,17,18,19,20}*.robot`
+(plus 020_12_02 in the same family, plus 021_09 on the multi-entity side).
+
+**What the tests do:**
+
+```
+Test Setup           Create Temporal Entity   # → POST /temporal/entities only
+
+[Test body]:
+    Delete Entity Attributes ...              # → DELETE /entities/{id}/attrs/{name}
+    Retrieve Temporal Representation Of Entity timeproperty=deletedAt
+    expect: the deleted attribute appears with `deletedAt`
+```
+
+**Why it's wrong:** `POST /temporal/entities` (§ 5.6.11) creates a
+*Temporal Evolution of an Entity* — instances in the temporal store.
+`DELETE /entities/{id}/attrs/{name}` (§ 5.6.5) is a *current-state*
+operation that requires the entity to exist in the current-state
+representation. The two stores are architecturally separate: a
+temporal-only entity has no current-state attribute to delete, so
+the spec-strict response is **404 Not Found**, and no `deletedAt`
+tombstone is written.
+
+The test fixtures assume — implicitly and undocumented — that the
+implementation under test treats current-state and temporal as a
+single unified entity (so a `POST /temporal/entities` magically also
+creates the corresponding current-state entity, even though
+§ 5.6.11.4 only says "create the provided Temporal Evolution of an
+Entity", with no mention of current-state mirroring).
+
+**Impact:** 13 tests fail in this family. Our broker keeps the two
+representations separate by design; we will not mirror, so these
+tests will keep failing.
+
+**Fix wanted:** The `Test Setup` should also `POST /entities` (or
+otherwise ensure the entity has a current-state representation with
+the attribute to be deleted) before the test body runs. With that
+change the `deletedAt`-tombstone path can be exercised faithfully,
+without forcing the implementation into a unified-entity architecture
+that the spec doesn't mandate.
+
+---
