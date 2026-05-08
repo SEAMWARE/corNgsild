@@ -7,10 +7,16 @@
 // 
 //
 #include <stdbool.h>                                     // bool
+#include <stdlib.h>                                      // malloc, free
 #include <string.h>                                      // strcmp
 
 #include "kbase/kLibLog.h"                             // KLOG_T
 #include "kjson/KjNode.h"                               // KjNode
+#include "kjson/kjBufferCreate.h"                       // kjBufferCreate
+#include "kjson/kjParse.h"                              // kjParse
+#include "kjson/kjBuilder.h"                            // kjObject, kjString, kjChildAdd
+
+#include "swRest/SwRestState.h"                         // swRest
 
 #include "swNgsild/LdProblem.h"                          // LD_ERROR_*
 #include "swNgsild/LdVocab.h"                            // LD_VOCAB_COORDINATES, LD_VOCAB_GEO_*
@@ -145,6 +151,127 @@ static bool positionsEqual(KjNode* pos1P, KjNode* pos2P)
 //
 // checkLinearRing - validate a polygon ring (closed LineString with >= 4 points)
 //
+// -----------------------------------------------------------------------------
+//
+// orientation - 2D cross product sign for triple (a, b, c)
+//
+//   > 0  → counter-clockwise
+//   < 0  → clockwise
+//   = 0  → collinear
+//
+static int orientation(double ax, double ay, double bx, double by, double cx, double cy)
+{
+  double v = (by - ay) * (cx - bx) - (bx - ax) * (cy - by);
+  if (v > 0)  return  1;
+  if (v < 0)  return -1;
+  return 0;
+}
+
+
+// -----------------------------------------------------------------------------
+//
+// onSegment - given collinear (a, b, c), is c within segment [a, b]'s bbox?
+//
+static bool onSegment(double ax, double ay, double bx, double by, double cx, double cy)
+{
+  double minX = ax < bx ? ax : bx;
+  double maxX = ax > bx ? ax : bx;
+  double minY = ay < by ? ay : by;
+  double maxY = ay > by ? ay : by;
+  return (cx >= minX && cx <= maxX && cy >= minY && cy <= maxY);
+}
+
+
+// -----------------------------------------------------------------------------
+//
+// segmentsIntersect - proper or improper segment-segment intersection test
+//
+static bool segmentsIntersect(double ax, double ay, double bx, double by,
+                              double cx, double cy, double dx, double dy)
+{
+  int o1 = orientation(ax, ay, bx, by, cx, cy);
+  int o2 = orientation(ax, ay, bx, by, dx, dy);
+  int o3 = orientation(cx, cy, dx, dy, ax, ay);
+  int o4 = orientation(cx, cy, dx, dy, bx, by);
+
+  if (o1 != o2 && o3 != o4)  return true;
+
+  if (o1 == 0 && onSegment(ax, ay, bx, by, cx, cy))  return true;
+  if (o2 == 0 && onSegment(ax, ay, bx, by, dx, dy))  return true;
+  if (o3 == 0 && onSegment(cx, cy, dx, dy, ax, ay))  return true;
+  if (o4 == 0 && onSegment(cx, cy, dx, dy, bx, by))  return true;
+
+  return false;
+}
+
+
+// -----------------------------------------------------------------------------
+//
+// posXY - extract (lon, lat) from a position KjNode
+//
+static bool posXY(KjNode* posP, double* lonP, double* latP)
+{
+  if (posP == NULL || posP->type != KjArray)
+    return false;
+  KjNode* a = posP->value.firstChildP;
+  if (a == NULL || a->next == NULL)
+    return false;
+  return nodeNumberValue(a, lonP) && nodeNumberValue(a->next, latP);
+}
+
+
+// -----------------------------------------------------------------------------
+//
+// ringSelfIntersects - O(n²) check for self-intersecting linear ring
+//
+// Pre-condition: caller validated child count ≥ 4 and each position has
+// numeric (lon, lat). Adjacent edges (sharing a vertex) and the closing
+// pair (last↔first) are skipped.
+//
+// Planar-Cartesian test on (lon, lat). MongoDB's 2dsphere uses geodesic
+// (great-circle) edges, so a planar-valid polygon may still fail there
+// for very large extents — but rejecting planar self-intersections up
+// front catches the common test-fixture errors and keeps us out of the
+// DB error path.
+//
+static bool ringSelfIntersects(KjNode* ringP)
+{
+  int n = childCount(ringP);
+  if (n < 4)  return false;
+
+  double* xs = (double*) malloc(n * sizeof(double));
+  double* ys = (double*) malloc(n * sizeof(double));
+  if (xs == NULL || ys == NULL) { free(xs); free(ys); return false; }
+
+  int i = 0;
+  for (KjNode* posP = ringP->value.firstChildP; posP != NULL; posP = posP->next, i++)
+  {
+    if (posXY(posP, &xs[i], &ys[i]) == false) { free(xs); free(ys); return false; }
+  }
+
+  int edges = n - 1;  // last == first → n-1 distinct edges
+  bool intersect = false;
+  for (int a = 0; a < edges && !intersect; a++)
+  {
+    for (int b = a + 1; b < edges; b++)
+    {
+      if (b == a + 1)              continue;            // adjacent (shared vertex)
+      if (a == 0 && b == edges-1)  continue;            // closing edge adjacent to first
+      if (segmentsIntersect(xs[a],   ys[a],   xs[a+1], ys[a+1],
+                            xs[b],   ys[b],   xs[b+1], ys[b+1]))
+      {
+        intersect = true;
+        break;
+      }
+    }
+  }
+
+  free(xs);
+  free(ys);
+  return intersect;
+}
+
+
 static bool checkLinearRing(KjNode* ringP)
 {
   if (ringP == NULL || ringP->type != KjArray)
@@ -167,6 +294,9 @@ static bool checkLinearRing(KjNode* ringP)
 
   if (positionsEqual(firstP, lastP) == false)
     return geoError("GeoJSON polygon ring must be closed (first == last position)");
+
+  if (ringSelfIntersects(ringP))
+    return geoError("GeoJSON polygon ring is self-intersecting (non-adjacent edges cross)");
 
   return true;
 }
@@ -270,4 +400,44 @@ bool ldCheckGeo(KjNode* geoValueP)
 
   ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid GeoJSON", "Unknown GeoJSON geometry type: '%s'", geoType);
   return false;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldCheckGeoQuery -
+//
+bool ldCheckGeoQuery(const char* geometry, const char* coordinates)
+{
+  if (geometry == NULL || coordinates == NULL)
+    return true;  // nothing to check; caller's earlier validation handles missing pair
+
+  // kjParse mutates its input — work on a heap copy.
+  char* dup = strdup(coordinates);
+  if (dup == NULL)
+  {
+    ldError(500, "https://uri.etsi.org/ngsi-ld/errors/InternalError",
+            "Internal Error", "Out of memory parsing coordinates");
+    return false;
+  }
+
+  Kjson  kjson;
+  Kjson* kjsonP = kjBufferCreate(&kjson, &swRest.kalloc);
+
+  KjNode* coordsP = kjParse(kjsonP, dup);
+  free(dup);
+  if (coordsP == NULL)
+  {
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid geo-query",
+            "coordinates must be a valid JSON array");
+    return false;
+  }
+
+  KjNode* root = kjObject(kjsonP, NULL);
+  kjChildAdd(root, kjString(kjsonP, "type", (char*) geometry));
+  coordsP->name = (char*) "coordinates";
+  kjChildAdd(root, coordsP);
+
+  return ldCheckGeo(root);
 }

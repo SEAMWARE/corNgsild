@@ -14,6 +14,7 @@
 #include "swNgsild/LdOp.h"                               // LdOpQueryEntities, LdOpQueryTemporal, LdOpBatchQuery
 #include "swNgsild/LdProblem.h"                          // LD_ERROR_*
 #include "swNgsild/ldError.h"                            // ldError
+#include "swNgsild/ldCheckGeo.h"                         // ldCheckGeoQuery
 
 #include "swNgsild/ldParamsValidate.h"                   // Own interface
 
@@ -123,6 +124,18 @@ bool ldParamsValidate(void)
         return true;
       }
     }
+  }
+
+  // § 4.10 / § 5.7.2.4 — when a geo-query is supplied (georel + geometry +
+  // coordinates) the geometry shape must be a valid GeoJSON. We parse the
+  // coordinates string and run the same shape/range/self-intersection
+  // checks we apply to entity GeoProperty values, so an invalid query
+  // polygon surfaces as 400 BadRequestData here instead of as a 500 from
+  // the DB layer (mongo's 2dsphere is strict about edge crossings).
+  if (swNgsild.geometry != NULL && swNgsild.coordinates != NULL)
+  {
+    if (!ldCheckGeoQuery(swNgsild.geometry, swNgsild.coordinates))
+      return true;
   }
 
   // § 5.7.2.4 — Query Entities requires AT LEAST ONE of: type / attrs / q /
