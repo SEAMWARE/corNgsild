@@ -410,9 +410,14 @@ static void ldParseHook(void)
   // CSR carry idPattern regexes and other strings that legitimately
   // include spec-forbidden chars.
   {
+    // urlPath is post-wildcard-stripping; the service pattern is the only
+    // reliable way to spot attribute-fragment routes ("/ngsi-ld/v1/entities/*/attrs/*").
+    bool isAttrFragmentRoute = (swRest.serviceP != NULL
+                                && swRest.serviceP->url != NULL
+                                && strstr(swRest.serviceP->url, "/attrs/") != NULL);
     bool isEntityPayloadPath = (swRest.in.urlPath != NULL
                                 && strncmp(swRest.in.urlPath, "/ngsi-ld/v1/entities", 20) == 0
-                                && strstr(swRest.in.urlPath, "/attrs/") == NULL);
+                                && !isAttrFragmentRoute);
     bool isEntityBatchPath   = (swRest.in.urlPath != NULL
                                 && strncmp(swRest.in.urlPath, "/ngsi-ld/v1/entityOperations/", 29) == 0);
     if (isEntityPayloadPath || isEntityBatchPath)
@@ -560,8 +565,14 @@ static void ldParseHook(void)
   // entity (and wrapping its scalar children as simplified attributes)
   // would corrupt the payload.
   //
-  bool isAttrFragmentUrl = (swRest.in.urlPath != NULL
-                            && strstr(swRest.in.urlPath, "/attrs/") != NULL);
+  // swRest.in.urlPath has had its wildcard suffix stripped by the router
+  // (e.g. "/ngsi-ld/v1/entities/urn:V/attrs/isParked" → "/ngsi-ld/v1/entities/urn:V"),
+  // so checking it for "/attrs/" misses every attribute-fragment route.
+  // Use the matched service's pattern URL — that one keeps the full shape
+  // including wildcards, e.g. "/ngsi-ld/v1/entities/*/attrs/*".
+  bool isAttrFragmentUrl = (swRest.serviceP != NULL
+                            && swRest.serviceP->url != NULL
+                            && strstr(swRest.serviceP->url, "/attrs/") != NULL);
 
   if (isEntityPayload && !isAttrFragmentUrl)
   {
