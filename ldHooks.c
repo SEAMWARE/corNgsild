@@ -658,6 +658,32 @@ static void filterDatasetId(KjNode* entityP, char** datasetIdV)
 //
 static void ldRenderHook(void)
 {
+  // § 6.3.4 — Accept negotiation runs FIRST, before any body work.
+  // It must trump an earlier 4xx (e.g. retrieving a non-existent
+  // entity with Accept: application/xml answers 406, not 404), so the
+  // check sits in the renderHook (called even on error paths) and
+  // overrides whatever problemType the service routine set.
+  {
+    LdAcceptType acceptType    = ldAcceptParse(swRest.in.accept);
+    uint64_t     ldOp          = (swRest.serviceP != NULL) ? swRest.serviceP->ldOp : 0;
+    bool         entityReadOp  = (ldOp & (LdOpRetrieveEntity | LdOpQueryEntities | LdOpBatchQuery)) != 0;
+
+    if (acceptType == LdAcceptNone ||
+        (acceptType == LdAcceptGeoJson && !entityReadOp))
+    {
+      ldError(406, LD_ERROR_INVALID_REQUEST, "Not Acceptable",
+              "supported response media types: application/json, application/ld+json%s",
+              entityReadOp ? ", application/geo+json" : "");
+      return;
+    }
+  }
+
+  // Bail out of body formatting on error — the response is a
+  // ProblemDetails JSON object built by swRest from problemType /
+  // problemTitle / problemDetail; nothing for us to compact.
+  if (swRest.out.problemType != NULL)
+    return;
+
   KjNode* treeP = swRest.out.responseTree;
 
   //
@@ -746,33 +772,10 @@ static void ldRenderHook(void)
     }
   }
 
-  //
-  // § 6.3.4 Accept negotiation — q-weighted across the three NGSI-LD
-  // media types. Highest q wins; equal q falls back to first-listed.
-  //
-  // 406 carve-out: geo+json by itself is acceptable on Retrieve Entity
-  // (§ 5.7.1), Query Entities (§ 5.7.2) and the POST-body variant of
-  // Query Entities (§ 5.7.3, /entityOperations/query) only; on every
-  // other operation a geo+json-only Accept is "Not Acceptable".
-  //
-  // None of the three is acceptable → 406 across the board.
-  //
-  // The check runs in the renderHook because read ops don't mutate
-  // state — replacing a 200 body with a 406 here is safe.
-  //
+  // § 6.3.4 Accept negotiation already ran at the top of this hook —
+  // here we only need the GeoJSON branch decision for the format
+  // path (the unacceptable-Accept case has already returned).
   LdAcceptType acceptType    = ldAcceptParse(swRest.in.accept);
-  uint64_t     ldOp          = (swRest.serviceP != NULL) ? swRest.serviceP->ldOp : 0;
-  bool         entityReadOp  = (ldOp & (LdOpRetrieveEntity | LdOpQueryEntities | LdOpBatchQuery)) != 0;
-
-  if (acceptType == LdAcceptNone ||
-      (acceptType == LdAcceptGeoJson && !entityReadOp))
-  {
-    ldError(406, LD_ERROR_INVALID_REQUEST, "Not Acceptable",
-            "supported response media types: application/json, application/ld+json%s",
-            entityReadOp ? ", application/geo+json" : "");
-    return;
-  }
-
   bool         acceptGeoJson = (acceptType == LdAcceptGeoJson);
   if (acceptGeoJson && treeP != NULL)
   {
