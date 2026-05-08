@@ -6,6 +6,7 @@
 // Copyright 2026 Seamware
 // 
 //
+#include <regex.h>                                       // regcomp, regfree
 #include <stdlib.h>                                      // atoi
 #include <string.h>                                      // strcmp, strstr, strcasecmp
 
@@ -114,6 +115,20 @@ void ldParamHook(const char* name, const char* value)
   }
   else if (strcmp(name, "idPattern") == 0)
   {
+    // § 4.1 / § 5.7.2.4 — idPattern is a POSIX regex. Compile-test
+    // it now so a syntax error surfaces as 400 BadRequestData here,
+    // not as a 500 from the DB layer when it tries to use it.
+    regex_t re;
+    int rc = regcomp(&re, value, REG_EXTENDED | REG_NOSUB);
+    if (rc != 0)
+    {
+      char errBuf[128];
+      regerror(rc, &re, errBuf, sizeof(errBuf));
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Bad Request",
+              "'idPattern' is not a valid regex: %s", errBuf);
+      return;
+    }
+    regfree(&re);
     swNgsild.idPattern = (char*) value;
   }
   else if (strcmp(name, "type") == 0)
