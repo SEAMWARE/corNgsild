@@ -8,7 +8,10 @@
 #include <stdbool.h>                                     // bool
 #include <string.h>                                      // strcmp, strchr
 
+#include "swRest/swRest.h"                               // swRest
+#include "swRest/SwRestService.h"                        // SwRestService.ldOp
 #include "swNgsild/SwNgsild.h"                           // swNgsild
+#include "swNgsild/LdOp.h"                               // LdOpQueryEntities, LdOpQueryTemporal, LdOpBatchQuery
 #include "swNgsild/LdProblem.h"                          // LD_ERROR_*
 #include "swNgsild/ldError.h"                            // ldError
 
@@ -119,6 +122,34 @@ bool ldParamsValidate(void)
                 "'?attrs': '%s' is a reserved entity member, not an Attribute name", a);
         return true;
       }
+    }
+  }
+
+  // § 5.7.2.4 — Query Entities requires AT LEAST ONE of: type / attrs / q /
+  // geoquery (georel+geometry+coordinates) / scopeQ. Filtering by `id` or
+  // `idPattern` alone is "too wide query" and shall be 400 BadRequestData.
+  // The same applies to Query Temporal Entities (§ 5.7.4.4) and the
+  // /entityOperations/query POST variant.
+  //
+  // Exception: a request paginating via `?entityMap=<id>` is bounded by the
+  // already-stored entity map (§ 5.14) — the original selectors lived on the
+  // request that built the map, so a continuation request needs no further
+  // selector.
+  uint64_t op = (swRest.serviceP != NULL) ? swRest.serviceP->ldOp : 0;
+  if ((op & (LdOpQueryEntities | LdOpQueryTemporal | LdOpBatchQuery)) &&
+      swNgsild.entityMapId == NULL)
+  {
+    bool haveSelector = (swNgsild.type != NULL)
+                     || (swNgsild.attrs != NULL)
+                     || (swNgsild.q != NULL)
+                     || (swNgsild.georel != NULL && swNgsild.geometry != NULL && swNgsild.coordinates != NULL)
+                     || (swNgsild.scopeQ != NULL)
+                     || (swNgsild.local == true);
+    if (!haveSelector)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid request",
+              "Query Entities requires at least one of 'type', 'attrs', 'q', a GeoQuery, 'scopeQ', or 'local=true' (§ 5.7.2.4 — id / idPattern alone is too wide)");
+      return true;
     }
   }
 
