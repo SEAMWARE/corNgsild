@@ -380,3 +380,39 @@ which would only fire after a successful lookup. One PASS→FAIL.
 **Fix wanted:** mirror `051_06`'s pattern — take the `localId` field, or
 split `URL` on `/` and take the last segment.
 
+
+## 12. `019_09 / 019_10 / 019_11` use a self-intersecting polygon test fixture
+
+**Hit:** the `Setup Initial Entities` keyword in
+`TP/NGSI-LD/.../QueryEntities/019_09.robot`,
+`019_10.robot`, `019_11.robot` (and any test that depends on
+`building-location-polygon.jsonld` / `building-location-polygon-second.jsonld`)
+creates a Building entity whose `location` GeoProperty is a Polygon with
+crossing non-adjacent edges:
+
+```
+[[13.2865906,52.5648645],[13.2879639,52.5648645],
+ [13.2797241,52.4988679],[13.477478,52.4712703],
+ [13.5049438,52.5373084],[13.2865906,52.5648645]]
+```
+
+MongoDB's 2dsphere index rejects it with *"Loop is not valid: Edges 1
+and 4 cross"*; per § 4.10 a self-intersecting polygon is not a valid
+GeoJSON, so the broker now rejects the entity create with 400
+BadRequestData (see swNgsild commit "ldCheckGeo: reject
+self-intersecting polygons up front"). The test setup then fails and
+every test in the suite is marked `FAIL`.
+
+**Why it's wrong:** § 4.10 / RFC 7946 require polygon rings to be
+simple (no self-intersection). The fixture is invalid GeoJSON and was
+only "working" against brokers that didn't validate.
+
+**Impact:** every 019_09 / 019_10 / 019_11 test fails on setup. Same
+for `019_11_06`, where the *query* polygon is also self-intersecting —
+that one would have failed even with a valid fixture.
+
+**Fix wanted:** replace the polygon coordinates with a valid simple
+polygon (e.g. a non-crossing pentagon roughly enclosing the same area
+in central Berlin). Same for the query polygons in `019_11_06` and
+similar.
+
