@@ -18,18 +18,21 @@
 //              inline: adds "entity" sub-attribute to Relationships.
 // mode       : "flat" or "inline" (per § 4.5.23.2 / § 4.5.23.3).
 // joinLevel  : recursion depth; spec default is 1.
+// sysAttrs   : true if the subscription requested sysAttrs — controls
+//              whether createdAt/modifiedAt survive on linked entities.
 // tenantP    : opaque tenant pointer (Tenant*) for the broker's lookup.
 //
 
+#include <stdbool.h>                                   // bool
 #include "kjson/KjNode.h"                              // KjNode
 
 
 
-typedef void (*LdLinkedEntitiesExpandHook)(KjNode* dataArrayP, const char* mode, int joinLevel, void* tenantP);
+typedef void (*LdLinkedEntitiesExpandHook)(KjNode* dataArrayP, const char* mode, int joinLevel, bool sysAttrs, void* tenantP);
 
 
 
 extern void ldLinkedEntitiesHookSet(LdLinkedEntitiesExpandHook fn);
-extern void ldLinkedEntitiesHookInvoke(KjNode* dataArrayP, const char* mode, int joinLevel, void* tenantP);
+extern void ldLinkedEntitiesHookInvoke(KjNode* dataArrayP, const char* mode, int joinLevel, bool sysAttrs, void* tenantP);
 
 #endif

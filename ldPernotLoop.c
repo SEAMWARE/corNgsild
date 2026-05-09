@@ -112,7 +112,7 @@ static bool pernotSendNotification(LdPernotItem* itemP, KjNode* entityArray, KAl
   if (itemP->notifJoin != NULL && strcmp(itemP->notifJoin, "@none") != 0)
   {
     int level = (itemP->notifJoinLevel > 0) ? itemP->notifJoinLevel : 1;
-    ldLinkedEntitiesHookInvoke(dataArray, itemP->notifJoin, level, itemP->tenantP);
+    ldLinkedEntitiesHookInvoke(dataArray, itemP->notifJoin, level, false, itemP->tenantP);
   }
 
   // Compact

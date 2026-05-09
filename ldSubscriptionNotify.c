@@ -599,7 +599,8 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
   }
 
   ldEntityToApi(entityClone, &swRest.kalloc);
-  ldStripSysAttrs(entityClone);
+  if (!itemP->sysAttrs)
+    ldStripSysAttrs(entityClone);
 
   //
   // showChanges (§ 5.8.6 / § 5.2.14.1): for each report change that
@@ -743,7 +744,7 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   if (itemP->notifJoin != NULL && strcmp(itemP->notifJoin, "@none") != 0)
   {
     int level = (itemP->notifJoinLevel > 0) ? itemP->notifJoinLevel : 1;
-    ldLinkedEntitiesHookInvoke(dataArray, itemP->notifJoin, level, swNgsild.tenantP);
+    ldLinkedEntitiesHookInvoke(dataArray, itemP->notifJoin, level, itemP->sysAttrs, swNgsild.tenantP);
   }
 
   // Compact expanded URIs to short names (covers every data[] entry).
