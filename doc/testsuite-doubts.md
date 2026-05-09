@@ -469,3 +469,37 @@ are computed.
 JSON files for these tests, OR move them through `deep_diff`'s
 `exclude_regex_paths` so the timestamps are ignored.
 
+
+
+## 15. `046_34_04` vs `046_37_01` LanguageProperty null-marker shape
+
+**Hit:** when emitting the § 5.8.6 null-marker for a deleted
+LanguageProperty, the two fixtures disagree on the wire form:
+
+  * `046_34_04` (attribute-delete) expects
+    ```json
+    "street": { "type": "LanguageProperty",
+                "languageMap": { "@none": "urn:ngsi-ld:null" } }
+    ```
+  * `046_37_01` (entity-delete + showChanges) expects
+    ```json
+    "street": { "type": "LanguageProperty",
+                "languageMap": "urn:ngsi-ld:null",
+                "previousLanguageMap": { fr: ..., nl: ... } }
+    ```
+
+Spec § 5.8.6 only says "the value (or object) shall be set to
+`urn:ngsi-ld:null`". The bare-string form is the natural fit for
+a single-value scalar key like `value` / `object` / `vocab` /
+`json`, but for `languageMap` (whose normal shape is a JSON object)
+both forms are defensible. The fixtures should pick one and stick
+with it.
+
+**Our call:** the broker emits `{@none: null}` on attribute-delete
+notifications and bare `"urn:ngsi-ld:null"` on entity-delete
+notifications, matching each fixture exactly. Both are spec-allowed.
+
+**Fix wanted:** fixtures should agree (preferably both bare null,
+since other types use bare null and § 5.8.6 reads more naturally
+that way). Once aligned, the broker's two code paths can be
+unified.
