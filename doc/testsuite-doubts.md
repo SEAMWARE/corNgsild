@@ -416,3 +416,32 @@ polygon (e.g. a non-crossing pentagon roughly enclosing the same area
 in central Berlin). Same for the query polygons in `019_11_06` and
 similar.
 
+
+## 13. `028_01_01 / 029_05_* / 029_06_01 / 030_03_01` deep-diff response against request — disallows spec defaults
+
+**Hit:** these Subscription Create / Update / Retrieve tests build a
+request payload, send it, then compare the response body to the
+request via `deep_diff` and assert the result is empty.
+
+**Why it's wrong:** § 5.2.12 makes `isActive` a 0..1 member with
+default `true`. § 6.3.13 shows it on every Subscription representation
+example. The broker injects `isActive: true` on create when the user
+didn't supply one, and emits it on retrieve — so the spec-conformant
+response contains a member the (minimal) request didn't.
+
+The `deep_diff` then reports `dictionary_item_added: ["root['isActive']"]`
+and the test fails. Same pattern would break for `status` (§ 5.2.12 too
+— always emitted by the broker since it's computed, not user-supplied)
+and any other defaulted member.
+
+**Impact:** four tests flip PASS→FAIL purely from the broker emitting
+`isActive: true`. Reverting the injection would also break the CSR-Sub
+retrieve test that relies on the field being present, so the broker
+side is correct.
+
+**Fix wanted:** the assertion should ignore members that are spec
+defaults / computed (`isActive`, `status`, `subscriptionName` when
+auto-derived, etc.) — either with a `deep_diff` `exclude_paths`
+allowlist or by switching to "subset" semantics ("response includes
+every key the request asked for, with the same value").
+
