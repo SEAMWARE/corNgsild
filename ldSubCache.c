@@ -407,7 +407,7 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
     {
       if (strcmp(v[i], "id") == 0 || strcmp(v[i], "type") == 0 || strcmp(v[i], "scope") == 0) continue;
       if (!swldAlreadyExpanded(v[i]))
-        v[i] = swldExpand(NULL, v[i], &cacheP->alloc, NULL, NULL);
+        v[i] = swldExpand(swNgsild.contextP, v[i], &cacheP->alloc, NULL, NULL);
     }
   }
 
