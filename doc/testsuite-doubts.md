@@ -503,3 +503,97 @@ notifications, matching each fixture exactly. Both are spec-allowed.
 since other types use bare null and § 5.8.6 reads more naturally
 that way). Once aligned, the broker's two code paths can be
 unified.
+
+
+## 16. `051_02_01`, `051_04_02/03`, `053_03_01` — missing resource imports
+
+**Hit:** these tests reference `${ERROR_TYPE_RESOURCE_NOT_FOUND}` in
+`Check Response Body Containing ProblemDetails Element`, but their
+`*** Settings ***` only import `jsonldContext.resource` and
+`AssertionUtils.resource` (and HttpUtils for some). None of those
+define the variable.
+
+`${ERROR_TYPE_RESOURCE_NOT_FOUND}` is defined in
+`Common.resource`, `ContextInformationConsumption.resource`, and
+several others — just not in the ones these tests pull in.
+
+Robot fails the test with `Variable '${ERROR_TYPE_RESOURCE_NOT_FOUND}'
+not found.` before even checking the broker behaviour.
+
+**Our call:** broker behaviour is correct (404 on unknown context-id);
+nothing to fix on our side.
+
+**Fix wanted:** add `Resource ${EXECDIR}/resources/ApiUtils/Common.resource`
+(or any resource that defines the variable) to those four tests'
+`*** Settings ***` blocks.
+
+
+## 17. `051_02_01` — random numeric string is not a URI
+
+**Hit:** the test generates a 16-digit random string with `Generate
+Random String 16 [NUMBERS]` and DELETEs `/jsonldContexts/<digits>`,
+expecting 404 ResourceNotFound. Per § 5.13.5.4 a context-id that is
+not a valid URI must yield 400 BadRequestData — the broker correctly
+returns 400.
+
+**Our call:** broker enforces the URI check.
+
+**Fix wanted:** the test should generate a URI (e.g.
+`urn:test:<random>` or `http://example.org/<random>`) so the 404
+path is exercised instead of the 400 (non-URI) path.
+
+
+## 18. `051_05_01`, `053_05_01` — wants 503, spec says 504
+
+**Hit:** both tests stop the local @context server, then hit the
+broker with a path that triggers `LdContextNotAvailable` (e.g. DELETE
+?reload=true on a Cached context whose source is gone). They assert
+`Check Response Status Code 503` with reason "Service Unavailable".
+
+ETSI GS CIM 009 v1.9.1 § 6.3.17 (and the table in ch6 line 260) maps
+`LdContextNotAvailable` to **504** — `Gateway Timeout`. The broker
+emits 504 per spec.
+
+**Our call:** broker returns spec-mandated 504.
+
+**Fix wanted:** the fixtures should assert 504 / "Gateway Timeout".
+
+
+## 19. `051_07_01` — Robot's URL stripping mangles the implicit URL
+
+**Hit:** the `Delete a @context` keyword strips the prefix
+`/ngsi-ld/v1/jsonldContexts/` from an absolute URL. When the broker
+returns the implicit context's URL as
+`http://localhost:8080/ngsi-ld/v1/jsonldContexts/<id>`, the strip
+leaves `http://localhost:8080<id>`, which Robot then URL-encodes and
+sends as the path component. The broker decodes this, looks up an id
+that doesn't exist, returns 404 — but the test expected 400 (reload
+on Implicit).
+
+**Our call:** broker behaves correctly given the input it receives.
+
+**Fix wanted:** the strip should anchor on the absolute prefix
+(e.g. regex `^https?://[^/]+/ngsi-ld/v1/jsonldContexts/`) or use the
+last `/`-segment of the URL.
+
+
+## 20. `051_08_*`, `051_09_*` — fixture `core_context` ≠ broker's actual core
+
+**Hit:** `resources/variables.py` sets
+`core_context = 'https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context-v1.6.jsonld'`.
+The broker's actual core (compile-time) is v1.9 / v1.9.1. Per spec
+(§ 5.13.5.4 / § 5.13.6.4), only the implementation's *actual* core
+context is undeletable / un-reloadable — older or unrelated core URLs
+are user contexts to the API and may be deleted normally.
+
+So when the test does `Delete a @context ${core_context}` expecting
+400 (or 200 for 051_09 reload), the broker (correctly) returns 204 /
+404 because v1.6 is just a regular Cached/Implicit context to it, not
+the core.
+
+**Our call:** keep the spec-strict semantics. Don't extend the
+"undeletable core" classification to alternate-version core URLs.
+
+**Fix wanted:** `variables.py` should be set per-implementation, e.g.
+`core_context = 'https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context-v1.9.jsonld'`,
+or the fixture should derive it from a broker-served endpoint.
