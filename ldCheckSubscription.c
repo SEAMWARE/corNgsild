@@ -170,12 +170,19 @@ static bool checkNotification(KjNode* notifP)
           ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription", "'notification.attributes' items must be strings");
           return false;
         }
-        if (strcmp(attrP->value.s, "id") == 0 ||
-            strcmp(attrP->value.s, "type") == 0 ||
-            strcmp(attrP->value.s, "scope") == 0)
+        // The @vocab-expansion may have rewritten the bare token to a
+        // core JSON-LD keyword (id → @id, type → @type) or to the
+        // expanded NGSI-LD IRI for `scope`. Match all forms so the
+        // reserved-member rejection survives expansion.
+        const char* v        = attrP->value.s;
+        const char* userName = NULL;
+        if      (strcmp(v, "id")    == 0 || strcmp(v, "@id")           == 0)  userName = "id";
+        else if (strcmp(v, "type")  == 0 || strcmp(v, "@type")         == 0)  userName = "type";
+        else if (strcmp(v, "scope") == 0 || strcmp(v, LD_VOCAB_SCOPE)  == 0)  userName = "scope";
+        if (userName != NULL)
         {
           ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
-                  "'notification.attributes' must not include '%s' (§ 5.2.12)", attrP->value.s);
+                  "'notification.attributes' must not include '%s' (§ 5.2.12)", userName);
           return false;
         }
       }

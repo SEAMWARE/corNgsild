@@ -529,23 +529,9 @@ static LdQNode* parseTerm(const char** pp, KAlloc* kaP)
   }
 
 
-  //
-  // expandValues: if the attribute is in expandValuesV, expand string values via @context
-  //
-  if (swNgsild.expandValuesV != NULL && nodeP->term.valueType == LdQString &&
-      nodeP->term.op != LdQPattern && nodeP->term.op != LdQNotPattern)
-  {
-    for (int ix = 0; swNgsild.expandValuesV[ix] != NULL; ix++)
-    {
-      if (strcmp(nodeP->term.attr, swNgsild.expandValuesV[ix]) == 0)
-      {
-        char* expanded = swldExpand(swNgsild.contextP, nodeP->term.value.s, kaP, NULL, NULL);
-        if (expanded != NULL)
-          nodeP->term.value.s = expanded;
-        break;
-      }
-    }
-  }
+  // expandValues handling moved to ldExpandParams: at parse time, URL param
+  // order may not have set expandValuesV yet, and term.attr is already in
+  // expanded form — both sides need to be expanded for the match to work.
   *pp = p;
   return nodeP;
 }

@@ -15,6 +15,7 @@
 #include "swJsonld/swldExpand.h"                       // swldExpand
 #include "swNgsild/SwNgsild.h"                         // swNgsild
 #include "swNgsild/LdProj.h"                           // LdProjItem
+#include "swNgsild/LdQ.h"                              // LdQNode
 
 #include "swNgsild/ldExpandParams.h"                   // Own interface
 
@@ -76,15 +77,57 @@ static void expandArray(char** v, KAlloc* kaP)
 
 // -----------------------------------------------------------------------------
 //
+// qExpandValuesWalk - apply expandValues to LdQString leaves whose attr matches
+//
+// q is parsed when the URL param is encountered, before expandValuesV is set
+// (param order is not guaranteed). Once expandValuesV is finalized, walk the
+// tree and expand string RHS values for matching attributes.
+//
+static void qExpandValuesWalk(LdQNode* nodeP, char** evV, KAlloc* kaP)
+{
+  if (nodeP == NULL || evV == NULL)
+    return;
+
+  if (nodeP->type == LdQTermNode)
+  {
+    if (nodeP->term.valueType == LdQString &&
+        nodeP->term.op != LdQPattern && nodeP->term.op != LdQNotPattern)
+    {
+      for (int ix = 0; evV[ix] != NULL; ix++)
+      {
+        if (strcmp(nodeP->term.attr, evV[ix]) == 0)
+        {
+          char* expanded = swldExpand(swNgsild.contextP, nodeP->term.value.s, kaP, NULL, NULL);
+          if (expanded != NULL)
+            nodeP->term.value.s = expanded;
+          break;
+        }
+      }
+    }
+  }
+  else if (nodeP->type == LdQAndNode || nodeP->type == LdQOrNode)
+  {
+    for (int i = 0; i < nodeP->group.count; i++)
+      qExpandValuesWalk(nodeP->group.childV[i], evV, kaP);
+  }
+  else if (nodeP->type == LdQLinkedNode)
+  {
+    qExpandValuesWalk(nodeP->linked.subQ, evV, kaP);
+  }
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldExpandParams - expand all vocab-bearing URL params in swNgsild
 //
 // Called once per request from the preServiceHook, after the payload body
 // has been parsed (@context available) and all URL params stored.
 //
-// Expands: typeV[], pickV[], omitV[], jsonKeysV[], geoproperty,
-//          geometryProperty.
-// Does NOT expand: expandValuesV (those names match q-parse tree as-is),
-//                  scopeQ, q, datasetId, lang, coordinates.
+// Expands: typeV[], pickV[], omitV[], jsonKeysV[], expandValuesV[],
+//          geoproperty, geometryProperty.
+// Does NOT expand: scopeQ, q, datasetId, lang, coordinates.
 //
 void ldExpandParams(KAlloc* kaP)
 {
@@ -98,6 +141,7 @@ void ldExpandParams(KAlloc* kaP)
   expandArray(swNgsild.attrsV,            kaP);
   expandArray(swNgsild.omitV,             kaP);
   expandArray(swNgsild.jsonKeysV,         kaP);
+  expandArray(swNgsild.expandValuesV,     kaP);
 
   // Expand the projection trees recursively so the linked-entity walker can
   // match against expanded IRIs inside nested entities.
@@ -130,6 +174,11 @@ void ldExpandParams(KAlloc* kaP)
 
   swNgsild.geoproperty      = expandString(swNgsild.geoproperty, kaP);
   swNgsild.geometryProperty = expandString(swNgsild.geometryProperty, kaP);
+
+  // q-tree was parsed before expandValuesV was finalized (URL param order is
+  // not guaranteed). Apply value expansion to matching string leaves now.
+  if (swNgsild.qExpr != NULL && swNgsild.expandValuesV != NULL)
+    qExpandValuesWalk(swNgsild.qExpr, swNgsild.expandValuesV, kaP);
 
   // orderBy: expand each dot-separated segment of each term's attrName.
   // Store the expanded segments as a separate array (pathSegV) — the joined
