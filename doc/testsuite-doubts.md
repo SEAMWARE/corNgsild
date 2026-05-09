@@ -445,3 +445,27 @@ auto-derived, etc.) — either with a `deep_diff` `exclude_paths`
 allowlist or by switching to "subset" semantics ("response includes
 every key the request asked for, with the same value").
 
+
+## 14. `046_24 / 046_28` expectation files hard-code `createdAt`/`modifiedAt`
+
+**Hit:** the JSON expectation files for `046_24_01` and `046_28_01`
+(`entity-created-name-attribute-join-flat-sysAttrs.json`,
+`entity-created-name-attribute-join-inline-sysAttrs.json`) include
+fixed `createdAt`/`modifiedAt` ISO timestamps — e.g.
+`"2025-05-19T15:20:16.418984Z"` — alongside the linked-entity members
+the test cares about.
+
+When `deep_diff` runs, the broker's *current-time* timestamps trip
+`values_changed` and the test fails — even though the field that the
+test was meant to verify (sysAttrs being present + linked entities
+appearing) is satisfied.
+
+**Why it's wrong:** the broker stamps `createdAt`/`modifiedAt` from
+the request clock; no broker can satisfy a fixture that demands a
+specific past datetime. § 4.5.4 / § 5.2.20 are explicit that these
+are computed.
+
+**Fix wanted:** strip `createdAt`/`modifiedAt` from the expectation
+JSON files for these tests, OR move them through `deep_diff`'s
+`exclude_regex_paths` so the timestamps are ignored.
+
