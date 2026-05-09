@@ -620,16 +620,28 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
       if (preValueP == NULL) continue;
 
       // preValue is the pre-change dataset-keyed wrapper
-      // ({"@none":{type:..,value:..}, ...}). Pull the @none instance's
-      // current/object/languageMap.
+      // ({"@none":{type:..,value:..}, ...}). Storage form keeps the raw
+      // value under "value" regardless of attr type — pick the right
+      // previousX key based on the per-instance "type".
       KjNode* preInst = kjLookup(preValueP, "@none");
       if (preInst == NULL && preValueP->type == KjObject)
         preInst = preValueP->value.firstChildP;
       if (preInst == NULL || preInst->type != KjObject) continue;
 
-      KjNode* preVal   = kjLookup(preInst, "value");
-      KjNode* preObj   = kjLookup(preInst, "object");
-      KjNode* preLmap  = kjLookup(preInst, "languageMap");
+      KjNode* preVal  = kjLookup(preInst, "value");
+      KjNode* preType = kjLookup(preInst, "type");
+      if (preVal == NULL) continue;
+
+      const char* prevKey = "previousValue";
+      if (preType != NULL && preType->type == KjString)
+      {
+        if      (strcmp(preType->value.s, "Relationship")     == 0) prevKey = "previousObject";
+        else if (strcmp(preType->value.s, "LanguageProperty") == 0) prevKey = "previousLanguageMap";
+        else if (strcmp(preType->value.s, "JsonProperty")     == 0) prevKey = "previousJson";
+        else if (strcmp(preType->value.s, "VocabProperty")    == 0) prevKey = "previousVocab";
+        else if (strcmp(preType->value.s, "ListProperty")     == 0) prevKey = "previousValueList";
+        else if (strcmp(preType->value.s, "ListRelationship") == 0) prevKey = "previousObjectList";
+      }
 
       KjNode* attrOutP = kjLookup(entityClone, attrNameP->value.s);
       if (attrOutP == NULL)
@@ -637,17 +649,14 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
         // attribute was deleted from entity — add a minimal wrapper
         // carrying only the previousX marker so showChanges sees it.
         attrOutP = kjObject(NULL, attrNameP->value.s);
-        kjChildRemove(entityClone, kjLookup(entityClone, attrNameP->value.s));
         kjChildAdd(entityClone, attrOutP);
-        // Set type from the preInst for correctness
-        KjNode* preType = kjLookup(preInst, "type");
         if (preType != NULL) kjChildAdd(attrOutP, kjClone(NULL, preType));
       }
       if (attrOutP->type != KjObject) continue;
 
-      if (preVal  != NULL) { KjNode* c = kjClone(NULL, preVal);  c->name = (char*) "previousValue";       kjChildAdd(attrOutP, c); }
-      if (preObj  != NULL) { KjNode* c = kjClone(NULL, preObj);  c->name = (char*) "previousObject";      kjChildAdd(attrOutP, c); }
-      if (preLmap != NULL) { KjNode* c = kjClone(NULL, preLmap); c->name = (char*) "previousLanguageMap"; kjChildAdd(attrOutP, c); }
+      KjNode* c = kjClone(NULL, preVal);
+      c->name = (char*) prevKey;
+      kjChildAdd(attrOutP, c);
     }
   }
 
