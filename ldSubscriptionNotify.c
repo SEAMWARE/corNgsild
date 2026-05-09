@@ -361,7 +361,11 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
     }
 
     int triggerMask = (itemP->triggerMask != 0) ? itemP->triggerMask : LD_TRIGGER_DEFAULT;
-    if ((triggerMask & LD_TRIGGER_ATTR_DELETED) != 0)
+    // Emit per-attribute null markers (and showChanges previousX) when
+    // attributeDeleted is in the trigger mask OR the subscription uses
+    // showChanges (§ 5.2.14.1) — entityDeleted+showChanges still wants
+    // each attribute rendered with its previous value (ETSI 046_37..39).
+    if (((triggerMask & LD_TRIGGER_ATTR_DELETED) != 0) || itemP->showChanges)
     {
       for (KjNode* attrP = entityP->value.firstChildP; attrP != NULL; attrP = attrP->next)
       {
@@ -391,22 +395,27 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
 
         KjNode* nullAttr = kjObject(NULL, attrP->name);
         kjChildAdd(nullAttr, kjString(NULL, "type", typeStr));
-        if (strcmp(typeStr, "LanguageProperty") == 0)
+        // Entity-delete fixtures (ETSI 046_37) want the bare null marker
+        // even for LanguageProperty (`"languageMap": "urn:ngsi-ld:null"`),
+        // matching § 5.8.6's bare form. The attribute-delete branch above
+        // uses the {@none: null} form because 046_34_04 demands it — see
+        // the SPEC NOTE there. testsuite-doubts.md tracks the divergence.
+        //
+        // Type names disambiguate on first char except 'L' (Language vs
+        // List(Property|Relationship)) — typeStr[1]/[4] settle that.
+        const char* primaryKey = "value";
+        switch (typeStr[0])
         {
-          KjNode* lmap = kjObject(NULL, "languageMap");
-          kjChildAdd(lmap, kjString(NULL, "@none", LD_VOCAB_NGSILD_NULL));
-          kjChildAdd(nullAttr, lmap);
+        case 'R': primaryKey = "object"; break;
+        case 'V': primaryKey = "vocab";  break;
+        case 'J': primaryKey = "json";   break;
+        case 'L':
+          if      (typeStr[1] == 'a') primaryKey = "languageMap";  // LanguageProperty
+          else if (typeStr[4] == 'P') primaryKey = "valueList";    // ListProperty
+          else if (typeStr[4] == 'R') primaryKey = "objectList";   // ListRelationship
+          break;
         }
-        else
-        {
-          const char* primaryKey = "value";
-          if      (strcmp(typeStr, "Relationship")     == 0) primaryKey = "object";
-          else if (strcmp(typeStr, "VocabProperty")    == 0) primaryKey = "vocab";
-          else if (strcmp(typeStr, "JsonProperty")     == 0) primaryKey = "json";
-          else if (strcmp(typeStr, "ListProperty")     == 0) primaryKey = "valueList";
-          else if (strcmp(typeStr, "ListRelationship") == 0) primaryKey = "objectList";
-          kjChildAdd(nullAttr, kjString(NULL, primaryKey, LD_VOCAB_NGSILD_NULL));
-        }
+        kjChildAdd(nullAttr, kjString(NULL, primaryKey, LD_VOCAB_NGSILD_NULL));
 
         if (itemP->sysAttrs && anyInstP != NULL && anyInstP->type == KjObject)
         {
@@ -435,6 +444,34 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
             kjChildAdd(nullAttr, kjClone(NULL, aModified));
           if (deletedIso[0] != 0)
             kjChildAdd(nullAttr, kjString(NULL, "deletedAt", deletedIso));
+        }
+
+        // showChanges (§ 5.8.6 / § 5.2.14.1): on entity-delete, every
+        // attribute carries previous<X> sourced from the pre-delete
+        // instance's `value`. Storage normalises typed primary keys to
+        // "value", so the previousX label comes from typeStr.
+        if (itemP->showChanges && anyInstP != NULL && anyInstP->type == KjObject &&
+            (itemP->format == NULL || strcmp(itemP->format, "simplified") != 0))
+        {
+          KjNode* preVal = kjLookup(anyInstP, "value");
+          if (preVal != NULL)
+          {
+            const char* prevKey = "previousValue";
+            switch (typeStr[0])
+            {
+            case 'R': prevKey = "previousObject"; break;
+            case 'V': prevKey = "previousVocab";  break;
+            case 'J': prevKey = "previousJson";   break;
+            case 'L':
+              if      (typeStr[1] == 'a') prevKey = "previousLanguageMap";  // LanguageProperty
+              else if (typeStr[4] == 'P') prevKey = "previousValueList";    // ListProperty
+              else if (typeStr[4] == 'R') prevKey = "previousObjectList";   // ListRelationship
+              break;
+            }
+            KjNode* prev = kjClone(NULL, preVal);
+            prev->name = (char*) prevKey;
+            kjChildAdd(nullAttr, prev);
+          }
         }
 
         kjChildAdd(out, nullAttr);
@@ -633,14 +670,20 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
       if (preVal == NULL) continue;
 
       const char* prevKey = "previousValue";
-      if (preType != NULL && preType->type == KjString)
+      if (preType != NULL && preType->type == KjString && preType->value.s != NULL)
       {
-        if      (strcmp(preType->value.s, "Relationship")     == 0) prevKey = "previousObject";
-        else if (strcmp(preType->value.s, "LanguageProperty") == 0) prevKey = "previousLanguageMap";
-        else if (strcmp(preType->value.s, "JsonProperty")     == 0) prevKey = "previousJson";
-        else if (strcmp(preType->value.s, "VocabProperty")    == 0) prevKey = "previousVocab";
-        else if (strcmp(preType->value.s, "ListProperty")     == 0) prevKey = "previousValueList";
-        else if (strcmp(preType->value.s, "ListRelationship") == 0) prevKey = "previousObjectList";
+        const char* t = preType->value.s;
+        switch (t[0])
+        {
+        case 'R': prevKey = "previousObject"; break;
+        case 'V': prevKey = "previousVocab";  break;
+        case 'J': prevKey = "previousJson";   break;
+        case 'L':
+          if      (t[1] == 'a') prevKey = "previousLanguageMap";  // LanguageProperty
+          else if (t[4] == 'P') prevKey = "previousValueList";    // ListProperty
+          else if (t[4] == 'R') prevKey = "previousObjectList";   // ListRelationship
+          break;
+        }
       }
 
       KjNode* attrOutP = kjLookup(entityClone, attrNameP->value.s);
