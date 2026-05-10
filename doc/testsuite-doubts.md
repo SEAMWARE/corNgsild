@@ -597,3 +597,85 @@ the core.
 **Fix wanted:** `variables.py` should be set per-implementation, e.g.
 `core_context = 'https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context-v1.9.jsonld'`,
 or the fixture should derive it from a broker-served endpoint.
+
+
+## 21. DistOps — `application/ld+json` + `Link` header in body-bearing POSTs
+
+**Hit:** the Robot keyword `Query Entities Via POST` (and the related
+batch-query helpers used across `D011_*`, `D016_*`) sets
+`Content-Type: application/ld+json` AND a `Link: <ctx>; rel=…/json-ld#context`
+header, with no `@context` in the body. The broker returns 400
+BadRequestData ("Missing @context") and the test fails with
+"expected 200, got 400" (~6 tests).
+
+**Spec:** § 6.3.5 is explicit:
+> "the presence of a JSON-LD Link header in the incoming HTTP request
+>  when the Content-Type header is application/ld+json shall result
+>  in an HTTP error response of type BadRequestData."
+
+So broker behaviour is mandatory.
+
+**Our call:** broker stays spec-strict — both "ld+json without body
+@context" and "ld+json + Link header" raise 400.
+
+**Fix wanted:** the test framework's POST keywords should pick ONE
+of two consistent shapes:
+  - Content-Type `application/json` + Link header (no body @context); or
+  - Content-Type `application/ld+json` + body @context (no Link header).
+Currently they emit a hybrid that the spec mandates rejecting.
+
+
+## 22. DistOps — HttpCtrl stub literal-match doesn't match forwarded URL
+
+**Hit:** `Set Stub Reply <method> <url> <status> <body>` registers an
+HttpCtrl stub keyed on the URL string `/broker1/ngsi-ld/v1/...` (or
+similar). The broker, when forwarding a distributed operation to the
+mocked Context Source, appends URL parameters mandated by § 5.7.2 /
+§ 5.6.x — typically `?type=<expanded>&pick=<expanded>&sysAttrs=true`,
+plus `id=` lists for queries. HttpCtrl matches stubs by exact URL
+string, so the request misses the stub. The mock then either:
+  - returns nothing (timeout → 7 tests fail with `Timeout: request
+    was not received`), or
+  - returns a default 404/empty (broker reports CS forward failed →
+    207 instead of 204, 502 instead of 200 — ~30+ tests).
+
+**Spec:** § 5.7.2 entitles the broker to attach the matching CSR's
+property/relationship constraints as query params on the forward
+(`pick`, `omit`, `type`, etc.). § 4.5 / § 5.7.1 say sysAttrs and
+similar shall be honoured end-to-end. Broker is correct.
+
+**Our call:** broker emits canonical distop URLs.
+
+**Fix wanted:** stubs should match by URL prefix or use a regex.
+Robotframework-httpctrl supports `Set Stub Reply` with regex match
+in newer versions — adopting that across the DistOps suite would
+flip ~30 tests without touching the broker.
+
+
+## 23. DistOps — `Get Stub Count 1 (integer) != 1 (string)` (~12 tests)
+
+**Hit:** Robot tests do `Should Be Equal ${stub_count} 1`.
+HttpCtrl's `Get Stub Count` returns a Python int; the literal `1`
+in the .robot file is a string. Robot's `Should Be Equal` is type-
+strict and fails.
+
+**Spec:** N/A.
+
+**Our call:** broker uninvolved.
+
+**Fix wanted:** use `Should Be Equal As Numbers` / `Should Be Equal
+As Integers`, or `Should Be True ${stub_count} == 1`.
+
+
+## 24. DistOps — `No keyword with name 'Get Request Url Params' found`
+
+**Hit:** three tests reference `Get Request Url Params`, a keyword
+that doesn't exist in the version of robotframework-httpctrl
+installed for the test runner. Tests crash before the broker ever
+sees a request.
+
+**Our call:** broker uninvolved.
+
+**Fix wanted:** pin a robotframework-httpctrl version that exposes
+this keyword, or rewrite the affected tests with what the installed
+version offers.
