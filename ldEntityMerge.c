@@ -54,43 +54,6 @@ static inline bool isNgsildNull(const KjNode* nodeP)
 
 
 
-// -----------------------------------------------------------------------------
-//
-// instancePrimaryMember - return the primary-value-member name for an
-// attribute instance, derived from its "type" field.
-//
-// Per spec § 4.5.1 / § 4.5.21, every attribute instance carries exactly one
-// primary value member determined by its type. If the merge result strips
-// that member, the instance is no longer a valid attribute instance and
-// must be removed (and if all instances are gone, the whole attribute is
-// considered deleted — fires "attributeDeleted" instead of "attributeModified").
-//
-// Returns NULL when the instance has no recognisable type or the type has
-// no single primary member (defensive — caller treats as "leave alone").
-//
-static const char* instancePrimaryMember(KjNode* instanceP)
-{
-  if (instanceP == NULL || instanceP->type != KjObject)
-    return NULL;
-
-  KjNode* typeP = kjLookup(instanceP, "type");
-  if (typeP == NULL || typeP->type != KjString)
-    return NULL;
-
-  switch (ldAttrTypeFromString(typeP->value.s))
-  {
-    case LdAttrProperty:         return "value";
-    case LdAttrRelationship:     return "object";
-    case LdAttrGeoProperty:      return "value";
-    case LdAttrLanguageProperty: return "languageMap";
-    case LdAttrVocabProperty:    return "vocab";
-    case LdAttrListProperty:     return "valueList";
-    case LdAttrListRelationship: return "objectList";
-    case LdAttrJsonProperty:     return "json";
-    default:                     return NULL;
-  }
-}
-
 
 
 // -----------------------------------------------------------------------------
@@ -617,18 +580,17 @@ static bool mergeAttrWrapper(KjNode* target, KjNode* fragment, uint64_t ts, Kjso
   // the wrapper ends up with zero instances by re-classifying the merge report
   // entry from "attributeModified" to "attributeDeleted".
   //
+  // Storage form keeps every typed primary key (object / languageMap /
+  // vocab / json / valueList / objectList) under "value" — q can't filter
+  // otherwise. So one lookup is enough.
   KjNode* iChild = target->value.firstChildP;
   while (iChild != NULL)
   {
     KjNode* iNext = iChild->next;
-    if (iChild->type == KjObject)
+    if (iChild->type == KjObject && kjLookup(iChild, "value") == NULL)
     {
-      const char* primary = instancePrimaryMember(iChild);
-      if (primary != NULL && kjLookup(iChild, primary) == NULL)
-      {
-        kjChildRemove(target, iChild);
-        mutated = true;
-      }
+      kjChildRemove(target, iChild);
+      mutated = true;
     }
     iChild = iNext;
   }
