@@ -30,6 +30,21 @@
 // merge semantics, such an object is a partial fragment targeting existing
 // sub-attributes, not a new Property whose value happens to be an object.
 //
-extern void ldNormalizeInput(KjNode* entityP, KAlloc* faP, bool mergeMode);
+extern void ldNormalizeInput(KjNode* entityP, KAlloc* kaP, bool mergeMode);
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldWrapAsGeoProperty - per-field GeoProperty wrap.
+//
+// Replaces `childP` (a member of `entityP`) with `{type:GeoProperty, value:<orig>}`.
+// Caller already knows the attr should be a GeoProperty, so this skips the
+// auto-detection ldNormalizeInput does and just performs the wrap. Used by
+// the CSR intake path for location / observationSpace / operationSpace which
+// arrive as bare GeoJSON Geometry on the wire (§ 5.2.9) but live as
+// normalized GeoProperty wrappers in storage and on output.
+//
+extern void ldWrapAsGeoProperty(KjNode* entityP, KjNode* childP, KAlloc* kaP);
 
 #endif  // SWNGSILD_LDNORMALIZEINPUT_H_

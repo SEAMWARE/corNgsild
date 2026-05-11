@@ -174,7 +174,7 @@ static bool hasExplicitAttrType(KjNode* objP)
 //
 // addTypeField - prepend a "type" string field to an attribute object
 //
-static void addTypeField(KjNode* attrP, const char* typeName, KAlloc* faP)
+static void addTypeField(KjNode* attrP, const char* typeName, KAlloc* kaP)
 {
   KjNode* typeNodeP = kjString(swRest.kjsonP, "type", typeName);
   if (typeNodeP != NULL)
@@ -193,14 +193,14 @@ static void addTypeField(KjNode* attrP, const char* typeName, KAlloc* faP)
 // Input:   entityP has child  "attrName": <value>
 // Output:  entityP has child  "attrName": { "type": "Property", LD_VOCAB_HAS_VALUE: <value> }
 //
-static void wrapAsProperty(KjNode* entityP, KjNode* childP, KAlloc* faP)
+static void wrapAsProperty(KjNode* entityP, KjNode* childP, KAlloc* kaP)
 {
   KjNode* wrapperP = kjObject(swRest.kjsonP, childP->name);
   if (wrapperP == NULL)
     return;
 
   // Create a value node that copies the original's type+value
-  KjNode* valueNodeP = (KjNode*) kaAlloc(faP, sizeof(KjNode));
+  KjNode* valueNodeP = (KjNode*) kaAlloc(kaP, sizeof(KjNode));
   if (valueNodeP == NULL)
     return;
 
@@ -211,7 +211,7 @@ static void wrapAsProperty(KjNode* entityP, KjNode* childP, KAlloc* faP)
   valueNodeP->next  = NULL;
 
   kjChildAdd(wrapperP, valueNodeP);
-  addTypeField(wrapperP, "Property", faP);
+  addTypeField(wrapperP, "Property", kaP);
 
   kjChildReplace(entityP, childP, wrapperP);
 }
@@ -220,16 +220,21 @@ static void wrapAsProperty(KjNode* entityP, KjNode* childP, KAlloc* faP)
 
 // -----------------------------------------------------------------------------
 //
-// wrapAsGeoProperty - wrap a GeoJSON object inside a GeoProperty
+// ldWrapAsGeoProperty - wrap a GeoJSON object inside a GeoProperty
 //
-static void wrapAsGeoProperty(KjNode* entityP, KjNode* childP, KAlloc* faP)
+// Public for callers that already know the target field is a GeoProperty
+// (typically CSR intake on location / observationSpace / operationSpace —
+// bare GeoJSON on the wire per § 5.2.9, but stored and rendered as the
+// normalized GeoProperty wrapper).
+//
+void ldWrapAsGeoProperty(KjNode* entityP, KjNode* childP, KAlloc* kaP)
 {
   KjNode* wrapperP = kjObject(swRest.kjsonP, childP->name);
   if (wrapperP == NULL)
     return;
 
   // Create hasValue node pointing to the GeoJSON object's children
-  KjNode* valueNodeP = (KjNode*) kaAlloc(faP, sizeof(KjNode));
+  KjNode* valueNodeP = (KjNode*) kaAlloc(kaP, sizeof(KjNode));
   if (valueNodeP == NULL)
     return;
 
@@ -240,14 +245,14 @@ static void wrapAsGeoProperty(KjNode* entityP, KjNode* childP, KAlloc* faP)
   valueNodeP->next  = NULL;
 
   kjChildAdd(wrapperP, valueNodeP);
-  addTypeField(wrapperP, "GeoProperty", faP);
+  addTypeField(wrapperP, "GeoProperty", kaP);
 
   kjChildReplace(entityP, childP, wrapperP);
 }
 
 
 
-static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* faP, bool mergeMode);
+static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool mergeMode);
 
 
 
@@ -258,7 +263,7 @@ static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* faP, bool m
 // containerP: the parent node (entity or attribute object) — needed for kjChildReplace
 // attrP:      the attribute node to normalize
 //
-static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* faP, bool mergeMode)
+static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool mergeMode)
 {
   // ---  Scalar children → simplified Property  ---
   if (attrP->type == KjInt || attrP->type == KjFloat || attrP->type == KjString || attrP->type == KjBoolean || attrP->type == KjNull)
@@ -277,7 +282,7 @@ static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* faP, bool m
     if (mergeMode)
       return;
 
-    wrapAsProperty(containerP, attrP, faP);
+    wrapAsProperty(containerP, attrP, kaP);
     return;
   }
 
@@ -297,14 +302,14 @@ static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* faP, bool m
       {
         KjNode* elemNextP = elemP->next;
         if (elemP->type == KjObject)
-          normalizeAttr(attrP, elemP, faP, mergeMode);
+          normalizeAttr(attrP, elemP, kaP, mergeMode);
         elemP = elemNextP;
       }
     }
     else
     {
       // Simplified array value (e.g. "tags": ["fast", "red"])
-      wrapAsProperty(containerP, attrP, faP);
+      wrapAsProperty(containerP, attrP, kaP);
     }
     return;
   }
@@ -322,7 +327,7 @@ static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* faP, bool m
     {
       KjNode* subNextP = subP->next;
       if (isAttrKeyword(subP->name) == false)
-        normalizeAttr(attrP, subP, faP, mergeMode);
+        normalizeAttr(attrP, subP, kaP, mergeMode);
       subP = subNextP;
     }
     return;
@@ -345,13 +350,13 @@ static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* faP, bool m
 
     if (hasValueP != NULL && isGeoJsonValue(hasValueP))
     {
-      addTypeField(attrP, "GeoProperty", faP);
+      addTypeField(attrP, "GeoProperty", kaP);
     }
     else
     {
       LdAttrType detectedType = ldAttrTypeDetect(attrP);
       if (detectedType != LdAttrNone)
-        addTypeField(attrP, ldAttrTypeToString(detectedType), faP);
+        addTypeField(attrP, ldAttrTypeToString(detectedType), kaP);
     }
 
     // Recurse into sub-attributes
@@ -360,7 +365,7 @@ static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* faP, bool m
     {
       KjNode* subNextP = subP->next;
       if (isAttrKeyword(subP->name) == false)
-        normalizeAttr(attrP, subP, faP, mergeMode);
+        normalizeAttr(attrP, subP, kaP, mergeMode);
       subP = subNextP;
     }
     return;
@@ -370,7 +375,7 @@ static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* faP, bool m
   // Check if it IS a GeoJSON geometry (simplified GeoProperty)
   if (isGeoJsonObject(attrP))
   {
-    wrapAsGeoProperty(containerP, attrP, faP);
+    ldWrapAsGeoProperty(containerP, attrP, kaP);
     return;
   }
 
@@ -389,13 +394,13 @@ static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* faP, bool m
     {
       KjNode* subNextP = subP->next;
       if (isAttrKeyword(subP->name) == false)
-        normalizeAttr(attrP, subP, faP, mergeMode);
+        normalizeAttr(attrP, subP, kaP, mergeMode);
       subP = subNextP;
     }
     return;
   }
 
-  wrapAsProperty(containerP, attrP, faP);
+  wrapAsProperty(containerP, attrP, kaP);
 }
 
 
@@ -404,7 +409,7 @@ static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* faP, bool m
 //
 // ldNormalizeInput -
 //
-void ldNormalizeInput(KjNode* entityP, KAlloc* faP, bool mergeMode)
+void ldNormalizeInput(KjNode* entityP, KAlloc* kaP, bool mergeMode)
 {
   if (entityP == NULL || entityP->type != KjObject)
     return;
@@ -416,7 +421,7 @@ void ldNormalizeInput(KjNode* entityP, KAlloc* faP, bool mergeMode)
     KjNode* nextP = childP->next;  // save before normalizeAttr may replace childP
 
     if (ldIsEntityKeyword(childP->name) == false)
-      normalizeAttr(entityP, childP, faP, mergeMode);
+      normalizeAttr(entityP, childP, kaP, mergeMode);
 
     childP = nextP;
   }
