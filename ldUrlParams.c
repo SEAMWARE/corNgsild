@@ -37,6 +37,7 @@
 //
 bool        ldLocalOnly          = false;
 bool        ldSplitEntities      = true;
+bool        ldTestConformance    = false;
 char*       ldDefaultContextUrl  = NULL;
 const char* ldCsourceAliasBase   = NULL;
 long long   ldBrokerStartTimeSec = 0;

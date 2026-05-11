@@ -787,6 +787,36 @@ fixtures should be relaxed to accept either 200 or 206, and the
 020_05/021_03 fixtures should be updated to expect 206 when clipping
 occurs.
 
+## 26. § 5.10.2.5 — RegistrationInfo filtering on GET /csourceRegistrations is "should", not "shall"; client should be able to pick
+
+**Hit:** `GET /csourceRegistrations?...` selects a CSR by matching the
+query against any of its `information[]` entries, but the response
+shape — full vs. filtered — is left to the implementation:
+
+> "implementations **should** return filtered Context Source
+>  Registrations, which only contain context source registration
+>  information relevant for the query, in particular only matching
+>  RegistrationInfo elements."
+
+Two valid behaviours:
+- **Filtered** (current swBroker default): strip non-matching
+  RegistrationInfo entries — cleaner, less network noise.
+- **Unfiltered**: return the CSR as registered — clients see context
+  they did not query for but get the complete picture.
+
+Today the choice is a build-time / configuration setting. The client
+cannot ask for one shape or the other from a single broker.
+
+**Our call:** broker defaults to filtered. A new CLI flag
+`--testConformance` flips it to unfiltered, used by ETSI runs whose
+fixtures expect that shape.
+
+**Fix wanted:** add a URL param to § 5.10.2.4 (e.g.
+`?information=relevant|full`, default `relevant`) so the client picks
+the shape per request. That removes the ambiguity ("should") and
+keeps both behaviours accessible from one broker without server
+restart or vendor-specific switches.
+
 ---
 
 ## Template for new entries

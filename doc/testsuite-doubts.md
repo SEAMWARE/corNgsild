@@ -679,3 +679,30 @@ sees a request.
 **Fix wanted:** pin a robotframework-httpctrl version that exposes
 this keyword, or rewrite the affected tests with what the installed
 version offers.
+
+
+## 25. § 5.10.2.5 / 037_08, 037_09_*, 037_10_02 — ETSI fixtures expect the un-filtered RegistrationInfo set
+
+**Hit:** Eight `GET /csourceRegistrations?…` tests (037_05_01,
+037_08_01, 037_09_01..04, 037_10_02, 037_11_*) assert against an
+expectation file that contains *every* `information[]` entry of the
+created CSR, regardless of whether the entry's `entities` / property
+names matched the discovery filter.
+
+The broker today returns only the matching entries (i.e. `entry.entities
+∩ ?type/?id/?attrs ≠ ∅`), so the response is a subset of what the
+fixture lists → `Compare Dictionaries Ignoring Keys` reports the
+missing entries as `Item …['information'][N] removed from iterable`.
+
+**Spec:** § 5.10.2.5 says implementations **should** return filtered
+registrations — only matching RegistrationInfo elements. "Should",
+not "shall" — so both shapes are spec-compliant.
+
+**Our call:** keep the filtered behaviour by default — it's the
+spec-recommended thing and a cleaner client experience (no irrelevant
+entries returned). Provide `--testConformance/-tc` so ETSI runs can
+opt into the un-filtered shape and pass these eight tests.
+
+**Fix wanted:** ETSI fixtures should accept either shape, or — better
+— the spec should add a URL param to let the client choose (see
+spec-doubts § 26 for the proposal).
