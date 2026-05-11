@@ -556,8 +556,12 @@ static LdQNode* parseAtom(const char** pp, KAlloc* kaP)
 
     skipWs(pp);
 
-    if (**pp == ')')
-      (*pp)++;
+    if (**pp != ')')
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid q parameter", "missing ')' in q expression");
+      return NULL;
+    }
+    (*pp)++;
 
     return inner;
   }

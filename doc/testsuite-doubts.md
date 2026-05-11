@@ -706,3 +706,39 @@ opt into the un-filtered shape and pass these eight tests.
 **Fix wanted:** ETSI fixtures should accept either shape, or — better
 — the spec should add a URL param to let the client choose (see
 spec-doubts § 26 for the proposal).
+
+
+## 26. § 5.10.2.4 / 037_10_01 — `?id=` alone is not enough; broker correctly demands one of type/attrs/q/geoQ
+
+**Hit:** Test 037_10_01 calls `GET /csourceRegistrations?id=<csr1>,<csr3>` (no `type`, no `attrs`, no `q`, no geoQ). Expects 200 + the two CSRs.
+
+**Spec:** § 5.10.2.4 lists the required input as exactly one of:
+- (a) selector of Entity Types,
+- (b) list of Attribute names,
+- (c) NGSI-LD Query,
+- (d) NGSI-LD GeoQuery.
+
+`id` is not in that list. Without one of the four, the broker raises 400 "Too Wide Query".
+
+**Our call:** broker stays spec-strict; `?id=` is an additional filter, not a sufficient one.
+
+**Fix wanted:** the test should also pass `type=Building` (or one of the other required selectors); it would still demonstrate the same `id`-list narrowing behaviour.
+
+
+## 27. § 5.5.9 / 037_11_01 + 037_11_02 — pagination expects offset to index page-by-page, not item-by-item
+
+**Hit:** Setup creates 3 CSRs with two different fixtures; `?type=Building` matches 2 of them. The two tests then query with limit/offset:
+
+- 037_11_01: `limit=1, offset=2` expects **1** result.
+- 037_11_02: `limit=2, offset=2` expects **1** result.
+- 037_11_03: `limit=15, offset=0` expects **2** results — passing.
+
+The 03 fixture confirms the matching-set size is 2. With § 5.5.9's zero-based item offset:
+- offset=2, limit=1 → skip 2 of 2 items → 0 results.
+- offset=2, limit=2 → same → 0 results.
+
+For the tests to expect 1, the fixtures must either (a) count all three CSRs as matching `?type=Building` (one of them has no Building EntityInfo so this is wrong), or (b) interpret offset as a page index multiplied by limit (which contradicts § 5.5.9).
+
+**Our call:** broker is spec-strict on offset.
+
+**Fix wanted:** rewrite the fixtures with an offset and matching-set count that line up, or — if 037_11_03's "expects 2" is actually correct — pick offset values that don't exceed the matching-set size.

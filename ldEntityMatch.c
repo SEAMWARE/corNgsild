@@ -148,13 +148,17 @@ static KjNode* getAttrValue(KjNode* entityP, const char* attrName)
   }
 
   KjNode* wrapperP = kjLookup(entityP, attrName);
-  if (wrapperP == NULL || wrapperP->type != KjObject)
+  if (wrapperP == NULL)
     return NULL;
 
-  // Flat API-shape wrapper: { "type": "Property", "value": X }. Used by
-  // CSR regs (§ 5.10.2 q-filter). Try this first; it's harmless when
-  // the wrapper is actually the DB-model instance-map shape because
-  // that shape has no direct "value" child.
+  // Simplified scalar — CSR user-Properties are always in simplified form per § 5.2.9 (a top-level
+  // `csourceProperty1: "aValue"` is the wire shape; no NGSI-LD Property wrapper). § 5.10.2.4 `?q=` filters
+  // on these directly. Treat the scalar as the value itself.
+  if (wrapperP->type != KjObject)
+    return wrapperP;
+
+  // Flat API-shape wrapper: { "type": "Property", "value": X }. Try this first; it's harmless when
+  // the wrapper is actually the DB-model instance-map shape because that shape has no direct "value" child.
   KjNode* flatValueP = kjLookup(wrapperP, "value");
   if (flatValueP != NULL)
     return flatValueP;
