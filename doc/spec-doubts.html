@@ -29,11 +29,11 @@
 html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); }
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-  font-size: 15px;
+  font-size: 22px;
   line-height: 1.55;
-  max-width: 900px;
+  max-width: 2100px;
   margin: 0 auto;
-  padding: 32px 36px 80px;
+  padding: 32px 56px 96px;
 }
 h1 { font-size: 1.9em; border-bottom: 2px solid var(--border); padding-bottom: 0.3em; margin-top: 0; }
 h2 { font-size: 1.45em; border-bottom: 1px solid var(--border); padding-bottom: 0.25em; margin-top: 2em; }
@@ -99,7 +99,48 @@ v1.9.1. Intended as input for ETSI ISG CIM / TC DATA clarifications.</p>
 <p>Each entry: <strong>§ ref</strong> · <strong>what we hit</strong> · <strong>what the spec says (or
 doesn't)</strong> · <strong>what we did</strong> · <strong>what we'd want fixed</strong>.</p>
 <hr />
-<h2 id="index-by-theme-roughly-ordered-by-interop-impact">Index (by theme, roughly ordered by interop impact)</h2>
+<h2 id="index-by-severity-of-needed-fix">Index — by severity of needed fix</h2>
+<p>The fix the spec needs is not the same for every entry. Three
+categories matter for an improvement-suggestion document:</p>
+<ul>
+<li><strong>Errors</strong> — spec wording is provably wrong, contradicts itself,
+  or every implementation has to ignore it to ship.</li>
+<li><strong>Missing</strong> — spec doesn't address the case at all; an entire
+  shape or mechanism needs to be added.</li>
+<li><strong>Ambiguities</strong> — spec is silent or unclear; multiple readings
+  are equally defensible.</li>
+</ul>
+<p>The themed cross-reference further down is by NGSI-LD mechanism
+(distops, CSR, subscriptions, …) for navigation purposes.</p>
+<h3 id="errors-spec-is-wrong">Errors (spec is <em>wrong</em>)</h3>
+<ul>
+<li><strong><a href="#46">46</a></strong> § 6.3.17 — <code>redirect</code> mode classified as BOTH "single registered source" (508/504/404/502) AND "multiple equally valid endpoints" (207) <strong>in the same section</strong>. Pure contradiction.</li>
+<li><strong><a href="#48">48</a></strong> § 4.5.5.3 — "the NGSI-LD system shall choose the Attribute instance at random and the result is indeterminate" as a tiebreaker. Guarantees cross-broker interop failure on identical input. Indeterminate output is unfit for a federation spec.</li>
+<li><strong><a href="#8">8</a></strong> § 5.2.9 — typos in top-level CSR fields are silently re-classified as CSF Properties. Silent data drop is the wrong behaviour; a typo at registration time must be rejected.</li>
+<li><strong><a href="#14">14</a></strong> § 6.34.3.1 — GET /entityMaps <strong>creates</strong> an EntityMap (returns 201). REST contract violation; mismatched with HTTP method semantics every tool assumes.</li>
+</ul>
+<h3 id="missing-spec-doesnt-address-this-case-at-all">Missing (spec <em>doesn't address</em> this case at all)</h3>
+<ul>
+<li><strong><a href="#1">1</a></strong> § 5.6.1.4 — createEntity partial-success body has no shape defined. Same gap recurs for append / update / merge / delete entity ops.</li>
+<li><strong><a href="#11">11</a></strong> § 5.7.11 / § 6.25–6.28 — no URL param for "local + registry, no forward". A real use case with no spec-blessed way to ask for it.</li>
+<li><strong><a href="#12">12</a></strong> § 5.7.11 — federation has no hop / TTL bound. Loop detection is the only stop; deep federation without cycles can still chain indefinitely.</li>
+<li><strong><a href="#13">13</a></strong> § 5.6 — no Retrieve Attribute operation. Clients must GET the whole entity and project; no minimal endpoint.</li>
+<li><strong><a href="#32">32</a></strong> § 5.2.6 — ProblemDetails extension fields for NGSI-LD-specific context (entityId, attributeName, registrationId, status) are vendor-invented today. No blessed set.</li>
+<li><strong><a href="#47">47</a></strong> § 6.3.17 — <code>NGSILD-Warning</code> header is defined but emission semantics are missing. No broker emits them today because the spec doesn't say WHEN to.</li>
+<li><strong><a href="#59">59</a></strong> § 4.8 — system Attributes set and visibility gate not enumerated in one place. Inferred from scattered references.</li>
+<li><strong><a href="#62">62</a></strong> § 5.13 — <code>jsonldContext.kind</code> values (Cached / ImplicitlyCreated / Hosted / ExplicitlyCreated) not enumerated; provenance vocabulary not standardised.</li>
+<li><strong><a href="#80">80</a></strong> § 4.5.4 — simplified-form projection table for List / Vocab / Json / Geo / Language attribute types missing. Implementer reconstructs from scattered hints.</li>
+<li><strong><a href="#83">83</a></strong> § 4.11 — temporal bound asymmetry (before exclusive, after inclusive). No clean way to express "at or before T". Design gap, not a contradiction.</li>
+<li><strong><a href="#84">84</a></strong> § 4.23 — what to do with <code>?orderBy=</code> under distop. Spec says sort is not applied; doesn't say whether to ignore silently, warn, or 400 the request. And no recommended default order.</li>
+<li><strong><a href="#86">86</a></strong> § 6.3.22 + § 5.16 — <code>NGSILD-Snapshot:</code> is documented only for reads in 1.9.1. The same header against the normal CRUD endpoints (POST /entities + header, PATCH, DELETE, …) would naturally address the snapshot's tenant, but the spec neither blesses nor forbids it. Future revisions will define snapshot writes via the existing CRUD API + header; today's spec needs an explicit "writes against NGSILD-Snapshot are not defined in this revision; brokers SHALL reject with 405 / 501" or equivalent, to make the version transition unambiguous.</li>
+</ul>
+<h3 id="ambiguities-spec-is-silent-or-unclear">Ambiguities (spec is <em>silent</em> or <em>unclear</em>)</h3>
+<p>The remaining <strong>68 entries</strong> fall into this category. They are
+best browsed via the cross-reference index below — grouped by
+NGSI-LD mechanism so a reviewer focused on (say) distributed
+operations can locate the relevant subset quickly.</p>
+<hr />
+<h2 id="index-by-ngsi-ld-mechanism-cross-reference-for-navigation">Index — by NGSI-LD mechanism (cross-reference for navigation)</h2>
 <h3 id="a-distributed-operations-concurrent-fan-out-policy">A. Distributed operations — concurrent fan-out &amp; policy</h3>
 <ul>
 <li><strong><a href="#27">27</a></strong> § 4.3.6 — concurrent vs sequential forwarding to matching CSRs is unspecified (no permission, no obligation, no constraint)</li>
@@ -2207,7 +2248,10 @@ above isn't pinned.</p>
   state for matching; notifications include the snapshot id.
 - <code>?local=true</code> + snapshot: snapshot reads are always local (the
   snapshot itself is a local frozen copy), the param is a no-op.
-- Header on writes: ignored. Snapshots are read-only.</p>
+- Header on writes: in 1.9.1, writes against a snapshot are not
+  defined (see entry 86); we reject with 405 today. Future
+  revisions are expected to bless snapshot writes via the same
+  CRUD API + header.</p>
 <p><strong>Fix wanted:</strong> § 6.3.22 should add an interaction matrix:</p>
 <table>
 <thead>
@@ -2223,7 +2267,7 @@ above isn't pinned.</p>
 </tr>
 <tr>
 <td>writes</td>
-<td>ignored — writes never apply to a snapshot</td>
+<td>undefined in 1.9.1 (see entry 86); broker SHOULD reject with 405</td>
 </tr>
 <tr>
 <td>distop forward</td>
@@ -2553,35 +2597,58 @@ mimics. Aligning <code>before</code>/<code>after</code> with it removes a real
 implementer trap and a subtle off-by-one for clients.</p>
 <hr />
 <p><a name="84"></a></p>
-<h2 id="84-423-orderby-never-applied-to-distributed-operations-vs-every-implementation-doing-it">84. § 4.23 — orderBy "never applied to distributed operations" vs every implementation doing it</h2>
+<h2 id="84-423-orderby-under-distop-silent-ignore-warn-or-400">84. § 4.23 — <code>?orderBy=</code> under distop: silent ignore, warn, or 400?</h2>
 <p><strong>Hit:</strong> § 4.23 explicitly says:</p>
 <blockquote>
 <p>Sort ordering is never applied to distributed operations, and the
 defined sort ordering strategy may depend on implementation
 specific configurations.</p>
 </blockquote>
-<p>But every real client expects <code>?orderBy=</code> to work on <code>GET
-/entities</code> regardless of whether the broker is single-source or
-federated. Returning unordered data on a federated query while
-the same broker returns ordered data when no CSRs match would be
-indistinguishable absurdity from the client's point of view.</p>
-<p>Every broker we've measured (swBroker, fwBroker, orion-ld) sorts
-the merged distop result locally — i.e. directly contradicting
-the spec sentence above. The user-visible behaviour is correct;
-the spec wording is not.</p>
-<p><strong>Spec:</strong> § 4.23, verbatim.</p>
-<p><strong>Our call:</strong> apply orderBy locally on the merged distop result.
-Diverges from spec but matches user expectation and every other
-implementer.</p>
-<p><strong>Fix wanted:</strong> § 4.23 should drop the sentence "Sort ordering
-is never applied to distributed operations" and replace with:
-"Sort ordering SHALL be applied to the broker's final merged
-result set. Forwarded query requests MAY (but need not) include
-the orderBy parameter; the broker SHALL re-sort after merging
-results from local + Context Sources to produce the final
-response."</p>
-<p>The current text is one of the few places where spec wording is
-<em>provably</em> incompatible with every shipped implementation.</p>
+<p>This is correct in principle — proper ordering across a federation
+of independent sources can't be done without first collecting the
+full result set (which is exactly what a snapshot does, by design).
+The spec's intent is right.</p>
+<p>What's left underspecified: when a client sends
+<code>?orderBy=foo</code> and distop is in effect, what should the broker do?</p>
+<ul>
+<li><strong>(a)</strong> Silently ignore <code>orderBy</code>. Return entities in
+  implementation-defined order (we use <code>createdAt</code> ascending —
+  it's stable, deterministic per source, and recoverable from the
+  local DB without extra cost). The client gets results but the
+  ordering hint was lost without warning.</li>
+<li><strong>(b)</strong> Honour <code>orderBy</code> only when the client has scoped the
+  request locally: <code>?local=true</code> OR <code>NGSILD-Snapshot: &lt;id&gt;</code>.
+  Otherwise ignore.</li>
+<li><strong>(c)</strong> Reject <code>?orderBy</code> under distop with 400 BadRequestData
+  ("ordering across distributed sources is not supported, use
+  <code>?local=true</code> or a snapshot").</li>
+<li><strong>(d)</strong> Best-effort: sort the per-source results locally, but
+  document that the combined result is not globally ordered.</li>
+</ul>
+<p>Our broker takes (b) — orderBy is honoured only with <code>?local=true</code>
+or a snapshot. Without those, the default order is <code>createdAt</code>
+ascending and <code>?orderBy</code> is silently ignored.</p>
+<p><strong>Spec:</strong> § 4.23 explicitly excludes orderBy from distop but
+doesn't say what the broker should do with the URL param when the
+client supplies it anyway.</p>
+<p><strong>Our call:</strong> option (b) plus default <code>createdAt</code>-asc.</p>
+<p><strong>Fix wanted:</strong> § 4.23 should add:</p>
+<blockquote>
+<p>Under distributed operations the Context Broker SHALL ignore the
+<code>?orderBy=</code> URL parameter. To request ordering across the
+federated result set, the client SHALL either set <code>?local=true</code>
+(restricting the query to the broker's own data) or use a
+snapshot (see clause 5.16). The default order of entities in a
+distributed response is implementation-defined; brokers
+RECOMMENDED-default to <code>createdAt</code> ascending. When <code>?orderBy=</code>
+is supplied AND distop is in effect, the broker SHOULD include
+the response header <code>NGSILD-Warning: 110</code> (or equivalent) to
+signal that the ordering hint was ignored.</p>
+</blockquote>
+<p>The "snapshot for federated ordering" pattern — which the spec
+implicitly introduces with § 5.16 — should also be explicitly
+cross-referenced from § 4.23 as the <strong>right</strong> way to get
+ordered+paginated federated reads.</p>
 <hr />
 <p><a name="85"></a></p>
 <h2 id="85-4232-datatype-comparison-order-strings-before-dates-where-does-geoproperty-fit">85. § 4.23.2 — datatype comparison order: strings before dates, where does GeoProperty fit?</h2>
@@ -2622,6 +2689,55 @@ ListProperty values as Array; JsonProperty values by their
 top-level JSON type." And reconsider the "Strings before
 DateTime" ordering — it produces non-intuitive sorts for
 real-world data where date-shaped strings are common.</p>
+<hr />
+<p><a name="86"></a></p>
+<h2 id="86-6322-516-writes-against-ngsild-snapshot-are-undefined-in-191">86. § 6.3.22 + § 5.16 — writes against <code>NGSILD-Snapshot</code> are undefined in 1.9.1</h2>
+<p><strong>Hit:</strong> A snapshot is effectively a tenant-shaped, isolated
+data view. The NGSI-LD CRUD API (POST /entities, PATCH, DELETE,
+…) naturally extends to operate on that tenant — just by setting
+the <code>NGSILD-Snapshot: &lt;id&gt;</code> header on the request. No new
+endpoints needed.</p>
+<p>But 1.9.1 only <em>describes</em> this header for reads (§ 6.3.22).
+Writes are neither blessed nor explicitly forbidden:</p>
+<ul>
+<li>POST /entities + <code>NGSILD-Snapshot: foo</code> — the spec doesn't say
+  what happens. Broker decision space:</li>
+<li>(a) Reject with 405 Method Not Allowed.</li>
+<li>(b) Reject with 501 Not Implemented.</li>
+<li>(c) Ignore the header and write into the default tenant
+    (silent data leak into the wrong place — terrible).</li>
+<li>(d) Treat as snapshot mutation (the future-revision behaviour).</li>
+<li>Same question for PATCH, DELETE, subscription CRUD, CSR CRUD
+  with the header.</li>
+</ul>
+<p>Future revisions of NGSI-LD are expected to bless snapshot writes
+via this same header pattern — turning snapshots into mutable
+sub-tenants. Without an explicit prohibition in 1.9.1, the version
+boundary between "snapshots are read-only" and "snapshots are
+writable" is invisible to clients.</p>
+<p><strong>Spec:</strong> § 6.3.22 describes the header on reads. § 5.16 describes
+snapshot CRUD on the Snapshot object itself (its metadata, status,
+queries). Neither addresses writes into the snapshot's data.</p>
+<p>The implicit read-only-ness comes from § 5.16.4 only allowing
+status updates ("Update Snapshot Status") and § 5.2.41 marking
+<code>snapshotQueries</code> / <code>snapshotTemporalQueries</code> as read-only after
+creation. The <em>data</em> read-only-ness is by absence of mention.</p>
+<p><strong>Our call:</strong> option (a). POST/PATCH/DELETE with
+<code>NGSILD-Snapshot:</code> returns 405 today. When the spec adds snapshot
+writes (a future revision), the broker drops the 405 and routes
+the write into the snapshot tenant. The broker exposes the spec
+version it implements via <code>/info/sourceIdentity</code>.</p>
+<p><strong>Fix wanted:</strong> § 6.3.22 should add explicitly: "In NGSI-LD
+1.9.1, the <code>NGSILD-Snapshot</code> header is defined only on Read
+operations (GET, query). A Context Broker receiving the header
+on a non-Read operation SHALL reject the request with 405 Method
+Not Allowed. Future revisions of the present document MAY define
+write operations against snapshots using the same header
+pattern."</p>
+<p>That sentence (a) makes the read-only-ness explicit in 1.9.1 and
+(b) reserves the API surface for the future-revision uplift —
+so clients can rely on a version-aware feature negotiation
+without ambiguity.</p>
 <hr />
 <h2 id="template-for-new-entries">Template for new entries</h2>
 <pre><code>## N. § X.Y.Z — one-line summary
