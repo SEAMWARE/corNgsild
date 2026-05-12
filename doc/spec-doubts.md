@@ -58,6 +58,7 @@ doesn't)** · **what we did** · **what we'd want fixed**.
 - **[45](#45)** § 5.2.9 — CSR `location` shape: bare GeoJSON Geometry (spec) vs wrapped GeoProperty (ETSI fixture)
 - **[71](#71)** § 5.2.40 — `contextSourceAlias` uniqueness scope (broker-local? federation? historical?) and allocation authority
 - **[72](#72)** § 5.2.40 — `contextSourceExtras` opaque-JSON contract (same gap as JsonProperty, entry 43)
+- **[82](#82)** § 4.20 — CSR `operations` list: named-group + literal-op mixing, typos, empty array vs absent default
 - **[81](#81)** § 5.15.1.4 / § 5.2.40 — `/info/sourceIdentity` per-tenant field variation (which fields vary; uptime semantics)
 
 ### E. Discovery & federation
@@ -116,6 +117,7 @@ doesn't)** · **what we did** · **what we'd want fixed**.
 - **[74](#74)** § 4.5.18 — LanguageProperty simplified rendering without `?lang=` URL param (lossless? default language? 400?)
 - **[75](#75)** § 4.5.19 — aggregated temporal × `?sysAttrs=true` interaction (per-period? attribute-level? suppressed?)
 - **[80](#80)** § 4.5.4 / § 4.5.21 / § 4.5.22 — simplified-form projection table for List/Vocab/Json/Geo attribute types
+- **[83](#83)** § 4.11 — temporal bound asymmetry: `before` exclusive, `after` inclusive, `between` half-open — pick one policy
 
 ---
 
@@ -2782,6 +2784,96 @@ which axis varies. Cleanest:
 | contextSourceUptime | no (broker-wide process uptime) |
 | contextSourceTimeAt | no |
 | contextSourceExtras | MAY be per-tenant (admin choice) |
+
+---
+
+<a name="82"></a>
+## 82. § 4.20 — CSR `operations` list: named-group + literal-op mixing and typo handling
+
+**Hit:** A CSR's `operations` array can contain literal op names
+(`createEntity`, `retrieveEntity`) AND named group aliases
+(`federationOps`, `redirectionOps`, etc.). Edge cases:
+
+- Mixed: `operations: ["federationOps", "createEntity"]` — does
+  this UNION the group's ops with `createEntity` (which isn't in
+  federationOps)? Or is mixing illegal?
+- Typo: `operations: ["federtionOps"]` (note the typo) — does the
+  broker reject (400)? Accept as a literal op name (silent
+  failure — no op matches)?
+- Empty array: `operations: []` — same as "no ops" (the CSR
+  responds to nothing) or same as "default" (federationOps)?
+- Default (field absent): § 4.20 says "the default set of
+  operations matches the group defined as federationOps". Explicit
+  `operations: ["federationOps"]` and absent should be equivalent —
+  but the broker may treat them differently on the wire (e.g. PATCH
+  semantics, "operations was set to default" vs "operations was
+  explicitly federationOps").
+- Group overlap: `operations: ["federationOps", "redirectionOps"]`
+  — these groups overlap on retrieveEntity, queryEntity, etc.
+  Union or set-of-sets?
+
+**Spec:** § 4.20 lists Table 4.20-1 (individual ops) and Table
+4.20-2 (named groups). The combinatorics aren't pinned.
+
+**Our call:**
+- Mixed: union (group expands, then literal ops add).
+- Typo: silent failure (unknown op name is a no-op for matching).
+  Should probably be 400 — log warning today.
+- Empty `[]`: same as "no ops match"; CSR is effectively inert.
+- Field absent: federationOps default.
+- Overlap: union with dedup.
+
+**Fix wanted:** § 4.20 should add: "The `operations` list MAY
+contain a mix of individual op names (Table 4.20-1) and named
+group aliases (Table 4.20-2). The effective op set is the union.
+Unrecognised names SHALL be rejected with 400 BadRequestData at
+CSR creation / patch time. An empty array SHALL mean the CSR
+supports no operations. An absent `operations` field SHALL imply
+the `federationOps` default."
+
+---
+
+<a name="83"></a>
+## 83. § 4.11 — temporal `before` / `after` / `between` bound asymmetry
+
+**Hit:** § 4.11 defines bound inclusivity per relation:
+- `before` — comparison value is **exclusive**
+- `after` — comparison value is **inclusive**
+- `between` — lower bound **inclusive**, upper bound **exclusive**
+
+So at exactly `timeAt = T`:
+- `?timerel=before&timeAt=T` does NOT match samples at T.
+- `?timerel=after&timeAt=T` DOES match samples at T.
+- `?timerel=between&timeAt=T&endTimeAt=T'` — at T matches, at T'
+  doesn't.
+
+This is asymmetric. A client who wants the COMPLEMENT of "before
+T" cannot use "after T" — both exclude samples at T from "before"
+but include them in "after" (because of the asymmetry, querying
+union(before, after) over the same T = matches every sample EXCEPT
+those at T are matched twice, those at T match once).
+
+Worse: there's no way to express "at or before T" — `before` is
+exclusive, no inclusive variant.
+
+**Spec:** § 4.11, verbatim — "before" exclusive, "after"
+inclusive, "between" half-open `[T, T')`.
+
+**Our call:** implement literally. Document the asymmetry in user
+docs.
+
+**Fix wanted:** § 4.11 should pick ONE policy and apply
+consistently. Two clean options:
+- (a) All-inclusive: before, after, between(closed-closed). Union
+  of complementary queries returns everything; intersections at
+  the boundary double-count.
+- (b) All half-open lower-inclusive (matches `between`):
+  `before T` = strict less-than, `after T` = greater-or-equal,
+  `between T T'` = `[T, T')`. Symmetric, no overlap, no gap.
+
+Option (b) is what most temporal DBs use and what `between` already
+mimics. Aligning `before`/`after` with it removes a real
+implementer trap and a subtle off-by-one for clients.
 
 ---
 
