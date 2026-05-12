@@ -70,6 +70,8 @@ doesn't)** · **what we did** · **what we'd want fixed**.
 - **[44](#44)** § 5.6.3.4 — `?observedAt=<time>` default-observedAt URL param exists for Merge but not Append/Update
 - **[63](#63)** § 5.14 — EntityMap lifetime, eviction, and persistence across restart
 - **[65](#65)** § 5.16.1.4 — snapshot capture from CSRs: do CSR-side changes after capture invalidate the snapshot? (frozen vs live)
+- **[67](#67)** § 5.7.3 — `lastN` semantics across pagination and distop fan-out
+- **[69](#69)** § 5.6.21 — Purge Entities and TRoE interaction (current-state only, or both?)
 
 ### G. Notifications & subscriptions
 
@@ -83,6 +85,7 @@ doesn't)** · **what we did** · **what we'd want fixed**.
 - **[56](#56)** § 5.8.6 — `notification.pick` / `notification.omit` vs entity-keyword members (can `id` be omitted?)
 - **[57](#57)** § 5.8.1.4 / § 5.8.2.4 — overlapping subscriptions to the same endpoint: dedup or duplicate?
 - **[58](#58)** § 5.8 — subscription `expiresAt` reached while broker is offline (recovery state machine undefined)
+- **[68](#68)** § 5.11 — csr-subscription notification triggers: which CSR state changes count (CRUD only? counter updates?)
 
 ### H. JSON-LD / @context
 
@@ -100,6 +103,8 @@ doesn't)** · **what we did** · **what we'd want fixed**.
 - **[59](#59)** § 4.8 — system Attributes set and visibility gate not enumerated in one place (sysAttrs scope, observedAt vs gate)
 - **[60](#60)** § 4.21 — `pick` / `omit` / `attrs` cross-parameter validation matrix missing (combination rules, conflict resolution)
 - **[61](#61)** § 5.3 — query language `q` lacks precedence table, escaping rules, type coercion, null-matching semantics
+- **[66](#66)** § 5.5.7 — IRI expansion of terms not defined in active @context (reject? @vocab fallback? bare?)
+- **[70](#70)** § 5.5.12 — `urn:ngsi-ld:null` tombstone scope: attribute-level only, or also inside array values / opaque json?
 
 ---
 
@@ -2187,6 +2192,176 @@ from Context Sources at capture time are stored in the snapshot;
 subsequent changes at the original Context Sources do not modify
 the snapshot. Reads against the snapshot return the captured
 T-state, not the live CSR state."
+
+---
+
+<a name="66"></a>
+## 66. § 5.5.7 — IRI expansion of terms not defined in the active @context
+
+**Hit:** Client sends `{ "speed": 42 }` but the active @context
+has no mapping for `speed`. JSON-LD's `@vocab` fallback can
+auto-construct an IRI (`<vocab>speed`) if `@vocab` is set; else
+the term is bare. NGSI-LD layers its own rules on top: attribute
+names must be IRIs per § 4.5.2; bare terms violate that.
+
+Three implementer reactions:
+- (a) Reject with 400 — "Attribute name not in active @context".
+- (b) Auto-construct via `@vocab` fallback if set; else 400.
+- (c) Accept the bare term; treat its full name as the bare string
+  for matching purposes (i.e. it stays "speed", not an IRI).
+
+**Spec:** § 5.5.7 / § 4.4 reference JSON-LD's expansion rules.
+Doesn't say what NGSI-LD does on a fallback miss. ETSI fixtures
+sometimes assume (b), sometimes (a).
+
+**Our call:** option (b) — fall back to `@vocab` when set;
+otherwise the bare term is rejected with 400. Matches JSON-LD
+default expansion + NGSI-LD's IRI requirement.
+
+**Fix wanted:** § 5.5.7 should add: "If a term in the request
+cannot be expanded by the active @context (no direct mapping,
+no applicable @vocab fallback), the Context Broker SHALL reject
+the request with 400 BadRequestData and a ProblemDetails
+referencing the unresolvable term."
+
+---
+
+<a name="67"></a>
+## 67. § 5.7.3 — `lastN` semantics across pagination and across distop
+
+**Hit:** `?lastN=10` asks for the most recent 10 instances of each
+attribute. Combined with:
+- Pagination (limit + offset): which axis paginates first? The
+  attribute axis (10 instances per attr, paginate over entities)
+  or the time axis (paginate over time-slices, each containing
+  up-to-lastN instances)?
+- Distop fan-out: each CSR returns its own lastN=10. Broker
+  merges. If a CSR returns 10 and the broker's local store has
+  10, the merged set may have >10 — does the broker re-trim to
+  lastN=10 after merge?
+
+**Spec:** § 5.7.3 / § 4.11 / § 5.5.11 define lastN, pagination,
+multi-instance. The composition is not addressed.
+
+**Our call:**
+- lastN applies post-merge: each attribute's instance list is
+  trimmed to most-recent N after distop merge.
+- Pagination operates on the entity axis; within each entity,
+  lastN governs the temporal-attribute axis. Combined: limit=L
+  entities, each carrying lastN=N instances.
+- Distop: forward lastN unchanged; trim locally after merge.
+
+**Fix wanted:** § 5.7.3 should add: "Under pagination, `lastN`
+applies per-Attribute within each returned Entity; the pagination
+parameter (`limit`) governs the entity dimension. Under
+distributed federation, `lastN` SHALL be forwarded to each Context
+Source and re-applied locally after merge."
+
+---
+
+<a name="68"></a>
+## 68. § 5.11 — CSR-Subscriptions: which CSR state changes trigger?
+
+**Hit:** A csr-subscription watches the CSR space. Spec says it
+fires when "a matching CSR is created, updated, or deleted". But
+"updated" is broad:
+- A counter update (timesSent++) — fires?
+- An expiresAt change without other state — fires?
+- A no-op write (PATCH with no actual change) — fires?
+- Internal state-machine changes (cooldown engaged, lastFailure
+  bumped) — fires?
+
+We have:
+- Active csr-subs in the catalog can hammer the notification
+  endpoint on every distop forward (counter updates) if we fire
+  on "any change to the CSR record".
+- Or under-fire if we ignore everything except CRUD on the
+  user-supplied fields.
+
+**Spec:** § 5.11 defines csr-sub CRUD but doesn't enumerate
+trigger conditions in detail.
+
+**Our call:** trigger only on user-visible CRUD: explicit POST,
+PATCH (with field changes), DELETE. Counter updates and internal
+state-machine transitions do not trigger. Same heuristic as
+"observable user-supplied state changed".
+
+**Fix wanted:** § 5.11.6 should add: "A csr-subscription notification
+SHALL be sent on Create / Patch (when at least one user-supplied
+field changes) / Delete. Internal Context Source state changes
+(distop counters, cooldown engagement, etc.) SHALL NOT trigger
+csr-sub notifications."
+
+---
+
+<a name="69"></a>
+## 69. § 5.6.21 — Purge Entities and TRoE interaction
+
+**Hit:** Purge Entities (`/entityOperations/purge`) removes
+matching entities from the current-state store. Does it also
+purge the TRoE temporal evolutions, or only the current state?
+
+Two readings:
+- (a) Purge is current-state only. The temporal evolution remains
+  (a complete history of deleted entities).
+- (b) Purge is total — both current-state AND temporal evolutions.
+  Subsequent temporal queries return 404.
+
+(a) is consistent with "soft delete" semantics in TRoE (createdAt
+preserved; deletedAt added). (b) is "hard delete" matching the
+purge name.
+
+**Spec:** § 5.6.21 defines Purge as removing entities. § 5.6.16
+(Delete Temporal Evolution) separately removes the temporal side.
+The interaction isn't addressed.
+
+**Our call:** Purge removes current-state only. TRoE evolution
+survives. Clients wanting both must call Delete Temporal Evolution
+separately (or use `?temporal=true` if we add such a flag).
+
+**Fix wanted:** § 5.6.21 should state: "Purge Entities operates
+on the current-state store. The temporal evolution of the purged
+entities (if any) is unaffected unless the URL parameter
+`?temporal=true` is also supplied, in which case the temporal
+evolution SHALL be purged with the same selector."
+
+That way the spec defines both the default and the override.
+
+---
+
+<a name="70"></a>
+## 70. § 5.5.12 — merge-patch with NGSI-LD null markers in arrays / nested objects
+
+**Hit:** Merge-patch (PATCH) uses `urn:ngsi-ld:null` as a tombstone
+for attribute deletion. RFC 7396 (JSON Merge Patch) uses literal
+JSON `null` for the same purpose. NGSI-LD diverges to accommodate
+its data model.
+
+Edge case: a PATCH body contains an array attribute and one
+element is `"urn:ngsi-ld:null"`. Is the entire array deleted? Just
+that element? Replaced with a null marker?
+
+Similarly: a JsonProperty whose `json` is `{ "x": "urn:ngsi-ld:null" }`
+— treated as "delete x from json"? Or preserved verbatim (the
+opaqueness from entry 43)?
+
+**Spec:** § 5.5.12 defines merge-patch with the urn:ngsi-ld:null
+marker semantics for attribute deletion. Element-level and
+inside-opaque cases are silent.
+
+**Our call:**
+- Inside a JsonProperty `json` value: opaque (entry 43); the
+  string `urn:ngsi-ld:null` is just a string, not a tombstone.
+- Inside an array Attribute value (Property with array value):
+  not a tombstone; the array is treated as a single value.
+- Tombstone semantics apply only at the attribute level.
+
+**Fix wanted:** § 5.5.12 should add: "The `urn:ngsi-ld:null`
+sentinel SHALL be interpreted as a deletion marker only at the
+Attribute level (as a sibling of `type`, replacing `value` /
+`object` / `languageMap` etc.). Occurrences within an Attribute's
+value (array elements, nested objects, JsonProperty contents) are
+preserved verbatim as data."
 
 ---
 
