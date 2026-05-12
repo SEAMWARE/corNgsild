@@ -118,6 +118,8 @@ doesn't)** · **what we did** · **what we'd want fixed**.
 - **[75](#75)** § 4.5.19 — aggregated temporal × `?sysAttrs=true` interaction (per-period? attribute-level? suppressed?)
 - **[80](#80)** § 4.5.4 / § 4.5.21 / § 4.5.22 — simplified-form projection table for List/Vocab/Json/Geo attribute types
 - **[83](#83)** § 4.11 — temporal bound asymmetry: `before` exclusive, `after` inclusive, `between` half-open — pick one policy
+- **[84](#84)** § 4.23 — "Sort ordering is never applied to distributed operations" — every implementer contradicts this; spec text needs replacement
+- **[85](#85)** § 4.23.2 — datatype comparison order: Strings before DateTime is non-intuitive; Geo/Vocab/Language/List/Json buckets unstated
 
 ---
 
@@ -2874,6 +2876,92 @@ consistently. Two clean options:
 Option (b) is what most temporal DBs use and what `between` already
 mimics. Aligning `before`/`after` with it removes a real
 implementer trap and a subtle off-by-one for clients.
+
+---
+
+<a name="84"></a>
+## 84. § 4.23 — orderBy "never applied to distributed operations" vs every implementation doing it
+
+**Hit:** § 4.23 explicitly says:
+
+> Sort ordering is never applied to distributed operations, and the
+> defined sort ordering strategy may depend on implementation
+> specific configurations.
+
+But every real client expects `?orderBy=` to work on `GET
+/entities` regardless of whether the broker is single-source or
+federated. Returning unordered data on a federated query while
+the same broker returns ordered data when no CSRs match would be
+indistinguishable absurdity from the client's point of view.
+
+Every broker we've measured (swBroker, fwBroker, orion-ld) sorts
+the merged distop result locally — i.e. directly contradicting
+the spec sentence above. The user-visible behaviour is correct;
+the spec wording is not.
+
+**Spec:** § 4.23, verbatim.
+
+**Our call:** apply orderBy locally on the merged distop result.
+Diverges from spec but matches user expectation and every other
+implementer.
+
+**Fix wanted:** § 4.23 should drop the sentence "Sort ordering
+is never applied to distributed operations" and replace with:
+"Sort ordering SHALL be applied to the broker's final merged
+result set. Forwarded query requests MAY (but need not) include
+the orderBy parameter; the broker SHALL re-sort after merging
+results from local + Context Sources to produce the final
+response."
+
+The current text is one of the few places where spec wording is
+*provably* incompatible with every shipped implementation.
+
+---
+
+<a name="85"></a>
+## 85. § 4.23.2 — datatype comparison order: strings before dates, where does GeoProperty fit?
+
+**Hit:** § 4.23.2 specifies a comparison order for mixed-type
+attribute values:
+
+> Numbers, Strings, Object, Array, Boolean, Time, Date, DateTime,
+> Null, Attribute does not exist
+
+Two surprises:
+- Strings come BEFORE Date / Time / DateTime. So
+  `"2024-01-01T00:00:00Z"` as a string compares BEFORE the same
+  value as a DateTime. The string representation of a date is
+  ranked below the DateTime representation — but only if the
+  string and DateTime are present *as different attributes* in
+  the same sort. The intuitive ordering would group all
+  date-shaped values regardless of declared type.
+- GeoProperty values, VocabProperty values, LanguageProperty
+  values — where do they fit in this list? "Object" bucket?
+
+When two entities have an attr declared GeoProperty (sort by
+value, not distance), which side wins in mixed-type sort with a
+String-valued entity for the same attr? Spec doesn't say.
+
+**Spec:** § 4.23.2 lists the order as cited above. Doesn't
+enumerate Geo/Vocab/Language values.
+
+**Our call:**
+- GeoProperty value → "Object" bucket (it's a GeoJSON object).
+- VocabProperty value → "String" bucket (vocab values are strings).
+- LanguageProperty value → "Object" bucket (languageMap is an
+  object).
+- ListProperty value → "Array" bucket.
+- JsonProperty value → bucket by the json's top-level type (object
+  or array; rarely scalar).
+
+**Fix wanted:** § 4.23.2 should add: "For NGSI-LD attribute value
+types: GeoProperty values are compared as Object; VocabProperty
+values as String; LanguageProperty values (without `?lang=`) as
+Object, with `?lang=` as the resolved-language String;
+ListProperty values as Array; JsonProperty values by their
+top-level JSON type." And reconsider the "Strings before
+DateTime" ordering — it produces non-intuitive sorts for
+real-world data where date-shaped strings are common.
 
 ---
 
