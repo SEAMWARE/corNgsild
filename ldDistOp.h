@@ -19,6 +19,7 @@
 
 #include "kjson/KjNode.h"                              // KjNode
 #include "swRest/SwRestVerb.h"                         // SwRestVerb
+#include "swRest/SwRestKeyValue.h"                     // SwRestKeyValue
 
 #include "swNgsild/LdRegCache.h"                       // LdRegCacheItem
 
@@ -130,6 +131,51 @@ extern int ldDistOpSendReceiveEx(LdRegCacheItem*  csr,
                                  const char**     errorDetailPP,
                                  char**           responseBodyPP,
                                  int*             responseBodyLenP);
+
+
+
+// -----------------------------------------------------------------------------
+//
+// -----------------------------------------------------------------------------
+//
+// LdDistOpBatchItem / LdDistOpBatchResult / ldDistOpSendMulti -
+//
+// Concurrent fan-out to N CSRs. The whole batch waits at most
+// max(per-CSR timeout) instead of the sequential sum. orion-ld uses
+// curl_multi_perform for this; swBroker uses the equivalent
+// swRestClientMulti engine (non-blocking epoll over N sockets).
+//
+// Each item carries a caller-built URL and optional body. ldDistOpSendMulti
+// adds the standard distop headers (Via / NGSILD-Tenant / contextSourceInfo /
+// Link / Content-Type) per CSR itself. resultV must be at least itemCount
+// entries long; the caller initialises it to all-zero. Per-CSR counters
+// (timesSent / timesFailed / lastSuccess / lastFailure) are updated.
+//
+// Returns 0 on setup success (regardless of per-CSR outcome); negative on
+// setup failure (rare). Per-CSR failures show up as resultV[i].statusCode
+// == 0 with errorDetail filled, or statusCode in 4xx/5xx range.
+//
+typedef struct LdDistOpBatchItem
+{
+  LdRegCacheItem*  csr;
+  const char*      url;
+  const char*      body;     // NULL for GET/DELETE
+  int              bodyLen;
+} LdDistOpBatchItem;
+
+typedef struct LdDistOpBatchResult
+{
+  int          statusCode;        // 0 on transport failure
+  char*        responseBody;      // request-kalloc; NULL if empty
+  int          responseBodyLen;
+  const char*  errorDetail;       // NULL on success; otherwise request-kalloc
+} LdDistOpBatchResult;
+
+extern int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
+                             int                    itemCount,
+                             SwRestVerb             verb,
+                             const char*            ownAlias,
+                             LdDistOpBatchResult*   resultV);
 
 
 

@@ -21,6 +21,7 @@
 #include "swRest/SwRestState.h"                        // swRest
 #include "swRest/SwRestKeyValue.h"                     // SwRestKeyValue
 #include "swRest/SwRestVerb.h"                         // SwVerbGet, SwVerbDelete
+#include "swRest/swRestClient.h"                       // swRestClientMulti*
 
 #include "swNgsild/LdForwarding.h"                     // LdForwardRequest, LdForwardResponse, LdForwardingPlugin
 #include "swNgsild/ldForwarding.h"                     // ldForwardingForEndpoint
@@ -372,6 +373,147 @@ int ldDistOpSend(LdRegCacheItem*  csr,
 {
   return ldDistOpSendReceive(csr, verb, url, body, bodyLen, ownAlias,
                              errorDetailPP, NULL, NULL);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldDistOpSendMulti -
+//
+// Fan out N CSR forwards concurrently over swRestClientMulti. The per-CSR
+// timeout (§ 5.2.34) caps each request individually inside the multi engine;
+// the engine itself runs with the max of all CSR timeouts so no single CSR
+// stalls peers. Bypasses the LdForwardingPlugin abstraction — HTTP is the
+// only transport that exists. A future non-HTTP plugin (swBin, MQTT) would
+// need its own batched fan-out.
+//
+int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
+                      int                    itemCount,
+                      SwRestVerb             verb,
+                      const char*            ownAlias,
+                      LdDistOpBatchResult*   resultV)
+{
+  if (itemCount <= 0)
+    return 0;
+
+  SwRestClientMulti* multi = swRestClientMultiCreate(itemCount);
+  if (multi == NULL)
+  {
+    for (int i = 0; i < itemCount; i++)
+      resultV[i].errorDetail = "swRestClientMultiCreate failed";
+    return -1;
+  }
+
+  // The multi engine takes a single overall budget. Use the highest per-CSR
+  // override so a fast peer doesn't pre-empt a slow one; fall back to the
+  // process-wide default when no CSR overrides it.
+  int batchTimeoutMs = 0;
+  for (int i = 0; i < itemCount; i++)
+  {
+    int t = (itemV[i].csr != NULL) ? itemV[i].csr->timeoutMs : 0;
+    if (t > batchTimeoutMs) batchTimeoutMs = t;
+  }
+  if (batchTimeoutMs <= 0)
+    batchTimeoutMs = swRestClientDefaultRequestTimeoutMs;
+
+  // Add every item. Failed adds (capacity exhausted, bad input) get
+  // statusCode == 0 + errorDetail filled and skipped at perform time.
+  int addedCount = 0;
+  int* addIndex = (int*) kaAlloc(&swRest.kalloc, itemCount * sizeof(int));
+  for (int i = 0; i < itemCount; i++) addIndex[i] = -1;
+
+  for (int i = 0; i < itemCount; i++)
+  {
+    LdRegCacheItem* csr = itemV[i].csr;
+
+    int             hc = 0;
+    SwRestKeyValue* hv = buildHeaders(verb, ownAlias, csr->tenant, csr->contextSourceInfoKV, &hc);
+
+    int idx = swRestClientMultiAdd(multi,
+                                   verb,
+                                   itemV[i].url,
+                                   hv, hc,
+                                   itemV[i].body, itemV[i].bodyLen,
+                                   &swRest.kalloc,
+                                   NULL);
+    if (idx < 0)
+    {
+      resultV[i].statusCode  = 0;
+      resultV[i].errorDetail = "swRestClientMultiAdd failed";
+      continue;
+    }
+
+    addIndex[i] = idx;
+    addedCount++;
+  }
+
+  if (addedCount > 0)
+    swRestClientMultiPerform(multi, batchTimeoutMs);
+
+  struct timespec ts;
+  clock_gettime(CLOCK_REALTIME, &ts);
+  uint64_t nowNs = (uint64_t) ts.tv_sec * 1000000000ULL + (uint64_t) ts.tv_nsec;
+
+  for (int i = 0; i < itemCount; i++)
+  {
+    LdRegCacheItem* csr = itemV[i].csr;
+    int             idx = addIndex[i];
+
+    if (idx < 0)
+    {
+      // add failed — counter still ticks (we tried), errorDetail already set
+      csr->timesSent++;
+      csr->timesFailed++;
+      csr->lastFailure = nowNs;
+      continue;
+    }
+
+    SwRestClientResponse* resp = swRestClientMultiResponse(multi, idx);
+    csr->timesSent++;
+
+    if (resp == NULL || resp->error != 0)
+    {
+      csr->timesFailed++;
+      csr->lastFailure = nowNs;
+      resultV[i].statusCode = 0;
+      if (resp != NULL && resp->errorDetail[0] != 0)
+      {
+        char* d = (char*) kaAlloc(&swRest.kalloc, strlen(resp->errorDetail) + 1);
+        strcpy(d, resp->errorDetail);
+        resultV[i].errorDetail = d;
+      }
+      else
+        resultV[i].errorDetail = "transport failure";
+      continue;
+    }
+
+    // resp->body points into the multi engine's per-connection read buffer,
+    // which swRestClientMultiDestroy frees. Copy into the request kalloc so
+    // the caller can keep using it after destroy.
+    resultV[i].statusCode      = resp->statusCode;
+    resultV[i].responseBodyLen = resp->bodyLen;
+    if (resp->body != NULL && resp->bodyLen > 0)
+    {
+      char* bodyCopy = (char*) kaAlloc(&swRest.kalloc, resp->bodyLen + 1);
+      memcpy(bodyCopy, resp->body, resp->bodyLen);
+      bodyCopy[resp->bodyLen] = 0;
+      resultV[i].responseBody = bodyCopy;
+    }
+    else
+      resultV[i].responseBody = NULL;
+
+    if (resp->statusCode >= 200 && resp->statusCode < 300)
+      csr->lastSuccess = nowNs;
+    else
+    {
+      csr->timesFailed++;
+      csr->lastFailure = nowNs;
+    }
+  }
+
+  swRestClientMultiDestroy(multi);
+  return 0;
 }
 
 
