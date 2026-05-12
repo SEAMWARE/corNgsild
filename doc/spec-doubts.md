@@ -53,6 +53,8 @@ doesn't)** · **what we did** · **what we'd want fixed**.
 - **[9](#9)** § 4.3.6.5 / 4.3.6.6 — contextSourceInfo edge cases (well-known keys, banned keys, `urn:ngsi-ld:request` substitution)
 - **[10](#10)** § 5.2.9 — location / observationSpace / operationSpace match semantics (containment? overlap?)
 - **[45](#45)** § 5.2.9 — CSR `location` shape: bare GeoJSON Geometry (spec) vs wrapped GeoProperty (ETSI fixture)
+- **[71](#71)** § 5.2.40 — `contextSourceAlias` uniqueness scope (broker-local? federation? historical?) and allocation authority
+- **[72](#72)** § 5.2.40 — `contextSourceExtras` opaque-JSON contract (same gap as JsonProperty, entry 43)
 
 ### E. Discovery & federation
 
@@ -72,6 +74,7 @@ doesn't)** · **what we did** · **what we'd want fixed**.
 - **[65](#65)** § 5.16.1.4 — snapshot capture from CSRs: do CSR-side changes after capture invalidate the snapshot? (frozen vs live)
 - **[67](#67)** § 5.7.3 — `lastN` semantics across pagination and distop fan-out
 - **[69](#69)** § 5.6.21 — Purge Entities and TRoE interaction (current-state only, or both?)
+- **[76](#76)** § 6.3.22 — `NGSILD-Snapshot` header: distop forwarding, subscription scope, mixed-mode interaction
 
 ### G. Notifications & subscriptions
 
@@ -86,6 +89,7 @@ doesn't)** · **what we did** · **what we'd want fixed**.
 - **[57](#57)** § 5.8.1.4 / § 5.8.2.4 — overlapping subscriptions to the same endpoint: dedup or duplicate?
 - **[58](#58)** § 5.8 — subscription `expiresAt` reached while broker is offline (recovery state machine undefined)
 - **[68](#68)** § 5.11 — csr-subscription notification triggers: which CSR state changes count (CRUD only? counter updates?)
+- **[73](#73)** § 5.2.15 — notification `cooldown` state machine: failure definition, scope, re-engagement, observability
 
 ### H. JSON-LD / @context
 
@@ -105,6 +109,8 @@ doesn't)** · **what we did** · **what we'd want fixed**.
 - **[61](#61)** § 5.3 — query language `q` lacks precedence table, escaping rules, type coercion, null-matching semantics
 - **[66](#66)** § 5.5.7 — IRI expansion of terms not defined in active @context (reject? @vocab fallback? bare?)
 - **[70](#70)** § 5.5.12 — `urn:ngsi-ld:null` tombstone scope: attribute-level only, or also inside array values / opaque json?
+- **[74](#74)** § 4.5.18 — LanguageProperty simplified rendering without `?lang=` URL param (lossless? default language? 400?)
+- **[75](#75)** § 4.5.19 — aggregated temporal × `?sysAttrs=true` interaction (per-period? attribute-level? suppressed?)
 
 ---
 
@@ -2362,6 +2368,224 @@ Attribute level (as a sibling of `type`, replacing `value` /
 `object` / `languageMap` etc.). Occurrences within an Attribute's
 value (array elements, nested objects, JsonProperty contents) are
 preserved verbatim as data."
+
+---
+
+<a name="71"></a>
+## 71. § 5.2.40 — `contextSourceAlias` uniqueness enforcement across a federation
+
+**Hit:** `contextSourceAlias` is the pseudonym used in `Via` for
+loop detection (§ 5.7.5). The spec describes it as "a unique id
+for a Context Source", but uniqueness is across what?
+
+- Across the local broker's CSR cache?
+- Across the entire federation?
+- Across federations historically?
+
+Two compliant brokers could pick `contextSourceAlias: "broker1"`
+independently — both correct in isolation, fatal under federation
+(false loops, missed loops).
+
+**Spec:** § 5.2.40 says alias is "non-empty string. Pseudonym
+field as defined in IETF RFC 7230". RFC 7230 says pseudonyms
+must be unique but doesn't say "across what". No NGSI-LD section
+defines an allocation authority.
+
+**Our call:** broker defaults the alias to `<exe-basename>:<port>`
+to give a reasonable starting point. Multi-tenant: alias becomes
+`<base>:<tenant>`. Admin override via `--csourceAlias` for
+federation deployments. We rely on the admin to make it unique.
+
+**Fix wanted:** § 5.2.40 should add: "The contextSourceAlias
+SHALL be unique across all Context Sources that may participate
+in the same federation (i.e. that may issue or receive forwarded
+requests with overlapping Via chains). The Context Broker
+RECOMMENDED-default is `<broker-id>:<port>` or
+`<broker-id>:<tenant>` for multi-tenant deployments. Operators are
+responsible for resolving collisions across federation
+boundaries."
+
+Or: introduce a UUID-based default (`urn:uuid:...`) so collisions
+are statistically impossible.
+
+---
+
+<a name="72"></a>
+## 72. § 5.2.40 — `contextSourceExtras` opaque JSON: same scope question as JsonProperty
+
+**Hit:** `contextSourceExtras` is "JSON which shall not be
+interpreted as JSON-LD using the supplied @context". Same
+opaqueness contract as § 4.5.24 JsonProperty.
+
+The same scope question (entry 43) recurs:
+- Inner `@context`, `@vocab`, prefixed names — preserve verbatim?
+- Compaction on output — apply or skip?
+- Validation — any rules (size limit, depth limit, character set)?
+
+This is a small-surface field but appears on every broker's
+/info/sourceIdentity response. Worth pinning.
+
+**Spec:** § 5.2.40 says "raw un-expandable JSON". Same gap as
+entry 43.
+
+**Our call:** byte-for-byte preservation. Parsed once at startup
+(from `--contextSourceExtras` config file), cloned into each
+response. No interpretation. Documented in memory.
+
+**Fix wanted:** § 5.2.40 should reference the same opaque-JSON
+clause as § 4.5.24 (the JsonProperty rules) — a single shared
+"opaqueness contract" applied wherever NGSI-LD has opaque-JSON
+fields. Cleaner than duplicating the rule per data type.
+
+---
+
+<a name="73"></a>
+## 73. § 5.2.15 — notification `cooldown` state machine
+
+**Hit:** A subscription has `endpoint.cooldown: 5000`. The
+notification endpoint fails. Cooldown engages: no further
+notifications for 5s.
+
+Underspecified:
+- What COUNTS as a failure? Transport timeout? 4xx response? 5xx?
+  Any non-2xx? An OK response with a parse failure?
+- Does each successful notification reset cooldown?
+- Does cooldown apply to the whole endpoint, or per-subscription
+  even if multiple subs share the endpoint URL?
+- Is cooldown observable to the client (a sub-stats field
+  "cooldownUntil")?
+- After cooldown expires and the next attempt also fails, does
+  cooldown re-engage immediately (exponential? linear?) or wait
+  for the full 5s again?
+
+**Spec:** § 5.2.15 defines cooldown as a number. § 5.8.6 mentions
+"If requests are received before the cooldown period has expired,
+no notification is sent." Behaviour of the state machine itself
+is unstated.
+
+**Our call:** any non-2xx triggers cooldown; cooldown is per-
+subscription (not per-endpoint); fresh failure after expiry
+restarts the same cooldown (no exponential backoff); cooldown
+state is observable via the sub's lastFailure field.
+
+**Fix wanted:** § 5.2.15 should add a cooldown state-machine
+sub-clause:
+- (a) Failure definition: ANY non-2xx response, transport error,
+  or parse-failure on the response counts.
+- (b) Scope: per-subscription (not per-endpoint).
+- (c) Re-engagement: each failure restarts a full cooldown
+  (no exponential), or implementations MAY exponential-backoff
+  with a documented capacity.
+- (d) Observability: SHALL surface lastFailure timestamp on
+  subscription status reads.
+
+---
+
+<a name="74"></a>
+## 74. § 4.5.18 — LanguageProperty simplified rendering without `?lang=`
+
+**Hit:** GET /entities/{id}?format=simplified against an entity
+whose `name` attribute is a LanguageProperty:
+`{ "type": "LanguageProperty", "languageMap": { "en": "Cat",
+"de": "Katze" } }`.
+
+In simplified form, a Property collapses to `{ "name": "value" }`.
+For LanguageProperty, the simplified form is:
+- without `?lang=` URL param: ???
+- with `?lang=en`: `{ "name": "Cat" }`
+
+Spec gives the second case but is silent on the first. Three
+implementer reactions:
+- (a) Return the entire languageMap object: `{ "name": { "en":
+  "Cat", "de": "Katze" } }` (lossless but not "simplified").
+- (b) Return a default language entry: `{ "name": "Cat" }`
+  picking some canonical language (en? @none?). Lossy.
+- (c) Reject with 400 — simplified+LanguageProperty requires
+  `?lang=`.
+
+**Spec:** § 4.5.18 + § 4.5.4 (simplified) — no joint rule. Per
+memory `feedback_lang_required_simplified` we chose (c) and ETSI
+fixtures generally agree.
+
+**Our call:** option (c). Simplified LanguageProperty without
+?lang= raises 400 BadRequestData with detail naming the
+LanguageProperty's attribute name.
+
+**Fix wanted:** § 4.5.18 + § 4.5.4 should explicitly say:
+"Simplified representation of an Entity containing a
+LanguageProperty SHALL include a `?lang=` URL parameter. In its
+absence, the Context Broker SHALL respond with 400 BadRequestData."
+
+Or pick (a) lossless or (b) default-language as the spec answer.
+Any explicit answer beats the current silence.
+
+---
+
+<a name="75"></a>
+## 75. § 4.5.19 — aggregated temporal representation × sysAttrs
+
+**Hit:** A temporal query with `?aggrMethods=avg,sum` returns
+aggregated values per period (§ 4.5.19). System Attributes
+(createdAt, modifiedAt) are timestamps on individual instances,
+not aggregable.
+
+When `?sysAttrs=true` is combined with aggregation:
+- Are createdAt/modifiedAt returned per-period (the timestamp of
+  the FIRST or LAST instance in the period)?
+- Are they returned at the attribute level (timestamp of the
+  whole attribute series)?
+- Are they suppressed entirely under aggregation?
+
+**Spec:** § 4.5.19 + § 6.3.12 cover aggregation. The sysAttrs
+interaction is silent.
+
+**Our call:** sysAttrs are suppressed under aggregation. The
+response contains only the aggregated metrics (avg/sum/min/max
+etc.) per period. createdAt / modifiedAt do not appear.
+
+**Fix wanted:** § 4.5.19 should add: "When aggregated
+representation is combined with `?sysAttrs=true`, system
+Attributes (createdAt, modifiedAt, deletedAt) SHALL be omitted
+from the response. Aggregation operates on the value series
+only; per-instance system metadata is not aggregable and SHALL
+NOT be surfaced in aggregated form."
+
+---
+
+<a name="76"></a>
+## 76. § 6.3.22 — `NGSILD-Snapshot` header: applicable resources and inheritance
+
+**Hit:** `NGSILD-Snapshot: <id>` directs reads to a snapshot.
+Applicable to GET /entities, GET /entities/{id}, GET /types, GET
+/attributes. But:
+- Distop forwards: does the broker forward `NGSILD-Snapshot` to
+  CSRs?
+- Subscription notifications: a sub created against a snapshot —
+  does each notification carry the header?
+- Mixed-mode requests: `NGSILD-Snapshot` + `?local=true` — should
+  one override the other?
+- Header on writes: explicitly forbidden? Silently ignored?
+
+**Spec:** § 6.3.22 defines the header. The interaction matrix
+above isn't pinned.
+
+**Our call:**
+- Forward `NGSILD-Snapshot` to CSRs verbatim during distop. CSRs
+  that don't support snapshots return 404 / 400; broker treats
+  that as "no contribution".
+- Subscription created via a snapshot uses the snapshot's frozen
+  state for matching; notifications include the snapshot id.
+- `?local=true` + snapshot: snapshot reads are always local (the
+  snapshot itself is a local frozen copy), the param is a no-op.
+- Header on writes: ignored. Snapshots are read-only.
+
+**Fix wanted:** § 6.3.22 should add an interaction matrix:
+| context | NGSILD-Snapshot behaviour |
+| reads | applies — return snapshot state |
+| writes | ignored — writes never apply to a snapshot |
+| distop forward | forward the header verbatim |
+| subscription | snapshot-id captured at creation; notifications carry it |
+| ?local=true | no-op (snapshots are local) |
 
 ---
 
