@@ -11,6 +11,7 @@
 #include <strings.h>                                   // strcasecmp
 #include <stdint.h>                                    // uint64_t
 #include <time.h>                                      // clock_gettime
+#include <regex.h>                                     // regexec
 
 #include "kjson/KjNode.h"                              // KjNode
 #include "kjson/kjBuilder.h"                           // kjObject, kjString, kjChildAdd
@@ -710,6 +711,8 @@ static bool ldoEntityInfoCoversId(LdRegInfo* riP, const char* entityId)
   {
     if (eiP->id == NULL && eiP->idPatternList == NULL) return true;
     if (eiP->id != NULL && strcmp(eiP->id, entityId) == 0) return true;
+    for (LdRegIdPattern* patP = eiP->idPatternList; patP != NULL; patP = patP->next)
+      if (regexec(&patP->regex, entityId, 0, NULL, 0) == 0) return true;
   }
   return false;
 }
