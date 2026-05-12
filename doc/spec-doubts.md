@@ -21,6 +21,7 @@ doesn't)** · **what we did** · **what we'd want fixed**.
 - **[35](#35)** § 5.7.1.4 — auxiliary mode merge when two aux CSRs overlap concurrently (first-wins? timestamp? reject at creation?)
 - **[46](#46)** § 6.3.17 — "redirect" mode classified as BOTH single-source and multi-source in the same section (contradiction)
 - **[47](#47)** § 6.3.17 — `NGSILD-Warning` header emission semantics are underspecified (no broker emits them today; 4 codes share triggers)
+- **[77](#77)** § 5.12 — Via parsing corner cases (case, whitespace, depth limit, malformed pseudonym)
 
 ### B. Distributed operations — composition & routing
 
@@ -35,6 +36,8 @@ doesn't)** · **what we did** · **what we'd want fixed**.
 - **[12](#12)** § 5.7.11 — federation has no hop / TTL bound; loop detection is the only stop
 - **[51](#51)** § 5.5.9 / § 6.3.10 — `limit` / `offset` semantics under distributed federation (per-CSR vs global; offset composition)
 - **[64](#64)** § 6.3.13 — `count` semantics under distributed federation (approximate vs exact; per-CSR count-only forward)
+- **[78](#78)** § 5.5.13 — `?local=true` behaviour matrix across read/write/sub/info endpoints
+- **[79](#79)** § 5.5.11 — batch with two elements addressing the same entityId (merge? sequence? reject?)
 
 ### C. Response shapes & error formats
 
@@ -55,6 +58,7 @@ doesn't)** · **what we did** · **what we'd want fixed**.
 - **[45](#45)** § 5.2.9 — CSR `location` shape: bare GeoJSON Geometry (spec) vs wrapped GeoProperty (ETSI fixture)
 - **[71](#71)** § 5.2.40 — `contextSourceAlias` uniqueness scope (broker-local? federation? historical?) and allocation authority
 - **[72](#72)** § 5.2.40 — `contextSourceExtras` opaque-JSON contract (same gap as JsonProperty, entry 43)
+- **[81](#81)** § 5.15.1.4 / § 5.2.40 — `/info/sourceIdentity` per-tenant field variation (which fields vary; uptime semantics)
 
 ### E. Discovery & federation
 
@@ -111,6 +115,7 @@ doesn't)** · **what we did** · **what we'd want fixed**.
 - **[70](#70)** § 5.5.12 — `urn:ngsi-ld:null` tombstone scope: attribute-level only, or also inside array values / opaque json?
 - **[74](#74)** § 4.5.18 — LanguageProperty simplified rendering without `?lang=` URL param (lossless? default language? 400?)
 - **[75](#75)** § 4.5.19 — aggregated temporal × `?sysAttrs=true` interaction (per-period? attribute-level? suppressed?)
+- **[80](#80)** § 4.5.4 / § 4.5.21 / § 4.5.22 — simplified-form projection table for List/Vocab/Json/Geo attribute types
 
 ---
 
@@ -2586,6 +2591,197 @@ above isn't pinned.
 | distop forward | forward the header verbatim |
 | subscription | snapshot-id captured at creation; notifications carry it |
 | ?local=true | no-op (snapshots are local) |
+
+---
+
+<a name="77"></a>
+## 77. § 5.12 — loop detection: `Via` header parsing corner cases
+
+**Hit:** Loop detection compares the broker's own alias against
+entries in the inbound `Via` header chain. Several parsing
+ambiguities:
+
+- Case sensitivity: is `Broker1` equivalent to `broker1`? RFC 7230
+  says Via tokens are case-insensitive; NGSI-LD § 5.7.5 says
+  pseudonyms compare per RFC 7230 but doesn't repeat the case
+  rule.
+- Whitespace: `Via: 1.1 broker1, 1.1 broker2` vs `Via: 1.1
+  broker1,1.1 broker2` — both valid HTTP, broker must tolerate.
+- Multiple Via headers vs single comma-separated: HTTP allows
+  either; both must collapse to the same chain.
+- Maximum Via depth: a deep federation with many hops generates
+  a long Via. Spec sets no limit; some HTTP frameworks cap header
+  size and silently truncate.
+- Pseudonym with embedded spaces or commas — not a valid token but
+  some operators set them anyway. Reject? Sanitize?
+
+**Spec:** § 5.7.5 / § 5.12 reference RFC 7230. Don't restate the
+parsing rules.
+
+**Our call:**
+- Case-insensitive comparison (per RFC 7230).
+- Tolerant whitespace; multiple Via headers and comma-separation
+  both supported.
+- No depth limit on our side; rely on HTTP framework cap and
+  emit 431 Request Header Fields Too Large if hit.
+- Invalid tokens (spaces, control chars) → 400 BadRequestData.
+
+**Fix wanted:** § 5.12 should add a "Via parsing" sub-clause
+restating the relevant RFC 7230 rules and pinning:
+(a) case-insensitive pseudonym comparison,
+(b) tolerant whitespace,
+(c) one-or-many Via header forms equivalent,
+(d) recommended max depth (e.g. 8) before rejecting with 508
+  Loop Detected as a defensive measure,
+(e) malformed pseudonym → 400.
+
+---
+
+<a name="78"></a>
+## 78. § 5.5.13 — `?local=true` semantics across endpoints
+
+**Hit:** `?local=true` is named for "skip the distop dispatcher;
+local data only". It's documented for the read side (GET
+/entities). What about:
+
+- POST /entities — does `?local=true` skip the forward to
+  exclusive CSRs (and lose data)? Or is the param a no-op on
+  writes?
+- DELETE /entities/{id} — local delete only?
+- POST /subscriptions — create a sub that only watches local
+  entities, never federates?
+- /info/sourceIdentity — meaningless?
+
+We've implemented `?local=true` for the major read routes.
+Write-side behaviour is implementer policy.
+
+**Spec:** § 5.5.13 defines `?local`. Reads are documented; writes
+are implicit/silent.
+
+**Our call:** `?local=true` on writes does NOT skip the exclusive
+chop (data must not go missing). Inclusive forwards: skipped.
+Sub creation: silently ignored (subs always observe local
+mutations; federation is implicit). Sourceidentity: ignored.
+
+**Fix wanted:** § 5.5.13 should add a behaviour matrix:
+| operation | local=true effect |
+| read | skip dispatcher; return broker's own data only |
+| write (exclusive coverage) | error 409 — can't write what we don't own |
+| write (inclusive coverage) | skip forward; apply locally only |
+| sub create | ignored (subs are always local-observing) |
+| /info/* | ignored |
+
+---
+
+<a name="79"></a>
+## 79. § 5.5.11 — multi-instance batch with two entries for the same `entityId`
+
+**Hit:** POST /entityOperations/create with body
+`[ { id: urn:X, type: T, a: ... }, { id: urn:X, type: T, b: ... } ]`
+— two array elements addressing the same entity in the same batch.
+
+Possible interpretations:
+- (a) Reject as conflicting — 400 BadRequestData.
+- (b) Apply in array order; second is "Already Exists" because
+  first created the entity. Response has notCreated[1].
+- (c) Merge into one logical create with both a and b.
+
+ETSI fixtures use (b). Our implementation also uses (b).
+
+**Spec:** § 5.5.11 covers batch multi-instance semantics for
+*Attribute instances* (same entityId + attrName + different
+datasetId). The same-entityId-distinct-elements case is silent.
+
+**Our call:** option (b). Each array element is its own
+operation; later elements may fail with AlreadyExists.
+
+**Fix wanted:** § 5.5.11 should add: "If a batch operation
+contains multiple array elements addressing the same Entity ID,
+each element is processed in array order. Subsequent elements MAY
+fail with AlreadyExists (createEntity) or with their respective
+error type (other ops). The Context Broker SHALL NOT merge
+multiple same-id elements into a single logical operation."
+
+(Or pick (a) or (c) — but pick something.)
+
+---
+
+<a name="80"></a>
+## 80. § 4.5.21 / § 4.5.22 — ListProperty / ListRelationship simplified form
+
+**Hit:** ListProperty/ListRelationship are arrays of values/objects
+under `valueList`/`objectList`. Simplified form drops type and
+returns a bare value.
+
+For a regular Property: simplified is `{ attr: value }`.
+For a ListProperty: simplified is `{ attr: [v1, v2, v3] }` — the
+list values are the bare array.
+
+For a Relationship: simplified is `{ attr: targetId }`.
+For a ListRelationship: simplified is `{ attr: [t1, t2, t3] }`.
+
+But what about MIXED — a ListProperty whose elements have
+metadata (per-element observedAt)? Lossy or rejected?
+
+**Spec:** § 4.5.21 / § 4.5.22 define List types. § 4.5.4
+(simplified) doesn't enumerate the projection rule per type.
+
+**Our call:** simplified ListProperty = bare array of values; any
+per-element metadata is dropped. Same for ListRelationship.
+
+**Fix wanted:** § 4.5.4 should have a projection table:
+| attribute type | simplified projection |
+| Property | `value` |
+| Relationship | `object` |
+| LanguageProperty | language-tag value (requires `?lang=`) |
+| GeoProperty | `value` (GeoJSON Geometry) |
+| ListProperty | `valueList` (bare array) |
+| ListRelationship | `objectList` (bare array of object URIs) |
+| VocabProperty | `vocab` |
+| JsonProperty | `json` (opaque) |
+
+Today this table is reconstructed by every implementer from
+scattered hints.
+
+---
+
+<a name="81"></a>
+## 81. § 5.15.1.4 — `/info/sourceIdentity` per-tenant variation
+
+**Hit:** GET /info/sourceIdentity returns the broker's identity.
+In a multi-tenant deployment, the same broker serves N tenants.
+Should the response vary per tenant (different
+contextSourceAlias, different contextSourceExtras), or be uniform?
+
+We argue per-tenant (alias differs because § 5.2.40 explicitly
+mentions multi-tenancy). But contextSourceExtras may be admin-
+configured per-tenant or globally — spec doesn't say.
+
+`contextSourceUptime` — broker uptime or tenant uptime (time since
+the tenant was first written to)? The latter requires state
+beyond the process.
+
+**Spec:** § 5.2.40 + § 5.15.1.4 mention multi-tenancy but don't
+explicitly define per-tenant behaviour for each field.
+
+**Our call:**
+- `contextSourceAlias`: per-tenant (`<base>:<tenant>`).
+- `contextSourceUptime`: process uptime (broker-wide; same for
+  all tenants).
+- `contextSourceTimeAt`: now() (broker-wide).
+- `id`, `type`: broker-wide.
+- `contextSourceExtras`: broker-wide today; could be per-tenant
+  via additional config.
+
+**Fix wanted:** § 5.2.40 + § 5.15.1.4 should specify per-field
+which axis varies. Cleanest:
+| field | per-tenant? |
+| id | no (broker-wide) |
+| type | no |
+| contextSourceAlias | YES (per-tenant) |
+| contextSourceUptime | no (broker-wide process uptime) |
+| contextSourceTimeAt | no |
+| contextSourceExtras | MAY be per-tenant (admin choice) |
 
 ---
 
