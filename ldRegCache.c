@@ -768,7 +768,7 @@ static bool attrInfoMatches(LdRegInfo* riP, char** attrsV)
 // for per-RegInfo response filtering (§ 5.10.2.5).
 //
 bool ldRegInfoDiscoveryMatches(LdRegInfo*     riP,
-                               const char*    entityId,
+                               char**         entityIdV,
                                char**         typeV,
                                const regex_t* idRegex,
                                char**         attrsV)
@@ -791,10 +791,16 @@ bool ldRegInfoDiscoveryMatches(LdRegInfo*     riP,
       if (!typeOk) continue;
     }
 
-    // id exact-match filter (ignored if the EntityInfo has no id constraint —
-    // the reg implicitly covers any id of the matched type, so it matches)
-    if (entityId != NULL && eiP->id != NULL && strcmp(eiP->id, entityId) != 0)
-      continue;
+    // id exact-match filter: OR across entityIdV (any-of). Ignored when
+    // the EntityInfo has no id constraint — the reg implicitly covers
+    // any id of the matched type, so it matches.
+    if (entityIdV != NULL && entityIdV[0] != NULL && eiP->id != NULL)
+    {
+      bool idOk = false;
+      for (int i = 0; entityIdV[i] != NULL; i++)
+        if (strcmp(eiP->id, entityIdV[i]) == 0) { idOk = true; break; }
+      if (!idOk) continue;
+    }
 
     // idPattern: request-side regex matched against EntityInfo.id (when present)
     if (idRegex != NULL && eiP->id != NULL)
@@ -815,14 +821,14 @@ bool ldRegInfoDiscoveryMatches(LdRegInfo*     riP,
 // itemDiscoveryMatches - CSR matches if ANY RegistrationInfo matches.
 //
 static bool itemDiscoveryMatches(LdRegCacheItem* itemP,
-                                 const char*     entityId,
+                                 char**          entityIdV,
                                  char**          typeV,
                                  const regex_t*  idRegex,
                                  char**          attrsV)
 {
   for (LdRegInfo* riP = itemP->infoV; riP != NULL; riP = riP->next)
   {
-    if (ldRegInfoDiscoveryMatches(riP, entityId, typeV, idRegex, attrsV))
+    if (ldRegInfoDiscoveryMatches(riP, entityIdV, typeV, idRegex, attrsV))
       return true;
   }
   return false;
@@ -847,7 +853,7 @@ static bool itemDiscoveryMatches(LdRegCacheItem* itemP,
 //
 int ldRegCacheMatchForDiscovery(LdRegCache*       cacheP,
                                 char**            typeV,
-                                const char*       entityId,
+                                char**            entityIdV,
                                 const char*       idPattern,
                                 char**            attrsV,
                                 LdRegCacheItem*** matchVP)
@@ -872,7 +878,7 @@ int ldRegCacheMatchForDiscovery(LdRegCache*       cacheP,
   {
     if (itemP->expiresAt > 0 && itemP->expiresAt <= nowNs)
       continue;
-    if (itemDiscoveryMatches(itemP, entityId, typeV,
+    if (itemDiscoveryMatches(itemP, entityIdV, typeV,
                               haveRegex ? &idRegex : NULL, attrsV))
       count++;
   }
@@ -890,7 +896,7 @@ int ldRegCacheMatchForDiscovery(LdRegCache*       cacheP,
   {
     if (itemP->expiresAt > 0 && itemP->expiresAt <= nowNs)
       continue;
-    if (itemDiscoveryMatches(itemP, entityId, typeV,
+    if (itemDiscoveryMatches(itemP, entityIdV, typeV,
                               haveRegex ? &idRegex : NULL, attrsV))
       v[ix++] = itemP;
   }

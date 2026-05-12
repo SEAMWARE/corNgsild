@@ -123,7 +123,8 @@ extern int ldRegCacheMatchForRetrieveScoped(LdRegCache*       cacheP,
 // frees *matchVP with free().
 //
 // typeV:      NULL = ignore; else NULL-terminated expanded IRIs
-// entityId:   NULL = ignore; else exact URI (matched against EntityInfo.id)
+// entityIdV:  NULL or empty = ignore; else NULL-terminated list of exact
+//             URIs (OR — match any). Maps to ?id=A,B (§ 6.4.3.2 comma list).
 // idPattern:  NULL = ignore; else POSIX regex matched request-side against
 //             each EntityInfo.id
 // attrsV:     NULL = ignore; else NULL-terminated expanded attribute IRIs
@@ -133,7 +134,7 @@ extern int ldRegCacheMatchForRetrieveScoped(LdRegCache*       cacheP,
 //
 extern int ldRegCacheMatchForDiscovery(LdRegCache*       cacheP,
                                        char**            typeV,
-                                       const char*       entityId,
+                                       char**            entityIdV,
                                        const char*       idPattern,
                                        char**            attrsV,
                                        LdRegCacheItem*** matchVP);
@@ -143,13 +144,13 @@ extern int ldRegCacheMatchForDiscovery(LdRegCache*       cacheP,
 // -----------------------------------------------------------------------------
 //
 // ldRegInfoDiscoveryMatches - § 5.12 match of a single RegistrationInfo
-// against the discovery filters: AND across (type, entityId, idRegex,
-// attrsV). Used by getCsourceRegistrations to filter the response's
-// information[] array (§ 5.10.2.5) so only matching entries are
-// returned.
+// against the discovery filters: AND across (type, entityIdV, idRegex,
+// attrsV). entityIdV is OR-of (any of). Used by getCsourceRegistrations
+// to filter the response's information[] array (§ 5.10.2.5) so only
+// matching entries are returned.
 //
 extern bool ldRegInfoDiscoveryMatches(LdRegInfo*     riP,
-                                      const char*    entityId,
+                                      char**         entityIdV,
                                       char**         typeV,
                                       const regex_t* idRegex,
                                       char**         attrsV);

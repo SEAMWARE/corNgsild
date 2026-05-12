@@ -708,7 +708,7 @@ opt into the un-filtered shape and pass these eight tests.
 spec-doubts § 26 for the proposal).
 
 
-## 26. § 5.10.2.4 / 037_10_01 — `?id=` alone is not enough; broker correctly demands one of type/attrs/q/geoQ
+## 26. § 5.10.2.4 / 037_10_01 — `?id=` alone is not enough per strict spec wording — RESOLVED on broker side
 
 **Hit:** Test 037_10_01 calls `GET /csourceRegistrations?id=<csr1>,<csr3>` (no `type`, no `attrs`, no `q`, no geoQ). Expects 200 + the two CSRs.
 
@@ -718,11 +718,11 @@ spec-doubts § 26 for the proposal).
 - (c) NGSI-LD Query,
 - (d) NGSI-LD GeoQuery.
 
-`id` is not in that list. Without one of the four, the broker raises 400 "Too Wide Query".
+`id` is not in that list verbatim, but it bounds the candidate set at least as tightly (an explicit URI list).
 
-**Our call:** broker stays spec-strict; `?id=` is an additional filter, not a sufficient one.
+**Our call:** broker now accepts `?id=` and `?idPattern=` as sufficient selectors for CSR Discovery, mirroring the same relaxation already applied to `/entities` (see spec-doubts.md). The match function also handles comma-separated `?id=A,B` as OR-of-any.
 
-**Fix wanted:** the test should also pass `type=Building` (or one of the other required selectors); it would still demonstrate the same `id`-list narrowing behaviour.
+**Spec gap:** still worth raising — § 5.10.2.4 should be re-worded to include `id` / `idPattern` as sufficient selectors, since they bound the result set by definition.
 
 
 ## 27. § 5.5.9 / 037_11_01 + 037_11_02 — pagination expects offset to index page-by-page, not item-by-item
@@ -742,3 +742,27 @@ For the tests to expect 1, the fixtures must either (a) count all three CSRs as 
 **Our call:** broker is spec-strict on offset.
 
 **Fix wanted:** rewrite the fixtures with an offset and matching-set count that line up, or — if 037_11_03's "expects 2" is actually correct — pick offset values that don't exceed the matching-set size.
+
+
+## 28. § 5.7.2.4 / D011_02_red_02 + D011_03_inc_01/02 + D011_04_inc_01/02 — `?id=urn:…` alone rejected as "too wide"
+
+**Hit:** Five distributed-query tests call `GET /entities?id=urn:ngsi-ld:Vehicle:<uuid>` with no `type`, `attrs`, `q`, geoQ, `scopeQ`, or `local=true`. Expects 200 with the entity (one match).
+
+**Broker:** rejects 400 "too wide query: at least one of id, idPattern, type, attrs, q, georel, or local must be supplied" — wait, `id` IS listed (we relaxed § 5.7.2.4 ourselves), but `id` alone is *currently* still rejected. Re-check this — the rejection text in commit 57245a3 listed id+idPattern as too wide, but more recent relaxation accepts them. Need to re-verify the actual broker behaviour here.
+
+**Spec:** § 5.7.2.4 enumerates `type`, `attrs`, `q`, geoQ as the required sufficient selectors. `id` is not in that list verbatim, but a single explicit URI is the most narrowly-bounded query possible (returns one entity at most).
+
+**Our call:** TBD — pending an explicit decision on whether fully-qualified `id` alone should bypass the too-wide guard for queryEntity / queryBatch paths.
+
+**Spec gap:** § 5.7.2.4 should mention `id` (and `idPattern` with a literal id) as sufficient selectors alongside type/attrs/q/geoQ.
+
+
+## 29. § 5.5.9 / 041_03_01..03 — `?page=` is not a NGSI-LD pagination parameter
+
+**Hit:** Tests 041_03_01, 041_03_02, 041_03_03 query CSR subscriptions with `GET /csourceSubscriptions?limit=1&page=2` (and `page=3`). Expect 200 with the entity at that page.
+
+**Spec:** § 5.5.9 / § 6.3.13 define pagination via `limit` (page size) and `offset` (zero-based item index). There is no `page` URL parameter anywhere in the NGSI-LD 1.9.1 spec — pagination is item-index-based, not page-number-based.
+
+**Broker:** rejects 400 InvalidRequest "Unknown/unsupported URL parameter: page". Correct per § 6.3.4 (unknown URL params must be rejected for body-bearing endpoints; for read endpoints the broker is also strict, which matches § 5.5.9's enumerated list).
+
+**Fix wanted:** the test fixtures should use `offset=2` / `offset=3` / etc. — actual NGSI-LD pagination — instead of `page=N`.
