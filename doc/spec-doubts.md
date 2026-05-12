@@ -19,6 +19,8 @@ doesn't)** · **what we did** · **what we'd want fixed**.
 - **[36](#36)** § 5.2.36 — distop counter (timesSent/Failed/Success/Failure) atomicity under concurrent fan-out and HA replicas sharing a CSR store
 - **[31](#31)** § 5.14.4.4 — multi-CSR EntityMap aggregation (linkedMaps shape, dedup rule, multi-source array semantics)
 - **[35](#35)** § 5.7.1.4 — auxiliary mode merge when two aux CSRs overlap concurrently (first-wins? timestamp? reject at creation?)
+- **[46](#46)** § 6.3.17 — "redirect" mode classified as BOTH single-source and multi-source in the same section (contradiction)
+- **[47](#47)** § 6.3.17 — `NGSILD-Warning` header emission semantics are underspecified (no broker emits them today; 4 codes share triggers)
 
 ### B. Distributed operations — composition & routing
 
@@ -31,6 +33,7 @@ doesn't)** · **what we did** · **what we'd want fixed**.
 - **[2](#2)** § 5.6.1.4 + § 4.3.6.3 — exclusive CSR without `createEntity` op: deadlock semantics for fully-claimed input
 - **[3](#3)** § 5.6.1.4 — entity shell when all attributes are claimed externally (create `{id, type}` locally or not?)
 - **[12](#12)** § 5.7.11 — federation has no hop / TTL bound; loop detection is the only stop
+- **[51](#51)** § 5.5.9 / § 6.3.10 — `limit` / `offset` semantics under distributed federation (per-CSR vs global; offset composition)
 
 ### C. Response shapes & error formats
 
@@ -38,6 +41,7 @@ doesn't)** · **what we did** · **what we'd want fixed**.
 - **[23](#23)** § 6.3.10 — 206 Partial Content vs 200 OK on temporal queries; ETSI tests are mutually inconsistent
 - **[19](#19)** § 5.5.4 / § 5.5.5 — InvalidRequest vs BadRequestData for invalid URL-param values
 - **[20](#20)** § 5.8.6 — `attributeDeleted` notification representation: bare-string default vs ETSI-fixture extended-form
+- **[50](#50)** § 6.3.7 / § 4.5.16 — GeoJSON negotiation: Accept header vs `?format=geojson` URL param (and the geometryProperty axis)
 
 ### D. CSR data model
 
@@ -80,6 +84,8 @@ doesn't)** · **what we did** · **what we'd want fixed**.
 - **[40](#40)** § 4.6.6 — chronological order on batch arrays is an unenforceable assumption (no mechanism to assert or signal intent)
 - **[41](#41)** § 4.5.5 — multi-instance with identical datasetId on intake (reject? dedupe? defer?)
 - **[42](#42)** § 4.5.23 — `joinLevel` semantics with cycles, diamonds, and originating-id self-reference
+- **[48](#48)** § 4.5.5.3 — "indeterminate / random" tiebreaker on identical datasetIds is unfit for cross-broker interop
+- **[49](#49)** § 4.5.5.1 — `datasetId: "@none"` round-trip drops the field on response (POST body not reproducible from GET)
 
 ---
 
@@ -1498,6 +1504,216 @@ They are NOT NGSI-LD GeoProperty representations; the wrapper
 shape `{ "type": "GeoProperty", "value": ... }` SHALL NOT be
 accepted." And the ETSI fixture that sends the wrapped form should
 be fixed accordingly.
+
+---
+
+<a name="46"></a>
+## 46. § 6.3.17 — "redirect" mode classified as BOTH single-source and multi-source (contradiction)
+
+**Hit:** The status-code mapping table in § 6.3.17 lists two
+separate cases:
+
+> In the case of an **exclusive or redirect** registration, where all
+> of the data is held outside of the Context Broker and held in a
+> **single registered source**, the following errors shall be
+> returned: 508 / 504 / 404 / 502.
+
+> In the case of an **inclusive or redirect** registration, where
+> an entity is distributed over **multiple equally valid endpoints**,
+> but when updating the state of the distributed entity, an error
+> response is returned from one or more registered sources: 207
+> Multi-Status.
+
+`redirect` appears in *both*. The two paragraphs are mutually
+exclusive ("single registered source" vs "multiple equally valid
+endpoints"). Pick one — `redirect` cannot be both classifications
+simultaneously.
+
+**Spec:** literally as quoted above, § 6.3.17.
+
+**Our call:** treat `redirect` as multi-source (the 207 path) —
+matches § 4.3.6.3 where redirect explicitly allows multiple co-
+existing CSRs. We use 502 generically for transport failure of a
+single match.
+
+**Fix wanted:** § 6.3.17 should clearly group:
+- `exclusive` → at most one source → 508 / 504 / 404 / 502
+- `redirect` → multiple co-existing sources → 207 (single failure)
+  / 502 (all fail with mixed) / 504 (all timeout)
+- `inclusive` → 207 on any failure
+- `auxiliary` → 207 on any failure (or silent, since aux is gap-
+  fill)
+
+The current text reads as a copy-paste accident.
+
+---
+
+<a name="47"></a>
+## 47. § 6.3.17 — `NGSILD-Warning` header emission semantics
+
+**Hit:** Spec defines four IANA Warning Codes — 110 / 111 / 199 /
+299 — for distop responses. But when exactly to attach them is
+underspecified:
+
+- 110 "Response is Stale" — emit on EVERY response that included
+  cached data, or only on the first cache hit? Both? On 200 OK
+  responses where mixed (some cached, some live)?
+- 111 "Revalidation Failed" — does this REPLACE the actual error,
+  or accompany a 502/207?
+- 199 "Miscellaneous Warning" — covers "no response in time" AND
+  "loop detected". Same code, two distinct causes; client can't
+  distinguish.
+- 299 "Miscellaneous Persistent Warning" — same issue, generic for
+  any 4xx the upstream returned.
+
+**Spec:** § 6.3.17 table 6.3.17-1.
+
+**Our call:** we don't emit any NGSILD-Warning headers today. The
+status code + ProblemDetails body carry the same information
+sufficiently. ETSI fixtures haven't asserted on these warnings yet.
+
+**Fix wanted:** § 6.3.17 should define for each warning code:
+(a) the exact triggering condition (single attribute? cached vs
+live response? loop vs timeout?),
+(b) the HTTP status code(s) it MAY accompany (200? 502? 207?),
+(c) whether multiple warning codes can appear simultaneously on
+the same response.
+
+Without that, the warning header is an interop dead-letter — every
+broker that wants to claim conformance just doesn't emit it.
+
+---
+
+<a name="48"></a>
+## 48. § 4.5.5.3 — "indeterminate / random" tiebreaker is unfit for interop
+
+**Hit:** Conflict resolution for two Attribute instances sharing a
+`datasetId`, both lacking `observedAt` and `modifiedAt` (or with
+identical values):
+
+> If no other mechanism for determining the most current Attribute
+> instance is found, the NGSI-LD system shall choose the Attribute
+> instance at random and the result is indeterminate.
+
+"Indeterminate" is acceptable for a single broker; for federation
+across brokers it is a guaranteed interop failure — same input,
+different output depending on which broker handled the merge.
+
+**Spec:** § 4.5.5.3, verbatim.
+
+**Our call:** deterministic last-wins by array index (which is the
+client-supplied ordering per § 4.6.6). Two of our brokers given
+the same input produce the same output; two of someone else's
+brokers may not.
+
+**Fix wanted:** spec should mandate a deterministic tiebreaker:
+- (a) array index (last in body wins), or
+- (b) lexicographic on the Attribute's full serialization, or
+- (c) a server-stamped `createdAt` ULID,
+
+so "given same input bytes, two compliant brokers produce same
+output bytes". "Indeterminate" should be reserved for non-
+observable internal states, not response data.
+
+---
+
+<a name="49"></a>
+## 49. § 4.5.5.1 — `datasetId: "@none"` round-trip drops the field
+
+**Hit:** Client sends `{"speed":{"type":"Property","value":42,
+"datasetId":"@none"}}`. Per § 4.5.5.1 this is equivalent to
+omitting datasetId — it identifies the default instance. On
+retrieval, the response renders the default instance *without* the
+datasetId. So:
+
+```
+POST /entities  body: { ..., "speed": {..., "datasetId": "@none"} }
+GET  /entities/{id}  → { ..., "speed": {...}  }   ← datasetId gone
+```
+
+The same POST body is no longer reproducible from the GET. Tools
+that "diff" expected-vs-actual JSON, or that pipe one entity into
+another broker, see a perceived difference.
+
+**Spec:** § 4.5.5.1 says "@none" is the default instance AND says
+"the datasetId of the default Attribute instance is never
+explicitly included in responses". Together: round-trip diverges.
+
+**Our call:** match the spec strictly — strip datasetId on response
+when it's "@none". Document the rule.
+
+**Fix wanted:** spec should either:
+(a) say explicitly "POST→GET round trips may drop `datasetId:
+@none`; client-side diff tools should normalize", or
+(b) preserve `datasetId: @none` on response when present in input
+(no information loss); the renderer chooses, and the implicit-
+default reading still works.
+
+(b) is friendlier to round-trip tools.
+
+---
+
+<a name="50"></a>
+## 50. § 6.3.7 / § 4.5.16 — GeoJSON representation negotiation: Accept header vs format param
+
+**Hit:** A client wants entities rendered as GeoJSON Feature
+objects (§ 4.5.16). Two ways to ask:
+
+- `Accept: application/geo+json`
+- `?format=geojson` (or similar URL param)
+
+The spec doesn't pin which one is normative. ETSI fixtures use
+Accept; some interop guides reference a URL param. The selection
+of geometry property (`?geometryProperty=location` vs another) is
+itself a separate axis.
+
+**Spec:** § 4.5.16 defines the GeoJSON representation. § 6.3.15
+mentions GeoJSON in passing. § 6.3.7 covers representation
+selection but doesn't enumerate GeoJSON specifically.
+
+**Our call:** `Accept: application/geo+json` triggers GeoJSON
+rendering. `?format=geojson` is also accepted as an alias.
+`?geometryProperty=` selects the geometry source attribute (default
+"location"). Same logic on collection (FeatureCollection) and
+single-entity (Feature) endpoints.
+
+**Fix wanted:** § 6.3.7 should list the GeoJSON representation
+explicitly, name `Accept: application/geo+json` as the canonical
+trigger, name the geometryProperty interaction explicitly, and
+state whether `?format=geojson` is a normative alias or a vendor
+extension.
+
+---
+
+<a name="51"></a>
+## 51. § 5.5.9 + § 6.3.10 — `limit` / `offset` semantics under distributed federation
+
+**Hit:** GET /entities?limit=20&offset=40 over an entity space
+distributed across 5 CSRs. Is `limit=20` per-CSR (each returns up
+to 20, broker dedupes locally → may exceed 20 in the response) or
+global (broker stops aggregating at 20 across all sources)? Where
+does `offset=40` apply — globally, or first-N from broker view,
+then the remaining offset against the federated set?
+
+EntityMap (§ 5.14) addresses the *consistency* of pagination
+(snapshot of IDs so subsequent pages return the same entities),
+but not the FIRST-page semantics.
+
+**Spec:** § 5.5.9 defines limit/offset on a single broker. § 6.3.10
+covers the HTTP binding. § 5.14 covers EntityMap. The composition
+of limit/offset across federated sources is not addressed.
+
+**Our call:** first page — request each CSR with the user's
+limit/offset verbatim, merge + dedup locally, trim to user's
+limit. EntityMap captures the resulting ID set for subsequent
+pages.
+
+**Fix wanted:** § 5.5.9 should add a sub-clause: "Under
+distributed federation, limit and offset apply to the broker's
+merged result set. The Context Broker MAY forward limit and offset
+to each source as a hint, but the merged-set bound is normative.
+EntityMap (§ 5.14) provides consistent pagination across follow-up
+page requests."
 
 ---
 
