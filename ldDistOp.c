@@ -26,6 +26,8 @@
 #include "swNgsild/LdForwarding.h"                     // LdForwardRequest, LdForwardResponse, LdForwardingPlugin
 #include "swNgsild/ldForwarding.h"                     // ldForwardingForEndpoint
 #include "swNgsild/LdRegCache.h"                       // LdRegCacheItem
+#include "swNgsild/ldRegCache.h"                       // ldRegOpSupported
+#include "swNgsild/swNgsild.h"                         // LD_ERROR_CONFLICT
 #include "swNgsild/ldCsourceAlias.h"                   // ldViaHasAlias
 #include "swNgsild/ldRequestSubstitute.h"              // ldRequestSubstitute
 #include "swNgsild/ldDistOp.h"                         // Own interface
@@ -691,4 +693,163 @@ const char* ldDistOpForwardFailureReason(int upCode, const char* upErr)
     snprintf(buf, sizeof(buf), "forward returned status %d", upCode);
 
   return buf;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// LdDistOpEntry helpers — private inline checks (kept here so the per-route
+// duplication of entityInfoCoversId / infoCoversAttr can be removed when
+// every distop route is migrated to the new API).
+//
+static bool ldoEntityInfoCoversId(LdRegInfo* riP, const char* entityId)
+{
+  if (riP == NULL || entityId == NULL) return true;
+  for (LdRegEntityInfo* eiP = riP->entityInfoV; eiP != NULL; eiP = eiP->next)
+  {
+    if (eiP->id == NULL && eiP->idPatternList == NULL) return true;
+    if (eiP->id != NULL && strcmp(eiP->id, entityId) == 0) return true;
+  }
+  return false;
+}
+
+static bool ldoInfoCoversAttr(LdRegInfo* riP, const char* attrIri)
+{
+  if (riP == NULL || attrIri == NULL) return true;
+  if (riP->propertyNamesV == NULL && riP->relationshipNamesV == NULL) return true;
+  for (int i = 0; riP->propertyNamesV != NULL && riP->propertyNamesV[i] != NULL; i++)
+    if (strcmp(riP->propertyNamesV[i], attrIri) == 0) return true;
+  for (int i = 0; riP->relationshipNamesV != NULL && riP->relationshipNamesV[i] != NULL; i++)
+    if (strcmp(riP->relationshipNamesV[i], attrIri) == 0) return true;
+  return false;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldDistOpEntriesBuild -
+//
+int ldDistOpEntriesBuild(const LdDistOpGroup  groupV[],
+                         int                  groupCount,
+                         const char*          ownAlias,
+                         LdOp                 op,
+                         const char*          opName,
+                         const char*          entityIdForErrors,
+                         bool                 perRi,
+                         const char*          riEntityIdCheck,
+                         const char*          riAttrIriCheck,
+                         KjNode*              errorsArrayP,
+                         LdDistOpEntry**      entriesPP)
+{
+  // Upper-bound capacity: sum over all groups of matchN, times max riP count
+  // when perRi. Worst case is "every csr has K infoVs all matching" — we don't
+  // know K up front, so count riPs per csr.
+  int capacity = 0;
+  for (int g = 0; g < groupCount; g++)
+  {
+    for (int i = 0; i < groupV[g].matchN; i++)
+    {
+      if (!perRi) { capacity++; continue; }
+      LdRegCacheItem* csr = groupV[g].matchV[i];
+      for (LdRegInfo* riP = csr->infoV; riP != NULL; riP = riP->next) capacity++;
+    }
+  }
+
+  LdDistOpEntry* entries = NULL;
+  if (capacity > 0)
+  {
+    entries = (LdDistOpEntry*) kaAlloc(&swRest.kalloc, capacity * sizeof(LdDistOpEntry));
+    memset(entries, 0, capacity * sizeof(LdDistOpEntry));
+  }
+  int count = 0;
+
+  for (int g = 0; g < groupCount; g++)
+  {
+    const LdDistOpGroup* grp = &groupV[g];
+    for (int i = 0; i < grp->matchN; i++)
+    {
+      LdRegCacheItem* csr = grp->matchV[i];
+
+      if (csr->endpoint == NULL) continue;
+      if (ldDistOpCsrWouldLoop(csr, ownAlias)) continue;
+
+      if (!ldRegOpSupported(csr, op))
+      {
+        if (grp->opConflict && errorsArrayP != NULL)
+        {
+          char detail[256];
+          snprintf(detail, sizeof(detail),
+                   "%s registration does not support %s",
+                   grp->modeTag, opName);
+          ldDistOpBatchErrorAdd(errorsArrayP, entityIdForErrors,
+                                LD_ERROR_CONFLICT, "Conflict", detail, csr->regId);
+        }
+        continue;
+      }
+
+      if (!perRi)
+      {
+        entries[count].csr     = csr;
+        entries[count].riP     = NULL;
+        entries[count].modeIdx = g;
+        count++;
+        continue;
+      }
+
+      for (LdRegInfo* riP = csr->infoV; riP != NULL; riP = riP->next)
+      {
+        if (riEntityIdCheck != NULL && !ldoEntityInfoCoversId(riP, riEntityIdCheck)) continue;
+        if (riAttrIriCheck  != NULL && !ldoInfoCoversAttr(riP, riAttrIriCheck))     continue;
+
+        entries[count].csr     = csr;
+        entries[count].riP     = riP;
+        entries[count].modeIdx = g;
+        count++;
+      }
+    }
+  }
+
+  *entriesPP = entries;
+  return count;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldDistOpEntriesPerform - dispatch built entries concurrently.
+//
+// Delegates to ldDistOpSendMulti, marshalling between the entry's
+// inline result fields and the lower-level Item/Result pair.
+//
+void ldDistOpEntriesPerform(LdDistOpEntry* entries,
+                            int            count,
+                            SwRestVerb     verb,
+                            const char*    ownAlias)
+{
+  if (count <= 0) return;
+
+  LdDistOpBatchItem*   items   = (LdDistOpBatchItem*)   kaAlloc(&swRest.kalloc, count * sizeof(LdDistOpBatchItem));
+  LdDistOpBatchResult* results = (LdDistOpBatchResult*) kaAlloc(&swRest.kalloc, count * sizeof(LdDistOpBatchResult));
+  memset(results, 0, count * sizeof(LdDistOpBatchResult));
+
+  for (int i = 0; i < count; i++)
+  {
+    items[i].csr     = entries[i].csr;
+    items[i].url     = entries[i].url;
+    items[i].body    = entries[i].body;
+    items[i].bodyLen = entries[i].bodyLen;
+  }
+
+  ldDistOpSendMulti(items, count, verb, ownAlias, results);
+
+  for (int i = 0; i < count; i++)
+  {
+    entries[i].statusCode      = results[i].statusCode;
+    entries[i].responseBody    = results[i].responseBody;
+    entries[i].responseBodyLen = results[i].responseBodyLen;
+    entries[i].errorDetail     = results[i].errorDetail;
+  }
 }

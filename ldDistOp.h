@@ -21,7 +21,8 @@
 #include "swRest/SwRestVerb.h"                         // SwRestVerb
 #include "swRest/SwRestKeyValue.h"                     // SwRestKeyValue
 
-#include "swNgsild/LdRegCache.h"                       // LdRegCacheItem
+#include "swNgsild/LdOp.h"                             // LdOp
+#include "swNgsild/LdRegCache.h"                       // LdRegCacheItem, LdRegInfo
 
 
 
@@ -225,5 +226,82 @@ extern KjNode* ldBatchErrorAsProblemDetails(KjNode* errorsArrayP);
 // the next call in the same thread).
 //
 extern const char* ldDistOpForwardFailureReason(int upCode, const char* upErr);
+
+
+
+// -----------------------------------------------------------------------------
+//
+// LdDistOpEntry / LdDistOpGroup / ldDistOpEntriesBuild + Perform —
+// orion-ld-style refactor of the per-route distop boilerplate.
+//
+// What this owns:
+//   - Iterating the 3-or-4 matched groups (excl / redir / incl [/ aux])
+//   - Per-CSR pre-checks: endpoint != NULL, ldDistOpCsrWouldLoop,
+//     ldRegOpSupported (with mode-specific Conflict emission)
+//   - Optional per-RegistrationInfo loop with entityInfoCoversId +
+//     infoCoversAttr filters
+//   - Concurrent dispatch via swRestClientMulti (entries-Perform delegates
+//     to ldDistOpSendMulti)
+//
+// What stays per-route:
+//   - URL composition (assigned to entry->url)
+//   - Body composition (entry->body / bodyLen) — NULL for GET/DELETE
+//   - Per-route result classification (success counter, per-attr update map,
+//     per-fragment error detail formatting, …)
+//
+// Result: each route's distop block collapses from ~50-60 lines to ~15-20.
+//
+typedef struct LdDistOpEntry
+{
+  LdRegCacheItem*   csr;
+  LdRegInfo*        riP;          // matched info entry; NULL when not per-RI
+  int               modeIdx;      // 0..groupCount-1 (caller maps to detach / opConf semantics)
+
+  // Caller fills these between Build and Perform:
+  const char*       url;
+  const char*       body;         // NULL for GET/DELETE
+  int               bodyLen;
+  void*             tag;          // arbitrary per-route stash (e.g. the source fragment)
+
+  // Result fields — Perform fills these:
+  int               statusCode;   // 0 on transport failure
+  char*             responseBody;
+  int               responseBodyLen;
+  const char*       errorDetail;
+} LdDistOpEntry;
+
+typedef struct LdDistOpGroup
+{
+  LdRegCacheItem**  matchV;       // matched CSR array (caller-owned, freed by caller)
+  int               matchN;
+  const char*       modeTag;      // e.g. "exclusive" / "redirect" / "inclusive" / "auxiliary"
+  bool              opConflict;   // true → emit Conflict on !ldRegOpSupported; false → silent skip
+} LdDistOpGroup;
+
+// Sweep groups, apply pre-checks, allocate one entry per surviving candidate.
+// Entries are emitted in group order (the caller's intended composition order).
+// For perRi=true, multiple entries may share a csr (one per matching RegistrationInfo).
+// For perRi=false, exactly one entry per surviving csr (riP=NULL).
+//
+// Returns count of entries; *entriesPP points into swRest.kalloc (request arena).
+extern int ldDistOpEntriesBuild(
+    const LdDistOpGroup  groupV[],
+    int                  groupCount,         // 3 (write) or 4 (read with auxiliary)
+    const char*          ownAlias,
+    LdOp                 op,                 // for ldRegOpSupported
+    const char*          opName,             // for Conflict error detail (e.g. "createEntity")
+    const char*          entityIdForErrors,  // for Conflict.entityId (may be NULL)
+    bool                 perRi,
+    const char*          riEntityIdCheck,    // non-NULL → require entityInfoCoversId
+    const char*          riAttrIriCheck,     // non-NULL → require infoCoversAttr
+    KjNode*              errorsArrayP,
+    LdDistOpEntry**      entriesPP);
+
+// Dispatch the built entries concurrently via ldDistOpSendMulti.
+extern void ldDistOpEntriesPerform(
+    LdDistOpEntry*       entries,
+    int                  count,
+    SwRestVerb           verb,
+    const char*          ownAlias);
 
 #endif  // SWNGSILD_LDDISTOP_H_
