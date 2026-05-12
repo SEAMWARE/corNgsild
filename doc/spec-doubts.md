@@ -73,6 +73,13 @@ doesn't)** · **what we did** · **what we'd want fixed**.
 - **[21](#21)** § 5.2.12 — entityDeleted vs attributeDeleted trigger symmetry on entity delete
 - **[16](#16)** § 4.3.6.6 / § 5.8 — `jsonldContext` fallback asymmetry between subscriptions and CSRs
 - **[17](#17)** § 6.3.8 / § 6.3.9 — `urn:ngsi-ld:request` substitution for receiverInfo
+- **[52](#52)** § 5.8.6 — distributed-subscription "except for the one received from" lacks identification mechanism (Via? regId? source URI?)
+- **[53](#53)** § 5.8.6 — change detection includes server-stamped `modifiedAt` (literal reading triggers notification storms on idempotent overwrites)
+- **[54](#54)** § 5.8.6 — `notification.attributes` IRI expansion timing: subscription-creation vs notification-time context
+- **[55](#55)** § 5.8.6 — delete-trigger notification + `notification.attributes` filter (which wins?)
+- **[56](#56)** § 5.8.6 — `notification.pick` / `notification.omit` vs entity-keyword members (can `id` be omitted?)
+- **[57](#57)** § 5.8.1.4 / § 5.8.2.4 — overlapping subscriptions to the same endpoint: dedup or duplicate?
+- **[58](#58)** § 5.8 — subscription `expiresAt` reached while broker is offline (recovery state machine undefined)
 
 ### H. JSON-LD / @context
 
@@ -1714,6 +1721,225 @@ merged result set. The Context Broker MAY forward limit and offset
 to each source as a hint, but the merged-set bound is normative.
 EntityMap (§ 5.14) provides consistent pagination across follow-up
 page requests."
+
+---
+
+<a name="52"></a>
+## 52. § 5.8.6 — distributed-subscription notification: "except for the one from which the notification has been received"
+
+**Hit:** Federated subscription path. A broker receives a notification
+from a remote source A; per § 5.8.6 it should retrieve the same
+entities from all OTHER known sources (locally + every CSR EXCEPT A)
+and merge. How does the broker know which source the notification
+came from? Subscription.subscriptionId? Via header? Source URI?
+The exclusion criterion is not specified.
+
+If the broker can't reliably identify A, it either (a) double-counts
+(asks A again, gets the same data, merges with itself) or (b) skips
+nothing (re-fans-out to all sources, defeating efficiency).
+
+**Spec:** § 5.8.6 — "all Context Sources that have information
+about these Entities, except for the one from which the
+Notification has been received." No mechanism described.
+
+**Our call:** identify A by inspecting the inbound notification's
+`Via` chain plus the corresponding csr-subscription. The CSR that
+originated the chain is the most recent Via entry; we skip it
+during the local fan-out.
+
+**Fix wanted:** § 5.8.6 should pin the mechanism. Two reasonable
+choices:
+(a) the notification SHALL include a header (or top-level field)
+naming the originating CSR's regId / contextSourceAlias, or
+(b) the broker SHALL trust the last `Via` entry as the originator,
+and § 5.7.5 SHALL document this dual-use.
+
+---
+
+<a name="53"></a>
+## 53. § 5.8.6 — change detection vs server-stamped `modifiedAt`
+
+**Hit:** Spec defines a change as "any of the members (including
+children) in its corresponding JSON-LD node is updated with a value
+different than the existing one." This includes system-managed
+sub-attributes like `modifiedAt`.
+
+An idempotent overwrite — same value, server stamps fresh
+`modifiedAt` — would, on a literal reading, trigger a notification
+because `modifiedAt` changed. That's a non-event the client doesn't
+care about and creates notification storms.
+
+**Spec:** § 5.8.6, definition of "change". No carve-out for
+server-stamped fields.
+
+**Our call:** exclude system-managed temporal fields (createdAt,
+modifiedAt, deletedAt) from the change-detection comparison. A
+client-supplied `observedAt` change DOES trigger; a broker-stamped
+`modifiedAt` alone does NOT.
+
+**Fix wanted:** § 5.8.6 should add: "Server-stamped system
+Attributes (createdAt, modifiedAt, deletedAt) SHALL NOT
+participate in change detection. A change is observed only on the
+client-visible value(s) of the Attribute and its client-supplied
+sub-Attributes."
+
+---
+
+<a name="54"></a>
+## 54. § 5.8.6 — `notification.attributes` IRI expansion: subscription context vs notification time
+
+**Hit:** A Subscription is created with `notification.attributes:
+["speed"]` and `jsonldContext: <ctx-v1>` (which maps speed → IRI X).
+Later, the entity is updated; the entity's stored attribute is at
+IRI X. The notification renders.
+
+If the subscription's jsonldContext has been replaced (or, more
+subtly, if a default core context has changed terms), should the
+broker re-expand "speed" against the current context, or against
+the context captured at subscription creation?
+
+If re-expanded → consistency with current entity state at the cost
+of subscription stability.
+If creation-time → subscription stability at the cost of "speed"
+possibly meaning a different IRI now.
+
+**Spec:** § 5.8.6 — "Term to URI expansion shall be observed
+(clause 5.5.7)." § 5.5.7 covers term-to-URI but doesn't address
+this temporal stability question.
+
+**Our call:** expand at subscription creation time; the resulting
+IRI is stored on the Subscription. Re-expansion never happens.
+Document the rule in `feedback_expand_canonical` memory.
+
+**Fix wanted:** § 5.8.6 should state: "Term-to-URI expansion of
+`notification.attributes` SHALL be performed at Subscription
+creation time using the Subscription's jsonldContext. The
+resulting IRIs are stored with the Subscription and used verbatim
+for matching and notification rendering thereafter."
+
+---
+
+<a name="55"></a>
+## 55. § 5.8.6 — deleted-entity notification + `notification.attributes` filter
+
+**Hit:** Subscription has `notification.attributes: ["speed",
+"color"]`. The watched entity is deleted. § 5.8.6 says:
+
+> If the notification was triggered by the deletion of an Entity
+> and the notification.showChanges member is not set to true, only
+> the deletedAt system property shall be provided.
+
+But the sub's `notification.attributes` says only speed & color
+should be returned. Is `deletedAt` returned because the trigger
+overrides the filter? Or are speed/color returned alongside
+`deletedAt`? Or neither?
+
+**Spec:** § 5.8.6, the quoted sentence implies the filter is
+overridden — "only the deletedAt". But the sub's filter says
+"speed, color" — explicit override or accidental contradiction?
+
+**Our call:** trigger override — `deletedAt` always; attribute
+filter ignored on delete-trigger notifications. The notification
+body is `{id, type, deletedAt}` plus whatever the format
+(concise/simplified/etc.) prescribes.
+
+**Fix wanted:** § 5.8.6 should state explicitly: "On an
+entity-delete notification, `notification.attributes` is ignored;
+the response contains only entity members (id, type) plus the
+`deletedAt` sub-attribute. `notification.showChanges` true MAY
+add the previously-stored attributes."
+
+---
+
+<a name="56"></a>
+## 56. § 5.8.6 — `notification.pick` / `notification.omit` vs entity-keyword members (id, type)
+
+**Hit:** Subscription has `notification.omit: ["id"]`. Can the
+broker actually omit `id`? `id` is the entity's identifier — every
+NGSI-LD entity representation requires it. § 5.8.6 says pick/omit
+operate on "entity members listed". id/type ARE members.
+
+Two readings:
+- (a) entity keywords (id, type, @context) are excluded from
+  pick/omit semantics; the param only operates on user attributes.
+- (b) pick/omit is fully general; omitting `id` produces an entity
+  representation that violates § 4.5.1.
+
+**Spec:** § 5.8.6 / § 4.21 — silent on this guard.
+
+**Our call:** pick/omit cannot remove id, type, @context, scope. A
+sub that tries (`omit=["id"]`) silently keeps id; no error. The
+guard is implicit in the NGSI-LD entity representation requirement.
+
+**Fix wanted:** § 5.8.6 should state: "`notification.pick` and
+`notification.omit` operate only on user-defined Attributes. The
+entity-keyword members (id, type, @context, scope) are preserved
+regardless." Or alternatively bless omit-id as a way to produce
+attribute-only fragments (e.g. for downstream processing).
+
+---
+
+<a name="57"></a>
+## 57. § 5.8.1.4 / § 5.8.2.4 — overlapping subscriptions: dedup or duplicate?
+
+**Hit:** Client creates Subscription S1 watching attr X on entity
+E, and Subscription S2 also watching attr X on E. Both send to the
+SAME endpoint URL. One change to E.X triggers two notifications
+(one per subscription).
+
+Is that desired (each subscription is independent) or wasteful
+(client gets duplicate data)? Should the broker dedup notifications
+sharing identical endpoint + payload?
+
+**Spec:** Each Subscription is independent; § 5.8.1/2/3 say nothing
+about cross-subscription dedup.
+
+**Our call:** strict per-subscription notification. No dedup
+across subscriptions, even with identical endpoint. Client is
+responsible for not creating redundant subs.
+
+**Fix wanted:** § 5.8.6 should clarify: "Subscriptions are
+independent; the Context Broker SHALL emit one notification per
+matching subscription, even if multiple subscriptions match the
+same change and share the same endpoint." That's the per-spec
+reading and would make it explicit. Vendors offering dedup as an
+extension should flag it as non-conformant.
+
+---
+
+<a name="58"></a>
+## 58. § 5.8 — subscription `expiresAt` reached while broker is down
+
+**Hit:** Subscription has `expiresAt: T`. Broker is offline at T.
+When the broker comes back at T+10s:
+
+- Status field reads "active" (last persisted before T)? The
+  resume code should detect expiration on load.
+- Did the missed-interval timing matter? If sub was timeInterval-
+  based, are missed intervals retroactively suppressed or do they
+  fire on resume?
+- Do throttling counters reset on resume?
+
+**Spec:** § 5.2.12 defines status with values active, paused,
+expired. § 5.8 doesn't address recovery state. The persisted-state
+machine is undefined.
+
+**Our call:**
+- On startup, walk the sub cache; flip any sub with
+  `expiresAt < now` to status=expired.
+- Throttling counters persist; `lastSuccess` carries through.
+- TimeInterval-based subs: missed intervals are not retroactively
+  fired; next fire is `lastFire + interval`.
+
+**Fix wanted:** § 5.8 should add a "Subscription persistence and
+recovery" sub-clause covering:
+(a) post-restart status-recomputation rules,
+(b) throttling counter persistence,
+(c) timeInterval missed-fire policy (retroactive vs forward-only),
+(d) pernot lastN evaluation across restarts.
+
+Without this section, two compliant brokers behave differently
+after a crash.
 
 ---
 
