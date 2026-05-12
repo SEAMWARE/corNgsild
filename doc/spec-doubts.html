@@ -1,0 +1,2638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>NGSI-LD Spec Doubts &amp; Gaps</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --fg: #1c1c1c;
+  --bg: #fafafa;
+  --muted: #666;
+  --accent: #0366d6;
+  --border: #d0d7de;
+  --code-bg: #f0f0f0;
+  --hl-bg: #fff8c5;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fg: #e6e6e6;
+    --bg: #1c1f24;
+    --muted: #9aa0a6;
+    --accent: #58a6ff;
+    --border: #30363d;
+    --code-bg: #2a2f36;
+    --hl-bg: #4a3f00;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 32px 36px 80px;
+}
+h1 { font-size: 1.9em; border-bottom: 2px solid var(--border); padding-bottom: 0.3em; margin-top: 0; }
+h2 { font-size: 1.45em; border-bottom: 1px solid var(--border); padding-bottom: 0.25em; margin-top: 2em; }
+h3 { font-size: 1.2em; margin-top: 1.5em; }
+h4 { font-size: 1.05em; margin-top: 1.3em; }
+p, li { line-height: 1.6; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code {
+  background: var(--code-bg);
+  padding: 0.15em 0.35em;
+  border-radius: 3px;
+  font-family: "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 0.9em;
+}
+pre {
+  background: var(--code-bg);
+  padding: 12px 16px;
+  border-radius: 6px;
+  overflow-x: auto;
+  font-size: 0.85em;
+}
+pre code { background: transparent; padding: 0; }
+blockquote {
+  margin: 1em 0;
+  padding: 0.5em 1em;
+  border-left: 4px solid var(--border);
+  color: var(--muted);
+  background: var(--code-bg);
+}
+table {
+  border-collapse: collapse;
+  margin: 1em 0;
+  width: 100%;
+  font-size: 0.92em;
+}
+th, td {
+  border: 1px solid var(--border);
+  padding: 6px 12px;
+  text-align: left;
+  vertical-align: top;
+}
+th { background: var(--code-bg); font-weight: 600; }
+hr { border: none; border-top: 1px solid var(--border); margin: 2.5em 0; }
+strong { color: var(--fg); }
+em { color: var(--muted); }
+:target {
+  background: var(--hl-bg);
+  padding: 0.1em 0.4em;
+  border-radius: 4px;
+  scroll-margin-top: 20px;
+}
+ul, ol { padding-left: 1.6em; }
+li { margin: 0.2em 0; }
+.toc-list a code { font-size: 0.95em; }
+</style>
+</head>
+<body>
+<h1 id="ngsi-ld-spec-doubts-gaps">NGSI-LD Spec Doubts &amp; Gaps</h1>
+<p>Running list of ambiguities, silent cases, and genuinely contradictory
+wording encountered while implementing swBroker / swNgsild against NGSI-LD
+v1.9.1. Intended as input for ETSI ISG CIM / TC DATA clarifications.</p>
+<p>Each entry: <strong>§ ref</strong> · <strong>what we hit</strong> · <strong>what the spec says (or
+doesn't)</strong> · <strong>what we did</strong> · <strong>what we'd want fixed</strong>.</p>
+<hr />
+<h2 id="index-by-theme-roughly-ordered-by-interop-impact">Index (by theme, roughly ordered by interop impact)</h2>
+<h3 id="a-distributed-operations-concurrent-fan-out-policy">A. Distributed operations — concurrent fan-out &amp; policy</h3>
+<ul>
+<li><strong><a href="#27">27</a></strong> § 4.3.6 — concurrent vs sequential forwarding to matching CSRs is unspecified (no permission, no obligation, no constraint)</li>
+<li><strong><a href="#28">28</a></strong> § 5.2.34 — per-CSR <code>timeoutMs</code> semantics when N CSRs forward concurrently</li>
+<li><strong><a href="#29">29</a></strong> § 4.3.6.5 — outbound header policy on forwarded requests is half-defined (Via, NGSILD-Tenant, Content-Type, Accept, Link, Authorization, X-Forwarded-For, inbound user headers — no normative table)</li>
+<li><strong><a href="#36">36</a></strong> § 5.2.36 — distop counter (timesSent/Failed/Success/Failure) atomicity under concurrent fan-out and HA replicas sharing a CSR store</li>
+<li><strong><a href="#31">31</a></strong> § 5.14.4.4 — multi-CSR EntityMap aggregation (linkedMaps shape, dedup rule, multi-source array semantics)</li>
+<li><strong><a href="#35">35</a></strong> § 5.7.1.4 — auxiliary mode merge when two aux CSRs overlap concurrently (first-wins? timestamp? reject at creation?)</li>
+<li><strong><a href="#46">46</a></strong> § 6.3.17 — "redirect" mode classified as BOTH single-source and multi-source in the same section (contradiction)</li>
+<li><strong><a href="#47">47</a></strong> § 6.3.17 — <code>NGSILD-Warning</code> header emission semantics are underspecified (no broker emits them today; 4 codes share triggers)</li>
+<li><strong><a href="#77">77</a></strong> § 5.12 — Via parsing corner cases (case, whitespace, depth limit, malformed pseudonym)</li>
+</ul>
+<h3 id="b-distributed-operations-composition-routing">B. Distributed operations — composition &amp; routing</h3>
+<ul>
+<li><strong><a href="#1">1</a></strong> § 5.6.1.4 — createEntity partial-success body format (no shape defined; same gap for append / update / merge / delete)</li>
+<li><strong><a href="#30">30</a></strong> § 5.7.2.4 — split-mode forwarded query: which URL params get stripped vs survive vs narrow per CSR (no normative list)</li>
+<li><strong><a href="#34">34</a></strong> § 5.6.17 + § 4.5.5.3 — Merge Entity composition order when applying across local + N CSRs in parallel</li>
+<li><strong><a href="#39">39</a></strong> § 5.6 (generic) — collapsing uniform-error multi-CSR responses (207 noise vs single ProblemDetails)</li>
+<li><strong><a href="#37">37</a></strong> § 5.6.3.4 — <code>?options=noOverwrite</code> semantics when the same attr exists locally AND on an exclusive CSR</li>
+<li><strong><a href="#38">38</a></strong> § 5.6.5 — <code>?deleteAll=true</code> forwarded to a CSR that doesn't support <code>deleteAttrs</code> (refuse all? skip CSR? partial?)</li>
+<li><strong><a href="#2">2</a></strong> § 5.6.1.4 + § 4.3.6.3 — exclusive CSR without <code>createEntity</code> op: deadlock semantics for fully-claimed input</li>
+<li><strong><a href="#3">3</a></strong> § 5.6.1.4 — entity shell when all attributes are claimed externally (create <code>{id, type}</code> locally or not?)</li>
+<li><strong><a href="#12">12</a></strong> § 5.7.11 — federation has no hop / TTL bound; loop detection is the only stop</li>
+<li><strong><a href="#51">51</a></strong> § 5.5.9 / § 6.3.10 — <code>limit</code> / <code>offset</code> semantics under distributed federation (per-CSR vs global; offset composition)</li>
+<li><strong><a href="#64">64</a></strong> § 6.3.13 — <code>count</code> semantics under distributed federation (approximate vs exact; per-CSR count-only forward)</li>
+<li><strong><a href="#78">78</a></strong> § 5.5.13 — <code>?local=true</code> behaviour matrix across read/write/sub/info endpoints</li>
+<li><strong><a href="#79">79</a></strong> § 5.5.11 — batch with two elements addressing the same entityId (merge? sequence? reject?)</li>
+</ul>
+<h3 id="c-response-shapes-error-formats">C. Response shapes &amp; error formats</h3>
+<ul>
+<li><strong><a href="#32">32</a></strong> § 5.2.6 — ProblemDetails extension fields for NGSI-LD-specific context (<code>entityId</code>, <code>entityIds</code>, <code>attributeName</code>, <code>registrationId</code>, <code>status</code>)</li>
+<li><strong><a href="#23">23</a></strong> § 6.3.10 — 206 Partial Content vs 200 OK on temporal queries; ETSI tests are mutually inconsistent</li>
+<li><strong><a href="#19">19</a></strong> § 5.5.4 / § 5.5.5 — InvalidRequest vs BadRequestData for invalid URL-param values</li>
+<li><strong><a href="#20">20</a></strong> § 5.8.6 — <code>attributeDeleted</code> notification representation: bare-string default vs ETSI-fixture extended-form</li>
+<li><strong><a href="#50">50</a></strong> § 6.3.7 / § 4.5.16 — GeoJSON negotiation: Accept header vs <code>?format=geojson</code> URL param (and the geometryProperty axis)</li>
+</ul>
+<h3 id="d-csr-data-model">D. CSR data model</h3>
+<ul>
+<li><strong><a href="#4">4</a></strong> § 5.2.9 — <code>endpoint</code> URL convention: host+port (example) vs full API base (silent normative)</li>
+<li><strong><a href="#5">5</a></strong> § 5.7.5 + § 5.2.9 — tenant-scoped loop detection alias (per-tenant or per-broker?)</li>
+<li><strong><a href="#7">7</a></strong> § 5.2.9 — CSR is over-nested and hard to write correctly (frequent user mistake → 422 / vendor-specific salvage)</li>
+<li><strong><a href="#8">8</a></strong> § 5.2.9 — typos in top-level CSR fields silently accepted as CSF Properties</li>
+<li><strong><a href="#9">9</a></strong> § 4.3.6.5 / 4.3.6.6 — contextSourceInfo edge cases (well-known keys, banned keys, <code>urn:ngsi-ld:request</code> substitution)</li>
+<li><strong><a href="#10">10</a></strong> § 5.2.9 — location / observationSpace / operationSpace match semantics (containment? overlap?)</li>
+<li><strong><a href="#45">45</a></strong> § 5.2.9 — CSR <code>location</code> shape: bare GeoJSON Geometry (spec) vs wrapped GeoProperty (ETSI fixture)</li>
+<li><strong><a href="#71">71</a></strong> § 5.2.40 — <code>contextSourceAlias</code> uniqueness scope (broker-local? federation? historical?) and allocation authority</li>
+<li><strong><a href="#72">72</a></strong> § 5.2.40 — <code>contextSourceExtras</code> opaque-JSON contract (same gap as JsonProperty, entry 43)</li>
+<li><strong><a href="#82">82</a></strong> § 4.20 — CSR <code>operations</code> list: named-group + literal-op mixing, typos, empty array vs absent default</li>
+<li><strong><a href="#81">81</a></strong> § 5.15.1.4 / § 5.2.40 — <code>/info/sourceIdentity</code> per-tenant field variation (which fields vary; uptime semantics)</li>
+</ul>
+<h3 id="e-discovery-federation">E. Discovery &amp; federation</h3>
+<ul>
+<li><strong><a href="#6">6</a></strong> § 5.10.2 — Discovery as a separate registry process (vs the implicit broker-driven matching)</li>
+<li><strong><a href="#26">26</a></strong> § 5.10.2.5 — RegistrationInfo filtering on GET /csourceRegistrations is "should", not "shall"; per-request opt-in lacking</li>
+<li><strong><a href="#11">11</a></strong> § 5.7.11 / § 6.25–6.28 — no URL param for "local + registry, no forward" use case</li>
+</ul>
+<h3 id="f-local-operations-data-semantics">F. Local operations &amp; data semantics</h3>
+<ul>
+<li><strong><a href="#33">33</a></strong> § 5.6.18 — Replace Entity: can the type change locally? Spec is permissive, implications unspecified</li>
+<li><strong><a href="#13">13</a></strong> § 5.6 — no Retrieve Attribute operation (forces clients to do GET /entity + project)</li>
+<li><strong><a href="#14">14</a></strong> § 6.34.3.1 — GET /entityMaps creates (HTTP method semantics violate REST norms)</li>
+<li><strong><a href="#22">22</a></strong> § 5.6.5 — <code>?deleteAll=</code> boolean parsing case-sensitivity</li>
+<li><strong><a href="#18">18</a></strong> § 5.16.1.4 — snapshot capture from CSRs in no-split deployments</li>
+<li><strong><a href="#44">44</a></strong> § 5.6.3.4 — <code>?observedAt=&lt;time&gt;</code> default-observedAt URL param exists for Merge but not Append/Update</li>
+<li><strong><a href="#63">63</a></strong> § 5.14 — EntityMap lifetime, eviction, and persistence across restart</li>
+<li><strong><a href="#65">65</a></strong> § 5.16.1.4 — snapshot capture from CSRs: do CSR-side changes after capture invalidate the snapshot? (frozen vs live)</li>
+<li><strong><a href="#67">67</a></strong> § 5.7.3 — <code>lastN</code> semantics across pagination and distop fan-out</li>
+<li><strong><a href="#69">69</a></strong> § 5.6.21 — Purge Entities and TRoE interaction (current-state only, or both?)</li>
+<li><strong><a href="#76">76</a></strong> § 6.3.22 — <code>NGSILD-Snapshot</code> header: distop forwarding, subscription scope, mixed-mode interaction</li>
+</ul>
+<h3 id="g-notifications-subscriptions">G. Notifications &amp; subscriptions</h3>
+<ul>
+<li><strong><a href="#21">21</a></strong> § 5.2.12 — entityDeleted vs attributeDeleted trigger symmetry on entity delete</li>
+<li><strong><a href="#16">16</a></strong> § 4.3.6.6 / § 5.8 — <code>jsonldContext</code> fallback asymmetry between subscriptions and CSRs</li>
+<li><strong><a href="#17">17</a></strong> § 6.3.8 / § 6.3.9 — <code>urn:ngsi-ld:request</code> substitution for receiverInfo</li>
+<li><strong><a href="#52">52</a></strong> § 5.8.6 — distributed-subscription "except for the one received from" lacks identification mechanism (Via? regId? source URI?)</li>
+<li><strong><a href="#53">53</a></strong> § 5.8.6 — change detection includes server-stamped <code>modifiedAt</code> (literal reading triggers notification storms on idempotent overwrites)</li>
+<li><strong><a href="#54">54</a></strong> § 5.8.6 — <code>notification.attributes</code> IRI expansion timing: subscription-creation vs notification-time context</li>
+<li><strong><a href="#55">55</a></strong> § 5.8.6 — delete-trigger notification + <code>notification.attributes</code> filter (which wins?)</li>
+<li><strong><a href="#56">56</a></strong> § 5.8.6 — <code>notification.pick</code> / <code>notification.omit</code> vs entity-keyword members (can <code>id</code> be omitted?)</li>
+<li><strong><a href="#57">57</a></strong> § 5.8.1.4 / § 5.8.2.4 — overlapping subscriptions to the same endpoint: dedup or duplicate?</li>
+<li><strong><a href="#58">58</a></strong> § 5.8 — subscription <code>expiresAt</code> reached while broker is offline (recovery state machine undefined)</li>
+<li><strong><a href="#68">68</a></strong> § 5.11 — csr-subscription notification triggers: which CSR state changes count (CRUD only? counter updates?)</li>
+<li><strong><a href="#73">73</a></strong> § 5.2.15 — notification <code>cooldown</code> state machine: failure definition, scope, re-engagement, observability</li>
+</ul>
+<h3 id="h-json-ld-context">H. JSON-LD / @context</h3>
+<ul>
+<li><strong><a href="#15">15</a></strong> § 6.3.5 — @context placement for array bodies is ambiguous (per-root vs per-element)</li>
+<li><strong><a href="#43">43</a></strong> § 4.5.24 — JsonProperty inner-value @context interaction: where does opaqueness start and end?</li>
+<li><strong><a href="#62">62</a></strong> § 5.13 — <code>jsonldContext.kind</code> values not enumerated (Cached / ImplicitlyCreated / Hosted / ExplicitlyCreated)</li>
+</ul>
+<h3 id="i-data-model-multi-instance-linked-entities-intake-order">I. Data model — multi-instance, linked entities, intake order</h3>
+<ul>
+<li><strong><a href="#40">40</a></strong> § 4.6.6 — chronological order on batch arrays is an unenforceable assumption (no mechanism to assert or signal intent)</li>
+<li><strong><a href="#41">41</a></strong> § 4.5.5 — multi-instance with identical datasetId on intake (reject? dedupe? defer?)</li>
+<li><strong><a href="#42">42</a></strong> § 4.5.23 — <code>joinLevel</code> semantics with cycles, diamonds, and originating-id self-reference</li>
+<li><strong><a href="#48">48</a></strong> § 4.5.5.3 — "indeterminate / random" tiebreaker on identical datasetIds is unfit for cross-broker interop</li>
+<li><strong><a href="#49">49</a></strong> § 4.5.5.1 — <code>datasetId: "@none"</code> round-trip drops the field on response (POST body not reproducible from GET)</li>
+<li><strong><a href="#59">59</a></strong> § 4.8 — system Attributes set and visibility gate not enumerated in one place (sysAttrs scope, observedAt vs gate)</li>
+<li><strong><a href="#60">60</a></strong> § 4.21 — <code>pick</code> / <code>omit</code> / <code>attrs</code> cross-parameter validation matrix missing (combination rules, conflict resolution)</li>
+<li><strong><a href="#61">61</a></strong> § 5.3 — query language <code>q</code> lacks precedence table, escaping rules, type coercion, null-matching semantics</li>
+<li><strong><a href="#66">66</a></strong> § 5.5.7 — IRI expansion of terms not defined in active @context (reject? @vocab fallback? bare?)</li>
+<li><strong><a href="#70">70</a></strong> § 5.5.12 — <code>urn:ngsi-ld:null</code> tombstone scope: attribute-level only, or also inside array values / opaque json?</li>
+<li><strong><a href="#74">74</a></strong> § 4.5.18 — LanguageProperty simplified rendering without <code>?lang=</code> URL param (lossless? default language? 400?)</li>
+<li><strong><a href="#75">75</a></strong> § 4.5.19 — aggregated temporal × <code>?sysAttrs=true</code> interaction (per-period? attribute-level? suppressed?)</li>
+<li><strong><a href="#80">80</a></strong> § 4.5.4 / § 4.5.21 / § 4.5.22 — simplified-form projection table for List/Vocab/Json/Geo attribute types</li>
+<li><strong><a href="#83">83</a></strong> § 4.11 — temporal bound asymmetry: <code>before</code> exclusive, <code>after</code> inclusive, <code>between</code> half-open — pick one policy</li>
+<li><strong><a href="#84">84</a></strong> § 4.23 — "Sort ordering is never applied to distributed operations" — every implementer contradicts this; spec text needs replacement</li>
+<li><strong><a href="#85">85</a></strong> § 4.23.2 — datatype comparison order: Strings before DateTime is non-intuitive; Geo/Vocab/Language/List/Json buckets unstated</li>
+</ul>
+<hr />
+<p><a name="1"></a></p>
+<h2 id="1-5614-createentity-partial-success-body-format">1. § 5.6.1.4 — createEntity partial success body format</h2>
+<p><strong>Hit:</strong> When some forwards succeed and others fail, the spec says the
+response is "a partial success". No body shape defined.</p>
+<p><strong>Spec:</strong> Only phrase is "a partial success if some parts of it succeeded".
+§ 5.2.18 defines <code>UpdateResult</code> with <code>updated[]</code> / <code>notUpdated[]</code> for
+attribute-update ops, but no equivalent for createEntity.</p>
+<p><strong>Our call:</strong> 207 Multi-Status with body
+<code>{ "notCreated": [ NotUpdatedDetails ] }</code>, reusing § 5.2.19 shape
+(<code>attributeName</code>, <code>reason</code>, <code>registrationId?</code>). Success side implicit.</p>
+<p><strong>Fix wanted:</strong> Spec should define the partial-success body formally —
+either extend <code>UpdateResult</code> semantics to createEntity, or introduce a
+dedicated <code>CreateResult</code> type. Same gap appears for append/update/merge/
+delete entity ops (§ 5.6.2–5.6.6).</p>
+<hr />
+<p><a name="2"></a></p>
+<h2 id="2-5614-4363-exclusive-csr-without-createentity-op">2. § 5.6.1.4 + § 4.3.6.3 — exclusive CSR without createEntity op</h2>
+<p><strong>Hit:</strong> A CSR with <code>mode: exclusive</code> and <code>operations: ["retrieveEntity"]</code>
+(i.e. no <code>createEntity</code>) claims a set of Attributes on an Entity, but:</p>
+<ul>
+<li>Per § 4.3.6.3, the broker cannot hold those Attributes locally (the
+  exclusive invariant).</li>
+<li>The forwarded createEntity is refused by the registration.</li>
+</ul>
+<p>If the admin creates such a reg, can those Attributes ever be created?</p>
+<p><strong>Spec:</strong> § 5.6.1.4 says "for matching Registrations where the Create
+Entity operation is not supported, this shall result in an error of
+type Conflict ... or a partial success if some parts of it succeeded."</p>
+<p>The spec treats this as a per-attribute failure, not a deadlock —
+<strong>implicitly</strong> relying on the user having submitted other Attributes
+that go elsewhere or stay local. If the input payload consists entirely
+of exclusive-claimed Attributes with no createEntity support, the whole
+create fails with Conflict and the Attributes can never be created.</p>
+<p><strong>Our call:</strong> Treat it as a legitimate "admin forbids creating these
+Attributes" feature. Partial success (207) if other Attributes succeed;
+409 Conflict if no other success.</p>
+<p><strong>Fix wanted:</strong> Spec should explicitly either (a) forbid creating such
+a CSR at registration time, or (b) bless the "forbid-creation" semantics
+so admins can rely on it, or (c) define a way out (e.g., override when
+no other source accepts).</p>
+<hr />
+<p><a name="3"></a></p>
+<h2 id="3-5614-entity-shell-when-all-attributes-are-claimed-externally">3. § 5.6.1.4 — entity shell when all Attributes are claimed externally</h2>
+<p><strong>Hit:</strong> POST /entities with attrs A, B. Exclusive/redirect CSRs claim
+both. After chop, remaining input data = <code>{ id, type }</code>. Do we create
+a local entity shell?</p>
+<p><strong>Spec:</strong> "Any remaining input data shall be used to create the Entity
+locally." If remaining data is empty, behaviour is undefined.</p>
+<p><strong>Our call:</strong> Skip local create (no shell). A separate <code>db.entityRetrieve</code>
+check catches the <code>AlreadyExists</code> case (if a local shell pre-existed from
+earlier traffic) so we can still raise 409 when appropriate.</p>
+<p><strong>Fix wanted:</strong> Spec should clarify whether a local <code>{id, type}</code> shell
+is created in this case. Two defensible positions: (i) yes, to record
+entity existence for later retrieve-merge; (ii) no, to keep the broker
+truly empty per the exclusive invariant. Pick one, document it.</p>
+<hr />
+<p><a name="4"></a></p>
+<h2 id="4-529-csr-endpoint-url-convention">4. § 5.2.9 — CSR endpoint URL convention</h2>
+<p><strong>Hit:</strong> Is <code>endpoint</code> the Context Source's base URL (host+port) with
+the broker adding <code>/ngsi-ld/v1/...</code>, or is it the full API base path
+(host+port+<code>/ngsi-ld/v1</code>)?</p>
+<p><strong>Spec:</strong> § 5.2.9 defines <code>endpoint</code> as "URI dereferenceable to access
+the registered Context Source". Annex C.3 example uses
+<code>"endpoint": "http://my.csource.org:1026"</code> — host+port only, no API
+path. So <strong>the example implies the broker must prepend <code>/ngsi-ld/v1/...</code></strong>
+when forwarding. But the normative text doesn't say this.</p>
+<p><strong>Our call:</strong> Follow the example. CSR endpoint is host+port (or any
+prefix the admin wants); broker appends the standardised NGSI-LD path
+(<code>/ngsi-ld/v1/entities</code>, <code>/ngsi-ld/v1/entities/{id}</code>, etc.).</p>
+<p><strong>Fix wanted:</strong> Spec should add a normative sentence: "The NGSI-LD
+standardised path segments (e.g. <code>/ngsi-ld/v1/entities</code>) shall be
+appended by the Context Broker when dereferencing the endpoint. The
+endpoint value shall not include these segments."</p>
+<hr />
+<p><a name="5"></a></p>
+<h2 id="5-575-529-tenant-scoped-loop-detection-alias">5. § 5.7.5 + § 5.2.9 — tenant-scoped loop detection alias</h2>
+<p><strong>Hit:</strong> Multi-tenant broker. The <code>Via</code> header alias for loop detection
+must distinguish between the same broker serving different tenants,
+otherwise a legitimate tenant-rewrite forward (CSR with <code>tenant: T2</code>,
+endpoint back to the same broker) is falsely detected as a loop.</p>
+<p><strong>Spec:</strong> § 5.7.5 defines <code>contextSourceAlias</code> for loop detection in
+general. § 5.2.9 defines <code>tenant</code> on a CSR to rewrite the target
+tenancy. Neither section explicitly says the alias is per-tenant.</p>
+<p><strong>Our call:</strong> The alias we emit is <code>&lt;base&gt;:&lt;tenant&gt;</code> where <code>base</code> is
+the broker's configured alias and <code>tenant</code> is the request's NGSILD-Tenant
+(default tenant → bare <code>&lt;base&gt;</code>, no suffix). Loop detection compares
+exact alias strings.</p>
+<p><strong>Fix wanted:</strong> Spec should state that when a broker serves multiple
+tenants, the loop-detection alias shall be scoped per-tenant. Otherwise
+a broker can never host <code>tenant: T2</code> rewrite CSRs to itself.</p>
+<hr />
+<p><a name="6"></a></p>
+<h2 id="6-5102-discovery-separate-registry-process">6. § 5.10.2 Discovery — separate registry process</h2>
+<p><strong>Hit:</strong> CSR Discovery (<code>GET /csourceRegistrations?...</code>) appears to be a
+separate concern from a broker's own internal registration cache. The
+filter language (§ 5.10.2) is richer than what a broker uses for dispatch.</p>
+<p><strong>Spec:</strong> § 5.10 frames Discovery as a service a Context Registry
+offers, but it's unclear whether a Context Broker must also implement
+Discovery over its own regCache, or only a Context Registry does.</p>
+<p><strong>Our call:</strong> Broker returns 501 Not Implemented on the rich
+Discovery query syntax; offers CRUD only over its own local regCache.</p>
+<p><strong>Fix wanted:</strong> Clarify the role separation: what must a Context Broker
+implement vs a Context Registry? Can a broker advertise itself as "no
+Discovery support" without breaking federation?</p>
+<hr />
+<p><a name="7"></a></p>
+<h2 id="7-529-csr-is-over-nested-and-hard-to-write-correctly">7. § 5.2.9 — CSR is over-nested and hard to write correctly</h2>
+<p><strong>Hit:</strong> Declaring a CSR requires two levels of array nesting to express
+even the simplest "forward this entity type to that endpoint":</p>
+<pre><code>&quot;information&quot;: [
+  {
+    &quot;entities&quot;: [
+      { &quot;id&quot;: &quot;urn:V1&quot;, &quot;type&quot;: &quot;Vehicle&quot; }
+    ],
+    &quot;propertyNames&quot;: [&quot;speed&quot;]
+  }
+]
+</code></pre>
+<p>The outer <code>information[]</code> groups RegistrationInfo entries (each with a
+different attr set + entity pattern); the inner <code>entities[]</code> enumerates
+EntityInfo entries sharing those attrs. Both arrays are commonly of
+length 1, but the spec forces the array wrappers anyway.</p>
+<p><strong>Spec:</strong> § 5.2.10 RegistrationInfo + § 5.2.8 EntityInfo are defined
+as cardinality <code>1..N</code> arrays even though the 1-element case is by far
+the most common in practice.</p>
+<p><strong>Our call:</strong> Parse as specified. Every test we write pays the two-level
+nesting tax even for trivial cases.</p>
+<p><strong>Fix wanted:</strong> Allow the singular shortcut at both levels — a bare
+object in place of a 1-element array. JSON Schema / OpenAPI tooling
+handles this pattern routinely; the spec could say "value may be a
+RegistrationInfo object or an array of RegistrationInfo objects". Same
+for <code>entities</code>. Reduces writer burden by ~6 lines per trivial CSR.</p>
+<hr />
+<p><a name="8"></a></p>
+<h2 id="8-529-typos-in-top-level-csr-fields-are-silently-accepted-as-csf-properties">8. § 5.2.9 — typos in top-level CSR fields are silently accepted as CSF Properties</h2>
+<p><strong>Hit:</strong> A CSR has well-known top-level keys (<code>id</code>, <code>type</code>, <code>endpoint</code>,
+<code>mode</code>, <code>information</code>, <code>operations</code>, ...). Anything else at the top
+level is treated as a Context Source Property (CSF property —
+user-defined metadata about the source).</p>
+<p>This means a typo like <code>"ifnormation"</code> instead of <code>"information"</code> is
+<strong>silently accepted</strong>: the typo'd key is stored as a CSF property, and
+then validation fails because the mandatory <code>information</code> field is
+missing. The error message points at the missing mandatory field, not
+the typo — debugging is unnecessarily painful.</p>
+<p><strong>Spec:</strong> § 5.2.9 table lists all standard fields; additional fields
+are implicitly CSF properties via NGSI-LD's open-schema model. No
+explicit JSON-LD frame, no <code>additionalProperties: false</code>, so typos
+can never be caught structurally.</p>
+<p><strong>Our call:</strong> Same behaviour — typos become silent CSF properties.
+Users get the confusing "missing mandatory information" error.</p>
+<p><strong>Fix wanted:</strong> Move user-defined CSR properties under a <code>properties</code>
+umbrella — e.g.</p>
+<pre><code>{
+  &quot;id&quot;: &quot;...&quot;,
+  &quot;type&quot;: &quot;ContextSourceRegistration&quot;,
+  &quot;endpoint&quot;: &quot;...&quot;,
+  &quot;information&quot;: [...],
+  &quot;properties&quot;: {
+    &quot;customKey1&quot;: &quot;value1&quot;,
+    &quot;customKey2&quot;: &quot;value2&quot;
+  }
+}
+</code></pre>
+<p>With that structure, standard fields have a closed set and typos are
+caught as "unknown field at top level". Same rethink applies to
+Subscription (which has the same class of issue with notification
+metadata) and to Entity-level spec shapes.</p>
+<hr />
+<p><a name="9"></a></p>
+<h2 id="9-4365-4366-contextsourceinfo-edge-cases">9. § 4.3.6.5 / 4.3.6.6 — contextSourceInfo edge cases</h2>
+<p><strong>Hit:</strong> Several under-specified edge cases around contextSourceInfo:</p>
+<p>(a) <strong>Banned keys at registration-creation time.</strong> § 4.3.6.5 says binding-
+    level headers (e.g. <code>Content-Length</code>) "shall be ignored" at forward
+    time. But the spec doesn't say whether a CSR with those keys should
+    be <strong>rejected at creation</strong> (400 Bad Request) or <strong>silently accepted
+    and filtered later</strong>. Same question for <code>NGSILD-Tenant</code> — the spec
+    says it "shall not be part of contextSourceInfo", with no explicit
+    rejection semantics.</p>
+<p>(b) <strong>Conflict between <code>contentType</code> CSI key and incoming Content-Type.</strong>
+    If the CSR declares <code>contentType: application/json</code> but the incoming
+    request is <code>application/ld+json</code> (with payload containing <code>@context</code>),
+    does the broker strip <code>@context</code> before forwarding? § 4.3.6.6 only
+    spells this out for the <code>jsonldContext</code> case.</p>
+<p>(c) <strong><code>accept</code> on write ops.</strong> § 4.3.6.6 says <code>accept</code> applies to
+    "response from the distributed endpoint". For createEntity a 201
+    response is empty-body — does <code>accept</code> still get sent as a header?
+    The spec doesn't differentiate write vs read ops.</p>
+<p>(d) <strong><code>urn:ngsi-ld:request</code> sentinel scope.</strong> § 4.3.6.5 says a value of
+    <code>urn:ngsi-ld:request</code> means "pull from triggering request", but only
+    <em>some</em> headers can be meaningfully pulled (e.g. <code>Authorization</code>,
+    not <code>Content-Length</code>). The spec doesn't list which headers are
+    eligible.</p>
+<p>(e) <strong>Advanced semantics deferred.</strong> <code>jsonldContext</code> (§ 4.3.6.6) requires
+    the broker to perform JSON-LD compaction against a remote <code>@context</code>,
+    switch <code>Content-Type</code> to <code>application/json</code>, and strip <code>@context</code>
+    from the body. <code>ngsildConformance</code> requires a version-compat
+    transform (defined in § 4.3.6.8). Both are non-trivial.</p>
+<p><strong>Our call (v1):</strong>
+- No creation-time rejection for banned keys → silently filter at forward
+  time (implements the "shall be ignored" instruction literally).
+- <code>accept</code> / <code>contentType</code> special-cased as HTTP <code>Accept</code> / <code>Content-Type</code>.
+- <code>jsonldContext</code> / <code>ngsildConformance</code> / <code>urn:ngsi-ld:request</code> deferred.</p>
+<p><strong>Fix wanted:</strong> Spec should be prescriptive about (a) and (d); clarify
+write-op behaviour of <code>accept</code> in (c); pin down the <code>contentType</code>/
+<code>@context</code> interaction in (b).</p>
+<hr />
+<p><a name="10"></a></p>
+<h2 id="10-529-location-observationspace-operationspace-match-semantics">10. § 5.2.9 location / observationSpace / operationSpace — match semantics</h2>
+<p><strong>Hit:</strong> CSR geo fields govern which forwards are eligible, but the spec
+doesn't spell out the matching <strong>relation</strong> clearly.</p>
+<p><strong>Spec:</strong>
+- <code>location</code> — "Geographic location that includes the <strong>locations</strong> of all
+  entities for which the Context Source may be able to provide information."
+- <code>observationSpace</code> — "includes the <strong>observation spaces</strong> of all
+  entities as specified by their respective observationSpace GeoProperty".
+- <code>operationSpace</code> — same shape, for operationSpace.</p>
+<p>But no explicit <code>georel</code> — should the broker test "entity.location <strong>within</strong>
+csr.location", or "intersects", or "contains"? The spec phrasing "includes"
+suggests the CSR's geometry is an <strong>outer boundary</strong> and matching should
+be <strong>entity within CSR</strong>, but it's inferred, not stated.</p>
+<p>Likewise, <code>observationSpace</code> / <code>operationSpace</code> match entity-side attrs
+rather than the entity's own location — adding asymmetry.</p>
+<p><strong>Our call:</strong> Implemented for createEntity dispatch. Routes through the
+existing <code>db.geoMatchFunc</code> callback (shared <code>src/plugins/shared/geoMatch.c</code>),
+so swNgsild stays GEOS-free. Applied semantics: entity's
+<code>location</code>/<code>observationSpace</code>/<code>operationSpace</code> must be <strong>within</strong> the
+corresponding CSR geometry. An entity lacking the corresponding
+GeoProperty fails the match (scope-like behaviour — geo-restricted CSRs
+don't apply to location-less entities).</p>
+<p><strong>Fix wanted:</strong> Spec should state the georel explicitly for each of the
+three fields. Probably "entity's GeoProperty X must be within (or equal
+to) CSR's X-Space" for all three.</p>
+<hr />
+<p><a name="11"></a></p>
+<h2 id="11-5711-625628-no-url-param-for-local-registry-no-forward">11. § 5.7.11 / § 6.25–6.28 — no URL param for "local + registry, no forward"</h2>
+<p><strong>Hit:</strong> Discovery endpoints (/types, /types/{type}, /attributes,
+/attributes/{attrId}) have three natural modes per § 5.7.11:</p>
+<ol>
+<li><strong>Local only</strong> — only the local datastore.</li>
+<li><strong>Local + CSR metadata</strong> — augment with types/attrs declared in
+   <code>information.entities[].type</code>, <code>propertyNames</code>, <code>relationshipNames</code>.</li>
+<li><strong>Local + CSR metadata + forwarded retrieval</strong> — forward the GET
+   to every CSR that supports the relevant retrieve op and merge.</li>
+</ol>
+<p>The spec defines <code>?local=true</code> (mode 1) and text for § 5.7.11 lays
+out both "local + registry" and "forward" as alternatives (mode 2 and
+mode 3), but the HTTP binding has <strong>no URL parameter</strong> to ask for
+mode 2 specifically. The default is underspecified — implementations
+will diverge on whether the default is mode 2 or mode 3.</p>
+<p><strong>Spec:</strong> § 5.7.11 — "implementations may only take into account
+information that is available or can be derived from a local datastore
+<strong>and the Context Registry</strong> … <strong>As an alternative</strong> … the request
+can be forwarded to all Context Sources". Reads as two implementation
+options but without a client-side switch.</p>
+<p><strong>Our call:</strong> Added a non-standard URL param <code>?noForward=true</code> that
+requests mode 2 (local + CSR metadata, no forwarding). Default (no
+<code>?local</code> and no <code>?noForward</code>) is mode 3 (forward).</p>
+<p><strong>Fix wanted:</strong> A standardised URL param (suggested <code>noForward=true</code>)
+so clients can explicitly request the middle mode, plus spec language
+mandating what the default is when the param is absent.</p>
+<hr />
+<p><a name="12"></a></p>
+<h2 id="12-5711-federation-depth-no-hop-ttl-bound">12. § 5.7.11 federation depth — no hop / TTL bound</h2>
+<p><strong>Hit:</strong> Mode-3 discovery forwarding is recursive by nature: every
+forwarded GET lands on a broker that itself re-forwards to its own
+CSRs. In a misconfigured or deep federation this can explode. Via-
+header loop detection catches <strong>cycles</strong> but not deep <strong>chains</strong>,
+and for discovery (which asks each CSR to aggregate upstream) it
+does not stop on legitimate non-cyclic trees that are simply too
+deep.</p>
+<p><strong>Spec:</strong> Silent on depth. § 5.7.11 describes forwarding as an option
+without any bounded-traversal concern.</p>
+<p><strong>Our call:</strong> Added a non-standard URL param <code>?hops=&lt;N&gt;</code>. Decremented
+on each outgoing forward; when the inbound hop count reaches 0 we
+stop forwarding entirely. Default when absent: 8 — deep enough for
+realistic federations while capping the worst case.</p>
+<p><strong>Fix wanted:</strong> Standardise the hop limit (name <code>hops</code> preferred over
+<code>ttl</code>; TTL-in-HTTP is ambiguous vs. cache-age) with a clear default
+and the rule "decrement on each hop, stop at 0".</p>
+<hr />
+<p><a name="13"></a></p>
+<h2 id="13-56-no-retrieve-attribute-operation">13. § 5.6 — no Retrieve Attribute operation</h2>
+<p><strong>Hit:</strong> The spec has PATCH/DELETE/PUT on <code>/entities/{id}/attrs/{attrId}</code>
+but no GET. Retrieving one specific attribute requires fetching the whole
+entity and filtering client-side (or using <code>?pick=</code>, which still returns
+the wrapping entity and its id/type).</p>
+<p><strong>Spec:</strong> § 5.6 covers Partial Attribute Update (5.6.4), Delete Attribute
+(5.6.5), Replace Attribute (5.6.19). There is no Retrieve Attribute
+operation, and no corresponding CSR op name.</p>
+<p><strong>Our call:</strong> Implemented <code>GET /entities/{id}/attrs/{attrId}</code> locally,
+returning the Attribute in NGSI-LD API format (plain Property /
+Relationship / ... object, no entity wrapping). <code>?datasetId</code> filters
+the default or specific instance. <code>?sysAttrs</code> preserved. DistOps
+forwarding not wired — no agreed op name.</p>
+<p><strong>Fix wanted:</strong> Add a Retrieve Attribute operation to § 5.6 with a
+defined response shape (plain Attribute vs. minimal entity wrapper)
+and a CSR op name (candidate: <code>retrieveAttribute</code>) so distributed
+retrieval of a single attribute is specified the same way as
+update / delete / replace are.</p>
+<hr />
+<p><a name="14"></a></p>
+<h2 id="14-63431-get-entitymaps-creates-http-method-semantics">14. § 6.34.3.1 — GET /entityMaps creates (HTTP method semantics)</h2>
+<p><strong>Hit:</strong> § 6.34.3.1 binds the HTTP GET method on <code>/entityMaps</code> to the
+"Create EntityMap for Query Entities" operation, responds 201 Created,
+and includes an <code>NGSILD-EntityMap</code> location header. The same semantics
+apply to GET /temporal/entityMaps (§ 6.35.3.1).</p>
+<p><strong>Spec:</strong> GET is defined this way; POST /entityMaps (§ 6.34.3.2) exists
+as an alternative with a Query body. Both forms CREATE an EntityMap.</p>
+<p><strong>Our call:</strong> Implemented as specified — GET creates (201), POST creates
+(201). No-op fallback or listing endpoint added.</p>
+<p><strong>Fix wanted:</strong> GET should be safe (RFC 9110 § 9.2.1) — "do not request
+any state change on the target resource". A method that creates a
+resource on every call and burdens the broker with garbage-collected
+EntityMaps is not safe. Either:
+  - Bind creation to POST only, drop the GET form; or
+  - Add a listing endpoint at GET /entityMaps (read-only), and keep
+    creation on POST.
+Rationale: intermediaries (proxies, browsers, crawlers, prefetchers)
+routinely retry / prefetch GET requests assuming safety. A creating
+GET generates a new resource per retry — classic anti-pattern.</p>
+<hr />
+<p><a name="16"></a></p>
+<h2 id="16-4366-58-jsonldcontext-fallback-asymmetry-subs-vs-csrs">16. § 4.3.6.6 / § 5.8 — <code>jsonldContext</code> fallback asymmetry: subs vs. CSRs</h2>
+<p><strong>Hit:</strong> When <code>jsonldContext</code> is not specified on a CSR's
+<code>contextSourceInfo</code>, forwarded requests go out with the original
+request's @context handling (no compaction, no context substitution).
+Subscriptions get different treatment for the same absent-field case.</p>
+<p><strong>Spec:</strong></p>
+<ul>
+<li>For <strong>Subscriptions</strong> (§ 5.8.1.4 on create, analogous language on
+  update):<blockquote>
+<p>"The @context to be used for sending Notifications ... shall be the
+one specified in the jsonldContext field. If not present, the
+jsonldContext field <strong>shall be initialized</strong> with the @context
+applicable for the Subscription."</p>
+</blockquote>
+</li>
+</ul>
+<p>Net: absent <code>jsonldContext</code> → broker auto-fills from the
+  subscription-creation request's @context.</p>
+<ul>
+<li>For <strong>CSRs</strong> (§ 4.3.6.6 + § 6.3.19): no analogous fallback clause.
+  § 4.3.6.6 only describes what happens when <code>jsonldContext</code> IS
+  explicitly set (compact body + strip @context + Content-Type
+  application/json). Nothing says the broker should auto-fill from the
+  registration's @context.</li>
+</ul>
+<p><strong>Our call:</strong> Follow the spec as written. Subscriptions get the
+fallback; CSRs do not — absent <code>jsonldContext</code> we forward with
+per-element @context (application/ld+json array body) using the core
+context.</p>
+<p><strong>Fix wanted:</strong> Make the fallback symmetric (CSRs also auto-initialise
+<code>jsonldContext</code> from the registration-creation request's @context) or
+state explicitly that the asymmetry is intentional. The subscription
+and CSR mechanisms otherwise mirror each other closely; a diverging
+default here is surprising.</p>
+<hr />
+<p><a name="15"></a></p>
+<h2 id="15-635-context-placement-for-array-bodies-is-ambiguous">15. § 6.3.5 — @context placement for array bodies is ambiguous</h2>
+<p><strong>Hit:</strong> Batch ops (§ 5.6.7 / 5.6.8 / 5.6.9 / 5.6.10 / 5.6.20) and ld+json
+listings take/produce a JSON <strong>array</strong> as the payload body. JSON arrays
+have no keys, so <code>@context</code> cannot appear "at the root of the body".</p>
+<p><strong>Spec:</strong> § 6.3.5 says, for Content-Type <code>application/ld+json</code>, "the
+associated @context shall be obtained from the request payload body
+itself" and "No mixes are allowed" (referring to Link header vs. in-body
+@context). The spec does not explicitly address arrays.</p>
+<p>Two plausible readings:
+- <strong>Strict:</strong> "body" means root — arrays cannot carry @context → ld+json
+  would be disallowed for array bodies entirely.
+- <strong>Per-element:</strong> array elements each carry their own @context; "no
+  mixes" refers to Link ⊕ in-body @context, not to per-element within
+  an array.</p>
+<p><strong>Our call:</strong> Per-element reading (what NGSI-LD listings already do in
+practice — GET /entities with Accept: ld+json returns an array whose
+elements each carry @context). An ld+json array body is valid iff EACH
+element has its own <code>@context</code>. A missing <code>@context</code> on any element
+raises BadRequestData. Link header with ld+json remains forbidden.</p>
+<p><strong>Fix wanted:</strong> § 6.3.5 should add one sentence: "For array request
+bodies with Content-Type <code>application/ld+json</code>, each element in the
+array shall carry its own <code>@context</code>." Same clarification applies to
+response bodies rendered as ld+json arrays.</p>
+<hr />
+<p><a name="17"></a></p>
+<h2 id="17-638-639-urnngsi-ldrequest-substitution-for-receiverinfo">17. § 6.3.8 / § 6.3.9 — <code>urn:ngsi-ld:request</code> substitution for receiverInfo</h2>
+<p><strong>Hit:</strong> § 4.3.6.5 mandates that a CSR's <code>contextSourceInfo</code> value of
+<code>"urn:ngsi-ld:request"</code> be replaced by the same-named header from the
+<em>triggering</em> request. § 6.3.18 spells the HTTP-binding rule out. The
+receiverInfo paragraphs (§ 6.3.8 entity notifications, § 6.3.9 csource
+notifications) describe an identically-shaped KeyValuePair[] but are
+silent on <code>"urn:ngsi-ld:request"</code>. Reading strictly, the value must be
+forwarded verbatim — defeating the same auth-forwarding use case the
+contextSourceInfo wording was added for.</p>
+<p><strong>Spec:</strong> silent — § 6.3.8/§ 6.3.9 only say "set equal to the content of
+the corresponding 'value' member of the KeyValuePair".</p>
+<p><strong>Our call:</strong> symmetrically apply the substitution to receiverInfo on
+the event-driven and CSR-side notify paths. Periodic-notification path
+(§ 5.8 / § 5.2.14.1) has no triggering request so a placeholder is
+silently dropped there.</p>
+<p><strong>Fix wanted:</strong> § 6.3.8 / § 6.3.9 should reuse the § 6.3.18 sentence:
+"unless the special value <code>urn:ngsi-ld:request</code> has been set, in which
+case the value is to be taken from the triggering request, if present
+there." The data-model section (§ 5.2.15 receiverInfo) should also
+mention the binding-specific substitution like § 4.3.6.5 does for
+contextSourceInfo.</p>
+<hr />
+<p><a name="19"></a></p>
+<h2 id="19-554-555-632-invalidrequest-vs-badrequestdata-for-invalid-url-param-values">19. § 5.5.4 / § 5.5.5 + § 6.3.2 — InvalidRequest vs. BadRequestData for invalid URL-param values</h2>
+<p><strong>Hit:</strong> A <code>GET /csourceSubscriptions?limit=-5&amp;page=2</code> (or any URL with a
+syntactically OK but semantically invalid pagination/value query param)
+must be rejected. Both <code>InvalidRequest</code> and <code>BadRequestData</code> are
+defensible per the wording in § 5.5; the ETSI test suite consistently
+expects <code>BadRequestData</code> (e.g. 041_04_01/02/03, 039_05_01).</p>
+<p><strong>Spec:</strong> Two different sections give two different rules:</p>
+<ul>
+<li>§ 5.5.4 (BadRequestData): "The request includes input data which does
+  not meet the requirements of the operation." — URL-param values are
+  arguably "input data".</li>
+<li>§ 5.5.5 (InvalidRequest): "The request associated to the operation is
+  syntactically invalid or includes wrong content."</li>
+<li>§ 6.3.2: "If an HTTP request for an operation contains parameters that
+  are incompatible with the operation, or it contains values of the
+  options parameter that are not supported by the operation, an HTTP
+  error response of type InvalidRequest should be returned." — but the
+  qualifier "of the <em>options</em> parameter" ties this specifically to the
+  <code>options=</code> URL param, not to <code>limit=</code> / <code>offset=</code> / <code>q=</code> / etc.</li>
+</ul>
+<p>So the spec narrows InvalidRequest to (a) malformed-request-line cases
+and (b) values of <code>options=</code>. Everything else lands in the wide
+"input data does not meet the requirements" bucket → BadRequestData.</p>
+<p><strong>Our call:</strong> Initially returned InvalidRequest for any unknown or
+out-of-range URL param value (uniform handling, less branching).
+Switching to BadRequestData per § 5.5.4 + the test suite's expectations.</p>
+<p><strong>Fix wanted:</strong> § 6.3.2 / § 5.5.4 / § 5.5.5 should make the split
+explicit:</p>
+<ul>
+<li>BadRequestData: invalid value for any URL param defined by NGSI-LD
+  (limit, offset, q, attrs, georel, …) — i.e. "data wrong".</li>
+<li>InvalidRequest: unrecognized URL param OR an <code>options=</code> value that
+  the implementation doesn't support — i.e. "request doesn't make
+  sense".</li>
+</ul>
+<p>Right now § 5.5.4 wording overlaps with § 5.5.5 wording closely enough
+that two implementations can both quote the spec and still disagree.</p>
+<hr />
+<p><a name="18"></a></p>
+<h2 id="18-51614-snapshot-capture-from-csrs-in-no-split-deployments">18. § 5.16.1.4 — snapshot capture from CSRs in no-split deployments</h2>
+<p><strong>Hit:</strong> § 5.16.1.4 says snapshot queries are executed "following the
+behaviour described in clause 5.7.2.4" (the distributed-query path).
+§ 5.7.2.4 in turn covers two regimes:
+1. <em>split entities</em>: each Entity may be sharded across multiple CSRs;
+   the broker must forward queries unfiltered, merge per-Attribute (§
+   4.5.5.3), and re-apply filters post-assembly (§ 5.5.9.3).
+2. <em>no-split</em>: every Entity is fully held by one source — used by the
+   <code>splitEntities=false</code> URL param (§ 5.2.23) and indirectly by some
+   broker-wide configuration switches.</p>
+<p>For <em>snapshot creation</em> in particular, the no-split regime is enormously
+faster because:
+- the query can be forwarded WITH filters to each CSR,
+- responses are simple inserts into the snapshot's storage (no merge),
+- no post-merge filter scan over the captured set is needed.</p>
+<p><strong>Spec:</strong> § 5.16.1.4 doesn't acknowledge the split/no-split distinction
+at all, just defers to § 5.7.2.4. Nothing forbids a broker from honouring
+<code>splitEntities=false</code> on snapshot creation, but it's also not made
+explicit. § 5.2.41 (Snapshot data type) doesn't list <code>splitEntities</code> as
+a member of the Snapshot doc, and § 6.3.22 (NGSILD-Snapshot binding)
+defines no URL params for the create endpoint.</p>
+<p><strong>Our call:</strong> allow <code>?splitEntities=true|false</code> on <code>POST /snapshots</code>,
+parsed into the same <code>swNgsild.splitEntitiesSet/Val</code> used by <code>GET
+/entities</code>. Default is the broker's <code>--noSplitEntities</code> setting. In
+no-split mode capture forwards filters to CSRs, dedupes by id when
+streaming into the snap-tenant ("first writer wins"), and skips the
+post-merge filter scan. Split-mode is a follow-up.</p>
+<p><strong>Fix wanted:</strong>
+- § 5.16.1 should say explicitly that snapshot creation MAY accept
+  <code>splitEntities</code> per § 5.2.23, with the same semantics as on <code>GET
+  /entities</code>.
+- § 6.3.22 should list URL params accepted on <code>POST /snapshots</code>, or
+  point to § 5.7.2 / § 5.2.23 for the allowed set (so brokers don't
+  diverge on which params apply where).
+- § 5.16.1.4 step "execute the Queries … following clause 5.7.2.4"
+  should make the split / no-split branches of 5.7.2.4 explicit, since
+  the implementations are very different on capture cost (TB-scale
+  snapshots are practical only in no-split mode without Phase-2c
+  per-attribute-merge work).</p>
+<hr />
+<p><a name="20"></a></p>
+<h2 id="20-586-attributedeleted-notification-representation-bare-string-default-vs-etsi-fixtures">20. § 5.8.6 — attributeDeleted notification representation: bare-string default vs. ETSI fixtures</h2>
+<p><strong>Hit:</strong> ETSI test cluster 046_22_<em> (attributeDeleted notifications) ships
+13 expectation fixtures under <code>data/subscriptions/expectations/</code> that
+unconditionally expect the </em><em>object form</em>*:</p>
+<pre><code class="language-json">&quot;locatedAt&quot;: { &quot;type&quot;: &quot;Relationship&quot;, &quot;object&quot;: &quot;urn:ngsi-ld:null&quot; }
+</code></pre>
+<p>The tested subscriptions set neither <code>sysAttrs</code>, <code>showChanges</code>, nor a
+multi-instance <code>datasetId</code>.</p>
+<p><strong>Spec:</strong> § 5.8.6, third bullet under "If a Subscription does not define a
+timeInterval...":</p>
+<blockquote>
+<p>"If an Attribute has been deleted, <strong>only the name of the attribute as
+key and the URI 'urn:ngsi-ld:null' as value shall be provided</strong>, unless
+more information is required. The latter is the case, if:</p>
+<ul>
+<li>a datasetId needs to be provided;</li>
+<li>the notification.sysAttrs is set to true and thus the system generated
+  sub-attributes [...] have to be provided;</li>
+<li>notification.showChanges is set to true and thus a previous value or
+  object has to be provided."</li>
+</ul>
+</blockquote>
+<p>So the spec mandates the <strong>bare string</strong> as the default; the object form
+is only required when one of those three triggers fires.</p>
+<p><strong>Our call:</strong> We ship the object form unconditionally (matches every
+ETSI fixture). The bare-string default would be strictly conformant but
+fails ~50% of 046_22_*. A code comment in
+<code>ldSubscriptionNotify.c::buildNotifDataEntry</code> and a feedback memory record
+the deviation so we can flip back when the fixtures are aligned.</p>
+<p><strong>Fix wanted:</strong> Either</p>
+<ul>
+<li>ETSI updates the 13 fixtures to use the bare-string form (then v1.9.1
+  brokers pass without a deviation), <strong>or</strong></li>
+<li>ETSI clarifies that § 5.8.6 always requires the object form regardless
+  of sysAttrs/showChanges/datasetId (then the spec text needs amending —
+  the "shall" + "unless more information is required" wording today
+  unambiguously mandates bare string as the minimum).</li>
+</ul>
+<p>The <code>since_v1.6.1</code> tag on the affected tests suggests these fixtures may
+predate a § 5.8.6 wording change; the framework's
+<code>SystemGeneratedTemporalPropertyOperator</code> already includes a <code>deletedAt</code>
+hook, hinting at half-finished alignment.</p>
+<hr />
+<p><a name="21"></a></p>
+<h2 id="21-5212-entitydeletedattributedeleted-trigger-symmetry-on-entity-delete">21. § 5.2.12 — entityDeleted/attributeDeleted trigger symmetry on entity delete</h2>
+<p><strong>Hit:</strong> ETSI tests 046_22_12 / 046_22_13 (entity-delete cluster) configure
+subscriptions with <code>notificationTrigger: ["attributeDeleted"]</code> only — no
+<code>entityDeleted</code>. The fixture expects the subscription to fire when the
+entity is deleted, with body shape:</p>
+<pre><code class="language-json">{
+  &quot;id&quot;: &quot;...&quot;,
+  &quot;type&quot;: &quot;Building&quot;,
+  &quot;deletedAt&quot;: &quot;&lt;iso&gt;&quot;,
+  &quot;name&quot;: { &quot;type&quot;: &quot;Property&quot;, &quot;value&quot;: &quot;urn:ngsi-ld:null&quot; }
+}
+</code></pre>
+<p>(046_22_13 adds <code>sysAttrs</code> → entity-level + per-attribute
+<code>createdAt</code>/<code>modifiedAt</code> from the pre-delete snapshot.)</p>
+<p><strong>Spec:</strong> § 5.2.12 enumerates six triggers — <code>entityCreated</code>,
+<code>entityUpdated</code>, <code>entityDeleted</code>, <code>attributeCreated</code>, <code>attributeUpdated</code>,
+<code>attributeDeleted</code>. <strong>Only</strong> <code>entityUpdated</code> is explicitly stated to
+subsume sub-events:</p>
+<blockquote>
+<p>"entityUpdated" is equivalent to the combination "attributeCreated",
+"attributeUpdated" and "attributeDeleted".</p>
+</blockquote>
+<p>There is <strong>no equivalent statement</strong> for <code>entityDeleted</code> ⇒
+<code>attributeDeleted</code> (or <code>entityCreated</code> ⇒ <code>attributeCreated</code>, though we
+already do that side too).</p>
+<p>§ 5.8.6 then says, for the body, "If the notification was triggered by
+the deletion of an Entity and the notification.showChanges member is not
+set to true, <strong>only the deletedAt system property shall be provided</strong>."
+The fixtures contradict this — they include the watched attribute as a
+null-marker entry alongside <code>deletedAt</code>.</p>
+<p><strong>Our call:</strong> Two deviations layered on each other to match the test:</p>
+<ol>
+<li><code>triggerMatches</code> — <code>LdNotifyEntityDelete</code> also fires for subs with
+   <code>attributeDeleted</code> trigger (symmetric to the existing
+   <code>LdNotifyEntityCreate</code> ⇒ <code>attributeCreated</code> mapping). Comment in
+   <code>ldSubscriptionNotify.c</code> flags the spec gap.</li>
+<li><code>buildNotifDataEntry</code> — for <code>LdNotifyEntityDelete</code> events, append each
+   non-keyword attribute the pre-delete entity had (subject to the sub's
+   <code>watchedAttributes</code> filter) as a null-marker wrapper
+   <code>{ type, value/object/languageMap: "urn:ngsi-ld:null" }</code>. With
+   <code>sysAttrs</code>, also forward each attribute's <code>createdAt</code>/<code>modifiedAt</code> and
+   inject a fresh <code>deletedAt</code> per attribute.</li>
+</ol>
+<p><strong>Fix wanted:</strong></p>
+<ul>
+<li>Either add the <code>entityDeleted</code> ⇒ <code>attributeDeleted</code> symmetry statement
+  to § 5.2.12, <strong>and</strong> update § 5.8.6's "only the deletedAt" rule to
+  describe the watched-attribute body case explicitly, <strong>or</strong></li>
+<li>Update the fixtures to use <code>notificationTrigger: ["entityDeleted"]</code> and
+  drop the per-attribute body content (just <code>{id, type, deletedAt}</code>).</li>
+</ul>
+<p>Either resolution would let us flip the deviation back to spec-strict
+behaviour. Until then, our broker matches what <code>046_22_12/13</code> demand.</p>
+<hr />
+<p><a name="22"></a></p>
+<h2 id="22-565-deleteall-boolean-parsing-case-sensitivity">22. § 5.6.5 — <code>?deleteAll=</code> boolean parsing case-sensitivity</h2>
+<p><strong>Hit:</strong> Python's <code>requests</code> library serialises a Python <code>True</code> to the
+literal string <code>"True"</code> (capital T) on URL query params. ETSI test
+046_22_08 sends <code>?deleteAll=True</code>. The broker was strict-<code>strcmp("true")</code>
+and silently treated it as false (deleted only <code>@none</code> instead of all
+instances), causing the wrong notification.</p>
+<p><strong>Spec:</strong> § 6.3.2 / § 5.6.5 don't pin down the case for boolean URL
+parameters. The "Boolean" datatype reference (§ 5.2.16) likewise leaves
+case unspecified for query-string serialisation.</p>
+<p><strong>Our call:</strong> Case-insensitive parse (<code>strcasecmp</code>). Same change should
+probably apply to other bool URL params (<code>details</code>, etc.) — currently
+done only for <code>deleteAll</code>.</p>
+<p><strong>Fix wanted:</strong> Spec clarification on whether bool URL params must be
+strict lower-case <code>true</code>/<code>false</code>, or whether implementations should
+accept any case. If strict, the test framework should fix
+<code>requests.delete(..., params={"deleteAll": "true"})</code> to send the
+lower-case literal instead of letting Python serialise <code>True</code>.</p>
+<hr />
+<p><a name="23"></a></p>
+<h2 id="23-6310-206-partial-content-vs-200-ok-on-temporal-queries-etsi-tests-are-mutually-inconsistent">23. § 6.3.10 — 206 Partial Content vs 200 OK on temporal queries: ETSI tests are mutually inconsistent</h2>
+<p><strong>Hit:</strong> ETSI temporal tests have contradictory expectations for the
+HTTP status code on <code>GET /temporal/entities</code> and
+<code>GET /temporal/entities/{id}</code>:</p>
+<ul>
+<li><em>Most</em> of the suite — <code>020_01..12</code>, <code>020_16</code>, <code>020_21</code>,
+  <code>021_01..14</code>, <code>021_17..19</code>, <code>021_21..23</code> (≈ 60 tests) —
+  expects <strong>200 OK</strong> for any successful temporal retrieve, <em>even when
+  the result has many instances and even when <code>lastN</code> was clipping</em>.</li>
+<li>A subset — <code>020_13_01..09</code>, <code>021_15_04..07</code>, <code>021_16_01</code> (≈ 11
+  tests) — expects <strong>206 + Content-Range</strong> in shapes where no
+  truncation should have occurred (e.g. <code>020_13_01</code> retrieves an
+  entity with 20 instances per attribute, no <code>lastN</code>, no <code>timerel</code>,
+  default broker cap = 100, so the broker has all the data the user
+  could possibly want — yet the test asserts 206).</li>
+<li>A third subset — <code>020_05_01/02</code>, <code>021_03_01</code> — sets <code>lastN</code>
+  smaller than the actual instance count and <em>also</em> expects <strong>200</strong>
+  (i.e. expects no Content-Range even though clipping by <code>lastN</code>
+  did occur).</li>
+</ul>
+<p><strong>Spec:</strong> § 6.3.10 says "implementations <em>shall</em> use the Partial
+Content Response (206) ... if the implementation is not able to respond
+with the full representation at once". The natural reading is that 206
+is conditional on the broker actually clipping the result. Under that
+reading <strong>none</strong> of the three subsets is internally consistent with
+the others; there is no single broker policy that satisfies the whole
+suite simultaneously.</p>
+<p><strong>Our call:</strong> Stick with the strict-spec interpretation:
+<strong>206 only when the implementation actually had to clip</strong> (default-cap
+overflow, or <code>lastN</code> smaller than the number of available instances);
+<strong>200</strong> otherwise. This satisfies the largest cluster (~60 tests)
+but loses the 11 in 020_13/021_15/021_16 that demand "always 206 even
+on full responses", plus the 3 in 020_05/021_03 that demand "200 even
+when lastN clipped".</p>
+<p>We tried the alternative ("always 206 when there's any temporal data")
+during this session — it won 11 tests and flipped 62 PASS→FAIL, so
+we reverted.</p>
+<p><strong>Fix wanted:</strong> ETSI tests need to be reconciled internally. The most
+defensible policy is the strict spec reading; the 020_13/021_15/021_16
+fixtures should be relaxed to accept either 200 or 206, and the
+020_05/021_03 fixtures should be updated to expect 206 when clipping
+occurs.</p>
+<p><a name="26"></a></p>
+<h2 id="26-51025-registrationinfo-filtering-on-get-csourceregistrations-is-should-not-shall-client-should-be-able-to-pick">26. § 5.10.2.5 — RegistrationInfo filtering on GET /csourceRegistrations is "should", not "shall"; client should be able to pick</h2>
+<p><strong>Hit:</strong> <code>GET /csourceRegistrations?...</code> selects a CSR by matching the
+query against any of its <code>information[]</code> entries, but the response
+shape — full vs. filtered — is left to the implementation:</p>
+<blockquote>
+<p>"implementations <strong>should</strong> return filtered Context Source
+ Registrations, which only contain context source registration
+ information relevant for the query, in particular only matching
+ RegistrationInfo elements."</p>
+</blockquote>
+<p>Two valid behaviours:
+- <strong>Filtered</strong> (current swBroker default): strip non-matching
+  RegistrationInfo entries — cleaner, less network noise.
+- <strong>Unfiltered</strong>: return the CSR as registered — clients see context
+  they did not query for but get the complete picture.</p>
+<p>Today the choice is a build-time / configuration setting. The client
+cannot ask for one shape or the other from a single broker.</p>
+<p><strong>Our call:</strong> broker defaults to filtered. A new CLI flag
+<code>--testConformance</code> flips it to unfiltered, used by ETSI runs whose
+fixtures expect that shape.</p>
+<p><strong>Fix wanted:</strong> add a URL param to § 5.10.2.4 (e.g.
+<code>?information=relevant|full</code>, default <code>relevant</code>) so the client picks
+the shape per request. That removes the ambiguity ("should") and
+keeps both behaviours accessible from one broker without server
+restart or vendor-specific switches.</p>
+<hr />
+<p><a name="27"></a></p>
+<h2 id="27-436-concurrent-vs-sequential-forwarding-to-matching-csrs">27. § 4.3.6 — concurrent vs sequential forwarding to matching CSRs</h2>
+<p><strong>Hit:</strong> When a service routine matches N CSRs (across exclusive,
+redirect, inclusive, auxiliary), the natural implementation is a
+sequential loop <code>for csr in csrs: forward(csr)</code>. With N=5 and a
+non-responsive CSR endpoint at the 5-second default, that's 25 s of
+wall-clock for a request that should be ~5 s.</p>
+<p>The fix is to fan out concurrently (curl_multi_perform or equivalent),
+but the spec gives no guidance — neither permission nor obligation.</p>
+<p><strong>Spec:</strong> § 4.3.6.1 talks about avoiding overquery but says nothing
+about ordering or concurrency of the forwards. § 5.7.1.4 / § 5.7.2.4
+describe the processing flow as if it were sequential ("first
+exclusive, then redirect, then inclusive"), but those orderings are
+about <em>result composition</em>, not <em>request issuance</em>.</p>
+<p><strong>Our call:</strong> issue all matched forwards concurrently in a single
+batch; walk the responses in the sequential order the spec describes
+for result composition. Semantically identical to serial dispatch.</p>
+<p><strong>Fix wanted:</strong> an explicit "the Context Broker MAY issue forwarded
+requests to matching Context Sources concurrently; the result
+composition order defined in § 5.7.1.4 / § 5.7.2.4 / § 4.3.6.3 is
+unaffected." Otherwise an interop reviewer can argue "the spec
+implies sequential."</p>
+<hr />
+<p><a name="28"></a></p>
+<h2 id="28-5234-timeoutms-semantics-under-concurrent-multi-csr-fan-out">28. § 5.2.34 — <code>timeoutMs</code> semantics under concurrent multi-CSR fan-out</h2>
+<p><strong>Hit:</strong> Each CSR may set its own <code>timeoutMs</code>. When the broker fans
+out to N CSRs concurrently, the natural single-deadline backend
+(curl multi, epoll) wants one overall budget, not N independent
+deadlines. The spec defines a per-CSR value but is silent on how
+that composes when multiple CSRs are active simultaneously.</p>
+<p><strong>Spec:</strong> § 5.2.34 defines <code>timeoutMs</code> on <code>CSourceRegistration</code> as
+"the maximum time the Context Broker will wait for a response from
+the Context Source". Says nothing about multi-CSR semantics.</p>
+<p><strong>Our call:</strong> overall batch deadline = <code>max(per-CSR timeoutMs over
+all matched CSRs)</code>, then per-CSR cancel when its own timeoutMs is
+reached. A fast CSR is not penalised by a slow peer.</p>
+<p><strong>Fix wanted:</strong> spec should state explicitly: "Each forwarded
+request has its own timeoutMs; concurrent forwards do not share a
+deadline. A request shall be cancelled when its own timeoutMs
+expires, irrespective of peer requests still in flight."</p>
+<hr />
+<p><a name="29"></a></p>
+<h2 id="29-4365-outbound-header-policy-on-forwarded-requests">29. § 4.3.6.5 — outbound header policy on forwarded requests</h2>
+<p><strong>Hit:</strong> The broker forwards a request to a CSR. Which headers
+<em>must</em> it add, which <em>may</em> it add, which <em>must</em> it copy verbatim
+from the inbound request? Today's spec text addresses only a subset
+(contextSourceInfo, banned keys, jsonldContext → Link). The
+mandatory baseline is not enumerated.</p>
+<p><strong>Spec:</strong> § 4.3.6.5 enumerates banned <code>contextSourceInfo</code> keys
+(Content-Length, Host, NGSILD-Tenant, ngsildConformance). § 5.7.5
+defines <code>Via</code> for loop detection. § 4.7 / annexes touch
+NGSILD-Tenant on the wire. No single section says "every forwarded
+request shall carry headers X, Y, Z" or "the inbound headers A, B, C
+shall be propagated".</p>
+<p><strong>Our call:</strong></p>
+<table>
+<thead>
+<tr>
+<th>header</th>
+<th>policy</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Via</td>
+<td>append own-alias; preserve inbound Via chain</td>
+</tr>
+<tr>
+<td>NGSILD-Tenant</td>
+<td>set to csr.tenant (§ 5.2.9 rewrite)</td>
+</tr>
+<tr>
+<td>Content-Type</td>
+<td>default <code>application/ld+json</code>; csi.contentType override</td>
+</tr>
+<tr>
+<td>Accept</td>
+<td>set from csi.accept (no default)</td>
+</tr>
+<tr>
+<td>Link</td>
+<td>from csi.jsonldContext</td>
+</tr>
+<tr>
+<td>Authorization</td>
+<td>dropped (not propagated)</td>
+</tr>
+<tr>
+<td>X-Forwarded-For</td>
+<td>not added (we don't track this today)</td>
+</tr>
+<tr>
+<td>inbound user hdrs</td>
+<td>not propagated unless named in csi</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Fix wanted:</strong> § 4.3.6.5 should have a table identical to the
+above (or its agreed equivalent). Without it, two compliant brokers
+can disagree on outbound shape, with downstream CSRs seeing
+different headers depending on broker vendor.</p>
+<hr />
+<p><a name="30"></a></p>
+<h2 id="30-5724-split-mode-forwarded-query-which-url-params-survive">30. § 5.7.2.4 — split-mode forwarded query: which URL params survive?</h2>
+<p><strong>Hit:</strong> In "split entities" mode, a single entity's attributes may
+live on multiple CSRs. Forwarding the user's <code>q</code>, <code>geoQ</code>, or <code>scopeQ</code>
+to one CSR is unsafe because that CSR sees only part of the entity
+and may falsely exclude it. The broker must therefore strip those
+filters from the forwarded URL — but the spec doesn't enumerate
+<em>which</em> filters are unsafe.</p>
+<p><strong>Spec:</strong> § 5.7.2.4 mentions split-entities behaviour in passing
+("if the broker holds part of an Entity locally"), without giving
+the list of forwardable params.</p>
+<p><strong>Our call:</strong> in split mode, forward only <code>id</code>, <code>idPattern</code>, <code>type</code>
+(guaranteed-on-every-fragment per § 4.5.5 / § 5.2.6). Strip
+<code>q</code>, <code>geoQ</code>, <code>scopeQ</code>, <code>attrs</code>, <code>format</code>, <code>local</code>, <code>entityMap</code>,
+<code>orderBy</code>, <code>collation</code>. <code>pick</code> MAY be narrowed per CSR (intersect
+with the CSR's registered exports).</p>
+<p><strong>Fix wanted:</strong> § 5.7.2.4 should contain an explicit table:
+"In split-mode federation, the following URL params SHALL be
+stripped from the forwarded request: …; the following params MAY be
+narrowed per CSR: …; the following are forwarded as-is: …".
+Without that table, interop on the same query across vendors is a
+coin toss.</p>
+<hr />
+<p><a name="31"></a></p>
+<h2 id="31-51444-multi-csr-entitymap-aggregation">31. § 5.14.4.4 — multi-CSR EntityMap aggregation</h2>
+<p><strong>Hit:</strong> GET /entityMaps under federation: each matched CSR returns
+its own EntityMap. The broker must build a single EntityMap response
+that captures <em>which entity came from which CSR(s)</em>. The spec
+defines the single-source EntityMap shape but not the aggregation.</p>
+<p><strong>Spec:</strong> § 5.14.4.4 defines <code>entityMap</code> as <code>{ &lt;entityId&gt;: [src1,
+src2, …] }</code>. § 5.2.42 mentions <code>linkedMaps</code> for cross-broker
+references. Nothing ties them together for the aggregation flow.</p>
+<p><strong>Our call:</strong> broker's response includes:
+- <code>entityMap</code>: union over all CSRs' entries, deduped by entityId,
+  source array merged.
+- <code>linkedMaps</code>: <code>{ &lt;csr.regId&gt;: &lt;remote-map-id&gt; }</code> so the client
+  can re-page the remote map directly. The local map's source
+  array for an entity is the set of <code>regId</code>s that returned it.</p>
+<p><strong>Fix wanted:</strong> § 5.14.4.4 should formalise the aggregation:
+linkedMaps shape, dedup rule, and the source-array semantics when
+the same entity appears on multiple CSRs (we use union; some might
+argue "first wins").</p>
+<hr />
+<p><a name="32"></a></p>
+<h2 id="32-526-problemdetails-extension-fields-for-ngsi-ld-errors">32. § 5.2.6 — ProblemDetails extension fields for NGSI-LD errors</h2>
+<p><strong>Hit:</strong> Every error response in our broker that names a specific
+entity wants to surface that entity's id. BatchEntityError already
+carries it; plain ProblemDetails (the 400/404/409 family) doesn't.
+Today the entityId is buried in the <code>detail</code> string, which is
+human-prose only.</p>
+<p><strong>Spec:</strong> § 5.2.18 defines BatchOperationResult / BatchEntityError
+with <code>entityId</code>. § 5.2.6 defines ProblemDetails per RFC 7807 with
+<code>type</code>, <code>title</code>, <code>detail</code> and "MAY contain additional members".
+The "MAY" is technically permission, but no recommended extension
+exists — every vendor invents their own field names.</p>
+<p><strong>Our call (proposed, not yet shipped):</strong> standardise an extension
+namespace and add:
+- <code>entityId</code> (string) — when the error pertains to a single entity
+- <code>entityIds</code> (string[]) — when it pertains to several
+- <code>attributeName</code> (string) — for attribute-scoped errors
+- <code>registrationId</code> (string) — for distop forwards that failed
+- <code>status</code> (int) — echo HTTP status in the body (clients that drop
+  the response line still see it)</p>
+<p><strong>Fix wanted:</strong> § 5.2.6 / Annex B should bless a small set of
+NGSI-LD-specific ProblemDetails extension keys. The current
+"undefined" position guarantees vendor lock-in.</p>
+<hr />
+<p><a name="33"></a></p>
+<h2 id="33-5618-replace-entity-can-the-type-change">33. § 5.6.18 — Replace Entity: can the type change?</h2>
+<p><strong>Hit:</strong> PUT /entities/{id} with <code>type: B</code> against a stored entity
+of <code>type: A</code>. The spec wants "complete replacement". Allowing the
+type to change has cascading implications: subscriptions filtered
+by type, TRoE indices, type-scoped CSR matches, etc.</p>
+<p><strong>Spec:</strong> § 5.6.18.4 — "If the target Entity exists locally,
+completely replace the existing Entity with the same Entity ID with
+the new Entity content provided." "Completely replace" is permissive
+of type change; nothing forbids it.</p>
+<p><strong>Our call:</strong> refuse with 400 BadRequestData when the body type
+differs from the stored type. Replace = same-id, same-type swap of
+attribute content.</p>
+<p><strong>Fix wanted:</strong> spec should pick one:
+(a) Replace SHALL preserve the stored type; type change requires a
+delete-then-create sequence, or
+(b) Replace MAY change the type, and the spec enumerates the
+ripple effects on subs / TRoE / matchers / CSR coverage.</p>
+<p>Picking (a) is much smaller; today (b) is implicit but
+uncharacterised. Either is fine; the silence is not.</p>
+<hr />
+<p><a name="34"></a></p>
+<h2 id="34-5617-4553-merge-entity-composition-order-across-local-multiple-csrs">34. § 5.6.17 + § 4.5.5.3 — Merge Entity composition order across local + multiple CSRs</h2>
+<p><strong>Hit:</strong> PATCH /entities/{id} (Merge) against an entity with attrs
+distributed across local + N inclusive CSRs. Each side may apply
+the merge differently (different <code>defaultObservedAt</code>, instance-level
+conflict resolution per § 4.5.5.3). The single response body wants
+to be the merged-entity view, but it's a composition of N+1
+results.</p>
+<p><strong>Spec:</strong> § 5.6.17 describes single-source merge. § 4.5.5.3
+describes per-instance conflict rules within one source. Nothing
+defines the order or rule when several sources merge in parallel
+and the broker must compose them.</p>
+<p><strong>Our call:</strong> local merge first (the broker's own view), then walk
+forwards in mode order (exclusive → redirect → inclusive). Each
+remote source's result is re-merged into the running composite via
+§ 4.5.5.3 timestamp rules. This is deterministic but vendor-policy.</p>
+<p><strong>Fix wanted:</strong> § 5.6.17 should state the composition order
+explicitly, OR explicitly say "the composition order is
+implementation-defined; the resulting entity SHALL satisfy
+§ 4.5.5.3 against the union of all per-source results". The latter
+is weaker but at least removes the "is order observable?" question.</p>
+<hr />
+<p><a name="35"></a></p>
+<h2 id="35-5714-auxiliary-mode-result-merge-under-concurrent-fan-out">35. § 5.7.1.4 — Auxiliary mode result merge under concurrent fan-out</h2>
+<p><strong>Hit:</strong> Auxiliary mode "fills gaps only" — its attributes are added
+to the composite only where no earlier source provided them. With N
+auxiliary CSRs in flight concurrently, two of them may both contribute
+attr X. Which one wins?</p>
+<p><strong>Spec:</strong> § 4.3.6.2 / § 5.7.1.4 describe auxiliary as gap-filler
+without ordering. "Concurrent two-aux overlap" is unspecified.</p>
+<p><strong>Our call:</strong> walk auxiliary results in CSR-cache-iteration order
+(stable but vendor-internal); first-write wins for any attr the
+composite is still missing.</p>
+<p><strong>Fix wanted:</strong> § 5.7.1.4 should pick:
+(a) the composite is order-independent — two aux CSRs claiming the
+same attr is "any of them wins, undefined which", and clients shall
+not rely on a specific source, or
+(b) the broker SHALL apply § 4.5.5.3 timestamps across aux sources
+too (most-recent wins), or
+(c) auxiliary CSRs SHALL not overlap — overlap is a configuration
+error the broker MAY reject at CSR creation.</p>
+<p>Today every broker silently picks one of these.</p>
+<hr />
+<p><a name="36"></a></p>
+<h2 id="36-5236-distop-counter-atomicity-under-concurrent-fan-out-and-ha">36. § 5.2.36 — distop counter atomicity under concurrent fan-out and HA</h2>
+<p><strong>Hit:</strong> <code>timesSent</code>, <code>timesFailed</code>, <code>lastSuccess</code>, <code>lastFailure</code>
+are per-CSR counters intended to expose distop health. With
+concurrent forwards from a single broker they update from one
+thread (epoll callback) — fine. But:</p>
+<ul>
+<li>Two broker replicas behind a load balancer sharing one mongo CSR
+  store: each replica increments independently; without <code>$inc</code> the
+  reads race. We use <code>$inc</code> exactly to avoid this.</li>
+<li>A single broker fanning out concurrently to the same CSR twice
+  (e.g. distributed sub fan-out on top of distop fan-out): the
+  counters should reflect both attempts.</li>
+</ul>
+<p>The spec defines what the counters mean but not their update
+semantics under concurrency.</p>
+<p><strong>Spec:</strong> § 5.2.36 lists the counters as part of CSR state. No
+section addresses concurrent update or HA.</p>
+<p><strong>Our call:</strong> atomic <code>$inc</code> on every increment, <code>$max</code>/<code>$min</code> for
+lastSuccess/lastFailure timestamps. Updates are best-effort flushed
+periodically, not synchronously per forward.</p>
+<p><strong>Fix wanted:</strong> § 5.2.36 should say "Context Brokers SHALL ensure
+counter updates are atomic with respect to concurrent forwards
+issued by the same broker or by replicas sharing the CSR store.
+Updates MAY be deferred (eventual consistency) but SHALL be
+monotonic." Otherwise interop is a vendor lottery.</p>
+<hr />
+<p><a name="37"></a></p>
+<h2 id="37-5634-optionsnooverwrite-semantics-when-the-same-attr-is-on-a-csr">37. § 5.6.3.4 — <code>?options=noOverwrite</code> semantics when the same attr is on a CSR</h2>
+<p><strong>Hit:</strong> POST /entities/{id}/attrs with <code>?options=noOverwrite=true</code>.
+The local entity already has attr X. An exclusive CSR also claims X.</p>
+<ul>
+<li>Local rule (§ 5.6.3.4): noOverwrite means "skip attrs already
+  present".</li>
+<li>Distop rule (§ 4.3.6.3): exclusive CSR owns its claimed attrs,
+  local SHALL NOT hold them.</li>
+</ul>
+<p>The two collide:
+- If the broker forwards X to the CSR, the CSR may itself apply
+  noOverwrite based on <em>its own</em> state and reject — or not.
+- If the broker also chops X from local input, the local
+  noOverwrite-skip never triggers because X is gone.
+- The response body should report X under <code>notUpdated</code> (noOverwrite
+  skip) or <code>updated</code> (CSR took it) — depending on what the CSR did,
+  not the local state.</p>
+<p><strong>Spec:</strong> § 5.6.3.4 describes the local case; § 4.3.6.3 describes
+the exclusive case. The interaction is silent.</p>
+<p><strong>Our call:</strong> chop precedes local noOverwrite. The forwarded
+request includes <code>?options=noOverwrite</code>. Whatever the CSR reports
+back drives the per-attribute outcome in <code>updated/notUpdated</code>.</p>
+<p><strong>Fix wanted:</strong> § 5.6.3.4 should add: "When <code>options=noOverwrite</code>
+combines with forwarded operations, the URL param SHALL be
+preserved on the forward; the CSR's per-attribute outcome
+determines the response classification for that attribute,
+overriding any inference the broker might make from local state."</p>
+<hr />
+<p><a name="38"></a></p>
+<h2 id="38-565-deletealltrue-forwarded-to-a-csr-that-doesnt-support-deleteattrs">38. § 5.6.5 — <code>?deleteAll=true</code> forwarded to a CSR that doesn't support <code>deleteAttrs</code></h2>
+<p><strong>Hit:</strong> DELETE /entities/{id}/attrs/{attr}?deleteAll=true against
+an entity that lives partly on an exclusive CSR. The CSR's
+operations list doesn't include <code>deleteAttrs</code>. What happens?</p>
+<p>Options:
+- (a) Refuse the entire request (409 Conflict) — preserves
+  consistency but loses the local copy unnecessarily.
+- (b) Forward anyway (CSR will return Conflict), then delete locally
+  — inconsistent but proceeds.
+- (c) Skip the CSR (record per-attribute Conflict in errors[]),
+  delete locally — the chop stands.</p>
+<p><strong>Spec:</strong> § 5.6.5 describes the local delete. § 4.3.6.3 mandates
+the exclusive chop. § 5.6.1.4 has analogous language for
+createEntity ("Conflict ... or partial success"), but Delete is
+silent.</p>
+<p><strong>Our call:</strong> option (c). Record <code>{ entityId, error: Conflict,
+detail: "exclusive registration does not support deleteAttrs",
+registrationId }</code> in errors[], local delete proceeds. Response is
+207 if local-success + per-attr conflict, 409 if no local success.</p>
+<p><strong>Fix wanted:</strong> § 5.6.5 should mirror the explicit clause already
+in § 5.6.1.4 — naming the partial-success / Conflict outcome
+explicitly so vendors don't pick (a), (b), or (c) on a whim.</p>
+<hr />
+<p><a name="39"></a></p>
+<h2 id="39-56-generic-collapsing-uniform-error-multi-csr-responses">39. § 5.6 (generic) — collapsing uniform-error multi-CSR responses</h2>
+<p><strong>Hit:</strong> A distributed write operation matches N CSRs; every single
+one returns the same error type (e.g. ResourceNotFound on a non-
+existent entity, or Conflict). The natural shape is 207 Multi-Status
+with N entries — but a 207 carrying N identical "Not Found" entries
+is noise. A single 404 + ProblemDetails is what the client expects.</p>
+<p><strong>Spec:</strong> § 5.2.18 defines BatchOperationResult (207). No section
+addresses collapsing.</p>
+<p><strong>Our call:</strong> when every <code>errors[]</code> entry shares the same
+<code>error.type</code>, collapse:
+- All ResourceNotFound → 404 + plain ProblemDetails.
+- All Conflict → 409 + plain ProblemDetails.
+- Otherwise → 207 Multi-Status.</p>
+<p>The collapsed body includes <code>entityId</code> (single entity) or
+<code>entityIds</code> (multiple) as ProblemDetails extensions (see entry 32).</p>
+<p><strong>Fix wanted:</strong> § 5.2.18 should bless the collapse rule explicitly,
+naming the two ergonomic cases (ResourceNotFound → 404, Conflict →
+409) and reserving 207 for genuinely mixed outcomes. Vendors that
+return 207 for every multi-CSR response (the strict reading) bury
+the actual cause behind a Multi-Status envelope.</p>
+<hr />
+<p><a name="40"></a></p>
+<h2 id="40-466-chronological-order-on-batch-arrays-is-an-unenforceable-assumption">40. § 4.6.6 — chronological order on batch arrays is an unenforceable assumption</h2>
+<p><strong>Hit:</strong> Spec assumes the client orders array elements (in
+postEntityBatch<em> bodies, in temporal POST instance arrays, etc.) by
+time-of-arrival. The broker uses array index as time. But nothing in
+the body lets the client </em>assert* an order — and the broker can't
+verify one, because the timestamps (createdAt/modifiedAt) are
+server-stamped on arrival, not carried by the client.</p>
+<p>So the "assumption" is functionally a hope. Two valid clients can
+submit the same logical sequence in different array orders and get
+divergent observable state.</p>
+<p><strong>Spec:</strong> § 4.6.6 — "The Context Broker may assume that array
+elements are provided in chronological order of arrival." No
+mechanism, no error on out-of-order, no signal of intent.</p>
+<p><strong>Our call:</strong> trust the array order; document the convention in
+<code>project_batch_multi_instance_ordering</code> memory.</p>
+<p><strong>Fix wanted:</strong> either
+(a) drop the "may assume" sentence — order is not specified, ties
+are broken by some deterministic rule (e.g. lexicographic on
+attribute identity), or
+(b) add an explicit assertion mechanism: <code>NGSILD-RequestSequence</code>
+header, or a <code>sequence</code> field on batch items, or a request param
+<code>?orderedByClient=true</code> that toggles strict order-as-time
+interpretation.</p>
+<p>Today every broker silently picks (a) or (b) with no observable
+signal to the client.</p>
+<hr />
+<p><a name="41"></a></p>
+<h2 id="41-455-multi-instance-with-identical-datasetid-on-intake">41. § 4.5.5 — multi-instance with identical datasetId on intake</h2>
+<p><strong>Hit:</strong> POST /entities or POST /entities/{id}/attrs with an
+attribute whose value is an array of N instances — two of which
+have the <em>same</em> <code>datasetId</code>. What should happen?</p>
+<p>Options:
+- Reject with 400 BadRequestData (the input is internally
+  contradictory).
+- Silently dedupe — keep the last one, or first one, or run
+  § 4.5.5.3 timestamp resolution between them.
+- Accept both, but the storage layer subsequently picks one (which?).</p>
+<p><strong>Spec:</strong> § 4.5.5 defines <code>datasetId</code> as the unique key within an
+attribute. § 4.5.5.3 describes inter-source merge resolution but
+<em>assumes</em> each source has already deduped its own instances. The
+intake case (one client, two instances with same dsKey in one
+request) is silent.</p>
+<p><strong>Our call:</strong> dedupe at intake (<code>ldDatasetIdDedup</code>) per § 4.5.5.3
+timestamp rules: most-recent wins. The client sees only one
+instance survive.</p>
+<p><strong>Fix wanted:</strong> § 4.5.5 should say explicitly: "If the input
+payload contains multiple instances of the same Attribute with
+identical datasetId, the Context Broker SHALL reject with
+BadRequestData / SHALL dedupe per § 4.5.5.3 / SHALL accept all and
+defer resolution to ...". Three vendors will pick three answers
+otherwise.</p>
+<hr />
+<p><a name="42"></a></p>
+<h2 id="42-4523-joinlevel-semantics-with-circular-references">42. § 4.5.23 — <code>joinLevel</code> semantics with circular references</h2>
+<p><strong>Hit:</strong> GET /entities/{id}?join=inline&amp;joinLevel=3 against an
+entity graph where A → B → C → A (cycle). <code>containedBy</code> is named in
+the spec for cycle prevention, but the per-step semantics are
+unclear:
+- Does the broker stop at depth 3 unconditionally, or at the cycle
+  closing back to A regardless of depth?
+- If A is the originally-requested entity, does it appear "inlined
+  inside itself"?
+- When two distinct paths to the same target exist
+  (diamond: A → B → D, A → C → D), is D expanded twice or once?</p>
+<p><strong>Spec:</strong> § 4.5.23 + § 5.7.1.4 introduce <code>joinLevel</code>, <code>join</code>, and
+mention <code>containedBy</code> cycle prevention. The interaction matrix
+(depth × cycle × diamond × originating-id) isn't laid out.</p>
+<p><strong>Our call:</strong>
+- Cycle detection by id only — if a target id is already in the
+  containedBy chain for the current path, skip the expansion.
+- Diamond: each path expands independently; no global dedup of
+  expansions.
+- joinLevel applies post-cycle: a cycle-closure counts as a "stop",
+  not as a step.</p>
+<p><strong>Fix wanted:</strong> § 4.5.23 should pin down the four-way interaction
+in a small worked example (the same example we cite here) so two
+brokers given the same graph + same <code>join=inline&amp;joinLevel=3</code>
+produce the same response.</p>
+<hr />
+<p><a name="43"></a></p>
+<h2 id="43-4524-jsonproperty-inner-value-context-interaction">43. § 4.5.24 — JsonProperty inner-value @context interaction</h2>
+<p><strong>Hit:</strong> A JsonProperty's <code>json</code> field is "opaque" — the spec says
+its contents are NOT subject to JSON-LD expansion. But what counts
+as "the contents"?</p>
+<ul>
+<li>If the JSON contains a key like <code>"speed"</code> that happens to match
+  an NGSI-LD attribute name on the same entity, is that key
+  expanded to its full IRI on output? (We say no — opaque means
+  opaque.)</li>
+<li>If the JSON contains a <code>@context</code> key, is that consumed by JSON-LD
+  processing, or rendered verbatim?</li>
+<li>Does the JsonProperty's <em>outer</em> wrapper (<code>type: JsonProperty</code>,
+  <code>json: ...</code>) get expanded, while the inner <code>json</code> is preserved
+  byte-for-byte?</li>
+</ul>
+<p><strong>Spec:</strong> § 4.5.24 says JsonProperty's value is opaque. The
+expansion boundary is intuitive but not normative.</p>
+<p><strong>Our call:</strong> strict boundary — the <code>json</code> value is treated as a
+black box. Inner <code>@context</code> is data, not directive. The outer
+wrapper is normal NGSI-LD.</p>
+<p><strong>Fix wanted:</strong> § 4.5.24 should add: "The Context Broker SHALL NOT
+process JSON-LD constructs inside the <code>json</code> value, including but
+not limited to <code>@context</code>, <code>@id</code>, <code>@type</code>, <code>@vocab</code>, prefixed
+names. The value SHALL be preserved byte-for-byte (up to
+JSON-canonicalisation) between intake and retrieval."</p>
+<hr />
+<p><a name="44"></a></p>
+<h2 id="44-5634-observedattime-default-observedat-url-param">44. § 5.6.3.4 — <code>?observedAt=&lt;time&gt;</code> default-observedAt URL param</h2>
+<p><strong>Hit:</strong> Append Attributes / Update Attributes / Merge Entity all
+benefit from a default <code>observedAt</code> value that the broker injects
+into each attribute instance that doesn't already carry one. Today
+we accept <code>?observedAt=</code> for Merge (§ 6.5.3.4) and apply it during
+ldEntityMerge.</p>
+<p>The URL param is mentioned in passing for Merge but absent from the
+Append / Update routes — yet the same use case ("I just sampled
+these N sensors at time T, attach T to all of them as observedAt")
+applies equally to Append.</p>
+<p><strong>Spec:</strong> § 6.5.3.4 (Merge) — <code>observedAt</code> URL param defined.
+§ 6.5.2.4 (Update), § 5.6.3.4 (Append) — no equivalent.</p>
+<p><strong>Our call:</strong> Merge only, matching the spec literally. Clients
+wanting the same on Append/Update must rewrite the payload.</p>
+<p><strong>Fix wanted:</strong> § 5.6.3.4 / § 6.5.2.4 should adopt the same
+<code>?observedAt=</code> semantics as § 6.5.3.4. Same shape, same
+default-injection rule.</p>
+<hr />
+<p><a name="45"></a></p>
+<h2 id="45-529-csr-location-shape-bare-geojson-geometry-vs-full-geoproperty">45. § 5.2.9 — CSR <code>location</code> shape: bare GeoJSON Geometry vs full GeoProperty?</h2>
+<p><strong>Hit:</strong> A CSR's <code>location</code> (and <code>observationSpace</code>, <code>operationSpace</code>)
+field — what's its shape?</p>
+<ul>
+<li>Per § 5.2.9 + § 4.7, it's a GeoJSON Geometry: <code>{ "type":
+  "Polygon", "coordinates": [...] }</code>. Bare geometry, no NGSI-LD
+  wrapper.</li>
+<li>Per the NGSI-LD entity rendering rules, a Property of type
+  GeoProperty is <code>{ "type": "GeoProperty", "value": { GeoJSON } }</code>.
+  Wrapper required.</li>
+</ul>
+<p>The CSR's <code>location</code> is <em>not</em> an entity-level GeoProperty — it's a
+cross-domain ontology field, simplified shape only. But ETSI
+fixtures and several implementations have submitted CSRs with the
+wrapper form, and brokers have had to accept both.</p>
+<p><strong>Spec:</strong> § 4.7 → bare GeoJSON Geometry on CSR location. § 5.2.9
+Example C.3 confirms (bare polygon). But the normative text doesn't
+contrast against the wrapped form, and at least one ETSI fixture
+sends the wrapped form to a CSR.</p>
+<p><strong>Our call:</strong> strict bare-geometry on intake (spec-conformant);
+clients sending the wrapper get 400. We previously tried "intake
+normalize" (auto-wrap → unwrap) but reverted — see commit
+<code>98efede</code>.</p>
+<p><strong>Fix wanted:</strong> § 5.2.9 should explicitly say: "The <code>location</code>,
+<code>observationSpace</code>, and <code>operationSpace</code> fields of a
+ContextSourceRegistration are GeoJSON Geometry objects per § 4.7.
+They are NOT NGSI-LD GeoProperty representations; the wrapper
+shape <code>{ "type": "GeoProperty", "value": ... }</code> SHALL NOT be
+accepted." And the ETSI fixture that sends the wrapped form should
+be fixed accordingly.</p>
+<hr />
+<p><a name="46"></a></p>
+<h2 id="46-6317-redirect-mode-classified-as-both-single-source-and-multi-source-contradiction">46. § 6.3.17 — "redirect" mode classified as BOTH single-source and multi-source (contradiction)</h2>
+<p><strong>Hit:</strong> The status-code mapping table in § 6.3.17 lists two
+separate cases:</p>
+<blockquote>
+<p>In the case of an <strong>exclusive or redirect</strong> registration, where all
+of the data is held outside of the Context Broker and held in a
+<strong>single registered source</strong>, the following errors shall be
+returned: 508 / 504 / 404 / 502.</p>
+<p>In the case of an <strong>inclusive or redirect</strong> registration, where
+an entity is distributed over <strong>multiple equally valid endpoints</strong>,
+but when updating the state of the distributed entity, an error
+response is returned from one or more registered sources: 207
+Multi-Status.</p>
+</blockquote>
+<p><code>redirect</code> appears in <em>both</em>. The two paragraphs are mutually
+exclusive ("single registered source" vs "multiple equally valid
+endpoints"). Pick one — <code>redirect</code> cannot be both classifications
+simultaneously.</p>
+<p><strong>Spec:</strong> literally as quoted above, § 6.3.17.</p>
+<p><strong>Our call:</strong> treat <code>redirect</code> as multi-source (the 207 path) —
+matches § 4.3.6.3 where redirect explicitly allows multiple co-
+existing CSRs. We use 502 generically for transport failure of a
+single match.</p>
+<p><strong>Fix wanted:</strong> § 6.3.17 should clearly group:
+- <code>exclusive</code> → at most one source → 508 / 504 / 404 / 502
+- <code>redirect</code> → multiple co-existing sources → 207 (single failure)
+  / 502 (all fail with mixed) / 504 (all timeout)
+- <code>inclusive</code> → 207 on any failure
+- <code>auxiliary</code> → 207 on any failure (or silent, since aux is gap-
+  fill)</p>
+<p>The current text reads as a copy-paste accident.</p>
+<hr />
+<p><a name="47"></a></p>
+<h2 id="47-6317-ngsild-warning-header-emission-semantics">47. § 6.3.17 — <code>NGSILD-Warning</code> header emission semantics</h2>
+<p><strong>Hit:</strong> Spec defines four IANA Warning Codes — 110 / 111 / 199 /
+299 — for distop responses. But when exactly to attach them is
+underspecified:</p>
+<ul>
+<li>110 "Response is Stale" — emit on EVERY response that included
+  cached data, or only on the first cache hit? Both? On 200 OK
+  responses where mixed (some cached, some live)?</li>
+<li>111 "Revalidation Failed" — does this REPLACE the actual error,
+  or accompany a 502/207?</li>
+<li>199 "Miscellaneous Warning" — covers "no response in time" AND
+  "loop detected". Same code, two distinct causes; client can't
+  distinguish.</li>
+<li>299 "Miscellaneous Persistent Warning" — same issue, generic for
+  any 4xx the upstream returned.</li>
+</ul>
+<p><strong>Spec:</strong> § 6.3.17 table 6.3.17-1.</p>
+<p><strong>Our call:</strong> we don't emit any NGSILD-Warning headers today. The
+status code + ProblemDetails body carry the same information
+sufficiently. ETSI fixtures haven't asserted on these warnings yet.</p>
+<p><strong>Fix wanted:</strong> § 6.3.17 should define for each warning code:
+(a) the exact triggering condition (single attribute? cached vs
+live response? loop vs timeout?),
+(b) the HTTP status code(s) it MAY accompany (200? 502? 207?),
+(c) whether multiple warning codes can appear simultaneously on
+the same response.</p>
+<p>Without that, the warning header is an interop dead-letter — every
+broker that wants to claim conformance just doesn't emit it.</p>
+<hr />
+<p><a name="48"></a></p>
+<h2 id="48-4553-indeterminate-random-tiebreaker-is-unfit-for-interop">48. § 4.5.5.3 — "indeterminate / random" tiebreaker is unfit for interop</h2>
+<p><strong>Hit:</strong> Conflict resolution for two Attribute instances sharing a
+<code>datasetId</code>, both lacking <code>observedAt</code> and <code>modifiedAt</code> (or with
+identical values):</p>
+<blockquote>
+<p>If no other mechanism for determining the most current Attribute
+instance is found, the NGSI-LD system shall choose the Attribute
+instance at random and the result is indeterminate.</p>
+</blockquote>
+<p>"Indeterminate" is acceptable for a single broker; for federation
+across brokers it is a guaranteed interop failure — same input,
+different output depending on which broker handled the merge.</p>
+<p><strong>Spec:</strong> § 4.5.5.3, verbatim.</p>
+<p><strong>Our call:</strong> deterministic last-wins by array index (which is the
+client-supplied ordering per § 4.6.6). Two of our brokers given
+the same input produce the same output; two of someone else's
+brokers may not.</p>
+<p><strong>Fix wanted:</strong> spec should mandate a deterministic tiebreaker:
+- (a) array index (last in body wins), or
+- (b) lexicographic on the Attribute's full serialization, or
+- (c) a server-stamped <code>createdAt</code> ULID,</p>
+<p>so "given same input bytes, two compliant brokers produce same
+output bytes". "Indeterminate" should be reserved for non-
+observable internal states, not response data.</p>
+<hr />
+<p><a name="49"></a></p>
+<h2 id="49-4551-datasetid-none-round-trip-drops-the-field">49. § 4.5.5.1 — <code>datasetId: "@none"</code> round-trip drops the field</h2>
+<p><strong>Hit:</strong> Client sends <code>{"speed":{"type":"Property","value":42,
+"datasetId":"@none"}}</code>. Per § 4.5.5.1 this is equivalent to
+omitting datasetId — it identifies the default instance. On
+retrieval, the response renders the default instance <em>without</em> the
+datasetId. So:</p>
+<pre><code>POST /entities  body: { ..., &quot;speed&quot;: {..., &quot;datasetId&quot;: &quot;@none&quot;} }
+GET  /entities/{id}  → { ..., &quot;speed&quot;: {...}  }   ← datasetId gone
+</code></pre>
+<p>The same POST body is no longer reproducible from the GET. Tools
+that "diff" expected-vs-actual JSON, or that pipe one entity into
+another broker, see a perceived difference.</p>
+<p><strong>Spec:</strong> § 4.5.5.1 says "@none" is the default instance AND says
+"the datasetId of the default Attribute instance is never
+explicitly included in responses". Together: round-trip diverges.</p>
+<p><strong>Our call:</strong> match the spec strictly — strip datasetId on response
+when it's "@none". Document the rule.</p>
+<p><strong>Fix wanted:</strong> spec should either:
+(a) say explicitly "POST→GET round trips may drop <code>datasetId:
+@none</code>; client-side diff tools should normalize", or
+(b) preserve <code>datasetId: @none</code> on response when present in input
+(no information loss); the renderer chooses, and the implicit-
+default reading still works.</p>
+<p>(b) is friendlier to round-trip tools.</p>
+<hr />
+<p><a name="50"></a></p>
+<h2 id="50-637-4516-geojson-representation-negotiation-accept-header-vs-format-param">50. § 6.3.7 / § 4.5.16 — GeoJSON representation negotiation: Accept header vs format param</h2>
+<p><strong>Hit:</strong> A client wants entities rendered as GeoJSON Feature
+objects (§ 4.5.16). Two ways to ask:</p>
+<ul>
+<li><code>Accept: application/geo+json</code></li>
+<li><code>?format=geojson</code> (or similar URL param)</li>
+</ul>
+<p>The spec doesn't pin which one is normative. ETSI fixtures use
+Accept; some interop guides reference a URL param. The selection
+of geometry property (<code>?geometryProperty=location</code> vs another) is
+itself a separate axis.</p>
+<p><strong>Spec:</strong> § 4.5.16 defines the GeoJSON representation. § 6.3.15
+mentions GeoJSON in passing. § 6.3.7 covers representation
+selection but doesn't enumerate GeoJSON specifically.</p>
+<p><strong>Our call:</strong> <code>Accept: application/geo+json</code> triggers GeoJSON
+rendering. <code>?format=geojson</code> is also accepted as an alias.
+<code>?geometryProperty=</code> selects the geometry source attribute (default
+"location"). Same logic on collection (FeatureCollection) and
+single-entity (Feature) endpoints.</p>
+<p><strong>Fix wanted:</strong> § 6.3.7 should list the GeoJSON representation
+explicitly, name <code>Accept: application/geo+json</code> as the canonical
+trigger, name the geometryProperty interaction explicitly, and
+state whether <code>?format=geojson</code> is a normative alias or a vendor
+extension.</p>
+<hr />
+<p><a name="51"></a></p>
+<h2 id="51-559-6310-limit-offset-semantics-under-distributed-federation">51. § 5.5.9 + § 6.3.10 — <code>limit</code> / <code>offset</code> semantics under distributed federation</h2>
+<p><strong>Hit:</strong> GET /entities?limit=20&amp;offset=40 over an entity space
+distributed across 5 CSRs. Is <code>limit=20</code> per-CSR (each returns up
+to 20, broker dedupes locally → may exceed 20 in the response) or
+global (broker stops aggregating at 20 across all sources)? Where
+does <code>offset=40</code> apply — globally, or first-N from broker view,
+then the remaining offset against the federated set?</p>
+<p>EntityMap (§ 5.14) addresses the <em>consistency</em> of pagination
+(snapshot of IDs so subsequent pages return the same entities),
+but not the FIRST-page semantics.</p>
+<p><strong>Spec:</strong> § 5.5.9 defines limit/offset on a single broker. § 6.3.10
+covers the HTTP binding. § 5.14 covers EntityMap. The composition
+of limit/offset across federated sources is not addressed.</p>
+<p><strong>Our call:</strong> first page — request each CSR with the user's
+limit/offset verbatim, merge + dedup locally, trim to user's
+limit. EntityMap captures the resulting ID set for subsequent
+pages.</p>
+<p><strong>Fix wanted:</strong> § 5.5.9 should add a sub-clause: "Under
+distributed federation, limit and offset apply to the broker's
+merged result set. The Context Broker MAY forward limit and offset
+to each source as a hint, but the merged-set bound is normative.
+EntityMap (§ 5.14) provides consistent pagination across follow-up
+page requests."</p>
+<hr />
+<p><a name="52"></a></p>
+<h2 id="52-586-distributed-subscription-notification-except-for-the-one-from-which-the-notification-has-been-received">52. § 5.8.6 — distributed-subscription notification: "except for the one from which the notification has been received"</h2>
+<p><strong>Hit:</strong> Federated subscription path. A broker receives a notification
+from a remote source A; per § 5.8.6 it should retrieve the same
+entities from all OTHER known sources (locally + every CSR EXCEPT A)
+and merge. How does the broker know which source the notification
+came from? Subscription.subscriptionId? Via header? Source URI?
+The exclusion criterion is not specified.</p>
+<p>If the broker can't reliably identify A, it either (a) double-counts
+(asks A again, gets the same data, merges with itself) or (b) skips
+nothing (re-fans-out to all sources, defeating efficiency).</p>
+<p><strong>Spec:</strong> § 5.8.6 — "all Context Sources that have information
+about these Entities, except for the one from which the
+Notification has been received." No mechanism described.</p>
+<p><strong>Our call:</strong> identify A by inspecting the inbound notification's
+<code>Via</code> chain plus the corresponding csr-subscription. The CSR that
+originated the chain is the most recent Via entry; we skip it
+during the local fan-out.</p>
+<p><strong>Fix wanted:</strong> § 5.8.6 should pin the mechanism. Two reasonable
+choices:
+(a) the notification SHALL include a header (or top-level field)
+naming the originating CSR's regId / contextSourceAlias, or
+(b) the broker SHALL trust the last <code>Via</code> entry as the originator,
+and § 5.7.5 SHALL document this dual-use.</p>
+<hr />
+<p><a name="53"></a></p>
+<h2 id="53-586-change-detection-vs-server-stamped-modifiedat">53. § 5.8.6 — change detection vs server-stamped <code>modifiedAt</code></h2>
+<p><strong>Hit:</strong> Spec defines a change as "any of the members (including
+children) in its corresponding JSON-LD node is updated with a value
+different than the existing one." This includes system-managed
+sub-attributes like <code>modifiedAt</code>.</p>
+<p>An idempotent overwrite — same value, server stamps fresh
+<code>modifiedAt</code> — would, on a literal reading, trigger a notification
+because <code>modifiedAt</code> changed. That's a non-event the client doesn't
+care about and creates notification storms.</p>
+<p><strong>Spec:</strong> § 5.8.6, definition of "change". No carve-out for
+server-stamped fields.</p>
+<p><strong>Our call:</strong> exclude system-managed temporal fields (createdAt,
+modifiedAt, deletedAt) from the change-detection comparison. A
+client-supplied <code>observedAt</code> change DOES trigger; a broker-stamped
+<code>modifiedAt</code> alone does NOT.</p>
+<p><strong>Fix wanted:</strong> § 5.8.6 should add: "Server-stamped system
+Attributes (createdAt, modifiedAt, deletedAt) SHALL NOT
+participate in change detection. A change is observed only on the
+client-visible value(s) of the Attribute and its client-supplied
+sub-Attributes."</p>
+<hr />
+<p><a name="54"></a></p>
+<h2 id="54-586-notificationattributes-iri-expansion-subscription-context-vs-notification-time">54. § 5.8.6 — <code>notification.attributes</code> IRI expansion: subscription context vs notification time</h2>
+<p><strong>Hit:</strong> A Subscription is created with <code>notification.attributes:
+["speed"]</code> and <code>jsonldContext: &lt;ctx-v1&gt;</code> (which maps speed → IRI X).
+Later, the entity is updated; the entity's stored attribute is at
+IRI X. The notification renders.</p>
+<p>If the subscription's jsonldContext has been replaced (or, more
+subtly, if a default core context has changed terms), should the
+broker re-expand "speed" against the current context, or against
+the context captured at subscription creation?</p>
+<p>If re-expanded → consistency with current entity state at the cost
+of subscription stability.
+If creation-time → subscription stability at the cost of "speed"
+possibly meaning a different IRI now.</p>
+<p><strong>Spec:</strong> § 5.8.6 — "Term to URI expansion shall be observed
+(clause 5.5.7)." § 5.5.7 covers term-to-URI but doesn't address
+this temporal stability question.</p>
+<p><strong>Our call:</strong> expand at subscription creation time; the resulting
+IRI is stored on the Subscription. Re-expansion never happens.
+Document the rule in <code>feedback_expand_canonical</code> memory.</p>
+<p><strong>Fix wanted:</strong> § 5.8.6 should state: "Term-to-URI expansion of
+<code>notification.attributes</code> SHALL be performed at Subscription
+creation time using the Subscription's jsonldContext. The
+resulting IRIs are stored with the Subscription and used verbatim
+for matching and notification rendering thereafter."</p>
+<hr />
+<p><a name="55"></a></p>
+<h2 id="55-586-deleted-entity-notification-notificationattributes-filter">55. § 5.8.6 — deleted-entity notification + <code>notification.attributes</code> filter</h2>
+<p><strong>Hit:</strong> Subscription has <code>notification.attributes: ["speed",
+"color"]</code>. The watched entity is deleted. § 5.8.6 says:</p>
+<blockquote>
+<p>If the notification was triggered by the deletion of an Entity
+and the notification.showChanges member is not set to true, only
+the deletedAt system property shall be provided.</p>
+</blockquote>
+<p>But the sub's <code>notification.attributes</code> says only speed &amp; color
+should be returned. Is <code>deletedAt</code> returned because the trigger
+overrides the filter? Or are speed/color returned alongside
+<code>deletedAt</code>? Or neither?</p>
+<p><strong>Spec:</strong> § 5.8.6, the quoted sentence implies the filter is
+overridden — "only the deletedAt". But the sub's filter says
+"speed, color" — explicit override or accidental contradiction?</p>
+<p><strong>Our call:</strong> trigger override — <code>deletedAt</code> always; attribute
+filter ignored on delete-trigger notifications. The notification
+body is <code>{id, type, deletedAt}</code> plus whatever the format
+(concise/simplified/etc.) prescribes.</p>
+<p><strong>Fix wanted:</strong> § 5.8.6 should state explicitly: "On an
+entity-delete notification, <code>notification.attributes</code> is ignored;
+the response contains only entity members (id, type) plus the
+<code>deletedAt</code> sub-attribute. <code>notification.showChanges</code> true MAY
+add the previously-stored attributes."</p>
+<hr />
+<p><a name="56"></a></p>
+<h2 id="56-586-notificationpick-notificationomit-vs-entity-keyword-members-id-type">56. § 5.8.6 — <code>notification.pick</code> / <code>notification.omit</code> vs entity-keyword members (id, type)</h2>
+<p><strong>Hit:</strong> Subscription has <code>notification.omit: ["id"]</code>. Can the
+broker actually omit <code>id</code>? <code>id</code> is the entity's identifier — every
+NGSI-LD entity representation requires it. § 5.8.6 says pick/omit
+operate on "entity members listed". id/type ARE members.</p>
+<p>Two readings:
+- (a) entity keywords (id, type, @context) are excluded from
+  pick/omit semantics; the param only operates on user attributes.
+- (b) pick/omit is fully general; omitting <code>id</code> produces an entity
+  representation that violates § 4.5.1.</p>
+<p><strong>Spec:</strong> § 5.8.6 / § 4.21 — silent on this guard.</p>
+<p><strong>Our call:</strong> pick/omit cannot remove id, type, @context, scope. A
+sub that tries (<code>omit=["id"]</code>) silently keeps id; no error. The
+guard is implicit in the NGSI-LD entity representation requirement.</p>
+<p><strong>Fix wanted:</strong> § 5.8.6 should state: "<code>notification.pick</code> and
+<code>notification.omit</code> operate only on user-defined Attributes. The
+entity-keyword members (id, type, @context, scope) are preserved
+regardless." Or alternatively bless omit-id as a way to produce
+attribute-only fragments (e.g. for downstream processing).</p>
+<hr />
+<p><a name="57"></a></p>
+<h2 id="57-5814-5824-overlapping-subscriptions-dedup-or-duplicate">57. § 5.8.1.4 / § 5.8.2.4 — overlapping subscriptions: dedup or duplicate?</h2>
+<p><strong>Hit:</strong> Client creates Subscription S1 watching attr X on entity
+E, and Subscription S2 also watching attr X on E. Both send to the
+SAME endpoint URL. One change to E.X triggers two notifications
+(one per subscription).</p>
+<p>Is that desired (each subscription is independent) or wasteful
+(client gets duplicate data)? Should the broker dedup notifications
+sharing identical endpoint + payload?</p>
+<p><strong>Spec:</strong> Each Subscription is independent; § 5.8.1/2/3 say nothing
+about cross-subscription dedup.</p>
+<p><strong>Our call:</strong> strict per-subscription notification. No dedup
+across subscriptions, even with identical endpoint. Client is
+responsible for not creating redundant subs.</p>
+<p><strong>Fix wanted:</strong> § 5.8.6 should clarify: "Subscriptions are
+independent; the Context Broker SHALL emit one notification per
+matching subscription, even if multiple subscriptions match the
+same change and share the same endpoint." That's the per-spec
+reading and would make it explicit. Vendors offering dedup as an
+extension should flag it as non-conformant.</p>
+<hr />
+<p><a name="58"></a></p>
+<h2 id="58-58-subscription-expiresat-reached-while-broker-is-down">58. § 5.8 — subscription <code>expiresAt</code> reached while broker is down</h2>
+<p><strong>Hit:</strong> Subscription has <code>expiresAt: T</code>. Broker is offline at T.
+When the broker comes back at T+10s:</p>
+<ul>
+<li>Status field reads "active" (last persisted before T)? The
+  resume code should detect expiration on load.</li>
+<li>Did the missed-interval timing matter? If sub was timeInterval-
+  based, are missed intervals retroactively suppressed or do they
+  fire on resume?</li>
+<li>Do throttling counters reset on resume?</li>
+</ul>
+<p><strong>Spec:</strong> § 5.2.12 defines status with values active, paused,
+expired. § 5.8 doesn't address recovery state. The persisted-state
+machine is undefined.</p>
+<p><strong>Our call:</strong>
+- On startup, walk the sub cache; flip any sub with
+  <code>expiresAt &lt; now</code> to status=expired.
+- Throttling counters persist; <code>lastSuccess</code> carries through.
+- TimeInterval-based subs: missed intervals are not retroactively
+  fired; next fire is <code>lastFire + interval</code>.</p>
+<p><strong>Fix wanted:</strong> § 5.8 should add a "Subscription persistence and
+recovery" sub-clause covering:
+(a) post-restart status-recomputation rules,
+(b) throttling counter persistence,
+(c) timeInterval missed-fire policy (retroactive vs forward-only),
+(d) pernot lastN evaluation across restarts.</p>
+<p>Without this section, two compliant brokers behave differently
+after a crash.</p>
+<hr />
+<p><a name="59"></a></p>
+<h2 id="59-48-system-attributes-ambiguous-set-and-rendering-policy">59. § 4.8 — system Attributes: ambiguous set and rendering policy</h2>
+<p><strong>Hit:</strong> Spec mentions "system Attributes" or "system properties"
+in many places but doesn't enumerate the complete set in one
+authoritative table. From scattered references we infer:</p>
+<ul>
+<li><code>createdAt</code>, <code>modifiedAt</code>, <code>deletedAt</code>, <code>expiresAt</code> — entity-level
+  and attribute-level</li>
+<li><code>observedAt</code> — attribute-level</li>
+<li><code>previousValue</code>, <code>previousObject</code>, <code>previousVocab</code>,
+  <code>previousLanguageMap</code>, <code>previousJson</code> — only on
+  notifications with <code>showChanges</code></li>
+<li><code>unitCode</code>, <code>lang</code> — sometimes called "system properties of
+  attributes" but client-supplied</li>
+</ul>
+<p>When <code>?sysAttrs=true</code> is set, which are returned? <code>createdAt</code>,
+<code>modifiedAt</code>, <code>deletedAt</code>. But <code>expiresAt</code>? <code>observedAt</code>? Memory
+fixture: ETSI tests assume sysAttrs=true also exposes <code>expiresAt</code>
+but not <code>observedAt</code> (which is always returned regardless).</p>
+<p><strong>Spec:</strong> § 4.8 introduces system attributes; § 4.5.2/4.5.3 list
+sub-attributes; § 6.3.11 covers <code>sysAttrs</code> URL param. No single
+authoritative list.</p>
+<p><strong>Our call:</strong> sysAttrs gate = { createdAt, modifiedAt, deletedAt,
+expiresAt }. observedAt is always returned (client-supplied data,
+not gate-controlled). unitCode / lang are user-supplied, always
+returned. previousValue family only on notif+showChanges.</p>
+<p><strong>Fix wanted:</strong> § 4.8 should have a normative table:
+"NGSI-LD System Attributes" with three columns: (name, gate
+controlling visibility, whether client-supplied or server-supplied).
+Clears up <code>?sysAttrs=true</code> ambiguity in one place.</p>
+<hr />
+<p><a name="60"></a></p>
+<h2 id="60-421-pick-omit-cross-parameter-validation-rules-are-incomplete">60. § 4.21 — <code>pick</code> / <code>omit</code>: cross-parameter validation rules are incomplete</h2>
+<p><strong>Hit:</strong> URL params <code>pick</code>, <code>omit</code>, and the legacy <code>attrs</code> interact
+in non-obvious ways:</p>
+<ul>
+<li><code>pick</code> AND <code>omit</code> together — does it AND (pick first, then omit
+  from picked) or fail with 400?</li>
+<li><code>pick</code> AND <code>attrs</code> — <code>attrs</code> is the deprecated alias for "pick+q"
+  (per § 5.10.2). Combined, contradictory?</li>
+<li><code>omit</code> AND <code>attrs</code> — even more confused.</li>
+<li>Each accepts a comma-separated list of nested-path projection
+  language (§ 4.21). Conflict on a path where pick says "keep X.Y"
+  and omit says "drop X" — does X.Y survive?</li>
+</ul>
+<p><strong>Spec:</strong> § 4.21 covers the projection language. § 6.4.3 mentions
+the URL params. Cross-parameter validation is implicit.</p>
+<p><strong>Our call:</strong> § 6.4.3 / § 4.21 violations → 400 BadRequestData
+with ldParamsValidate diagnostics. Pick wins over omit on the
+same path; deeper-path omit overrides pick on that sub-path.
+<code>pick + attrs</code> and <code>omit + attrs</code> are both 400.</p>
+<p><strong>Fix wanted:</strong> § 4.21 should add a validation matrix:
+"Combinations of pick / omit / attrs are valid as follows: pick OR
+omit OR attrs (not multiple). pick AND omit MAY be used together;
+the resulting projection is { paths kept by pick } MINUS { paths
+removed by omit }. Conflicts on overlapping paths: the more
+specific path wins (longer JSONPath)."</p>
+<hr />
+<p><a name="61"></a></p>
+<h2 id="61-53-query-language-q-corner-cases-precedence-escaping-null-handling">61. § 5.3 — query language <code>q</code> corner cases: precedence, escaping, null handling</h2>
+<p><strong>Hit:</strong> <code>q=</code> is a mini-expression language for filtering. Several
+under-specified corners:</p>
+<ul>
+<li>Operator precedence: <code>q=a==1;b==2|c==3</code> — does <code>;</code> bind tighter
+  than <code>|</code>? Spec gives the operators but no precedence table.</li>
+<li>Negation: <code>!attr==value</code> vs <code>attr!=value</code> — equivalent? Both
+  valid?</li>
+<li>String escaping inside <code>q</code>: how to match a value containing <code>;</code>,
+  <code>|</code>, <code>==</code>? URL-encoding? Backslash? The spec doesn't say.</li>
+<li>Null matching: <code>q=attr==null</code> — matches attributes whose value
+  is the JSON <code>null</code>? Or attributes with the NGSI-LD null marker
+  <code>urn:ngsi-ld:null</code>? Or both?</li>
+<li>Type coercion: <code>q=year==2024</code> — year stored as string "2024"
+  vs integer 2024 — match?</li>
+</ul>
+<p><strong>Spec:</strong> § 5.3 defines the language but does not formalize
+precedence, escaping, or coercion.</p>
+<p><strong>Our call:</strong> documented in <code>feedback_q_*</code> memories. Specifically:
+<code>;</code> &gt; <code>|</code> precedence; URL-encoding for special chars in values;
+null matches only literal JSON null (the urn:ngsi-ld:null marker
+is "attribute deleted" sentinel, not a queryable value).</p>
+<p><strong>Fix wanted:</strong> § 5.3 should include:
+(a) BNF grammar with explicit precedence,
+(b) escaping rules for value strings containing operator chars,
+(c) type-coercion table (string-vs-numeric comparison rules),
+(d) null-matching semantics.</p>
+<p>Without these, every broker's <code>q</code> parser is its own dialect.</p>
+<hr />
+<p><a name="62"></a></p>
+<h2 id="62-513-jsonldcontextkind-values-are-not-enumerated">62. § 5.13 — <code>jsonldContext.kind</code> values are not enumerated</h2>
+<p><strong>Hit:</strong> GET /jsonldContexts returns objects with a <code>kind</code> field.
+We observe values from the codebase: <code>Cached</code>, <code>ImplicitlyCreated</code>,
+<code>Hosted</code>, <code>ExplicitlyCreated</code>. Each maps to a different
+provenance:</p>
+<ul>
+<li><code>Cached</code> — broker downloaded it from a URL, holds a local copy</li>
+<li><code>ImplicitlyCreated</code> — broker created it from a subscription/CSR
+  body that carried inline @context</li>
+<li><code>Hosted</code> — explicit POST /jsonldContexts to install</li>
+<li><code>ExplicitlyCreated</code> — ??? (we have it in code, can't find spec
+  reference)</li>
+</ul>
+<p>The complete set, the state transitions, and when each is shown
+are not in the spec.</p>
+<p><strong>Spec:</strong> § 5.13 defines /jsonldContexts CRUD but does not
+enumerate <code>kind</code> values or their semantics.</p>
+<p><strong>Our call:</strong> four kinds as listed above; documented in
+<code>feedback_jsonld_context_kind</code> memory (informally).</p>
+<p><strong>Fix wanted:</strong> § 5.13 should add: "The <code>kind</code> field of a
+JSON-LD Context entry SHALL be one of: Cached, ImplicitlyCreated,
+Hosted, ExplicitlyCreated. Each is defined as follows: ...".
+Include the transitions (e.g. Cached entries with no recent use
+may be evicted; Hosted are persistent until DELETE; etc.).</p>
+<p>Without this, two brokers expose <code>kind</code> with diverging vocabulary
+and clients can't reason about provenance portably.</p>
+<hr />
+<p><a name="63"></a></p>
+<h2 id="63-514-entitymap-lifetime-eviction-and-persistence">63. § 5.14 — EntityMap lifetime, eviction, and persistence</h2>
+<p><strong>Hit:</strong> EntityMaps capture a paginated snapshot. They have a
+default lifetime, eviction rule on resource pressure, and may
+or may not persist across broker restarts.</p>
+<p>Spec mentions a default lifetime ("5 minutes" widely cited) but
+doesn't normatively pin it. Persistence behavior is undefined:
+do EntityMaps survive a broker restart?</p>
+<p><strong>Spec:</strong> § 5.14 defines EntityMap CRUD. The lifetime is
+mentioned via the <code>expiresAt</code> field on the map. No section
+defines:
+- default lifetime when the request doesn't set expiresAt
+- eviction policy when memory is full
+- persistence across broker restart
+- behavior on follow-up page request after expiry (404? auto-
+  recreate? error?)</p>
+<p><strong>Our call:</strong> default lifetime = 5 minutes from creation;
+in-memory only (does not survive restart); eviction on expiry
+sweep (lazy, on next /entityMaps access). Client gets 404 if
+the map expired between page requests.</p>
+<p><strong>Fix wanted:</strong> § 5.14 should add:
+(a) default lifetime (recommendation, RECOMMENDED 5 min),
+(b) eviction policy MAY be implementation-defined but SHALL
+preserve unexpired maps,
+(c) persistence behavior MAY be in-memory; if so, post-restart
+follow-up page request SHALL return 404 ResourceNotFound,
+(d) recovery: the client MAY retry without entityMapId to
+recreate.</p>
+<hr />
+<p><a name="64"></a></p>
+<h2 id="64-6313-count-semantics-under-distributed-federation">64. § 6.3.13 — <code>count</code> semantics under distributed federation</h2>
+<p><strong>Hit:</strong> GET /entities?count=true gives a <code>NGSILD-Results-Count</code>
+header alongside the (possibly limited) result page. Under
+federation, the count is a federated count — the total entities
+across all sources, after dedup, satisfying the filter.</p>
+<p>But: the broker may not have fetched every entity. With limit=20,
+the broker fetches at most 20 from each CSR. The real total may
+exceed 20 × N CSRs. So the count is either approximate or requires
+a separate "count-only" forwarded request to each CSR (count=true
+without data).</p>
+<p><strong>Spec:</strong> § 6.3.13 defines the count param + header for a single
+broker. Federation is unaddressed.</p>
+<p><strong>Our call:</strong> issue count-only requests in parallel to each CSR
+when <code>?count=true</code> is set; aggregate the per-source counts after
+dedup. The count is <em>approximately</em> federated — exact only if
+no overlap between sources (no entity appears in multiple CSRs).</p>
+<p><strong>Fix wanted:</strong> § 6.3.13 should add:
+"Under distributed federation, the count SHALL be the size of the
+broker's merged result set after dedup. The Context Broker MAY
+issue separate count-only forwarded requests to each Context
+Source. In the presence of overlapping sources, the federated
+count MAY be approximate; the Context Broker SHOULD include a
+warning header NGSILD-Warning: 199 - federated count approximate."</p>
+<hr />
+<p><a name="65"></a></p>
+<h2 id="65-51614-snapshot-capture-from-csrs-do-csr-side-changes-after-capture-invalidate-the-snapshot">65. § 5.16.1.4 — snapshot capture from CSRs: do CSR-side changes after capture invalidate the snapshot?</h2>
+<p><strong>Hit:</strong> A snapshot captures entity state at time T. Entities
+sourced from a CSR are captured by querying the CSR at T. After T,
+the CSR's data changes. A read against the snapshot at T+ should
+return the captured T-state, not the live CSR state.</p>
+<p>Two interpretations:
+- (a) Snapshot stores a frozen copy. CSR changes after T are
+  irrelevant — the snapshot is the authoritative T-state.
+- (b) Snapshot stores entity ids + source pointers. A read at T+
+  re-queries the CSR; CSR's then-current state is returned (or
+  error if CSR no longer has the entity).</p>
+<p><strong>Spec:</strong> § 5.16 defines snapshot semantics for the entity space.
+The capture interaction with CSRs is silent.</p>
+<p><strong>Our call:</strong> option (a) — frozen copy. The snapshot has its own
+storage tenant; capture fetches from CSR once, stores locally.
+CSR-side mutations after T are not reflected. Memory:
+<code>project_snapshot_storage</code>.</p>
+<p><strong>Fix wanted:</strong> § 5.16 should explicitly state: "A snapshot is a
+frozen copy of entity state at capture time T. Entities sourced
+from Context Sources at capture time are stored in the snapshot;
+subsequent changes at the original Context Sources do not modify
+the snapshot. Reads against the snapshot return the captured
+T-state, not the live CSR state."</p>
+<hr />
+<p><a name="66"></a></p>
+<h2 id="66-557-iri-expansion-of-terms-not-defined-in-the-active-context">66. § 5.5.7 — IRI expansion of terms not defined in the active @context</h2>
+<p><strong>Hit:</strong> Client sends <code>{ "speed": 42 }</code> but the active @context
+has no mapping for <code>speed</code>. JSON-LD's <code>@vocab</code> fallback can
+auto-construct an IRI (<code>&lt;vocab&gt;speed</code>) if <code>@vocab</code> is set; else
+the term is bare. NGSI-LD layers its own rules on top: attribute
+names must be IRIs per § 4.5.2; bare terms violate that.</p>
+<p>Three implementer reactions:
+- (a) Reject with 400 — "Attribute name not in active @context".
+- (b) Auto-construct via <code>@vocab</code> fallback if set; else 400.
+- (c) Accept the bare term; treat its full name as the bare string
+  for matching purposes (i.e. it stays "speed", not an IRI).</p>
+<p><strong>Spec:</strong> § 5.5.7 / § 4.4 reference JSON-LD's expansion rules.
+Doesn't say what NGSI-LD does on a fallback miss. ETSI fixtures
+sometimes assume (b), sometimes (a).</p>
+<p><strong>Our call:</strong> option (b) — fall back to <code>@vocab</code> when set;
+otherwise the bare term is rejected with 400. Matches JSON-LD
+default expansion + NGSI-LD's IRI requirement.</p>
+<p><strong>Fix wanted:</strong> § 5.5.7 should add: "If a term in the request
+cannot be expanded by the active @context (no direct mapping,
+no applicable @vocab fallback), the Context Broker SHALL reject
+the request with 400 BadRequestData and a ProblemDetails
+referencing the unresolvable term."</p>
+<hr />
+<p><a name="67"></a></p>
+<h2 id="67-573-lastn-semantics-across-pagination-and-across-distop">67. § 5.7.3 — <code>lastN</code> semantics across pagination and across distop</h2>
+<p><strong>Hit:</strong> <code>?lastN=10</code> asks for the most recent 10 instances of each
+attribute. Combined with:
+- Pagination (limit + offset): which axis paginates first? The
+  attribute axis (10 instances per attr, paginate over entities)
+  or the time axis (paginate over time-slices, each containing
+  up-to-lastN instances)?
+- Distop fan-out: each CSR returns its own lastN=10. Broker
+  merges. If a CSR returns 10 and the broker's local store has
+  10, the merged set may have &gt;10 — does the broker re-trim to
+  lastN=10 after merge?</p>
+<p><strong>Spec:</strong> § 5.7.3 / § 4.11 / § 5.5.11 define lastN, pagination,
+multi-instance. The composition is not addressed.</p>
+<p><strong>Our call:</strong>
+- lastN applies post-merge: each attribute's instance list is
+  trimmed to most-recent N after distop merge.
+- Pagination operates on the entity axis; within each entity,
+  lastN governs the temporal-attribute axis. Combined: limit=L
+  entities, each carrying lastN=N instances.
+- Distop: forward lastN unchanged; trim locally after merge.</p>
+<p><strong>Fix wanted:</strong> § 5.7.3 should add: "Under pagination, <code>lastN</code>
+applies per-Attribute within each returned Entity; the pagination
+parameter (<code>limit</code>) governs the entity dimension. Under
+distributed federation, <code>lastN</code> SHALL be forwarded to each Context
+Source and re-applied locally after merge."</p>
+<hr />
+<p><a name="68"></a></p>
+<h2 id="68-511-csr-subscriptions-which-csr-state-changes-trigger">68. § 5.11 — CSR-Subscriptions: which CSR state changes trigger?</h2>
+<p><strong>Hit:</strong> A csr-subscription watches the CSR space. Spec says it
+fires when "a matching CSR is created, updated, or deleted". But
+"updated" is broad:
+- A counter update (timesSent++) — fires?
+- An expiresAt change without other state — fires?
+- A no-op write (PATCH with no actual change) — fires?
+- Internal state-machine changes (cooldown engaged, lastFailure
+  bumped) — fires?</p>
+<p>We have:
+- Active csr-subs in the catalog can hammer the notification
+  endpoint on every distop forward (counter updates) if we fire
+  on "any change to the CSR record".
+- Or under-fire if we ignore everything except CRUD on the
+  user-supplied fields.</p>
+<p><strong>Spec:</strong> § 5.11 defines csr-sub CRUD but doesn't enumerate
+trigger conditions in detail.</p>
+<p><strong>Our call:</strong> trigger only on user-visible CRUD: explicit POST,
+PATCH (with field changes), DELETE. Counter updates and internal
+state-machine transitions do not trigger. Same heuristic as
+"observable user-supplied state changed".</p>
+<p><strong>Fix wanted:</strong> § 5.11.6 should add: "A csr-subscription notification
+SHALL be sent on Create / Patch (when at least one user-supplied
+field changes) / Delete. Internal Context Source state changes
+(distop counters, cooldown engagement, etc.) SHALL NOT trigger
+csr-sub notifications."</p>
+<hr />
+<p><a name="69"></a></p>
+<h2 id="69-5621-purge-entities-and-troe-interaction">69. § 5.6.21 — Purge Entities and TRoE interaction</h2>
+<p><strong>Hit:</strong> Purge Entities (<code>/entityOperations/purge</code>) removes
+matching entities from the current-state store. Does it also
+purge the TRoE temporal evolutions, or only the current state?</p>
+<p>Two readings:
+- (a) Purge is current-state only. The temporal evolution remains
+  (a complete history of deleted entities).
+- (b) Purge is total — both current-state AND temporal evolutions.
+  Subsequent temporal queries return 404.</p>
+<p>(a) is consistent with "soft delete" semantics in TRoE (createdAt
+preserved; deletedAt added). (b) is "hard delete" matching the
+purge name.</p>
+<p><strong>Spec:</strong> § 5.6.21 defines Purge as removing entities. § 5.6.16
+(Delete Temporal Evolution) separately removes the temporal side.
+The interaction isn't addressed.</p>
+<p><strong>Our call:</strong> Purge removes current-state only. TRoE evolution
+survives. Clients wanting both must call Delete Temporal Evolution
+separately (or use <code>?temporal=true</code> if we add such a flag).</p>
+<p><strong>Fix wanted:</strong> § 5.6.21 should state: "Purge Entities operates
+on the current-state store. The temporal evolution of the purged
+entities (if any) is unaffected unless the URL parameter
+<code>?temporal=true</code> is also supplied, in which case the temporal
+evolution SHALL be purged with the same selector."</p>
+<p>That way the spec defines both the default and the override.</p>
+<hr />
+<p><a name="70"></a></p>
+<h2 id="70-5512-merge-patch-with-ngsi-ld-null-markers-in-arrays-nested-objects">70. § 5.5.12 — merge-patch with NGSI-LD null markers in arrays / nested objects</h2>
+<p><strong>Hit:</strong> Merge-patch (PATCH) uses <code>urn:ngsi-ld:null</code> as a tombstone
+for attribute deletion. RFC 7396 (JSON Merge Patch) uses literal
+JSON <code>null</code> for the same purpose. NGSI-LD diverges to accommodate
+its data model.</p>
+<p>Edge case: a PATCH body contains an array attribute and one
+element is <code>"urn:ngsi-ld:null"</code>. Is the entire array deleted? Just
+that element? Replaced with a null marker?</p>
+<p>Similarly: a JsonProperty whose <code>json</code> is <code>{ "x": "urn:ngsi-ld:null" }</code>
+— treated as "delete x from json"? Or preserved verbatim (the
+opaqueness from entry 43)?</p>
+<p><strong>Spec:</strong> § 5.5.12 defines merge-patch with the urn:ngsi-ld:null
+marker semantics for attribute deletion. Element-level and
+inside-opaque cases are silent.</p>
+<p><strong>Our call:</strong>
+- Inside a JsonProperty <code>json</code> value: opaque (entry 43); the
+  string <code>urn:ngsi-ld:null</code> is just a string, not a tombstone.
+- Inside an array Attribute value (Property with array value):
+  not a tombstone; the array is treated as a single value.
+- Tombstone semantics apply only at the attribute level.</p>
+<p><strong>Fix wanted:</strong> § 5.5.12 should add: "The <code>urn:ngsi-ld:null</code>
+sentinel SHALL be interpreted as a deletion marker only at the
+Attribute level (as a sibling of <code>type</code>, replacing <code>value</code> /
+<code>object</code> / <code>languageMap</code> etc.). Occurrences within an Attribute's
+value (array elements, nested objects, JsonProperty contents) are
+preserved verbatim as data."</p>
+<hr />
+<p><a name="71"></a></p>
+<h2 id="71-5240-contextsourcealias-uniqueness-enforcement-across-a-federation">71. § 5.2.40 — <code>contextSourceAlias</code> uniqueness enforcement across a federation</h2>
+<p><strong>Hit:</strong> <code>contextSourceAlias</code> is the pseudonym used in <code>Via</code> for
+loop detection (§ 5.7.5). The spec describes it as "a unique id
+for a Context Source", but uniqueness is across what?</p>
+<ul>
+<li>Across the local broker's CSR cache?</li>
+<li>Across the entire federation?</li>
+<li>Across federations historically?</li>
+</ul>
+<p>Two compliant brokers could pick <code>contextSourceAlias: "broker1"</code>
+independently — both correct in isolation, fatal under federation
+(false loops, missed loops).</p>
+<p><strong>Spec:</strong> § 5.2.40 says alias is "non-empty string. Pseudonym
+field as defined in IETF RFC 7230". RFC 7230 says pseudonyms
+must be unique but doesn't say "across what". No NGSI-LD section
+defines an allocation authority.</p>
+<p><strong>Our call:</strong> broker defaults the alias to <code>&lt;exe-basename&gt;:&lt;port&gt;</code>
+to give a reasonable starting point. Multi-tenant: alias becomes
+<code>&lt;base&gt;:&lt;tenant&gt;</code>. Admin override via <code>--csourceAlias</code> for
+federation deployments. We rely on the admin to make it unique.</p>
+<p><strong>Fix wanted:</strong> § 5.2.40 should add: "The contextSourceAlias
+SHALL be unique across all Context Sources that may participate
+in the same federation (i.e. that may issue or receive forwarded
+requests with overlapping Via chains). The Context Broker
+RECOMMENDED-default is <code>&lt;broker-id&gt;:&lt;port&gt;</code> or
+<code>&lt;broker-id&gt;:&lt;tenant&gt;</code> for multi-tenant deployments. Operators are
+responsible for resolving collisions across federation
+boundaries."</p>
+<p>Or: introduce a UUID-based default (<code>urn:uuid:...</code>) so collisions
+are statistically impossible.</p>
+<hr />
+<p><a name="72"></a></p>
+<h2 id="72-5240-contextsourceextras-opaque-json-same-scope-question-as-jsonproperty">72. § 5.2.40 — <code>contextSourceExtras</code> opaque JSON: same scope question as JsonProperty</h2>
+<p><strong>Hit:</strong> <code>contextSourceExtras</code> is "JSON which shall not be
+interpreted as JSON-LD using the supplied @context". Same
+opaqueness contract as § 4.5.24 JsonProperty.</p>
+<p>The same scope question (entry 43) recurs:
+- Inner <code>@context</code>, <code>@vocab</code>, prefixed names — preserve verbatim?
+- Compaction on output — apply or skip?
+- Validation — any rules (size limit, depth limit, character set)?</p>
+<p>This is a small-surface field but appears on every broker's
+/info/sourceIdentity response. Worth pinning.</p>
+<p><strong>Spec:</strong> § 5.2.40 says "raw un-expandable JSON". Same gap as
+entry 43.</p>
+<p><strong>Our call:</strong> byte-for-byte preservation. Parsed once at startup
+(from <code>--contextSourceExtras</code> config file), cloned into each
+response. No interpretation. Documented in memory.</p>
+<p><strong>Fix wanted:</strong> § 5.2.40 should reference the same opaque-JSON
+clause as § 4.5.24 (the JsonProperty rules) — a single shared
+"opaqueness contract" applied wherever NGSI-LD has opaque-JSON
+fields. Cleaner than duplicating the rule per data type.</p>
+<hr />
+<p><a name="73"></a></p>
+<h2 id="73-5215-notification-cooldown-state-machine">73. § 5.2.15 — notification <code>cooldown</code> state machine</h2>
+<p><strong>Hit:</strong> A subscription has <code>endpoint.cooldown: 5000</code>. The
+notification endpoint fails. Cooldown engages: no further
+notifications for 5s.</p>
+<p>Underspecified:
+- What COUNTS as a failure? Transport timeout? 4xx response? 5xx?
+  Any non-2xx? An OK response with a parse failure?
+- Does each successful notification reset cooldown?
+- Does cooldown apply to the whole endpoint, or per-subscription
+  even if multiple subs share the endpoint URL?
+- Is cooldown observable to the client (a sub-stats field
+  "cooldownUntil")?
+- After cooldown expires and the next attempt also fails, does
+  cooldown re-engage immediately (exponential? linear?) or wait
+  for the full 5s again?</p>
+<p><strong>Spec:</strong> § 5.2.15 defines cooldown as a number. § 5.8.6 mentions
+"If requests are received before the cooldown period has expired,
+no notification is sent." Behaviour of the state machine itself
+is unstated.</p>
+<p><strong>Our call:</strong> any non-2xx triggers cooldown; cooldown is per-
+subscription (not per-endpoint); fresh failure after expiry
+restarts the same cooldown (no exponential backoff); cooldown
+state is observable via the sub's lastFailure field.</p>
+<p><strong>Fix wanted:</strong> § 5.2.15 should add a cooldown state-machine
+sub-clause:
+- (a) Failure definition: ANY non-2xx response, transport error,
+  or parse-failure on the response counts.
+- (b) Scope: per-subscription (not per-endpoint).
+- (c) Re-engagement: each failure restarts a full cooldown
+  (no exponential), or implementations MAY exponential-backoff
+  with a documented capacity.
+- (d) Observability: SHALL surface lastFailure timestamp on
+  subscription status reads.</p>
+<hr />
+<p><a name="74"></a></p>
+<h2 id="74-4518-languageproperty-simplified-rendering-without-lang">74. § 4.5.18 — LanguageProperty simplified rendering without <code>?lang=</code></h2>
+<p><strong>Hit:</strong> GET /entities/{id}?format=simplified against an entity
+whose <code>name</code> attribute is a LanguageProperty:
+<code>{ "type": "LanguageProperty", "languageMap": { "en": "Cat",
+"de": "Katze" } }</code>.</p>
+<p>In simplified form, a Property collapses to <code>{ "name": "value" }</code>.
+For LanguageProperty, the simplified form is:
+- without <code>?lang=</code> URL param: ???
+- with <code>?lang=en</code>: <code>{ "name": "Cat" }</code></p>
+<p>Spec gives the second case but is silent on the first. Three
+implementer reactions:
+- (a) Return the entire languageMap object: <code>{ "name": { "en":
+  "Cat", "de": "Katze" } }</code> (lossless but not "simplified").
+- (b) Return a default language entry: <code>{ "name": "Cat" }</code>
+  picking some canonical language (en? @none?). Lossy.
+- (c) Reject with 400 — simplified+LanguageProperty requires
+  <code>?lang=</code>.</p>
+<p><strong>Spec:</strong> § 4.5.18 + § 4.5.4 (simplified) — no joint rule. Per
+memory <code>feedback_lang_required_simplified</code> we chose (c) and ETSI
+fixtures generally agree.</p>
+<p><strong>Our call:</strong> option (c). Simplified LanguageProperty without
+?lang= raises 400 BadRequestData with detail naming the
+LanguageProperty's attribute name.</p>
+<p><strong>Fix wanted:</strong> § 4.5.18 + § 4.5.4 should explicitly say:
+"Simplified representation of an Entity containing a
+LanguageProperty SHALL include a <code>?lang=</code> URL parameter. In its
+absence, the Context Broker SHALL respond with 400 BadRequestData."</p>
+<p>Or pick (a) lossless or (b) default-language as the spec answer.
+Any explicit answer beats the current silence.</p>
+<hr />
+<p><a name="75"></a></p>
+<h2 id="75-4519-aggregated-temporal-representation-sysattrs">75. § 4.5.19 — aggregated temporal representation × sysAttrs</h2>
+<p><strong>Hit:</strong> A temporal query with <code>?aggrMethods=avg,sum</code> returns
+aggregated values per period (§ 4.5.19). System Attributes
+(createdAt, modifiedAt) are timestamps on individual instances,
+not aggregable.</p>
+<p>When <code>?sysAttrs=true</code> is combined with aggregation:
+- Are createdAt/modifiedAt returned per-period (the timestamp of
+  the FIRST or LAST instance in the period)?
+- Are they returned at the attribute level (timestamp of the
+  whole attribute series)?
+- Are they suppressed entirely under aggregation?</p>
+<p><strong>Spec:</strong> § 4.5.19 + § 6.3.12 cover aggregation. The sysAttrs
+interaction is silent.</p>
+<p><strong>Our call:</strong> sysAttrs are suppressed under aggregation. The
+response contains only the aggregated metrics (avg/sum/min/max
+etc.) per period. createdAt / modifiedAt do not appear.</p>
+<p><strong>Fix wanted:</strong> § 4.5.19 should add: "When aggregated
+representation is combined with <code>?sysAttrs=true</code>, system
+Attributes (createdAt, modifiedAt, deletedAt) SHALL be omitted
+from the response. Aggregation operates on the value series
+only; per-instance system metadata is not aggregable and SHALL
+NOT be surfaced in aggregated form."</p>
+<hr />
+<p><a name="76"></a></p>
+<h2 id="76-6322-ngsild-snapshot-header-applicable-resources-and-inheritance">76. § 6.3.22 — <code>NGSILD-Snapshot</code> header: applicable resources and inheritance</h2>
+<p><strong>Hit:</strong> <code>NGSILD-Snapshot: &lt;id&gt;</code> directs reads to a snapshot.
+Applicable to GET /entities, GET /entities/{id}, GET /types, GET
+/attributes. But:
+- Distop forwards: does the broker forward <code>NGSILD-Snapshot</code> to
+  CSRs?
+- Subscription notifications: a sub created against a snapshot —
+  does each notification carry the header?
+- Mixed-mode requests: <code>NGSILD-Snapshot</code> + <code>?local=true</code> — should
+  one override the other?
+- Header on writes: explicitly forbidden? Silently ignored?</p>
+<p><strong>Spec:</strong> § 6.3.22 defines the header. The interaction matrix
+above isn't pinned.</p>
+<p><strong>Our call:</strong>
+- Forward <code>NGSILD-Snapshot</code> to CSRs verbatim during distop. CSRs
+  that don't support snapshots return 404 / 400; broker treats
+  that as "no contribution".
+- Subscription created via a snapshot uses the snapshot's frozen
+  state for matching; notifications include the snapshot id.
+- <code>?local=true</code> + snapshot: snapshot reads are always local (the
+  snapshot itself is a local frozen copy), the param is a no-op.
+- Header on writes: ignored. Snapshots are read-only.</p>
+<p><strong>Fix wanted:</strong> § 6.3.22 should add an interaction matrix:</p>
+<table>
+<thead>
+<tr>
+<th>context</th>
+<th>NGSILD-Snapshot behaviour</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>reads</td>
+<td>applies — return snapshot state</td>
+</tr>
+<tr>
+<td>writes</td>
+<td>ignored — writes never apply to a snapshot</td>
+</tr>
+<tr>
+<td>distop forward</td>
+<td>forward the header verbatim</td>
+</tr>
+<tr>
+<td>subscription</td>
+<td>snapshot-id captured at creation; notifications carry it</td>
+</tr>
+<tr>
+<td>?local=true</td>
+<td>no-op (snapshots are local)</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<p><a name="77"></a></p>
+<h2 id="77-512-loop-detection-via-header-parsing-corner-cases">77. § 5.12 — loop detection: <code>Via</code> header parsing corner cases</h2>
+<p><strong>Hit:</strong> Loop detection compares the broker's own alias against
+entries in the inbound <code>Via</code> header chain. Several parsing
+ambiguities:</p>
+<ul>
+<li>Case sensitivity: is <code>Broker1</code> equivalent to <code>broker1</code>? RFC 7230
+  says Via tokens are case-insensitive; NGSI-LD § 5.7.5 says
+  pseudonyms compare per RFC 7230 but doesn't repeat the case
+  rule.</li>
+<li>Whitespace: <code>Via: 1.1 broker1, 1.1 broker2</code> vs <code>Via: 1.1
+  broker1,1.1 broker2</code> — both valid HTTP, broker must tolerate.</li>
+<li>Multiple Via headers vs single comma-separated: HTTP allows
+  either; both must collapse to the same chain.</li>
+<li>Maximum Via depth: a deep federation with many hops generates
+  a long Via. Spec sets no limit; some HTTP frameworks cap header
+  size and silently truncate.</li>
+<li>Pseudonym with embedded spaces or commas — not a valid token but
+  some operators set them anyway. Reject? Sanitize?</li>
+</ul>
+<p><strong>Spec:</strong> § 5.7.5 / § 5.12 reference RFC 7230. Don't restate the
+parsing rules.</p>
+<p><strong>Our call:</strong>
+- Case-insensitive comparison (per RFC 7230).
+- Tolerant whitespace; multiple Via headers and comma-separation
+  both supported.
+- No depth limit on our side; rely on HTTP framework cap and
+  emit 431 Request Header Fields Too Large if hit.
+- Invalid tokens (spaces, control chars) → 400 BadRequestData.</p>
+<p><strong>Fix wanted:</strong> § 5.12 should add a "Via parsing" sub-clause
+restating the relevant RFC 7230 rules and pinning:
+(a) case-insensitive pseudonym comparison,
+(b) tolerant whitespace,
+(c) one-or-many Via header forms equivalent,
+(d) recommended max depth (e.g. 8) before rejecting with 508
+  Loop Detected as a defensive measure,
+(e) malformed pseudonym → 400.</p>
+<hr />
+<p><a name="78"></a></p>
+<h2 id="78-5513-localtrue-semantics-across-endpoints">78. § 5.5.13 — <code>?local=true</code> semantics across endpoints</h2>
+<p><strong>Hit:</strong> <code>?local=true</code> is named for "skip the distop dispatcher;
+local data only". It's documented for the read side (GET
+/entities). What about:</p>
+<ul>
+<li>POST /entities — does <code>?local=true</code> skip the forward to
+  exclusive CSRs (and lose data)? Or is the param a no-op on
+  writes?</li>
+<li>DELETE /entities/{id} — local delete only?</li>
+<li>POST /subscriptions — create a sub that only watches local
+  entities, never federates?</li>
+<li>/info/sourceIdentity — meaningless?</li>
+</ul>
+<p>We've implemented <code>?local=true</code> for the major read routes.
+Write-side behaviour is implementer policy.</p>
+<p><strong>Spec:</strong> § 5.5.13 defines <code>?local</code>. Reads are documented; writes
+are implicit/silent.</p>
+<p><strong>Our call:</strong> <code>?local=true</code> on writes does NOT skip the exclusive
+chop (data must not go missing). Inclusive forwards: skipped.
+Sub creation: silently ignored (subs always observe local
+mutations; federation is implicit). Sourceidentity: ignored.</p>
+<p><strong>Fix wanted:</strong> § 5.5.13 should add a behaviour matrix:</p>
+<table>
+<thead>
+<tr>
+<th>operation</th>
+<th>local=true effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>read</td>
+<td>skip dispatcher; return broker's own data only</td>
+</tr>
+<tr>
+<td>write (exclusive coverage)</td>
+<td>error 409 — can't write what we don't own</td>
+</tr>
+<tr>
+<td>write (inclusive coverage)</td>
+<td>skip forward; apply locally only</td>
+</tr>
+<tr>
+<td>sub create</td>
+<td>ignored (subs are always local-observing)</td>
+</tr>
+<tr>
+<td>/info/*</td>
+<td>ignored</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<p><a name="79"></a></p>
+<h2 id="79-5511-multi-instance-batch-with-two-entries-for-the-same-entityid">79. § 5.5.11 — multi-instance batch with two entries for the same <code>entityId</code></h2>
+<p><strong>Hit:</strong> POST /entityOperations/create with body
+<code>[ { id: urn:X, type: T, a: ... }, { id: urn:X, type: T, b: ... } ]</code>
+— two array elements addressing the same entity in the same batch.</p>
+<p>Possible interpretations:
+- (a) Reject as conflicting — 400 BadRequestData.
+- (b) Apply in array order; second is "Already Exists" because
+  first created the entity. Response has notCreated[1].
+- (c) Merge into one logical create with both a and b.</p>
+<p>ETSI fixtures use (b). Our implementation also uses (b).</p>
+<p><strong>Spec:</strong> § 5.5.11 covers batch multi-instance semantics for
+<em>Attribute instances</em> (same entityId + attrName + different
+datasetId). The same-entityId-distinct-elements case is silent.</p>
+<p><strong>Our call:</strong> option (b). Each array element is its own
+operation; later elements may fail with AlreadyExists.</p>
+<p><strong>Fix wanted:</strong> § 5.5.11 should add: "If a batch operation
+contains multiple array elements addressing the same Entity ID,
+each element is processed in array order. Subsequent elements MAY
+fail with AlreadyExists (createEntity) or with their respective
+error type (other ops). The Context Broker SHALL NOT merge
+multiple same-id elements into a single logical operation."</p>
+<p>(Or pick (a) or (c) — but pick something.)</p>
+<hr />
+<p><a name="80"></a></p>
+<h2 id="80-4521-4522-listproperty-listrelationship-simplified-form">80. § 4.5.21 / § 4.5.22 — ListProperty / ListRelationship simplified form</h2>
+<p><strong>Hit:</strong> ListProperty/ListRelationship are arrays of values/objects
+under <code>valueList</code>/<code>objectList</code>. Simplified form drops type and
+returns a bare value.</p>
+<p>For a regular Property: simplified is <code>{ attr: value }</code>.
+For a ListProperty: simplified is <code>{ attr: [v1, v2, v3] }</code> — the
+list values are the bare array.</p>
+<p>For a Relationship: simplified is <code>{ attr: targetId }</code>.
+For a ListRelationship: simplified is <code>{ attr: [t1, t2, t3] }</code>.</p>
+<p>But what about MIXED — a ListProperty whose elements have
+metadata (per-element observedAt)? Lossy or rejected?</p>
+<p><strong>Spec:</strong> § 4.5.21 / § 4.5.22 define List types. § 4.5.4
+(simplified) doesn't enumerate the projection rule per type.</p>
+<p><strong>Our call:</strong> simplified ListProperty = bare array of values; any
+per-element metadata is dropped. Same for ListRelationship.</p>
+<p><strong>Fix wanted:</strong> § 4.5.4 should have a projection table:</p>
+<table>
+<thead>
+<tr>
+<th>attribute type</th>
+<th>simplified projection</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Property</td>
+<td><code>value</code></td>
+</tr>
+<tr>
+<td>Relationship</td>
+<td><code>object</code></td>
+</tr>
+<tr>
+<td>LanguageProperty</td>
+<td>language-tag value (requires <code>?lang=</code>)</td>
+</tr>
+<tr>
+<td>GeoProperty</td>
+<td><code>value</code> (GeoJSON Geometry)</td>
+</tr>
+<tr>
+<td>ListProperty</td>
+<td><code>valueList</code> (bare array)</td>
+</tr>
+<tr>
+<td>ListRelationship</td>
+<td><code>objectList</code> (bare array of object URIs)</td>
+</tr>
+<tr>
+<td>VocabProperty</td>
+<td><code>vocab</code></td>
+</tr>
+<tr>
+<td>JsonProperty</td>
+<td><code>json</code> (opaque)</td>
+</tr>
+</tbody>
+</table>
+<p>Today this table is reconstructed by every implementer from
+scattered hints.</p>
+<hr />
+<p><a name="81"></a></p>
+<h2 id="81-51514-infosourceidentity-per-tenant-variation">81. § 5.15.1.4 — <code>/info/sourceIdentity</code> per-tenant variation</h2>
+<p><strong>Hit:</strong> GET /info/sourceIdentity returns the broker's identity.
+In a multi-tenant deployment, the same broker serves N tenants.
+Should the response vary per tenant (different
+contextSourceAlias, different contextSourceExtras), or be uniform?</p>
+<p>We argue per-tenant (alias differs because § 5.2.40 explicitly
+mentions multi-tenancy). But contextSourceExtras may be admin-
+configured per-tenant or globally — spec doesn't say.</p>
+<p><code>contextSourceUptime</code> — broker uptime or tenant uptime (time since
+the tenant was first written to)? The latter requires state
+beyond the process.</p>
+<p><strong>Spec:</strong> § 5.2.40 + § 5.15.1.4 mention multi-tenancy but don't
+explicitly define per-tenant behaviour for each field.</p>
+<p><strong>Our call:</strong>
+- <code>contextSourceAlias</code>: per-tenant (<code>&lt;base&gt;:&lt;tenant&gt;</code>).
+- <code>contextSourceUptime</code>: process uptime (broker-wide; same for
+  all tenants).
+- <code>contextSourceTimeAt</code>: now() (broker-wide).
+- <code>id</code>, <code>type</code>: broker-wide.
+- <code>contextSourceExtras</code>: broker-wide today; could be per-tenant
+  via additional config.</p>
+<p><strong>Fix wanted:</strong> § 5.2.40 + § 5.15.1.4 should specify per-field
+which axis varies. Cleanest:</p>
+<table>
+<thead>
+<tr>
+<th>field</th>
+<th>per-tenant?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>id</td>
+<td>no (broker-wide)</td>
+</tr>
+<tr>
+<td>type</td>
+<td>no</td>
+</tr>
+<tr>
+<td>contextSourceAlias</td>
+<td>YES (per-tenant)</td>
+</tr>
+<tr>
+<td>contextSourceUptime</td>
+<td>no (broker-wide process uptime)</td>
+</tr>
+<tr>
+<td>contextSourceTimeAt</td>
+<td>no</td>
+</tr>
+<tr>
+<td>contextSourceExtras</td>
+<td>MAY be per-tenant (admin choice)</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<p><a name="82"></a></p>
+<h2 id="82-420-csr-operations-list-named-group-literal-op-mixing-and-typo-handling">82. § 4.20 — CSR <code>operations</code> list: named-group + literal-op mixing and typo handling</h2>
+<p><strong>Hit:</strong> A CSR's <code>operations</code> array can contain literal op names
+(<code>createEntity</code>, <code>retrieveEntity</code>) AND named group aliases
+(<code>federationOps</code>, <code>redirectionOps</code>, etc.). Edge cases:</p>
+<ul>
+<li>Mixed: <code>operations: ["federationOps", "createEntity"]</code> — does
+  this UNION the group's ops with <code>createEntity</code> (which isn't in
+  federationOps)? Or is mixing illegal?</li>
+<li>Typo: <code>operations: ["federtionOps"]</code> (note the typo) — does the
+  broker reject (400)? Accept as a literal op name (silent
+  failure — no op matches)?</li>
+<li>Empty array: <code>operations: []</code> — same as "no ops" (the CSR
+  responds to nothing) or same as "default" (federationOps)?</li>
+<li>Default (field absent): § 4.20 says "the default set of
+  operations matches the group defined as federationOps". Explicit
+  <code>operations: ["federationOps"]</code> and absent should be equivalent —
+  but the broker may treat them differently on the wire (e.g. PATCH
+  semantics, "operations was set to default" vs "operations was
+  explicitly federationOps").</li>
+<li>Group overlap: <code>operations: ["federationOps", "redirectionOps"]</code>
+  — these groups overlap on retrieveEntity, queryEntity, etc.
+  Union or set-of-sets?</li>
+</ul>
+<p><strong>Spec:</strong> § 4.20 lists Table 4.20-1 (individual ops) and Table
+4.20-2 (named groups). The combinatorics aren't pinned.</p>
+<p><strong>Our call:</strong>
+- Mixed: union (group expands, then literal ops add).
+- Typo: silent failure (unknown op name is a no-op for matching).
+  Should probably be 400 — log warning today.
+- Empty <code>[]</code>: same as "no ops match"; CSR is effectively inert.
+- Field absent: federationOps default.
+- Overlap: union with dedup.</p>
+<p><strong>Fix wanted:</strong> § 4.20 should add: "The <code>operations</code> list MAY
+contain a mix of individual op names (Table 4.20-1) and named
+group aliases (Table 4.20-2). The effective op set is the union.
+Unrecognised names SHALL be rejected with 400 BadRequestData at
+CSR creation / patch time. An empty array SHALL mean the CSR
+supports no operations. An absent <code>operations</code> field SHALL imply
+the <code>federationOps</code> default."</p>
+<hr />
+<p><a name="83"></a></p>
+<h2 id="83-411-temporal-before-after-between-bound-asymmetry">83. § 4.11 — temporal <code>before</code> / <code>after</code> / <code>between</code> bound asymmetry</h2>
+<p><strong>Hit:</strong> § 4.11 defines bound inclusivity per relation:
+- <code>before</code> — comparison value is <strong>exclusive</strong>
+- <code>after</code> — comparison value is <strong>inclusive</strong>
+- <code>between</code> — lower bound <strong>inclusive</strong>, upper bound <strong>exclusive</strong></p>
+<p>So at exactly <code>timeAt = T</code>:
+- <code>?timerel=before&amp;timeAt=T</code> does NOT match samples at T.
+- <code>?timerel=after&amp;timeAt=T</code> DOES match samples at T.
+- <code>?timerel=between&amp;timeAt=T&amp;endTimeAt=T'</code> — at T matches, at T'
+  doesn't.</p>
+<p>This is asymmetric. A client who wants the COMPLEMENT of "before
+T" cannot use "after T" — both exclude samples at T from "before"
+but include them in "after" (because of the asymmetry, querying
+union(before, after) over the same T = matches every sample EXCEPT
+those at T are matched twice, those at T match once).</p>
+<p>Worse: there's no way to express "at or before T" — <code>before</code> is
+exclusive, no inclusive variant.</p>
+<p><strong>Spec:</strong> § 4.11, verbatim — "before" exclusive, "after"
+inclusive, "between" half-open <code>[T, T')</code>.</p>
+<p><strong>Our call:</strong> implement literally. Document the asymmetry in user
+docs.</p>
+<p><strong>Fix wanted:</strong> § 4.11 should pick ONE policy and apply
+consistently. Two clean options:
+- (a) All-inclusive: before, after, between(closed-closed). Union
+  of complementary queries returns everything; intersections at
+  the boundary double-count.
+- (b) All half-open lower-inclusive (matches <code>between</code>):
+  <code>before T</code> = strict less-than, <code>after T</code> = greater-or-equal,
+  <code>between T T'</code> = <code>[T, T')</code>. Symmetric, no overlap, no gap.</p>
+<p>Option (b) is what most temporal DBs use and what <code>between</code> already
+mimics. Aligning <code>before</code>/<code>after</code> with it removes a real
+implementer trap and a subtle off-by-one for clients.</p>
+<hr />
+<p><a name="84"></a></p>
+<h2 id="84-423-orderby-never-applied-to-distributed-operations-vs-every-implementation-doing-it">84. § 4.23 — orderBy "never applied to distributed operations" vs every implementation doing it</h2>
+<p><strong>Hit:</strong> § 4.23 explicitly says:</p>
+<blockquote>
+<p>Sort ordering is never applied to distributed operations, and the
+defined sort ordering strategy may depend on implementation
+specific configurations.</p>
+</blockquote>
+<p>But every real client expects <code>?orderBy=</code> to work on <code>GET
+/entities</code> regardless of whether the broker is single-source or
+federated. Returning unordered data on a federated query while
+the same broker returns ordered data when no CSRs match would be
+indistinguishable absurdity from the client's point of view.</p>
+<p>Every broker we've measured (swBroker, fwBroker, orion-ld) sorts
+the merged distop result locally — i.e. directly contradicting
+the spec sentence above. The user-visible behaviour is correct;
+the spec wording is not.</p>
+<p><strong>Spec:</strong> § 4.23, verbatim.</p>
+<p><strong>Our call:</strong> apply orderBy locally on the merged distop result.
+Diverges from spec but matches user expectation and every other
+implementer.</p>
+<p><strong>Fix wanted:</strong> § 4.23 should drop the sentence "Sort ordering
+is never applied to distributed operations" and replace with:
+"Sort ordering SHALL be applied to the broker's final merged
+result set. Forwarded query requests MAY (but need not) include
+the orderBy parameter; the broker SHALL re-sort after merging
+results from local + Context Sources to produce the final
+response."</p>
+<p>The current text is one of the few places where spec wording is
+<em>provably</em> incompatible with every shipped implementation.</p>
+<hr />
+<p><a name="85"></a></p>
+<h2 id="85-4232-datatype-comparison-order-strings-before-dates-where-does-geoproperty-fit">85. § 4.23.2 — datatype comparison order: strings before dates, where does GeoProperty fit?</h2>
+<p><strong>Hit:</strong> § 4.23.2 specifies a comparison order for mixed-type
+attribute values:</p>
+<blockquote>
+<p>Numbers, Strings, Object, Array, Boolean, Time, Date, DateTime,
+Null, Attribute does not exist</p>
+</blockquote>
+<p>Two surprises:
+- Strings come BEFORE Date / Time / DateTime. So
+  <code>"2024-01-01T00:00:00Z"</code> as a string compares BEFORE the same
+  value as a DateTime. The string representation of a date is
+  ranked below the DateTime representation — but only if the
+  string and DateTime are present <em>as different attributes</em> in
+  the same sort. The intuitive ordering would group all
+  date-shaped values regardless of declared type.
+- GeoProperty values, VocabProperty values, LanguageProperty
+  values — where do they fit in this list? "Object" bucket?</p>
+<p>When two entities have an attr declared GeoProperty (sort by
+value, not distance), which side wins in mixed-type sort with a
+String-valued entity for the same attr? Spec doesn't say.</p>
+<p><strong>Spec:</strong> § 4.23.2 lists the order as cited above. Doesn't
+enumerate Geo/Vocab/Language values.</p>
+<p><strong>Our call:</strong>
+- GeoProperty value → "Object" bucket (it's a GeoJSON object).
+- VocabProperty value → "String" bucket (vocab values are strings).
+- LanguageProperty value → "Object" bucket (languageMap is an
+  object).
+- ListProperty value → "Array" bucket.
+- JsonProperty value → bucket by the json's top-level type (object
+  or array; rarely scalar).</p>
+<p><strong>Fix wanted:</strong> § 4.23.2 should add: "For NGSI-LD attribute value
+types: GeoProperty values are compared as Object; VocabProperty
+values as String; LanguageProperty values (without <code>?lang=</code>) as
+Object, with <code>?lang=</code> as the resolved-language String;
+ListProperty values as Array; JsonProperty values by their
+top-level JSON type." And reconsider the "Strings before
+DateTime" ordering — it produces non-intuitive sorts for
+real-world data where date-shaped strings are common.</p>
+<hr />
+<h2 id="template-for-new-entries">Template for new entries</h2>
+<pre><code>## N. § X.Y.Z — one-line summary
+
+**Hit:** what we ran into.
+
+**Spec:** what the spec says (or doesn't).
+
+**Our call:** what we implemented.
+
+**Fix wanted:** what we want clarified.
+</code></pre>
+</body>
+</html>

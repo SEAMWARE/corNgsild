@@ -2589,12 +2589,14 @@ above isn't pinned.
 - Header on writes: ignored. Snapshots are read-only.
 
 **Fix wanted:** § 6.3.22 should add an interaction matrix:
-| context | NGSILD-Snapshot behaviour |
-| reads | applies — return snapshot state |
-| writes | ignored — writes never apply to a snapshot |
-| distop forward | forward the header verbatim |
-| subscription | snapshot-id captured at creation; notifications carry it |
-| ?local=true | no-op (snapshots are local) |
+
+| context        | NGSILD-Snapshot behaviour                                          |
+|----------------|--------------------------------------------------------------------|
+| reads          | applies — return snapshot state                                    |
+| writes         | ignored — writes never apply to a snapshot                         |
+| distop forward | forward the header verbatim                                        |
+| subscription   | snapshot-id captured at creation; notifications carry it           |
+| ?local=true    | no-op (snapshots are local)                                        |
 
 ---
 
@@ -2668,12 +2670,14 @@ Sub creation: silently ignored (subs always observe local
 mutations; federation is implicit). Sourceidentity: ignored.
 
 **Fix wanted:** § 5.5.13 should add a behaviour matrix:
-| operation | local=true effect |
-| read | skip dispatcher; return broker's own data only |
-| write (exclusive coverage) | error 409 — can't write what we don't own |
-| write (inclusive coverage) | skip forward; apply locally only |
-| sub create | ignored (subs are always local-observing) |
-| /info/* | ignored |
+
+| operation                  | local=true effect                                |
+|----------------------------|--------------------------------------------------|
+| read                       | skip dispatcher; return broker's own data only   |
+| write (exclusive coverage) | error 409 — can't write what we don't own        |
+| write (inclusive coverage) | skip forward; apply locally only                 |
+| sub create                 | ignored (subs are always local-observing)        |
+| /info/*                    | ignored                                          |
 
 ---
 
@@ -2734,15 +2738,17 @@ metadata (per-element observedAt)? Lossy or rejected?
 per-element metadata is dropped. Same for ListRelationship.
 
 **Fix wanted:** § 4.5.4 should have a projection table:
-| attribute type | simplified projection |
-| Property | `value` |
-| Relationship | `object` |
-| LanguageProperty | language-tag value (requires `?lang=`) |
-| GeoProperty | `value` (GeoJSON Geometry) |
-| ListProperty | `valueList` (bare array) |
-| ListRelationship | `objectList` (bare array of object URIs) |
-| VocabProperty | `vocab` |
-| JsonProperty | `json` (opaque) |
+
+| attribute type   | simplified projection                            |
+|------------------|--------------------------------------------------|
+| Property         | `value`                                          |
+| Relationship     | `object`                                         |
+| LanguageProperty | language-tag value (requires `?lang=`)           |
+| GeoProperty      | `value` (GeoJSON Geometry)                       |
+| ListProperty     | `valueList` (bare array)                         |
+| ListRelationship | `objectList` (bare array of object URIs)         |
+| VocabProperty    | `vocab`                                          |
+| JsonProperty     | `json` (opaque)                                  |
 
 Today this table is reconstructed by every implementer from
 scattered hints.
@@ -2779,13 +2785,15 @@ explicitly define per-tenant behaviour for each field.
 
 **Fix wanted:** § 5.2.40 + § 5.15.1.4 should specify per-field
 which axis varies. Cleanest:
-| field | per-tenant? |
-| id | no (broker-wide) |
-| type | no |
-| contextSourceAlias | YES (per-tenant) |
-| contextSourceUptime | no (broker-wide process uptime) |
-| contextSourceTimeAt | no |
-| contextSourceExtras | MAY be per-tenant (admin choice) |
+
+| field               | per-tenant?                            |
+|---------------------|----------------------------------------|
+| id                  | no (broker-wide)                       |
+| type                | no                                     |
+| contextSourceAlias  | YES (per-tenant)                       |
+| contextSourceUptime | no (broker-wide process uptime)        |
+| contextSourceTimeAt | no                                     |
+| contextSourceExtras | MAY be per-tenant (admin choice)       |
 
 ---
 
