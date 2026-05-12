@@ -34,6 +34,7 @@ doesn't)** · **what we did** · **what we'd want fixed**.
 - **[3](#3)** § 5.6.1.4 — entity shell when all attributes are claimed externally (create `{id, type}` locally or not?)
 - **[12](#12)** § 5.7.11 — federation has no hop / TTL bound; loop detection is the only stop
 - **[51](#51)** § 5.5.9 / § 6.3.10 — `limit` / `offset` semantics under distributed federation (per-CSR vs global; offset composition)
+- **[64](#64)** § 6.3.13 — `count` semantics under distributed federation (approximate vs exact; per-CSR count-only forward)
 
 ### C. Response shapes & error formats
 
@@ -67,6 +68,8 @@ doesn't)** · **what we did** · **what we'd want fixed**.
 - **[22](#22)** § 5.6.5 — `?deleteAll=` boolean parsing case-sensitivity
 - **[18](#18)** § 5.16.1.4 — snapshot capture from CSRs in no-split deployments
 - **[44](#44)** § 5.6.3.4 — `?observedAt=<time>` default-observedAt URL param exists for Merge but not Append/Update
+- **[63](#63)** § 5.14 — EntityMap lifetime, eviction, and persistence across restart
+- **[65](#65)** § 5.16.1.4 — snapshot capture from CSRs: do CSR-side changes after capture invalidate the snapshot? (frozen vs live)
 
 ### G. Notifications & subscriptions
 
@@ -85,6 +88,7 @@ doesn't)** · **what we did** · **what we'd want fixed**.
 
 - **[15](#15)** § 6.3.5 — @context placement for array bodies is ambiguous (per-root vs per-element)
 - **[43](#43)** § 4.5.24 — JsonProperty inner-value @context interaction: where does opaqueness start and end?
+- **[62](#62)** § 5.13 — `jsonldContext.kind` values not enumerated (Cached / ImplicitlyCreated / Hosted / ExplicitlyCreated)
 
 ### I. Data model — multi-instance, linked entities, intake order
 
@@ -93,6 +97,9 @@ doesn't)** · **what we did** · **what we'd want fixed**.
 - **[42](#42)** § 4.5.23 — `joinLevel` semantics with cycles, diamonds, and originating-id self-reference
 - **[48](#48)** § 4.5.5.3 — "indeterminate / random" tiebreaker on identical datasetIds is unfit for cross-broker interop
 - **[49](#49)** § 4.5.5.1 — `datasetId: "@none"` round-trip drops the field on response (POST body not reproducible from GET)
+- **[59](#59)** § 4.8 — system Attributes set and visibility gate not enumerated in one place (sysAttrs scope, observedAt vs gate)
+- **[60](#60)** § 4.21 — `pick` / `omit` / `attrs` cross-parameter validation matrix missing (combination rules, conflict resolution)
+- **[61](#61)** § 5.3 — query language `q` lacks precedence table, escaping rules, type coercion, null-matching semantics
 
 ---
 
@@ -1940,6 +1947,246 @@ recovery" sub-clause covering:
 
 Without this section, two compliant brokers behave differently
 after a crash.
+
+---
+
+<a name="59"></a>
+## 59. § 4.8 — system Attributes: ambiguous set and rendering policy
+
+**Hit:** Spec mentions "system Attributes" or "system properties"
+in many places but doesn't enumerate the complete set in one
+authoritative table. From scattered references we infer:
+
+- `createdAt`, `modifiedAt`, `deletedAt`, `expiresAt` — entity-level
+  and attribute-level
+- `observedAt` — attribute-level
+- `previousValue`, `previousObject`, `previousVocab`,
+  `previousLanguageMap`, `previousJson` — only on
+  notifications with `showChanges`
+- `unitCode`, `lang` — sometimes called "system properties of
+  attributes" but client-supplied
+
+When `?sysAttrs=true` is set, which are returned? `createdAt`,
+`modifiedAt`, `deletedAt`. But `expiresAt`? `observedAt`? Memory
+fixture: ETSI tests assume sysAttrs=true also exposes `expiresAt`
+but not `observedAt` (which is always returned regardless).
+
+**Spec:** § 4.8 introduces system attributes; § 4.5.2/4.5.3 list
+sub-attributes; § 6.3.11 covers `sysAttrs` URL param. No single
+authoritative list.
+
+**Our call:** sysAttrs gate = { createdAt, modifiedAt, deletedAt,
+expiresAt }. observedAt is always returned (client-supplied data,
+not gate-controlled). unitCode / lang are user-supplied, always
+returned. previousValue family only on notif+showChanges.
+
+**Fix wanted:** § 4.8 should have a normative table:
+"NGSI-LD System Attributes" with three columns: (name, gate
+controlling visibility, whether client-supplied or server-supplied).
+Clears up `?sysAttrs=true` ambiguity in one place.
+
+---
+
+<a name="60"></a>
+## 60. § 4.21 — `pick` / `omit`: cross-parameter validation rules are incomplete
+
+**Hit:** URL params `pick`, `omit`, and the legacy `attrs` interact
+in non-obvious ways:
+
+- `pick` AND `omit` together — does it AND (pick first, then omit
+  from picked) or fail with 400?
+- `pick` AND `attrs` — `attrs` is the deprecated alias for "pick+q"
+  (per § 5.10.2). Combined, contradictory?
+- `omit` AND `attrs` — even more confused.
+- Each accepts a comma-separated list of nested-path projection
+  language (§ 4.21). Conflict on a path where pick says "keep X.Y"
+  and omit says "drop X" — does X.Y survive?
+
+**Spec:** § 4.21 covers the projection language. § 6.4.3 mentions
+the URL params. Cross-parameter validation is implicit.
+
+**Our call:** § 6.4.3 / § 4.21 violations → 400 BadRequestData
+with ldParamsValidate diagnostics. Pick wins over omit on the
+same path; deeper-path omit overrides pick on that sub-path.
+`pick + attrs` and `omit + attrs` are both 400.
+
+**Fix wanted:** § 4.21 should add a validation matrix:
+"Combinations of pick / omit / attrs are valid as follows: pick OR
+omit OR attrs (not multiple). pick AND omit MAY be used together;
+the resulting projection is { paths kept by pick } MINUS { paths
+removed by omit }. Conflicts on overlapping paths: the more
+specific path wins (longer JSONPath)."
+
+---
+
+<a name="61"></a>
+## 61. § 5.3 — query language `q` corner cases: precedence, escaping, null handling
+
+**Hit:** `q=` is a mini-expression language for filtering. Several
+under-specified corners:
+
+- Operator precedence: `q=a==1;b==2|c==3` — does `;` bind tighter
+  than `|`? Spec gives the operators but no precedence table.
+- Negation: `!attr==value` vs `attr!=value` — equivalent? Both
+  valid?
+- String escaping inside `q`: how to match a value containing `;`,
+  `|`, `==`? URL-encoding? Backslash? The spec doesn't say.
+- Null matching: `q=attr==null` — matches attributes whose value
+  is the JSON `null`? Or attributes with the NGSI-LD null marker
+  `urn:ngsi-ld:null`? Or both?
+- Type coercion: `q=year==2024` — year stored as string "2024"
+  vs integer 2024 — match?
+
+**Spec:** § 5.3 defines the language but does not formalize
+precedence, escaping, or coercion.
+
+**Our call:** documented in `feedback_q_*` memories. Specifically:
+`;` > `|` precedence; URL-encoding for special chars in values;
+null matches only literal JSON null (the urn:ngsi-ld:null marker
+is "attribute deleted" sentinel, not a queryable value).
+
+**Fix wanted:** § 5.3 should include:
+(a) BNF grammar with explicit precedence,
+(b) escaping rules for value strings containing operator chars,
+(c) type-coercion table (string-vs-numeric comparison rules),
+(d) null-matching semantics.
+
+Without these, every broker's `q` parser is its own dialect.
+
+---
+
+<a name="62"></a>
+## 62. § 5.13 — `jsonldContext.kind` values are not enumerated
+
+**Hit:** GET /jsonldContexts returns objects with a `kind` field.
+We observe values from the codebase: `Cached`, `ImplicitlyCreated`,
+`Hosted`, `ExplicitlyCreated`. Each maps to a different
+provenance:
+
+- `Cached` — broker downloaded it from a URL, holds a local copy
+- `ImplicitlyCreated` — broker created it from a subscription/CSR
+  body that carried inline @context
+- `Hosted` — explicit POST /jsonldContexts to install
+- `ExplicitlyCreated` — ??? (we have it in code, can't find spec
+  reference)
+
+The complete set, the state transitions, and when each is shown
+are not in the spec.
+
+**Spec:** § 5.13 defines /jsonldContexts CRUD but does not
+enumerate `kind` values or their semantics.
+
+**Our call:** four kinds as listed above; documented in
+`feedback_jsonld_context_kind` memory (informally).
+
+**Fix wanted:** § 5.13 should add: "The `kind` field of a
+JSON-LD Context entry SHALL be one of: Cached, ImplicitlyCreated,
+Hosted, ExplicitlyCreated. Each is defined as follows: ...".
+Include the transitions (e.g. Cached entries with no recent use
+may be evicted; Hosted are persistent until DELETE; etc.).
+
+Without this, two brokers expose `kind` with diverging vocabulary
+and clients can't reason about provenance portably.
+
+---
+
+<a name="63"></a>
+## 63. § 5.14 — EntityMap lifetime, eviction, and persistence
+
+**Hit:** EntityMaps capture a paginated snapshot. They have a
+default lifetime, eviction rule on resource pressure, and may
+or may not persist across broker restarts.
+
+Spec mentions a default lifetime ("5 minutes" widely cited) but
+doesn't normatively pin it. Persistence behavior is undefined:
+do EntityMaps survive a broker restart?
+
+**Spec:** § 5.14 defines EntityMap CRUD. The lifetime is
+mentioned via the `expiresAt` field on the map. No section
+defines:
+- default lifetime when the request doesn't set expiresAt
+- eviction policy when memory is full
+- persistence across broker restart
+- behavior on follow-up page request after expiry (404? auto-
+  recreate? error?)
+
+**Our call:** default lifetime = 5 minutes from creation;
+in-memory only (does not survive restart); eviction on expiry
+sweep (lazy, on next /entityMaps access). Client gets 404 if
+the map expired between page requests.
+
+**Fix wanted:** § 5.14 should add:
+(a) default lifetime (recommendation, RECOMMENDED 5 min),
+(b) eviction policy MAY be implementation-defined but SHALL
+preserve unexpired maps,
+(c) persistence behavior MAY be in-memory; if so, post-restart
+follow-up page request SHALL return 404 ResourceNotFound,
+(d) recovery: the client MAY retry without entityMapId to
+recreate.
+
+---
+
+<a name="64"></a>
+## 64. § 6.3.13 — `count` semantics under distributed federation
+
+**Hit:** GET /entities?count=true gives a `NGSILD-Results-Count`
+header alongside the (possibly limited) result page. Under
+federation, the count is a federated count — the total entities
+across all sources, after dedup, satisfying the filter.
+
+But: the broker may not have fetched every entity. With limit=20,
+the broker fetches at most 20 from each CSR. The real total may
+exceed 20 × N CSRs. So the count is either approximate or requires
+a separate "count-only" forwarded request to each CSR (count=true
+without data).
+
+**Spec:** § 6.3.13 defines the count param + header for a single
+broker. Federation is unaddressed.
+
+**Our call:** issue count-only requests in parallel to each CSR
+when `?count=true` is set; aggregate the per-source counts after
+dedup. The count is *approximately* federated — exact only if
+no overlap between sources (no entity appears in multiple CSRs).
+
+**Fix wanted:** § 6.3.13 should add:
+"Under distributed federation, the count SHALL be the size of the
+broker's merged result set after dedup. The Context Broker MAY
+issue separate count-only forwarded requests to each Context
+Source. In the presence of overlapping sources, the federated
+count MAY be approximate; the Context Broker SHOULD include a
+warning header NGSILD-Warning: 199 - federated count approximate."
+
+---
+
+<a name="65"></a>
+## 65. § 5.16.1.4 — snapshot capture from CSRs: do CSR-side changes after capture invalidate the snapshot?
+
+**Hit:** A snapshot captures entity state at time T. Entities
+sourced from a CSR are captured by querying the CSR at T. After T,
+the CSR's data changes. A read against the snapshot at T+ should
+return the captured T-state, not the live CSR state.
+
+Two interpretations:
+- (a) Snapshot stores a frozen copy. CSR changes after T are
+  irrelevant — the snapshot is the authoritative T-state.
+- (b) Snapshot stores entity ids + source pointers. A read at T+
+  re-queries the CSR; CSR's then-current state is returned (or
+  error if CSR no longer has the entity).
+
+**Spec:** § 5.16 defines snapshot semantics for the entity space.
+The capture interaction with CSRs is silent.
+
+**Our call:** option (a) — frozen copy. The snapshot has its own
+storage tenant; capture fetches from CSR once, stores locally.
+CSR-side mutations after T are not reflected. Memory:
+`project_snapshot_storage`.
+
+**Fix wanted:** § 5.16 should explicitly state: "A snapshot is a
+frozen copy of entity state at capture time T. Entities sourced
+from Context Sources at capture time are stored in the snapshot;
+subsequent changes at the original Context Sources do not modify
+the snapshot. Reads against the snapshot return the captured
+T-state, not the live CSR state."
 
 ---
 
