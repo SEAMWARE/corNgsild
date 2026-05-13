@@ -406,6 +406,16 @@ bool ldCheckGeo(KjNode* geoValueP)
     return true;
   }
 
+  // § 4.7.1 / § 4.6.1: NGSI-LD allows all RFC 7946 geometry types
+  // except GeometryCollection — explicit error so the client sees the
+  // spec-level reason, not "Unknown".
+  if (strcmp(geoType, "GeometryCollection") == 0)
+  {
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid GeoJSON",
+            "GeoJSON GeometryCollection is not allowed in NGSI-LD (§ 4.7.1)");
+    return false;
+  }
+
   ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid GeoJSON", "Unknown GeoJSON geometry type: '%s'", geoType);
   return false;
 }

@@ -21,8 +21,14 @@
 //
 // extractGeometry - extract GeoJSON geometry from an entity's GeoProperty
 //
-// In API format (after compaction):
-//   "location": { "type": "GeoProperty", "value": { "type": "Point", "coordinates": [...] } }
+// Two shapes seen at this point:
+//   normalized:  "location": { "type": "GeoProperty", "value": { "type": "Point", "coordinates": [...] } }
+//   simplified:  "location": { "type": "Point", "coordinates": [...] }      (after keyValues collapse)
+//
+// In simplified the wrapping GeoProperty has already been stripped — the
+// attr is the geometry. Distinguish by looking for a `value` sub-object;
+// if absent and the attr itself has GeoJSON shape (`type` is one of the
+// geometry types + `coordinates`), use the attr directly.
 //
 static KjNode* extractGeometry(KjNode* entityP, const char* geoPropName, Kjson* kjsonP)
 {
@@ -36,7 +42,25 @@ static KjNode* extractGeometry(KjNode* entityP, const char* geoPropName, Kjson* 
   if (valueP != NULL && valueP->type == KjObject)
     return kjClone(kjsonP, valueP);
 
-  return NULL;
+  // Simplified — the attribute IS the geometry. Cheap shape check: a
+  // GeoJSON geometry has a string `type` whose value is one of the
+  // standard geometry kinds.
+  KjNode* typeP = kjLookup(attrP, "type");
+  if (typeP == NULL || typeP->type != KjString)
+    return NULL;
+
+  // NGSI-LD § 4.7.1 / § 4.6.1: all GeoJSON geometries are allowed
+  // except GeometryCollection.
+  const char* t = typeP->value.s;
+  if (strcmp(t, "Point")           != 0 &&
+      strcmp(t, "MultiPoint")      != 0 &&
+      strcmp(t, "LineString")      != 0 &&
+      strcmp(t, "MultiLineString") != 0 &&
+      strcmp(t, "Polygon")         != 0 &&
+      strcmp(t, "MultiPolygon")    != 0)
+    return NULL;
+
+  return kjClone(kjsonP, attrP);
 }
 
 
