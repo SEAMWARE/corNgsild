@@ -754,17 +754,24 @@ For the tests to expect 1, the fixtures must either (a) count all three CSRs as 
 **Fix wanted:** rewrite the fixtures with an offset and matching-set count that line up, or — if 037_11_03's "expects 2" is actually correct — pick offset values that don't exceed the matching-set size.
 
 
-## 28. § 5.7.2.4 / D011_02_red_02 + D011_03_inc_01/02 + D011_04_inc_01/02 — `?id=urn:…` alone rejected as "too wide"
+## 28. § 5.7.2.4 / D011_03_inc_01/02 + D011_04_inc_01/02 — `?id=urn:…` alone rejected as "too wide"
 
-**Hit:** Five distributed-query tests call `GET /entities?id=urn:ngsi-ld:Vehicle:<uuid>` with no `type`, `attrs`, `q`, geoQ, `scopeQ`, or `local=true`. Expects 200 with the entity (one match).
+**Hit:** Four distributed-query tests call `GET /entities?id=urn:ngsi-ld:Vehicle:<uuid>` (and the queryBatch POST equivalent) with no `type`, `attrs`, `q`, geoQ, `scopeQ`, or `local=true`. Expects 200 with the entity from the matching CSR.
 
-**Broker:** rejects 400 "too wide query: at least one of id, idPattern, type, attrs, q, georel, or local must be supplied" — wait, `id` IS listed (we relaxed § 5.7.2.4 ourselves), but `id` alone is *currently* still rejected. Re-check this — the rejection text in commit 57245a3 listed id+idPattern as too wide, but more recent relaxation accepts them. Need to re-verify the actual broker behaviour here.
+**Spec:** § 5.7.2.4 enumerates exactly five sufficient selectors:
+- (a) selector of Entity Types
+- (b) list of Attribute names with at least one non-system Attribute
+- (c) NGSI-LD Query with at least one non-system Attribute
+- (d) NGSI-LD GeoQuery
+- (e) local scope
 
-**Spec:** § 5.7.2.4 enumerates `type`, `attrs`, `q`, geoQ as the required sufficient selectors. `id` is not in that list verbatim, but a single explicit URI is the most narrowly-bounded query possible (returns one entity at most).
+`id` and `idPattern` are NOT in that list. The broker rejects 400 "too wide query (§ 5.7.2.4 — id / idPattern alone is too wide)" per `ldParamsValidate.c`.
 
-**Our call:** TBD — pending an explicit decision on whether fully-qualified `id` alone should bypass the too-wide guard for queryEntity / queryBatch paths.
+**Broker:** stays spec-strict — the listing in § 5.7.2.4 is enumerative ("the following input data shall be provided"), and `id` is conspicuously absent. A `getEntity by id` operation already exists (`GET /entities/{id}` — single entity, no query semantics); the queryEntities path is for filtering, where unbounded id-filter has no use.
 
-**Spec gap:** § 5.7.2.4 should mention `id` (and `idPattern` with a literal id) as sufficient selectors alongside type/attrs/q/geoQ.
+**Our call:** broker correct, tests wrong. The CSR Discovery variant of this (§ 26a) WAS relaxed because there the `id` filter applies to EntityInfo.id, not to the resource being listed — different semantics.
+
+**Fix wanted:** the four tests should each add a `&type=Vehicle` or use `GET /entities/{id}` directly. Either passes a sufficient selector while still exercising the CSR forward.
 
 
 ## 29. § 5.5.9 / 041_03_01..03 — `?page=` is not a NGSI-LD pagination parameter
