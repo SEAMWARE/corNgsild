@@ -52,8 +52,8 @@ typedef enum LdNotifyOp
 #define LD_TRIGGER_ATTR_MODIFIED      0x10
 #define LD_TRIGGER_ATTR_DELETED       0x20
 
-// Default: entity create + attribute created + attribute modified
-#define LD_TRIGGER_DEFAULT            (LD_TRIGGER_ENTITY_CREATED | LD_TRIGGER_ATTR_CREATED | LD_TRIGGER_ATTR_MODIFIED)
+// Default per § 5.2.12: attributeCreated + attributeUpdated only.
+#define LD_TRIGGER_DEFAULT            (LD_TRIGGER_ATTR_CREATED | LD_TRIGGER_ATTR_MODIFIED)
 
 
 
