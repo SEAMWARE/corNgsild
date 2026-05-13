@@ -192,6 +192,25 @@ void ldSimplifyEntity(KjNode* entityP)
       continue;
     }
 
+    // join=inline attaches the linked Entity under `entity` on a
+    // Relationship instance (see ldLinkedEntities::inlineWalk). In
+    // simplified format with join, the "value" of the Relationship is
+    // the inlined Entity itself, not the object URI — § 4.5.4 + § 4.5.23.
+    if (strcmp(typeP->value.s, "Relationship") == 0)
+    {
+      KjNode* entityP = kjLookup(childP, "entity");
+      if (entityP != NULL && entityP->type == KjObject)
+      {
+        // Simplify the linked Entity recursively (so its own
+        // Relationships also collapse) and replace the attribute with it.
+        ldSimplifyEntity(entityP);
+        childP->type            = KjObject;
+        childP->value           = entityP->value;
+        childP = nextP;
+        continue;
+      }
+    }
+
     const char* valKey    = primaryValueKey(typeP->value.s);
     KjNode*     valueNode = (valKey != NULL) ? kjLookup(childP, valKey) : NULL;
 

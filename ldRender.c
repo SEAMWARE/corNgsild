@@ -14,6 +14,7 @@
 #include "kalloc/KAlloc.h"                             // KAlloc
 #include "kjson/KjNode.h"                               // KjNode
 #include "kjson/kjBuilder.h"                             // kjString
+#include "kjson/kjLookup.h"                              // kjLookup
 
 #include "swNgsild/LdAttrType.h"                         // LdAttrType
 #include "swNgsild/LdVocab.h"                            // LD_VOCAB_*
@@ -272,6 +273,20 @@ bool ldToSimplified(KjNode* entityP, KAlloc* faP)
 
     if (ldIsEntityKeyword(childP->name) == false && childP->type == KjObject)
     {
+      // § 4.5.23 + § 4.5.4: join=inline attaches the linked Entity under
+      // `entity` on the Relationship instance. In simplified format with
+      // join, the value of the Relationship is the inlined Entity (itself
+      // simplified) — not the URI in `object`.
+      KjNode* entityValP = kjLookup(childP, "entity");
+      if (entityValP != NULL && entityValP->type == KjObject)
+      {
+        ldToSimplified(entityValP, faP);
+        childP->type  = entityValP->type;
+        childP->value = entityValP->value;
+        childP = nextP;
+        continue;
+      }
+
       KjNode* valueP = getValueNode(childP);
 
       if (valueP != NULL)
