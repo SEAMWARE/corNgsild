@@ -743,14 +743,10 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
   if (itemP->lang != NULL && itemP->lang[0] != 0)
     ldLangReduce(entityClone, itemP->lang, &swRest.kalloc);
 
-  if (itemP->format != NULL)
-  {
-    if (strcmp(itemP->format, "simplified") == 0 || strcmp(itemP->format, "keyValues") == 0)
-      ldSimplifyEntity(entityClone);
-    else if (strcmp(itemP->format, "concise") == 0)
-      ldConciseEntity(entityClone);
-  }
-
+  // Format conversion is deferred to notificationSendMany — it has to run
+  // AFTER the linked-entity hook attaches `entity` to Relationship
+  // instances, otherwise simplified turns the Relationship into a bare
+  // URI string and the inline join is silently dropped (ETSI 046_29_01).
   return entityClone;
 }
 
@@ -797,6 +793,25 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   {
     int level = (itemP->notifJoinLevel > 0) ? itemP->notifJoinLevel : 1;
     ldLinkedEntitiesHookInvoke(dataArray, itemP->notifJoin, level, itemP->sysAttrs, swNgsild.tenantP);
+  }
+
+  // Format conversion (deferred from buildNotifDataEntry so the linked-
+  // entity hook runs first). simplified/keyValues read `entity` off a
+  // Relationship when join=inline attached it — if simplify ran before
+  // the join hook, the Relationship would already be collapsed to its
+  // URI and the inlined Entity dropped on the floor.
+  if (itemP->format != NULL)
+  {
+    void (*fmtFn)(KjNode*) = NULL;
+    if (strcmp(itemP->format, "simplified") == 0 || strcmp(itemP->format, "keyValues") == 0)
+      fmtFn = ldSimplifyEntity;
+    else if (strcmp(itemP->format, "concise") == 0)
+      fmtFn = ldConciseEntity;
+    if (fmtFn != NULL)
+    {
+      for (KjNode* eP = dataArray->value.firstChildP; eP != NULL; eP = eP->next)
+        fmtFn(eP);
+    }
   }
 
   // Compact expanded URIs to short names (covers every data[] entry).
