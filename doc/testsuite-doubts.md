@@ -819,3 +819,64 @@ For the tests to expect 1, the fixtures must either (a) count all three CSRs as 
 **Spec:** § 5.13 mandates context ids be URIs (scheme://...). A bare path is not a URI.
 
 **Fix wanted:** the fixture should generate the full URL (broker base + path) before issuing the GET.
+
+
+## 34. 019_11_* — fixture polygon is self-intersecting per S2 geometry
+
+**Hit:** Suite setup of `QueryEntities.019 11` creates an entity with a
+5-vertex polygon whose `BC` and `EA` edges cross near vertex `A`. Mongo's
+2dsphere index (which uses S2 geometry) rejects with "Can't extract geo
+keys"; the entity creation returns 400 (was 500 before §34's broker fix)
+and all 8 sub-tests in the suite cascade-fail.
+
+Polygon coordinates: `[[13.2865906,52.5648645], [13.2879639,52.5648645],
+[13.2797241,52.4988679], [13.477478,52.4712703], [13.5049438,52.5373084],
+[13.2865906,52.5648645]]`. The first two vertices are essentially collinear
+at y=52.5648645, then BC goes far SW and EA (the closing edge) cuts back
+across BC just before reaching A.
+
+**Spec:** § 4.7.1 says polygons "should" not be self-intersecting (SHOULD,
+not MUST), so technically valid input — but any storage layer using S2
+(which most do) will refuse to index it.
+
+**Fix wanted:** pick a different polygon for these geo-query tests, or
+explicitly state the polygon contract is "S2-valid GeoJSON". Until then
+the seven 019_11_* sub-tests all fail at suite-setup.
+
+
+## 35. 046_24_01 / 046_28_01 — fixture compares createdAt/modifiedAt as literals
+
+**Hit:** Notification-with-linked-entity tests compare the broker's
+response against an expectation file containing hardcoded
+`"createdAt": "2025-05-19T15:20:16.418984Z"` / `"modifiedAt": "..."`. Since
+the test creates the entity at test-run time, the broker's actual timestamps
+will always differ — both at the entity level and inside the embedded
+`name`/`locatedAt` attributes.
+
+**Spec:** N/A.
+
+**Fix wanted:** the expectation file should mark these fields as
+"any value" / regex, or the assertion utility should skip them.
+
+
+## 36. 038_01_01 / 039_01_01 / 040_01_01 — CSR-Subscription fixtures
+don't expect notificationTrigger or notification stats
+
+**Hit:** Create/Update/Retrieve of a CSR-Subscription. ETSI expectation
+for the retrieved sub:
+- `isActive: true` present (broker now suppresses defaults; 028_06 expects suppression)
+- No `notificationTrigger` (broker now default-emits per § 5.2.12)
+- No `notification.timesSent`/`timesFailed`/etc. (broker emits stats per
+  § 5.2.14)
+
+028_06 (regular Subscription) expects the OPPOSITE: no isActive, yes
+notificationTrigger default. So ETSI's own fixtures disagree on the
+spec-default-emission rules across the two endpoints.
+
+**Spec:** § 5.2.12 — defaults aren't supposed to be persisted as user
+fields; § 5.2.14 — notification counters are part of the Subscription
+representation.
+
+**Fix wanted:** decide and apply consistently across all subscription
+retrieve fixtures (regular + CSR). Both endpoints share the Subscription
+resource type, so behaviour shouldn't diverge.
