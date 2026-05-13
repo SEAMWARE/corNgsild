@@ -708,21 +708,31 @@ opt into the un-filtered shape and pass these eight tests.
 spec-doubts § 26 for the proposal).
 
 
-## 26. § 5.10.2.4 / 037_10_01 — `?id=` alone is not enough per strict spec wording — RESOLVED on broker side
+## 26. § 5.10.2.4 / 037_10_01 — three separate bugs in one test (one was on broker side, two on fixture side)
 
-**Hit:** Test 037_10_01 calls `GET /csourceRegistrations?id=<csr1>,<csr3>` (no `type`, no `attrs`, no `q`, no geoQ). Expects 200 + the two CSRs.
+The test calls `GET /csourceRegistrations?id=<csr1>,<csr3>` and expects 200 + two specific CSRs.
 
-**Spec:** § 5.10.2.4 lists the required input as exactly one of:
-- (a) selector of Entity Types,
-- (b) list of Attribute names,
-- (c) NGSI-LD Query,
-- (d) NGSI-LD GeoQuery.
+### 26a. Too-wide rejection on `?id=` alone — RESOLVED broker-side
 
-`id` is not in that list verbatim, but it bounds the candidate set at least as tightly (an explicit URI list).
+§ 5.10.2.4 lists `type / attrs / q / geoQ` as the required sufficient selectors. `id` and `idPattern` are not in that list verbatim, but they bound the candidate set at least as tightly. Broker now accepts `?id=` and `?idPattern=` as sufficient selectors for CSR Discovery, mirroring the same relaxation already applied to `/entities`. Match function handles comma-separated `?id=A,B` as OR-of-any.
 
-**Our call:** broker now accepts `?id=` and `?idPattern=` as sufficient selectors for CSR Discovery, mirroring the same relaxation already applied to `/entities` (see spec-doubts.md). The match function also handles comma-separated `?id=A,B` as OR-of-any.
+Spec gap still worth raising with ETSI TC DATA — § 5.10.2.4 should mention id / idPattern.
 
-**Spec gap:** still worth raising — § 5.10.2.4 should be re-worded to include `id` / `idPattern` as sufficient selectors, since they bound the result set by definition.
+### 26b. `?id=` semantic — fixture confuses CSR's own id with EntityInfo.id
+
+Per § 5.10.2, `?id` filters on `EntityInfo.id` (entities the CSR claims to know about), **not** on the CSR's own identifier. The CSRs in this test are created with `entities: [{ "type": "Building" }]` — no `id` field — so the EntityInfo-id constraint is "any". Filtering on `?id=urn:ngsi-ld:ContextSourceRegistration:X` doesn't narrow anything; the broker returns all CSRs with matching information.
+
+The test author has mistaken the EntityInfo-id filter for a CSR-id filter. Either:
+- the fixture should query by something the EntityInfo actually has (a specific entity id, a type), or
+- spec should be amended to also support a filter on the CSR's own id (proposal-worthy — convenient for fetch-by-id when caller has discovered them earlier).
+
+Broker is spec-correct here.
+
+### 26c. Expected body is malformed — template never substituted
+
+The expectation file looks like Robot string-formatted `${first_id},${third_id}` straight into a JSON dict key, producing one key `"urn:ngsi-ld:CSR:A,urn:ngsi-ld:CSR:B"` (with literal comma) instead of two keys. Adjacent entries also show unfilled `urn:ngsi-ld:ContextSourceRegistration:randomUUID` placeholders. **No broker can pass this body assertion** — the fixture is shipped broken.
+
+**Fix wanted:** regenerate the expectation file with proper id substitution; once that's done, fix 26b by changing the query to a meaningful filter (e.g. `?type=Building`).
 
 
 ## 27. § 5.5.9 / 037_11_01 + 037_11_02 — pagination expects offset to index page-by-page, not item-by-item
