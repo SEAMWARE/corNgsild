@@ -82,14 +82,17 @@ static const char* firstElementKey(const char* attrType)
 // -----------------------------------------------------------------------------
 //
 // firstElementWrapped - true when the wire pair's first element must be
-// the wrapped {key: value} object instead of a bare value (§ 4.5.7 for
-// JsonProperty, § 4.5.x for VocabProperty).
+// the wrapped {key: value} object instead of a bare value (§ 4.5.9 —
+// see EXAMPLE 2 for LanguageProperty {"languageMap": {...}}, EXAMPLE 4
+// for JsonProperty {"json": ...}, EXAMPLE 5 for VocabProperty
+// {"vocab": ...}).
 //
 static bool firstElementWrapped(const char* attrType)
 {
   if (attrType == NULL) return false;
-  if (strcmp(attrType, "JsonProperty")  == 0) return true;
-  if (strcmp(attrType, "VocabProperty") == 0) return true;
+  if (strcmp(attrType, "LanguageProperty") == 0) return true;
+  if (strcmp(attrType, "JsonProperty")     == 0) return true;
+  if (strcmp(attrType, "VocabProperty")    == 0) return true;
   return false;
 }
 

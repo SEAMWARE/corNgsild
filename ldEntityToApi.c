@@ -188,8 +188,28 @@ void ldEntityToApi(KjNode* entityP, KAlloc* faP)
   {
     KjNode* nextP = childP->next;
 
-    // Only process entity-level attribute wrappers (KjObject, non-keyword)
-    if (childP->type != KjObject || childP->name == NULL || ldIsEntityKeyword(childP->name))
+    // Skip entity keywords (id, type, scope, ...).
+    if (childP->name == NULL || ldIsEntityKeyword(childP->name))
+    {
+      childP = nextP;
+      continue;
+    }
+
+    // Temporal attribute: KjArray of instance objects (not the
+    // dataset-keyed KjObject wrapper). ldEntityToApi's unwrap logic
+    // doesn't apply, but each instance's "value" key still needs
+    // restoring to the type-appropriate IRI (e.g. JsonProperty stores
+    // `value` but the API names it `json`).
+    if (childP->type == KjArray)
+    {
+      for (KjNode* instP = childP->value.firstChildP; instP != NULL; instP = instP->next)
+        restoreValueKey(instP);
+      childP = nextP;
+      continue;
+    }
+
+    // Otherwise must be the dataset-keyed wrapper (KjObject).
+    if (childP->type != KjObject)
     {
       childP = nextP;
       continue;
