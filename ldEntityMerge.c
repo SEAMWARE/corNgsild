@@ -45,11 +45,26 @@
 //
 // isNgsildNull - check if a node is the ngsi-ld null delete-marker
 //
+// Two shapes per § 4.5:
+//   - the URI string "urn:ngsi-ld:null" (any URI-valued slot)
+//   - the JSON object {"@none": "urn:ngsi-ld:null"} (languageMap slot —
+//     because languageMap is itself an object, the URI cannot stand
+//     alone; the @none key is the universal-language default)
+//
 static inline bool isNgsildNull(const KjNode* nodeP)
 {
-  return (nodeP != NULL &&
-          nodeP->type == KjString &&
-          strcmp(nodeP->value.s, LD_VOCAB_NGSILD_NULL) == 0);
+  if (nodeP == NULL)
+    return false;
+  if (nodeP->type == KjString)
+    return strcmp(nodeP->value.s, LD_VOCAB_NGSILD_NULL) == 0;
+  if (nodeP->type == KjObject)
+  {
+    KjNode* firstP = nodeP->value.firstChildP;
+    if (firstP == NULL || firstP->next != NULL) return false;   // exactly one child
+    if (firstP->name == NULL || strcmp(firstP->name, "@none") != 0) return false;
+    return firstP->type == KjString && strcmp(firstP->value.s, LD_VOCAB_NGSILD_NULL) == 0;
+  }
+  return false;
 }
 
 
