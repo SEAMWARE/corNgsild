@@ -208,9 +208,14 @@ static char* derivedSubBody(LdSubCacheItem* itemP,
   if (statusP != NULL)
     kjChildRemove(clone, statusP);
 
+  // Strip both the user-facing jsonldContext (the remote will resolve its
+  // own from @context) and the broker-filled `_jcResolved` (internal-only).
   KjNode* jcP = kjLookup(clone, "jsonldContext");
   if (jcP != NULL)
     kjChildRemove(clone, jcP);
+  KjNode* jcrP = kjLookup(clone, "_jcResolved");
+  if (jcrP != NULL)
+    kjChildRemove(clone, jcrP);
 
   KjNode* sysIdP = kjLookup(clone, "_id");
   if (sysIdP != NULL)
@@ -469,6 +474,8 @@ static char* patchBody(LdSubCacheItem* itemP, KjNode* fragmentP, int* bodyLenP)
 
   KjNode* jcP = kjLookup(clone, "jsonldContext");
   if (jcP != NULL) kjChildRemove(clone, jcP);
+  KjNode* jcrP = kjLookup(clone, "_jcResolved");
+  if (jcrP != NULL) kjChildRemove(clone, jcrP);
 
   if (kjLookup(clone, "@context") == NULL)
   {

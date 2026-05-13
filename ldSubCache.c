@@ -435,7 +435,12 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
     itemP->showChanges = (showP != NULL && showP->type == KjBoolean && showP->value.b == true);
   }
 
+  // User-provided `jsonldContext` (the spec-visible field) wins; otherwise
+  // fall back to `_jcResolved`, the broker-filled internal URL written by
+  // postSubscriptions when the user didn't supply one.
   KjNode* jcP = kjLookup(itemP->subTree, "jsonldContext");
+  if (jcP == NULL || jcP->type != KjString)
+    jcP = kjLookup(itemP->subTree, "_jcResolved");
   itemP->contextUrl = (jcP != NULL && jcP->type == KjString) ? jcP->value.s : NULL;
 
   KjNode* throttlingP = kjLookup(itemP->subTree, LD_VOCAB_THROTTLING);

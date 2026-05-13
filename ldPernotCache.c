@@ -209,7 +209,11 @@ LdPernotItem* ldPernotCacheItemAdd(LdPernotCache* cacheP, KjNode* subTree,
   KjNode* formatP = (notifP != NULL) ? kjLookup(notifP, LD_VOCAB_FORMAT) : NULL;
   itemP->format = (formatP != NULL && formatP->type == KjString) ? formatP->value.s : NULL;
 
+  // User-provided `jsonldContext` wins; otherwise fall back to broker-filled
+  // `_jcResolved`. Same convention as the regular sub cache.
   KjNode* jcP = kjLookup(itemP->subTree, "jsonldContext");
+  if (jcP == NULL || jcP->type != KjString)
+    jcP = kjLookup(itemP->subTree, "_jcResolved");
   itemP->contextUrl = (jcP != NULL && jcP->type == KjString) ? jcP->value.s : NULL;
 
   // State
