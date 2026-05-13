@@ -783,3 +783,39 @@ For the tests to expect 1, the fixtures must either (a) count all three CSRs as 
 **Broker:** rejects 400 InvalidRequest "Unknown/unsupported URL parameter: page". Correct per § 6.3.4 (unknown URL params must be rejected for body-bearing endpoints; for read endpoints the broker is also strict, which matches § 5.5.9's enumerated list).
 
 **Fix wanted:** the test fixtures should use `offset=2` / `offset=3` / etc. — actual NGSI-LD pagination — instead of `page=N`.
+
+
+## 30. D001_04_inc — Robot keyword typo `Generate Random Vehice Id`
+
+**Hit:** Test D001_04_inc setup calls `Generate Random Vehice Id`. Robot reports: `No keyword with name 'Generate Random Vehice Id' found. Did you mean: 'Generate Random Vehicle Entity Id'`.
+
+**Spec:** N/A — pure typo.
+
+**Fix wanted:** rename the call to `Generate Random Vehicle Entity Id` (the actual keyword in `Common.resource`).
+
+
+## 31. D001_02_exc / D002_02_exc / D012_01_exc — HttpCtrl `OSError` starting mock server
+
+**Hit:** Setup fails with bare `OSError`. The traceback (in the log.html) points at `HttpCtrl.Server.Start Server` — likely the mock can't bind its port (timing / leftover socket from a previous test).
+
+**Spec:** N/A.
+
+**Fix wanted:** make `Start Context Source Mock Server` resilient to bind failures (retry, or rebind on a different port). Today a single port-clash in any test cascades the entire setup. Same root cause as §22 (HttpCtrl mock fragility).
+
+
+## 32. 047_02_01 — fixture assertion compares two different CSR ids
+
+**Hit:** Setup-phase `Should Contain` checks that one CSR id list contains another id; they're unrelated (`[A]` should contain `B`). The setup fails immediately. The test is in ContextSourceRegistrationSubscriptionNotificationBehaviour, which has multiple Setup keywords that each generate fresh CSR ids — the assertion appears to use the wrong variable.
+
+**Spec:** N/A — fixture variable bug.
+
+**Fix wanted:** trace the variable indirection in the setup keyword chain and align the asserted ids.
+
+
+## 33. 053_06_01 — fixture sends path-only context id `/api/v1/context.jsonld`
+
+**Hit:** Setup retrieves an implicitly-created context via path `/api/v1/context.jsonld` (no scheme, no host). Broker (correctly per § 5.13) rejects with 400 BadRequestData "context id '/api/v1/context.jsonld' is not a valid URI". Fixture expects 200.
+
+**Spec:** § 5.13 mandates context ids be URIs (scheme://...). A bare path is not a URI.
+
+**Fix wanted:** the fixture should generate the full URL (broker base + path) before issuing the GET.
