@@ -920,3 +920,71 @@ independent stores).
 cap above what any reasonable accumulation hits. We're not enabling
 this by default in our broker because the spec-correct cap is part
 of what the suite ought to exercise.
+
+## 38. 041_04_02 / 041_04_03 — fixture uses non-spec `?page=` param
+
+**Test:**
+[041_04.robot](https://forge.etsi.org/rep/cim/ngsi-ld-test-suite/-/blob/develop/TP/NGSI-LD/ContextSource/RegistrationSubscription/QueryContextSourceRegistrationSubscriptions/041_04.robot) — "Check that one cannot query context source registration subscriptions with invalid page and limit parameters".
+
+```
+041_04_01 Invalid Limit            limit=-5   page=2
+041_04_02 Invalid Page             limit=2    page=-3
+041_04_03 Invalid Limit And Page   limit=0    page=0
+```
+
+All three assert `400 BadRequestData`.
+
+**Broker:** returns `400 InvalidRequest` for the two cases that
+include `?page=` (test names ending _02 and _03), because `page` is
+not a registered URL parameter and the broker correctly classifies an
+unknown URL parameter as InvalidRequest per § 6.3.20.
+
+**Spec:** NGSI-LD defines two pagination parameters — **`limit`**
+(§ 6.3.10 Table 6.3.10-1) and **`offset`** (§ 6.3.10 Table 6.3.10-2).
+There is no `page` parameter. § 6.3.20: "If an HTTP request for an
+operation contains parameters that are incompatible with the
+operation … an HTTP error response of type InvalidRequest should be
+returned." So `?page=…` is unknown → InvalidRequest, not
+BadRequestData.
+
+**Fix wanted:** rewrite the fixture to exercise only spec-defined
+pagination parameters. The intent ("reject negative pagination") is
+correct and worth keeping, but it should use `offset=-3` (the actual
+NGSI-LD analogue of "page") to validate the broker's value-range
+rejection on a known parameter, which IS BadRequestData per § 5.5.9.
+Alternatively, the test can keep `?page=` and reclassify its expected
+error to InvalidRequest.
+
+**Note:** 041_04_01 uses only `limit=-5` (no `page=`) and expects
+BadRequestData. That's consistent with the spec and our broker
+returns BadRequestData for it.
+
+## 39. 059_01_* + 007_02_02 + 015_01_01 (AddAttribute) + 050_02_02 — BadRequestData vs InvalidRequest split
+
+**Test pattern:** ETSI tests across several sections assert
+**InvalidRequest** for what § 5.5.4 / § 6.3.20 classify as
+syntactic/transport errors (as opposed to semantic errors in a
+parsed NGSI-LD payload, which are BadRequestData):
+
+- **059_01_xx** — `?invalidParams=invalidValue` on every endpoint
+  family. § 6.3.20: unknown URL param → InvalidRequest.
+- **007_02_02 Create A Temporal Entity With An Empty Json** —
+  empty request body. § 5.5.4: "not a valid JSON document" →
+  InvalidRequest.
+- **015_01_01 (setup) Append Attribute With Empty Body** — same as
+  above.
+- **050_02_02 Checking Wrong JSON** — POST `/jsonldContexts` with
+  malformed JSON. § 5.5.4 again — not a valid JSON document.
+- **050_02_01 Checking Incorrect Payload** — POST
+  `/jsonldContexts` with a JSON object whose shape is wrong
+  (missing required key). Our broker returns InvalidRequest here
+  because the payload is rejected at the syntactic-shape gate
+  ("payload must be a JSON object") *before* any semantic
+  @context-content validation. The test agrees.
+
+No fixture changes needed — this entry exists so future readers
+understand the rationale for the broker behaviour. The 11 fw
+failures + the symmetric 1 sw failure for these tests cleared after
+the broker stopped over-using BadRequestData on transport-layer
+issues.
+
