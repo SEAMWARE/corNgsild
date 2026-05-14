@@ -7,13 +7,17 @@
 // 
 //
 #include <stdbool.h>                                     // bool
+#include <string.h>                                      // strcmp, strstr, strlen, strrchr
 
 #include "kbase/kLibLog.h"                             // KLOG_T
-#include "swJsonld/swldExpand.h"                       // swldSetVocabExpandCheck
+#include "kjson/KjNode.h"                              // KjNode
+#include "swJsonld/swldExpand.h"                       // swldSetVocabExpandCheck, swldSetValueCheck
 
 #include "swNgsild/ldTraceLevels.h"                      // LdTInit
 #include "swNgsild/ldParams.h"                           // ldParamsInit
 #include "swNgsild/ldError.h"                            // ldError
+#include "swNgsild/ldCheckDateTime.h"                    // ldCheckDateTime
+#include "swNgsild/ldCheckUri.h"                         // ldCheckUri
 #include "swNgsild/LdProblem.h"                          // LD_ERROR_BAD_REQUEST_DATA
 #include "swNgsild/ldHooks.h"                            // ldHooksRegister
 #include "swNgsild/ldMqttNotify.h"                       // ldMqttInit
@@ -75,6 +79,169 @@ static bool ldVocabNameCheck(const char* name)
 
 // -----------------------------------------------------------------------------
 //
+// datatypeMatches - true if the @type string from a term def names the
+//                   given XSD datatype (handles short form `xsd:foo` and
+//                   the full http://www.w3.org/2001/XMLSchema#foo IRI).
+//
+static bool datatypeMatches(const char* type, const char* xsdLocal)
+{
+  if (type == NULL || xsdLocal == NULL) return false;
+
+  if (type[0] == 'x' && type[1] == 's' && type[2] == 'd' && type[3] == ':')
+    return strcmp(type + 4, xsdLocal) == 0;
+
+  const char* hash = strrchr(type, '#');
+  if (hash != NULL && strstr(type, "XMLSchema") != NULL)
+    return strcmp(hash + 1, xsdLocal) == 0;
+
+  return false;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldValueCheck - validate a value against a term's @type:<datatype>
+//
+// Invoked by swJsonld during expansion for any term whose @type is set
+// and is neither @id nor @vocab. Emits ldError + returns false on
+// mismatch.
+//
+// Supported datatypes (short + full-IRI forms both recognised):
+//   xsd:dateTime / xsd:dateTimeStamp   — ISO 8601 datetime
+//   xsd:date / xsd:time                — ISO 8601 partials
+//   xsd:integer / xsd:int / xsd:long / xsd:short / xsd:byte /
+//   xsd:nonNegativeInteger / xsd:positiveInteger
+//                                      — JSON int OR numeric string
+//   xsd:double / xsd:decimal / xsd:float
+//                                      — JSON number OR numeric string
+//   xsd:boolean                        — JSON bool OR "true"/"false"
+//   xsd:anyURI                         — string passing ldCheckUri
+//
+// Unknown datatypes pass silently — JSON-LD leaves their semantics to
+// the application.
+//
+static bool isIntegerString(const char* s)
+{
+  if (s == NULL || *s == 0) return false;
+  if (*s == '+' || *s == '-') ++s;
+  if (*s == 0) return false;
+  for (; *s != 0; ++s) if (*s < '0' || *s > '9') return false;
+  return true;
+}
+
+static bool isNumberString(const char* s)
+{
+  if (s == NULL || *s == 0) return false;
+  const char* p = s;
+  if (*p == '+' || *p == '-') ++p;
+  bool sawDigit = false;
+  while (*p >= '0' && *p <= '9') { ++p; sawDigit = true; }
+  if (*p == '.') { ++p; while (*p >= '0' && *p <= '9') { ++p; sawDigit = true; } }
+  if (*p == 'e' || *p == 'E')
+  {
+    ++p;
+    if (*p == '+' || *p == '-') ++p;
+    if (*p < '0' || *p > '9') return false;
+    while (*p >= '0' && *p <= '9') ++p;
+  }
+  return sawDigit && *p == 0;
+}
+
+static bool ldValueCheck(const char* term, const char* datatype, KjNode* valueP)
+{
+  if (valueP == NULL || term == NULL || datatype == NULL) return true;
+
+  if (datatypeMatches(datatype, "dateTime") || datatypeMatches(datatype, "dateTimeStamp"))
+  {
+    if (valueP->type != KjString || ldCheckDateTime(valueP->value.s) < 0)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Value",
+              "'%s' is bound to @type:%s but value is not a valid ISO 8601 dateTime",
+              term, datatype);
+      return false;
+    }
+    return true;
+  }
+
+  if (datatypeMatches(datatype, "date"))
+  {
+    if (valueP->type != KjString || valueP->value.s == NULL || strlen(valueP->value.s) != 10
+        || valueP->value.s[4] != '-' || valueP->value.s[7] != '-')
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Value",
+              "'%s' is bound to @type:%s but value is not a valid xsd:date (YYYY-MM-DD)",
+              term, datatype);
+      return false;
+    }
+    return true;
+  }
+
+  if (datatypeMatches(datatype, "time"))
+  {
+    if (valueP->type != KjString || valueP->value.s == NULL
+        || strlen(valueP->value.s) < 8 || valueP->value.s[2] != ':' || valueP->value.s[5] != ':')
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Value",
+              "'%s' is bound to @type:%s but value is not a valid xsd:time (HH:MM:SS)",
+              term, datatype);
+      return false;
+    }
+    return true;
+  }
+
+  if (datatypeMatches(datatype, "integer") || datatypeMatches(datatype, "int")  ||
+      datatypeMatches(datatype, "long")    || datatypeMatches(datatype, "short") ||
+      datatypeMatches(datatype, "byte")    || datatypeMatches(datatype, "nonNegativeInteger") ||
+      datatypeMatches(datatype, "positiveInteger"))
+  {
+    if (valueP->type == KjInt) return true;
+    if (valueP->type == KjString && isIntegerString(valueP->value.s)) return true;
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Value",
+            "'%s' is bound to @type:%s but value is not a valid integer", term, datatype);
+    return false;
+  }
+
+  if (datatypeMatches(datatype, "double")  || datatypeMatches(datatype, "decimal") ||
+      datatypeMatches(datatype, "float"))
+  {
+    if (valueP->type == KjInt || valueP->type == KjFloat) return true;
+    if (valueP->type == KjString && isNumberString(valueP->value.s)) return true;
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Value",
+            "'%s' is bound to @type:%s but value is not a valid number", term, datatype);
+    return false;
+  }
+
+  if (datatypeMatches(datatype, "boolean"))
+  {
+    if (valueP->type == KjBoolean) return true;
+    if (valueP->type == KjString && valueP->value.s != NULL &&
+        (strcmp(valueP->value.s, "true") == 0 || strcmp(valueP->value.s, "false") == 0))
+      return true;
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Value",
+            "'%s' is bound to @type:%s but value is not 'true' or 'false'", term, datatype);
+    return false;
+  }
+
+  if (datatypeMatches(datatype, "anyURI"))
+  {
+    if (valueP->type != KjString || ldCheckUri(valueP->value.s) == false)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Value",
+              "'%s' is bound to @type:%s but value is not a valid URI", term, datatype);
+      return false;
+    }
+    return true;
+  }
+
+  // Unknown / unsupported datatype — pass through silently.
+  return true;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // Global state
 //
 static bool ldInitialized = false;
@@ -97,6 +264,7 @@ int ldInit(void)
 
   ldHooksRegister();
   swldSetVocabExpandCheck(ldVocabNameCheck);
+  swldSetValueCheck(ldValueCheck);
 
   // libmosquitto global init for MQTT notifications (§ 7).
   if (ldMqttInit() != 0)
