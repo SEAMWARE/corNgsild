@@ -880,3 +880,43 @@ representation.
 **Fix wanted:** decide and apply consistently across all subscription
 retrieve fixtures (regular + CSR). Both endpoints share the Subscription
 resource type, so behaviour shouldn't diverge.
+
+
+## 37. Robot teardowns clean current-state but NOT temporal history
+
+**Hit:** Run-to-run variance of ±10–15 tests on the full ETSI suite,
+all concentrated in the **021_* (temporal)** cluster, all showing as
+`200 != 206` from the broker. Cherry-picking a single failing
+021_* test in isolation makes it pass — the failure only reproduces
+inside the full suite run.
+
+**Why:** every `Test Teardown` in the ETSI Robot suite does
+`DELETE /ngsi-ld/v1/entities/{id}` (current-state cleanup) but does
+NOT also `DELETE /ngsi-ld/v1/temporal/entities/{id}` (history
+cleanup). TRoE rows from every prior test linger for the entire run.
+By the time the temporal tests run, the per-entity attribute-instance
+history (across all tests sharing the broker's timescale DB) exceeds
+the broker's `-troeCap` (default 100, § 6.3.10). The TRoE driver
+correctly returns 206 + Content-Range; the test expected 200.
+
+**Spec:** § 6.3.10 — 206 + Content-Range is the right answer for a
+truncated temporal result. Spec-correct broker, fixture-side problem.
+
+**Why this matters beyond the count drift:** the suite is no longer
+order-independent. Cherry-picking a single 021_* test to debug a
+failure works (clean DB → fits under the cap → passes), but the
+exact same test fails when run inside the suite (cap blown by prior
+fixtures). That makes triage of any temporal failure unnecessarily
+expensive.
+
+**Fix wanted:** add `DELETE /ngsi-ld/v1/temporal/entities/{entity_id}`
+to every test teardown that creates temporal data, paired with the
+existing entity-delete call. The broker fully supports the temporal
+DELETE; teardown order doesn't matter (current and temporal are
+independent stores).
+
+**Workaround on the broker side:** start the broker with
+`-troeCap 100000` (or larger) for ETSI baseline runs — pushes the
+cap above what any reasonable accumulation hits. We're not enabling
+this by default in our broker because the spec-correct cap is part
+of what the suite ought to exercise.
