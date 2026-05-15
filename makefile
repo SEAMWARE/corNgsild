@@ -85,6 +85,7 @@ LIB_SOURCES   = swNgsild.c \
                 ldDistMerge.c \
                 ldDatasetIdDedup.c \
                 ldNameContentCheck.c \
+                ldUrlWildcardCheck.c \
                 ldMqttNotify.c \
                 ldSnapshotCache.c \
                 ldSnapshotNotify.c \
