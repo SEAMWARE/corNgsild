@@ -988,3 +988,57 @@ failures + the symmetric 1 sw failure for these tests cleared after
 the broker stopped over-using BadRequestData on transport-layer
 issues.
 
+## 40. HttpCtrl mock — `Set Stub Reply` URL is exact-match (path + query string)
+
+**Library:** `robotframework-httpctrl` (used by all DistOps tests via
+`resources/MockServerUtils.resource` → `Start Context Source Mock Server`).
+
+**Behaviour:** in `HttpCtrl/http_stub.py::HttpStubCriteria.__eq__` the
+stub is matched against an incoming request only when both `method`
+*and* `url` are case-insensitively equal. The "url" is the request's
+raw target — path **and** query string, no normalisation. A stub
+registered as `Set Stub Reply  POST  /a/b/attrs/` will *not* match a
+request to `/a/b/attrs` (missing trailing slash) or
+`/a/b/attrs/?sysAttrs=true` (extra query string).
+
+**Concrete impact on the swBroker / fwBroker DistOps tests:**
+
+1. **Trailing-slash mismatch on the attribute-list endpoint.** § 6.6.3
+   Table 6.6.3.1-1 shows the URI template as `/entities/{entityId}/attrs/`
+   (with trailing slash). Many test stubs include the trailing slash;
+   our broker used to send `/attrs` (no slash) on forwarded requests.
+   D003_01_red, D004_01_red, D006_02_exc, D014_01_red, D014_02_red all
+   failed with `204 != 404` because the mock never matched the
+   stub → mock fell back to the default reply → forward "failed" from
+   the broker's perspective → `anyCsrSucceeded` stayed false → broker
+   returned 404 "entity not found".
+
+   **Worked around** on the broker side (postEntityAttrs / patchEntityAttrs /
+   postEntityTemporalAttrs now emit the trailing slash) but the
+   underlying mock-matching bug stays.
+
+2. **Forward URL carries `?sysAttrs=true` and `&type=…`.** For
+   retrieveEntity through CSRs the broker has to ask the upstream for
+   sysAttrs (createdAt / modifiedAt are needed at the merge tiebreaker
+   per § 4.5.5.3) and the entity type is added when the CSR's
+   RegistrationInfo specifies one. Both are correct per § 5.7.1 / §
+   4.3.6.3. The ETSI stubs are registered with `Set Stub Reply  GET
+   /ngsi-ld/v1/entities/{id}  200  …` — no query string — so the
+   stub never matches the broker's request.
+
+   This affects:
+     * D010_01_inc, D010_01_red (single-CSR retrieve)
+     * D010_03_inc_01..03 (chained retrieve)
+
+   **Not worked around** — dropping `sysAttrs=true` from the forward
+   would silently break the spec-mandated merge for multi-source
+   reads. The fix belongs on the testsuite side.
+
+**Fix wanted upstream:** either
+  (a) loosen `HttpStubCriteria.__eq__` to compare just the path
+      (with optional `?…` glob support), or
+  (b) update every affected `Set Stub Reply` to register both the
+      canonical URL and a `?sysAttrs=true` variant (cumbersome), or
+  (c) switch tests that need precise URL matching to `Wait For
+      Request` + manual reply instead of the stub mechanism.
+
