@@ -1221,3 +1221,189 @@ precisely to make this case unambiguous.
 `{ "expiresAt": "urn:ngsi-ld:null" }` (with `Content-Type:
 application/json` — the sentinel survives JSON-LD expansion
 because it is a string, not null). The broker is correct.
+
+
+## 49. `001_05_02 / 003_04_02 / 003_05_02 / 010_04_01 / 033_05_01` — fixtures key on the expanded IRI in plain-JSON responses
+
+**Hit:** the test code reads response keys with the fully-
+expanded JSON-LD IRI:
+```python
+${response_body['ngsi-ld:default-context/almostFull']}
+${response_body['https://ngsi-ld-test-suite/context#almostFull']}
+${response_body['ngsi-ld:default-context/attribute_to_be_added']}
+${response_body['ngsi-ld:default-context/Building']}
+```
+Each fails with `KeyError` because the broker compacts the
+response back to short names (`almostFull`, `Building`) as
+spec wants.
+
+**Spec:** § 6.3.5 — `application/json` responses are compacted
+using the user @context. Short names are correct on the wire.
+
+**Broker:** correct (compacts).
+
+**Fix wanted:** Robot tests should access
+`${response_body['almostFull']}`, `Building`, etc. — i.e.,
+the short names that JSON-LD compaction produces.
+
+
+## 50. `020_05_02 / 020_13_06..09 / 021_15_05..07` — temporal 206 vs 200
+
+**Hit:** broker emits **206 Partial Content** + `Content-Range`
+when the temporal slice exceeds the per-entity instance cap
+(`--troeInstanceCap`, default 20 per § 6.3.10). Tests expect
+**200** in cases where the slice still fits, OR **206** in
+cases where the slice fits but the test predates the cap rule.
+
+The result: each test in this family encodes one specific
+interpretation of when 206 should fire, but the broker (using
+a uniform "instance count > cap" rule) crosses the test's
+expectation at different points.
+
+**Spec:** § 6.3.10 / § 6.3.5 — the broker SHALL emit 206 +
+Content-Range when an entity's instance count exceeds the
+configured pageSize. The configured pageSize is broker-
+dependent; the test suite hard-codes one specific value.
+
+**Broker:** correct under its own configured cap. Same behaviour
+as doubt #41 (`020_14_01/02` — default temporal page size not
+in the spec).
+
+**Fix wanted:** either the test suite needs a documented
+expected-cap that brokers honour, or the assertion accepts
+both 200 and 206 + Content-Range for these cases.
+
+
+## 51. `054_01_01 Replace An Existing Entity` — modifiedAt jitter on exact-string compare
+
+**Hit:** the assertion compares `modifiedAt` strings byte-for-
+byte:
+```
+2026-05-20T15:22:04.844856025Z != 2026-05-20T15:22:04.823397351Z
+```
+The two timestamps differ by ~20 ms because the broker records
+`modifiedAt` at the moment of write, then the test reads back
+and compares to a fixture timestamp generated at a different
+moment.
+
+**Spec:** § 4.5.10 — `modifiedAt` is broker-assigned; the
+client cannot predict its exact value.
+
+**Broker:** correct (writes its own timestamp).
+
+**Fix wanted:** the test should compare with tolerance (e.g.
+ignore `modifiedAt` and other server-side timestamps in the
+deep-diff), or assert "is a valid DateTime, is close to now".
+
+
+## 52. `047_03_01 / 047_04_01 / 047_08_01 / 047_09_01 / 047_16_01` — hardcoded CSR ids in assertion
+
+**Hit:** these CSR-subscription tests assert against a CSR id
+that's hardcoded in the expectation file, e.g.:
+```
+[ urn:ngsi-ld:ContextSourceRegistration:5902198644784923 ] does not contain value
+'urn:ngsi-ld:ContextSourceRegistration:5902198644784923'
+```
+But the setup generates a fresh random CSR id each run
+(`Generate Random CSR Id`). The expectation file is never
+re-written with the random id; the comparison can therefore
+never match.
+
+**Spec:** N/A — purely a test-fixture wiring issue.
+
+**Broker:** correct (notification fires with the actually-
+registered CSR id).
+
+**Fix wanted:** the assertion needs to substitute the
+generated CSR id into the expectation (the same trick the
+test does for entity ids elsewhere), or the expectation file
+needs to be templated.
+
+
+## 53. `047_05_01 / 047_06_01` — fixture predates `timesFailed` and `status` fields
+
+**Hit:**
+```
+Item root['timesFailed'] added to dictionary.
+Value of root['status'] changed from "ok" to "failed".
+```
+The broker now emits `timesFailed` (and reflects the success/
+failure of the last notification attempt in `status`). Older
+expectation files don't list these.
+
+Same shape as doubt #45 (`041_01_01 / 041_02_03 / 038_02_01`
+— fixtures omit `notificationTrigger`).
+
+**Broker:** correct (per § 5.11 the CSR-sub maintains delivery
+stats; the spec doesn't forbid surfacing them).
+
+**Fix wanted:** regenerate the expectations against a current-
+spec broker.
+
+
+## 54. `051_04_03` — fixture references an undeclared Robot variable
+
+**Hit:** assertion fails with
+```
+Variable '${ERROR_TYPE_RESOURCE_NOT_FOUND}' not found.
+```
+The variable isn't declared in any of the imported `.resource`
+files. The test cannot run at all.
+
+**Broker:** never even reached.
+
+**Fix wanted:** declare `${ERROR_TYPE_RESOURCE_NOT_FOUND}` in
+`resources/ApiUtils/Common.resource` (the rest of the suite
+defines a parallel set of `ERROR_TYPE_*` variables there).
+
+
+## 55. `051_08_01 / 051_08_02 / 051_09_01` — Delete-Core-@context behaviour is spec-undefined
+
+**Hit:** tests call `DELETE /jsonldContexts/{core-context-id}`
+and assert specific status codes (variously 204 / 404 / 400).
+The broker treats the core context as immutable and rejects
+with 400 ("core context cannot be deleted").
+
+**Spec:** § 6.5 — does not define what should happen when a
+client tries to delete the core JSON-LD @context. The tests
+disagree with each other on which status to expect (204 from
+one, 404 from another), confirming the spec gap.
+
+**Broker:** consistent (always 400 with a descriptive detail).
+
+**Fix wanted:** spec needs to mandate one of: 400 (delete
+forbidden), 405 (method not allowed on the core resource), or
+204 + reload-from-disk. Once chosen, the three tests should
+all assert the same code.
+
+
+## 56. `019_11_01..08 / 021_09_02` — fixture polygon is self-intersecting at vertex A
+
+**Hit:** suite setup creates a Building with
+`building-location-polygon.jsonld`, whose polygon is:
+```
+A = (13.2865906, 52.5648645)
+B = (13.2879639, 52.5648645)
+C = (13.2797241, 52.4988679)
+D = (13.477478,  52.4712703)
+E = (13.5049438, 52.5373084)
+```
+
+A and B share the same latitude and B is only 0.0014° east of
+A. Edge BC drops straight down from B while edge EA closes the
+polygon back to A — and in the tiny x-interval [13.2866,
+13.2880] those two edges cross (BC dips below EA's near-A end,
+then the polygon "wraps" around). The broker's planar self-
+intersection check (mirroring MongoDB 2dsphere strictness)
+correctly returns 400 at setup time, which cascades the entire
+019_11_* suite plus the related polygon test 021_09_02.
+
+**Spec:** § 4.7 — Polygons must be simple (non-self-
+intersecting). § 6.5.3 — bad geometry → 400 BadRequestData.
+
+**Broker:** correct.
+
+**Fix wanted:** replace the fixture polygon with one whose
+near-A edge has even modest separation in either lat or lon —
+e.g. shifting B east by another ~0.005° eliminates the
+self-intersection without changing the test's intent.
