@@ -10,6 +10,7 @@
 #include <string.h>                                      // strcmp, strncasecmp, memset
 
 #include "kalloc/kaAlloc.h"                             // kaAlloc
+#include "kalloc/kaStrdup.h"                            // kaStrdup
 #include "kjson/KjNode.h"                               // KjNode
 #include "kjson/kjLookup.h"                             // kjLookup
 #include "kjson/kjBuilder.h"                        // kjChildRemove, kjChildAdd
@@ -583,12 +584,57 @@ static void ldParseHook(void)
   if (atCtx != NULL && (atCtx->type == KjArray || atCtx->type == KjObject))
     swNgsild.userContextBody = atCtx;
 
+  // § 4.17 — for Subscription / ContextSourceSubscription bodies, an
+  // entities[].type may carry a type-selection expression like
+  // "(Building|Tower)". JSON-LD's @vocab fallback otherwise produces
+  // "<vocab>(Building|Tower)" — a polluted IRI that doesn't parse as
+  // a § 4.17 expression and never matches any entity (046_16_01).
+  // Snapshot the raw strings for those type fields and restore them
+  // after expansion; ldTypeExprParse will then expand each leaf
+  // type individually using the still-current request @context.
+  KjNode** rawTypeNodes = NULL;
+  char**   rawTypeValues = NULL;
+  int      rawTypeN      = 0;
+  if (recordTypeValue != NULL &&
+      (strcmp(recordTypeValue, "Subscription") == 0))
+  {
+    KjNode* entitiesP = kjLookup(swRest.in.requestTree, "entities");
+    if (entitiesP != NULL && entitiesP->type == KjArray)
+    {
+      int cap = 0;
+      for (KjNode* selP = entitiesP->value.firstChildP; selP != NULL; selP = selP->next)
+        cap++;
+      if (cap > 0)
+      {
+        rawTypeNodes  = (KjNode**) kaAlloc(&swRest.kalloc, cap * sizeof(KjNode*));
+        rawTypeValues = (char**)   kaAlloc(&swRest.kalloc, cap * sizeof(char*));
+        for (KjNode* selP = entitiesP->value.firstChildP; selP != NULL; selP = selP->next)
+        {
+          if (selP->type != KjObject) continue;
+          KjNode* tP = kjLookup(selP, "type");
+          if (tP == NULL || tP->type != KjString || tP->value.s == NULL) continue;
+          bool hasOp = false;
+          for (const char* p = tP->value.s; *p != 0 && !hasOp; p++)
+            if (*p == '(' || *p == ')' || *p == '|' || *p == '&' || *p == ',') hasOp = true;
+          if (!hasOp) continue;
+          rawTypeNodes[rawTypeN]  = tP;
+          rawTypeValues[rawTypeN] = kaStrdup(&swRest.kalloc, tP->value.s);
+          rawTypeN++;
+        }
+      }
+    }
+  }
+
   // ldUrlParams.c has already set swNgsild.contextP from the Link header
   // (or to the core context if no Link). swldExpandTree uses that as the
   // base context; an in-body @context overrides it for the body subtree
   // and becomes the new effective context (returned and chained back
   // into swNgsild.contextP).
   swNgsild.contextP = swldExpandTree(swRest.in.requestTree, swNgsild.contextP, &swRest.kalloc);
+
+  // Restore raw type-selection expressions on the now-expanded tree.
+  for (int i = 0; i < rawTypeN; i++)
+    rawTypeNodes[i]->value.s = rawTypeValues[i];
 
   //
   // Relink `type` at its original position (right after typePrevP, or at
