@@ -24,11 +24,11 @@
 //
 // expandType - expand a single type name via the request's @context
 //
-static char* expandType(const char* name, KAlloc* faP)
+static char* expandType(const char* name, KAlloc* kaP)
 {
-  char* expanded = swldExpand(swNgsild.contextP, name, faP, NULL, NULL);
+  char* expanded = swldExpand(swNgsild.contextP, name, kaP, NULL, NULL);
 
-  return (expanded != NULL) ? expanded : kaStrdup(faP, name);
+  return (expanded != NULL) ? expanded : kaStrdup(kaP, name);
 }
 
 
@@ -37,10 +37,10 @@ static char* expandType(const char* name, KAlloc* faP)
 //
 // parseGroup - parse an AND group (semicolon-separated types, possibly wrapped in parens)
 //
-// Input: a faP-strdup'd string like "Home;Vehicle" or "Building" (parens already stripped).
+// Input: a kaP-strdup'd string like "Home;Vehicle" or "Building" (parens already stripped).
 // Splits on ';', expands each type, fills group->typeV and group->count.
 //
-static bool parseGroup(char* str, LdTypeGroup* group, KAlloc* faP)
+static bool parseGroup(char* str, LdTypeGroup* group, KAlloc* kaP)
 {
   // Count semicolons to determine array size
   int count = 1;
@@ -51,7 +51,7 @@ static bool parseGroup(char* str, LdTypeGroup* group, KAlloc* faP)
       count++;
   }
 
-  group->typeV = (char**) kaAlloc(faP, (count + 1) * sizeof(char*));
+  group->typeV = (char**) kaAlloc(kaP, (count + 1) * sizeof(char*));
   group->count = count;
 
   // Split on ';'
@@ -72,7 +72,7 @@ static bool parseGroup(char* str, LdTypeGroup* group, KAlloc* faP)
         return false;
       }
 
-      group->typeV[ix++] = expandType(start, faP);
+      group->typeV[ix++] = expandType(start, kaP);
 
       if (end)
         break;
@@ -96,13 +96,36 @@ static bool parseGroup(char* str, LdTypeGroup* group, KAlloc* faP)
 //   OrEntityType = '(' EntityType *(';' EntityType) ')' | EntityType
 //   orOp         = '|' / ','
 //
-LdTypeExpr* ldTypeExprParse(const char* value, KAlloc* faP)
+LdTypeExpr* ldTypeExprParse(const char* value, KAlloc* kaP)
 {
   if (value == NULL || value[0] == 0)
     return NULL;
 
   // Work on a copy
-  char* buf = kaStrdup(faP, value);
+  char* buf = kaStrdup(kaP, value);
+
+  // § 4.17 allows superfluous outer parens — `(Building|Tower)` is
+  // semantically identical to `Building|Tower`. Strip them only when
+  // they wrap the WHOLE expression (open at index 0, matching close
+  // at the last char with depth never returning to 0 in between) —
+  // otherwise `(A;B)|(C;D)` would lose its grouping. Iterate so
+  // `((A|B))` collapses fully.
+  while (true)
+  {
+    int len = (int) strlen(buf);
+    if (len < 2 || buf[0] != '(' || buf[len - 1] != ')') break;
+    int  depth = 0;
+    bool wraps = true;
+    for (int i = 0; i < len - 1; i++)
+    {
+      if      (buf[i] == '(') depth++;
+      else if (buf[i] == ')') depth--;
+      if (depth == 0) { wraps = false; break; }
+    }
+    if (!wraps) break;
+    buf[len - 1] = 0;
+    buf++;
+  }
 
   //
   // First pass: count OR groups by scanning for '|' and ',' outside parens
@@ -121,9 +144,9 @@ LdTypeExpr* ldTypeExprParse(const char* value, KAlloc* faP)
   //
   // Allocate result
   //
-  LdTypeExpr* expr = (LdTypeExpr*) kaAlloc(faP, sizeof(LdTypeExpr));
+  LdTypeExpr* expr = (LdTypeExpr*) kaAlloc(kaP, sizeof(LdTypeExpr));
 
-  expr->groupV     = (LdTypeGroup*) kaAlloc(faP, groupCount * sizeof(LdTypeGroup));
+  expr->groupV     = (LdTypeGroup*) kaAlloc(kaP, groupCount * sizeof(LdTypeGroup));
   expr->groupCount = groupCount;
   expr->isSimple   = true;
 
@@ -158,7 +181,7 @@ LdTypeExpr* ldTypeExprParse(const char* value, KAlloc* faP)
           groupStr[len - 1] = 0;
       }
 
-      if (parseGroup(groupStr, &expr->groupV[gix], faP) == false)
+      if (parseGroup(groupStr, &expr->groupV[gix], kaP) == false)
         return NULL;
 
       if (expr->groupV[gix].count > 1)
