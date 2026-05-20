@@ -1581,3 +1581,74 @@ GET the current-state endpoint (which then also needs a setup
 that puts the entity into current state to begin with, since
 `POST /temporal/entities/` against a non-existent current
 entity skips creation per § 5.7.2.1).
+
+
+## 61. `047_16_01 / 047_16_03` — PATCH /csourceSubscriptions has no @context, so the new entity-selector terms expand differently than the CSR's terms
+
+**Hit:**
+
+Setup (in the same suite):
+- CSR1 (Vehicle) and CSR2 (Bus) are POSTed with
+  `Content-Type: application/ld+json` + an `@context` array
+  pointing at the test-suite-compound. The compound's nested
+  `test-suite.jsonld` has an explicit mapping
+  `"Vehicle" → "https://ngsi-ld-test-suite/context#Vehicle"`,
+  so each CSR's `information[0].entities[0].type` is stored
+  as `https://ngsi-ld-test-suite/context#Vehicle`.
+- The CSR-subscription is initially created the same way
+  (entities[].type = `Building`, expanded against
+  test-suite-compound to `https://ngsi-ld-test-suite/context#Building`).
+
+Test body:
+```robot
+PATCH /csourceSubscriptions/{id}    json={"entities":[{"type":"Vehicle"}]}
+```
+which `requests` sends as `Content-Type: application/json`
+with NO Link header. Per § 6.3.5 the broker resolves `Vehicle`
+against the core context's `@vocab` because no @context
+information arrives with the request. The PATCH ends up
+overwriting `entities[0].type` in the cached subscription as
+`https://uri.etsi.org/ngsi-ld/default-context/Vehicle`.
+
+Now the cached subscription's entity-selector IRI is
+`uri.etsi.org/ngsi-ld/default-context/Vehicle`, but CSR1's
+entityInfo IRI is `ngsi-ld-test-suite/context#Vehicle`. Same
+token "Vehicle" but expanded under two different @contexts.
+They don't compare equal, the sub doesn't match CSR1, and the
+post-PATCH `newlyMatching` notification never fires.
+
+**Why 047_16_02 (Bus) accidentally passes:**
+
+`test-suite.jsonld` defines `Vehicle`, `Building`,
+`OffStreetParking` and a handful of attribute terms — but NOT
+`Bus`. When CSR2 was POSTed, the broker walked the compound
+@context looking for `Bus`, didn't find it, and fell through
+to the core `@vocab` of `https://uri.etsi.org/ngsi-ld/default-context/`.
+So CSR2.entityInfo[0].type was stored as
+`https://uri.etsi.org/ngsi-ld/default-context/Bus` — exactly
+the same IRI the PATCH later produces for `Bus`.
+
+047_16_01 (Vehicle) hits the asymmetry; 047_16_03 covers both
+Vehicle and Bus and fires the notification with only the Bus
+half (`data[1]` missing).
+
+**Spec:** broker behaviour is correct for the wire it sees. The
+PATCH carries no @context, so `Vehicle` is a locally undefined
+term and the broker's resolution against core `@vocab` is the
+only spec-aware option.
+
+**Fix wanted:** the test PATCH should send the same @context
+that created the resources — either `Content-Type:
+application/ld+json` with the `@context` array in the body, or
+`Content-Type: application/json` with a Link header naming the
+test-suite-compound. Without one of those, `Vehicle` is
+locally undefined and the broker has nothing to align it
+against.
+
+**Broker improvement idea (future work):** on PATCH of an
+existing resource with a stored `_jcResolved`/`jsonldContext`,
+fall back to the stored @context if the request omits one.
+That would mask this fixture bug, but it changes semantics the
+spec doesn't actually mandate, and would also need an opt-out
+for clients that intentionally want default-vocab semantics.
+Not pursuing for now.
