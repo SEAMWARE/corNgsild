@@ -1697,3 +1697,45 @@ mandated algorithm (and 020_14 gets explicit normative
 backing) or the suite needs to assert observably (e.g.
 "total instance count ≤ cap" rather than "this attribute is
 empty").
+
+
+## 63. `047_07_01 / 047_07_02` — flaky in full-suite due to cross-test state leak; pass in isolation
+
+**Hit:** when run alone, both subtests pass — the broker
+correctly skips notifications for a sub patched to
+`isActive: false` (paused) or `expiresAt` in the past
+(expired). When the full ETSI suite runs them in suite-order,
+`Wait for no notification` (5s) sees a stray
+`POST /notify` arrive and the assertion fails.
+
+**Root cause:** the suite's `Start Local Server` /
+`Stop Local Server` pair is per-test, but the HTTP listener
+on port 1111 is the SAME port the previous tests in the 047_*
+folder used as their notification endpoint. If an earlier
+test's broker is still draining notifications at the moment
+047_07's `Wait for no notification` window opens, the new
+listener catches them — they're leftovers from a prior sub /
+CSR, not from 047_07's paused/expired sub at all.
+
+**Spec:** broker behaviour is correct in both isolated and
+suite mode. The flakiness is purely test-framework
+sequencing.
+
+**Broker:** runs both subtests cleanly when invoked alone via
+`robot --test '047_07_*' …`. Verified: 047_07_01 / 02 both
+PASS in isolation; both FAIL in the full-folder run with a
+stray-notification "request was received".
+
+**Fix wanted:** the suite needs either
+(a) per-test cleanup that drains the local listener queue
+    before exiting, or
+(b) a longer stabilisation delay between tests in the 047_*
+    folder, or
+(c) per-test ports for the local listener so leftover
+    notifications can't bleed across.
+
+**Also tagged:** 047_01_01 — same family, but it flips the
+other direction (PASSes in full-suite, FAILs in isolation).
+This direction-flip across the suite is the strongest
+indicator that the suite's listener/teardown sequencing is
+the actual problem, not the broker.
