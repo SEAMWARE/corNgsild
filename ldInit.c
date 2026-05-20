@@ -46,6 +46,20 @@ static bool ldVocabNameCheck(const char* name)
 {
   if (name == NULL || name[0] == 0) return true;
 
+  // § 4.17 — when the name comes from a subscription's
+  // entities[].type or similar field, it can be a type-selection
+  // expression with operators `(`, `)`, `|`, `&`, `,`. None of
+  // those are legal in a single attribute name (§ 4.6.2 grammar
+  // permits only letters / digits / `_` / `.` / `-` / `:`), so if
+  // we see any of them the value isn't a single name and the
+  // attribute-name rules don't apply. Skip the check; the type-
+  // selection parser elsewhere validates the expression itself.
+  for (const unsigned char* p = (const unsigned char*) name; *p != 0; ++p)
+  {
+    if (*p == '(' || *p == ')' || *p == '|' || *p == '&' || *p == ',')
+      return true;
+  }
+
   // First char must be a Letter (ASCII letter or non-ASCII high byte).
   unsigned char first = (unsigned char) name[0];
   bool firstOk = (first >= 0x80) ||
