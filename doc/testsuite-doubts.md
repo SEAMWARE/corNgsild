@@ -1140,3 +1140,55 @@ expectations.
 **Fix wanted:** update the affected fixtures + expectations to
 the current spec, OR drop deep-diff in favour of asserting only
 user-set fields.
+
+
+## 46. `002_02_01 / 054_02_02 / 056_02_02` — confused expectations for verbs on `/entities/`
+
+**Hit:** three fixtures hit the entity collection endpoint with a
+write verb and no id, each expecting a different status:
+
+- `002_02_01` — `DELETE /entities/` — expects **405**
+- `054_02_02` — `PUT /entities/`    — expects **400**
+- `056_02_02` — `PATCH /entities/`  — expects **400**
+
+**Spec:**
+- `DELETE /entities` IS a real endpoint (§ 6.4.3.3 — Purge
+  Entities). Purge was added post-1.6.1, so the test fixture
+  (likely authored against pre-purge spec) treats it as
+  non-existent and expects 405. The broker correctly handles
+  purge and returns 400 with "requires at least one of
+  id/type/idPattern/q/geoquery/scopeQ or ?local=true" — the user
+  supplied no filter.
+- `PUT /entities` and `PATCH /entities` are NOT defined on the
+  collection — only on the individual `/entities/{id}` resource.
+  HTTP convention says 405 Method Not Allowed.
+
+**Broker:** consistent and correct on all three (400 for purge,
+405 for the two undefined verbs).
+
+**Fix wanted:** the three fixtures need consistent + spec-aware
+expectations:
+- `002_02_01`: change to 400 (purge endpoint, missing filter) —
+  OR keep at 405 and add a filter so the response really IS 405.
+- `054_02_02`, `056_02_02`: change to 405.
+
+
+## 47. `016_02_06` — PATCH temporal attr instance with empty attr name
+
+**Hit:** `PATCH /temporal/entities/{id}/attrs//{instanceId}` (note
+the empty attr-name segment). Test asserts **405**.
+
+**Broker:** routes the request via wildcard matching to the
+partial-update-temporal-attr handler, validates the empty attr
+name as a § 4.6.2 violation, returns **400** "invalid attribute
+name '' (§ 4.6.2)".
+
+**Why it's a doubt:** both interpretations are defensible — 405
+from a strict router perspective (URL doesn't match a valid
+route shape), 400 from a "URL matched, but the name slot is
+invalid" perspective. 400 is more diagnostic.
+
+**Fix wanted:** decide on a convention and update the test or
+the broker. Same logic should also apply to other
+attrs/{empty}/... routes (016_02_05 is the same shape but uses
+`invalid(Id` instead of empty and asserts 400 — broker matches).
