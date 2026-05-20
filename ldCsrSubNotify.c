@@ -36,7 +36,8 @@
 
 #include "swRest/SwRestState.h"                        // swRest
 #include "swRest/swRestClient.h"                       // SwRestClientRequest, etc.
-#include "swJsonld/swldCompactTree.h"                  // swldCompactTree
+#include "swJsonld/swldCompactTree.h"                  // swldCompactTree, swldCompactTreeWith
+#include "swJsonld/swldDownload.h"                     // swldContextFromUrl
 #include "swJsonld/swldInit.h"                         // swldCoreContext
 #include "swJsonld/SwldContext.h"                      // SwldContext
 
@@ -255,12 +256,54 @@ static void sendCsourceNotification(LdSubCacheItem* subItemP,
   KjNode* dataArray = kjArray(NULL, "data");
   for (int i = 0; i < matchN; i++)
   {
-    if (matchV[i]->regTree != NULL)
-      kjChildAdd(dataArray, kjClone(swRest.kjsonP, matchV[i]->regTree));
+    if (matchV[i]->regTree == NULL) continue;
+
+    KjNode* regClone = kjClone(swRest.kjsonP, matchV[i]->regTree);
+
+    // § 5.11.7 — "implementations should return context source
+    // registration information relevant for the subscription, in
+    // particular only matching RegistrationInfo elements." Walk the
+    // cloned tree's "information" array in lockstep with the pre-
+    // parsed LdRegInfo list and drop the entries whose entityInfo
+    // doesn't match the subscription's entity selectors. The
+    // surviving array is what the subscriber actually cares about.
+    if (subItemP->entitySelectors != NULL)
+    {
+      KjNode* infoArrP = kjLookup(regClone, "information");
+      if (infoArrP != NULL && infoArrP->type == KjArray)
+      {
+        KjNode*    jsonInfo = infoArrP->value.firstChildP;
+        LdRegInfo* regInfo  = matchV[i]->infoV;
+        while (jsonInfo != NULL && regInfo != NULL)
+        {
+          KjNode*    jsonNext = jsonInfo->next;
+          LdRegInfo* regNext  = regInfo->next;
+          if (!subEntitySideMatchesInfo(subItemP, regInfo))
+            kjChildRemove(infoArrP, jsonInfo);
+          jsonInfo = jsonNext;
+          regInfo  = regNext;
+        }
+      }
+    }
+
+    kjChildAdd(dataArray, regClone);
   }
   kjChildAdd(notification, dataArray);
 
-  swldCompactTree(notification);
+  // Compact with the subscription's @context (parallel to the entity-
+  // sub path in ldSubscriptionNotify / ldPernotLoop): if the sub
+  // declares a context URL the broker resolves it and uses its term
+  // mappings — otherwise notification attribute keys ship expanded
+  // IRIs that subscribers can't index by short name (047_03_01).
+  {
+    SwldContext* notifCtx = NULL;
+    if (subItemP->contextUrl != NULL)
+      notifCtx = swldContextFromUrl(subItemP->contextUrl, &swRest.kalloc);
+    if (notifCtx != NULL)
+      swldCompactTreeWith(notification, notifCtx);
+    else
+      swldCompactTree(notification);
+  }
 
   int   bodySize = kjFastRenderSize(notification) + 1;
   char* body     = (char*) kaAlloc(&swRest.kalloc, bodySize);

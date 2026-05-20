@@ -1485,3 +1485,40 @@ appears once 033_01_01 has populated the broker.
 CSR (not just a suite-level teardown for the last one). The
 suite has 4 subtests, each creating a separate CSR; only one
 gets removed today.
+
+
+## 59. `047_03_01` — `Check Notification Data Entities` indexes `type` as an array
+
+**Hit:** the helper keyword in `NotificationUtils.resource`:
+```robot
+FOR    ${registration_information}    IN    @{notification_data_information}
+    Append To List    ${notification_data_entities}
+    ...    ${registration_information}[entities][0][type][0]
+END
+```
+The expression `[type][0]` takes the first ELEMENT of `type`.
+Python string indexing makes `"Building"[0] == "B"`. So when
+the broker correctly returns `"type": "Building"` (string),
+the test collects `"B"` into the list and the assertion fails
+with `Index 0: Building != B`.
+
+**Spec:** § 5.2.8 defines `EntityInfo.type` as "an NGSI-LD
+attribute name" — singular, scalar string. § 6.3.5 compaction
+returns a single value as a string, not an array.
+
+**Broker:** correct (returns `"type": "Building"`). Verified by
+037_05_01 / 037_05_02 (GET /csourceRegistrations) whose
+expectation files have `"type": "Vehicle"` as a string and pass.
+
+**Fix wanted:** drop the trailing `[0]` from the assertion:
+```robot
+Append To List    ${notification_data_entities}
+...    ${registration_information}[entities][0][type]
+```
+
+**Broker improvements landed alongside this triage:** the CSR-
+sub notification now (a) filters `information[]` to only the
+entries matching the subscription's entity scope (§ 5.11.7
+SHOULD), and (b) compacts using the subscription's @context so
+attribute IRIs come back as short names. Both were genuine
+broker bugs visible regardless of the assertion typo.
