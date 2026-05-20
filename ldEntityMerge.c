@@ -381,6 +381,17 @@ static bool rfc7396Merge(KjNode* targetP, KjNode* patchP, uint64_t ts, Kjson* ta
 
     KjNode* tChild = kjLookup(targetP, pChild->name);
 
+    // Per ldApiEntityToDbModel, the primary-value member of every
+    // attribute type (Property.value, Relationship.object,
+    // LanguageProperty.languageMap, JsonProperty.json, VocabProperty.vocab,
+    // ListProperty.valueList, ListRelationship.objectList) is normalised
+    // to the key "value". § 4.5.21 treats that primary value as opaque —
+    // a merge replaces it wholesale and does not deep-merge into it.
+    // Without this special case, a fragment's languageMap or json sub-
+    // object would deep-merge with the target's, leaving stale entries
+    // behind (012_04_01, 012_08_01).
+    bool replaceWhole = (pChild->name != NULL && strcmp(pChild->name, "value") == 0);
+
     if (isNgsildNull(pChild))
     {
       if (tChild != NULL)
@@ -394,7 +405,7 @@ static bool rfc7396Merge(KjNode* targetP, KjNode* patchP, uint64_t ts, Kjson* ta
       kjChildAdd(targetP, kjClone(targetAllocP, pChild));
       mutated = true;
     }
-    else if (tChild->type == KjObject && pChild->type == KjObject)
+    else if (!replaceWhole && tChild->type == KjObject && pChild->type == KjObject)
     {
       if (rfc7396Merge(tChild, pChild, ts, targetAllocP))
       {
