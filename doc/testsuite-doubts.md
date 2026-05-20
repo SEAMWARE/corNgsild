@@ -1456,3 +1456,32 @@ populate current state is contrary to the spec.
 occasionally pass in the full suite due to cross-test state
 leak — when run in isolation, all six subtests fail with the
 same fixture root cause.
+
+
+## 58. `033_01_02` — fixture leaks the previous test's CSR into the next test's `exclusive`-mode conflict check
+
+**Hit:** test setup for 033_01_02 creates an `exclusive`-mode
+CSR with the same entity scope (`Vehicle:A456` + `OffStreetParking`
+idPatterns) as 033_01_01's earlier (default `inclusive`) CSR.
+The suite has `Suite Teardown    Delete Created Context Source
+Registrations` but only cleans up the most-recently-saved
+`${registration_id}` variable — 033_01_01's CSR stays in the
+broker between tests.
+
+Per § 5.9.2.4: "An exclusive registration shall conflict with
+another registration covering the same Entity scope (regardless
+of mode)." Two CSRs with overlapping entityInfo, at least one
+exclusive → 409 Conflict on the second create.
+
+**Broker:** returns 409 — correct per spec.
+
+**Test:** asserts 201. Fails.
+
+**Verified:** when 033_01_02 is run truly alone (broker DB
+wiped, broker restarted), it passes with 201. Failure only
+appears once 033_01_01 has populated the broker.
+
+**Fix wanted:** add a `Test Teardown` that deletes the test's
+CSR (not just a suite-level teardown for the last one). The
+suite has 4 subtests, each creating a separate CSR; only one
+gets removed today.
