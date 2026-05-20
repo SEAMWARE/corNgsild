@@ -26,10 +26,10 @@ The themed cross-reference further down is by NGSI-LD mechanism
 
 ### Errors (spec is *wrong*)
 
-- **[46](#46)** § 6.3.17 — `redirect` mode classified as BOTH "single registered source" (508/504/404/502) AND "multiple equally valid endpoints" (207) **in the same section**. Pure contradiction.
-- **[48](#48)** § 4.5.5.3 — "the NGSI-LD system shall choose the Attribute instance at random and the result is indeterminate" as a tiebreaker. Guarantees cross-broker interop failure on identical input. Indeterminate output is unfit for a federation spec.
-- **[8](#8)** § 5.2.9 — typos in top-level CSR fields are silently re-classified as CSF Properties. Silent data drop is the wrong behaviour; a typo at registration time must be rejected.
-- **[14](#14)** § 6.34.3.1 — GET /entityMaps **creates** an EntityMap (returns 201). REST contract violation; mismatched with HTTP method semantics every tool assumes.
+- **[8](#8)** § 5.2.9 — typos in top-level CSR fields are silently re-classified as CSF Properties. Silent data drop is the wrong behaviour;
+                        a typo at registration time must be rejected.
+- **[14](#14)** § 6.34.3.1 — GET /entityMaps **creates** an EntityMap (returns 201). REST contract violation;
+                             mismatched with HTTP method semantics every tool assumes.
 
 ### Missing (spec *doesn't address* this case at all)
 
@@ -45,6 +45,8 @@ The themed cross-reference further down is by NGSI-LD mechanism
 - **[83](#83)** § 4.11 — temporal bound asymmetry (before exclusive, after inclusive). No clean way to express "at or before T". Design gap, not a contradiction.
 - **[84](#84)** § 4.23 — what to do with `?orderBy=` under distop. Spec says sort is not applied; doesn't say whether to ignore silently, warn, or 400 the request. And no recommended default order.
 - **[86](#86)** § 6.3.22 + § 5.16 — `NGSILD-Snapshot:` is documented only for reads in 1.9.1. The same header against the normal CRUD endpoints (POST /entities + header, PATCH, DELETE, …) would naturally address the snapshot's tenant, but the spec neither blesses nor forbids it. Future revisions will define snapshot writes via the existing CRUD API + header; today's spec needs an explicit "writes against NGSILD-Snapshot are not defined in this revision; brokers SHALL reject with 405 / 501" or equivalent, to make the version transition unambiguous.
+- **[87](#87)** § 5.2.12 / § 5.8 — Subscription has no `datasetId` filter for multi-instance attributes. `watchedAttributes` is attribute-level only, with no way to subscribe to "this specific dataset instance". Critical for streaming-action / per-job state-machine use cases where each in-flight goal/job is its own datasetId.
+- **[88](#88)** § 5.8.6 — Subscription trigger condition `AttributeInstanceCreate` (and siblings: `Update`, `Delete`) for multi-instance attributes. The current Add / Update / Delete trigger taxonomy is whole-attribute granularity; appearance of a new dataset instance on an existing attribute is invisible as a distinct event.
 
 ### Ambiguities (spec is *silent* or *unclear*)
 
@@ -141,6 +143,8 @@ operations can locate the relevant subset quickly.
 - **[58](#58)** § 5.8 — subscription `expiresAt` reached while broker is offline (recovery state machine undefined)
 - **[68](#68)** § 5.11 — csr-subscription notification triggers: which CSR state changes count (CRUD only? counter updates?)
 - **[73](#73)** § 5.2.15 — notification `cooldown` state machine: failure definition, scope, re-engagement, observability
+- **[87](#87)** § 5.2.12 / § 5.8 — Subscription has no `datasetId` filter; `watchedAttributes` is attribute-level only — coarse for multi-instance use cases (streaming actions, per-job state machines, per-sensor channels)
+- **[88](#88)** § 5.8.6 — Add `AttributeInstanceCreate` / `AttributeInstanceUpdate` / `AttributeInstanceDelete` trigger conditions so subscribers can distinguish per-instance lifecycle events from whole-attribute Add/Update/Delete
 
 ### H. JSON-LD / @context
 
@@ -3099,6 +3103,130 @@ That sentence (a) makes the read-only-ness explicit in 1.9.1 and
 (b) reserves the API surface for the future-revision uplift —
 so clients can rely on a version-aware feature negotiation
 without ambiguity.
+
+---
+
+<a name="87"></a>
+## 87. § 5.2.12 / § 5.8 — Subscription has no `datasetId` filter for multi-instance attributes
+
+**Hit:** Building a DDS-action client on top of NGSI-LD, the broker
+materialises each in-flight action goal as a per-goal `datasetId`
+instance of the action-tied attribute (e.g. `fib` with
+`datasetId: "urn:goal:<uuid>"`). Each notification from the action
+server (status / feedback / result) lands as an update on that
+specific instance. The client triggering goal G1 wants notifications
+for G1's lifecycle — not the chatter from every other client's
+goals on the same attribute. A subscription on `watchedAttributes:
+["fib"]` is too coarse: it fires for *every* instance.
+
+The same shape recurs anywhere multi-instance is used as a per-job /
+per-stream / per-sensor-channel discriminator: telematics with one
+attribute per vehicle multi-instance, IoT sensors batching readings
+under a single attribute keyed by datasetId, federated job-queue
+broker patterns. In every case "subscribe to my instance" is the
+natural ask and there is no spec-blessed way to express it.
+
+**Spec:** Subscription (§ 5.2.12) supports `entities[]` (id, idPattern,
+type), `watchedAttributes`, `q`, `geoQ`, `scopeQ` — all at entity /
+attribute / value level. None descend to the instance level. § 5.8
+(Subscription operation) describes change detection in terms of
+"Attribute" semantics with no mention of how the matcher should
+behave when an attribute has N instances.
+
+The spec is silent on:
+
+- whether a subscription fires per-instance or per-attribute
+  (one notification per change vs one coalesced per request);
+- whether the notification body carries just the changed instance
+  or the full instance array;
+- how a subscriber expresses "only this datasetId" interest.
+
+Implementations have to pick: most fire one notification per
+write irrespective of instance, with the body carrying the entity
+in normalised form (full instance array). This is correct under the
+"watchedAttributes is attribute-level" reading but is operationally
+unusable for streaming-state-machine use cases.
+
+**Our call:** Going to add a broker-local extension: optional
+`datasetId` (string or array) alongside `watchedAttributes` in the
+subscription payload. When present, the subscription matcher checks
+the altered-instance's datasetId against the filter and skips when
+no match. Carries through to `OrionldAttributeAlteration` (new
+`datasetId` field) so `subCacheAlterationMatch` can filter cheaply.
+Notification body still carries the whole entity; the filter only
+gates *whether* a notification fires.
+
+**Fix wanted:** Add `datasetId` (string or array of strings, optional)
+as a filter member on Subscription, scoped per `watchedAttributes`
+entry — or as a sibling to `watchedAttributes` if the same filter
+applies across all watched attributes (the two shapes have different
+ergonomics for the multi-attribute case; spec should pick one).
+
+While at it, clarify:
+
+1. whether a single update to an attribute that touches one instance
+   produces one or many notifications (per-instance or coalesced);
+2. notification body when an attribute is multi-instance: full
+   array vs only the changed instance (or both, via `notification.format`);
+3. interaction with `notification.pick` / `notification.omit` /
+   `notification.attributes` — does an attribute-level pick imply
+   "all instances of that attribute" or can the pick descend?
+
+Concrete use cases that need this clarification: streaming actions
+(goal datasetId), per-sensor batched readings, per-job state machines.
+
+---
+
+<a name="88"></a>
+## 88. § 5.8.6 — Subscription trigger conditions are whole-attribute; no per-instance Create / Update / Delete
+
+**Hit:** Companion problem to [[#87]]. Once a subscription *can*
+target a specific datasetId (or the multi-instance attribute in
+general), subscribers also want to distinguish the **kind** of
+event at instance granularity:
+
+- a new dataset instance appeared on this attribute
+  (`AttributeInstanceCreate`);
+- an existing dataset instance's value or sub-attrs changed
+  (`AttributeInstanceUpdate`);
+- a dataset instance disappeared (`AttributeInstanceDelete`).
+
+Today's trigger taxonomy is `AttributeAdded` / `AttributeValueChanged`
+/ `AttributeModifiedAtChanged` / `AttributeDeleted` — all
+*whole-attribute*. Multi-instance churn collapses into
+`AttributeValueChanged` regardless of whether the change was the
+appearance of a brand-new datasetId or just a value tweak on an
+existing one. Action / job clients want to react to "my goal
+appeared" exactly once and "my goal is finished" exactly once,
+not on every intermediate envelope churn.
+
+**Spec:** § 5.8.6 (Subscription change-detection) defines
+notification triggering in terms of `Attribute` events. Multi-
+instance behaviour is implicit and the trigger labels don't
+mention it. Subscribers can't ask "fire only on a new
+instance appearing" today.
+
+**Our call:** With [[#87]]'s `datasetId` subscription filter, half
+the use case is already covered (per-instance dispatch is
+possible). Distinguishing the *kind* of event still needs
+per-instance trigger conditions — planning to add
+`AttributeInstanceCreate`, `AttributeInstanceUpdate`,
+`AttributeInstanceDelete` as optional values in our broker's
+subscription `trigger` field, alongside the existing
+whole-attribute set. Default behaviour (no trigger specified)
+remains the current "all changes" semantic.
+
+**Fix wanted:** Add the per-instance trigger conditions to
+§ 5.8.6's enumerated set. Clarify the relationship to whole-
+attribute triggers — e.g. does subscribing to
+`AttributeInstanceUpdate` ALSO match a value change on the
+default (no-datasetId) instance? Likely yes (the default
+instance is just "no datasetId" in the spec's data model),
+but the wording needs to make that explicit.
+
+Bundles well with [[#87]] — a Subscription that has both a
+`datasetId` filter and an `AttributeInstanceUpdate` trigger is
+exactly the streaming-action subscriber's natural ask.
 
 ---
 
