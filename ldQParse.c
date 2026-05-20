@@ -551,9 +551,29 @@ static LdQNode* parseTerm(const char** pp, KAlloc* kaP)
     }
     else
     {
-      // Numeric
-      nodeP->term.valueType = LdQNumber;
-      nodeP->term.value.n   = strtod(vStart, NULL);
+      // Try numeric first; if strtod doesn't consume the whole token,
+      // treat the value as an unquoted string. § 4.9 grammatically
+      // requires quotes around strings, but URIs, plain words and
+      // similar tokens routinely appear unquoted in real-world q
+      // expressions (and the ETSI suite tests for it — 019_09_08:
+      // `locatedIn==urn:ngsi-ld:City:Pisa`). Without this fallback,
+      // strtod returns 0.0 and the match silently never fires.
+      char* endP = NULL;
+      double n = strtod(vStart, &endP);
+      if (endP != NULL && (endP == vStart + vLen))
+      {
+        nodeP->term.valueType = LdQNumber;
+        nodeP->term.value.n   = n;
+      }
+      else
+      {
+        char* s = (char*) kaAlloc(kaP, vLen + 1);
+        memcpy(s, vStart, vLen);
+        s[vLen] = 0;
+
+        nodeP->term.valueType = LdQString;
+        nodeP->term.value.s   = s;
+      }
     }
   }
 
