@@ -166,6 +166,16 @@ typedef struct SwNgsild
   // its own errors[] before normal processing.
   KjNode*  batchPreErrors;
 
+  // § 4.17 — parse-once cache for subscription entities[].type
+  // expressions. Set by ldCheckSubscription (one slot per entities[]
+  // entry, indexed left-to-right; NULL slots mean "no type field" or
+  // "plain literal — no expression to keep"). Drained by
+  // ldSubCacheItemAdd which transfers ownership to the cache. Trees
+  // are malloc-allocated (KAlloc would die with the request);
+  // entitySelectorsFree calls ldTypeExprFree when not consumed.
+  LdTypeExpr** subEntityTypeExprsV;
+  int          subEntityTypeExprsN;
+
   // Response flags
   bool    rawResponse;  // true => renderHook skips ldEntityToApi (used for subscription responses)
   bool    entityMapOnly; // true => GET|POST /entityMaps: query + return the EntityMap (not entities)

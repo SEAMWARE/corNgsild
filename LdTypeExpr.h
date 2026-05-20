@@ -49,8 +49,21 @@ typedef struct LdTypeExpr
 //
 // ldTypeExprParse - parse a type selection expression
 //
-// Returns a faP-allocated LdTypeExpr, or NULL on error (ldError(400) called).
+// Returns a kaP-allocated LdTypeExpr, or NULL on error (ldError(400) called).
 //
-extern LdTypeExpr* ldTypeExprParse(const char* value, KAlloc* faP);
+// If kaP is NULL the tree is malloc-allocated; the caller owns it and
+// must release it with ldTypeExprFree when the subscription is removed
+// from the cache. Used by the sub-cache to keep a parsed tree past the
+// request that created it.
+//
+extern LdTypeExpr* ldTypeExprParse(const char* value, KAlloc* kaP);
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldTypeExprFree - release a malloc-mode parsed tree
+//
+extern void ldTypeExprFree(LdTypeExpr* expr);
 
 #endif  // SWNGSILD_LDTYPEEXPR_H_

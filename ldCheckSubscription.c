@@ -7,6 +7,7 @@
 //
 //
 #include <stdbool.h>                                     // bool
+#include <stdlib.h>                                      // free, calloc
 #include <string.h>                                      // strcmp
 #include <time.h>                                        // time
 
@@ -16,6 +17,8 @@
 #include "kjson/kjLookup.h"                            // kjLookup
 
 #include "swNgsild/LdOp.h"                               // LdOp
+#include "swNgsild/SwNgsild.h"                           // swNgsild
+#include "swNgsild/LdTypeExpr.h"                         // ldTypeExprParse, ldTypeExprFree
 #include "swNgsild/LdCheck.h"                            // OBJECT_CHECK, STRING_CHECK, ...
 #include "swNgsild/LdVocab.h"                            // LD_VOCAB_*
 #include "swNgsild/ldTypes.h"                            // ldOpToString
@@ -283,7 +286,32 @@ static bool checkEntitiesArray(KjNode* entitiesP)
   ARRAY_CHECK(entitiesP, "Invalid Subscription", "'entities' must be a JSON array");
   EMPTY_ARRAY_CHECK(entitiesP, "'entities' must not be empty");
 
-  for (KjNode* entP = entitiesP->value.firstChildP; entP != NULL; entP = entP->next)
+  // § 4.17 — parse each entities[].type into a malloc-allocated
+  // LdTypeExpr and stash on swNgsild for the sub-cache to claim.
+  // Allocate the side-channel sized to the array length; one slot
+  // per entry, NULL slot = no type field. Old contents (e.g. left
+  // over from a previous request on the same thread) are released
+  // here.
+  int entCount = 0;
+  for (KjNode* p = entitiesP->value.firstChildP; p != NULL; p = p->next)
+    entCount++;
+
+  if (swNgsild.subEntityTypeExprsV != NULL)
+  {
+    for (int i = 0; i < swNgsild.subEntityTypeExprsN; i++)
+      ldTypeExprFree(swNgsild.subEntityTypeExprsV[i]);
+    free(swNgsild.subEntityTypeExprsV);
+    swNgsild.subEntityTypeExprsV = NULL;
+    swNgsild.subEntityTypeExprsN = 0;
+  }
+  if (entCount > 0)
+  {
+    swNgsild.subEntityTypeExprsV = (LdTypeExpr**) calloc(entCount, sizeof(LdTypeExpr*));
+    swNgsild.subEntityTypeExprsN = entCount;
+  }
+
+  int entIx = 0;
+  for (KjNode* entP = entitiesP->value.firstChildP; entP != NULL; entP = entP->next, entIx++)
   {
     OBJECT_CHECK(entP, "Invalid Subscription", "'entities' items must be JSON objects");
 
@@ -302,6 +330,13 @@ static bool checkEntitiesArray(KjNode* entitiesP)
           return false;
         }
         hasType = true;
+
+        // Parse the §4.17 expression up front. NULL allocator → malloc;
+        // tree outlives this request and is handed off to the sub cache.
+        LdTypeExpr* expr = ldTypeExprParse(fieldP->value.s, NULL);
+        if (expr == NULL)
+          return false;  // ldError already set inside the parser
+        swNgsild.subEntityTypeExprsV[entIx] = expr;
       }
       else if (strcmp(fieldP->name, "id") == 0)
       {

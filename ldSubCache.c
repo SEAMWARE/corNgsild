@@ -37,7 +37,7 @@
 //
 // entitySelectorsExtract - parse the entities[] array into a linked list
 //
-static LdSubEntitySelector* entitySelectorsExtract(KjNode* entitiesP, KAlloc* faP)
+static LdSubEntitySelector* entitySelectorsExtract(KjNode* entitiesP)
 {
   if (entitiesP == NULL || entitiesP->type != KjArray)
     return NULL;
@@ -45,23 +45,29 @@ static LdSubEntitySelector* entitySelectorsExtract(KjNode* entitiesP, KAlloc* fa
   LdSubEntitySelector* head = NULL;
   LdSubEntitySelector* tail = NULL;
 
-  for (KjNode* selP = entitiesP->value.firstChildP; selP != NULL; selP = selP->next)
+  // ldCheckSubscription has already parsed each entities[].type into a
+  // malloc-allocated LdTypeExpr and stashed it on swNgsild. Claim the
+  // tree here (zero the slot so swNgsildReset doesn't free-double).
+  int selIx = 0;
+  for (KjNode* selP = entitiesP->value.firstChildP; selP != NULL; selP = selP->next, selIx++)
   {
     if (selP->type != KjObject)
       continue;
 
     LdSubEntitySelector* esP = (LdSubEntitySelector*) calloc(1, sizeof(LdSubEntitySelector));
 
-    // type (borrowed pointer into the cloned subTree) — also parse
-    // it as a § 4.17 type-selection expression so matching honours
-    // (A|B), A&B, !A operators. The parsed tree is allocated from
-    // the sub-cache's persistent KAlloc and lives for the cache's
-    // lifetime, just like the cloned subTree itself.
+    // type — raw text kept for diagnostics. The parsed §4.17 tree
+    // comes from the parse-once side channel populated during
+    // validation; the cache owns it from here on.
     KjNode* typeP = kjLookup(selP, "type");
     if (typeP != NULL && typeP->type == KjString)
     {
-      esP->type     = typeP->value.s;
-      esP->typeExpr = ldTypeExprParse(typeP->value.s, faP);
+      esP->type = typeP->value.s;
+      if (swNgsild.subEntityTypeExprsV != NULL && selIx < swNgsild.subEntityTypeExprsN)
+      {
+        esP->typeExpr = swNgsild.subEntityTypeExprsV[selIx];
+        swNgsild.subEntityTypeExprsV[selIx] = NULL;
+      }
     }
 
     // id (borrowed pointer)
@@ -175,6 +181,10 @@ static void entitySelectorsFree(LdSubEntitySelector* head)
       ripP = ripNext;
     }
 
+    // Parsed §4.17 expression is malloc-allocated (caller passed NULL
+    // to ldTypeExprParse so the tree survives request boundaries).
+    ldTypeExprFree(head->typeExpr);
+
     free(head);
     head = next;
   }
@@ -225,7 +235,7 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
   // Pre-parse matching fields from the cloned tree
   //
   KjNode* entitiesP = kjLookup(itemP->subTree, LD_VOCAB_ENTITIES);
-  itemP->entitySelectors = entitySelectorsExtract(entitiesP, &cacheP->alloc);
+  itemP->entitySelectors = entitySelectorsExtract(entitiesP);
 
   KjNode* watchedP = kjLookup(itemP->subTree, LD_VOCAB_WATCHED_ATTRS);
   itemP->watchedAttrsV = watchedAttrsExtract(watchedP);

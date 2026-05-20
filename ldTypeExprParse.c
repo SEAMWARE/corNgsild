@@ -6,7 +6,8 @@
 // Copyright 2026 Seamware
 // 
 //
-#include <string.h>                                      // strlen, strchr
+#include <stdlib.h>                                      // malloc, free, calloc
+#include <string.h>                                      // strlen, strchr, strdup
 
 #include "kalloc/KAlloc.h"                             // kaAlloc
 #include "kalloc/kaAlloc.h"                            // kaAlloc
@@ -22,13 +23,44 @@
 
 // -----------------------------------------------------------------------------
 //
+// memAlloc / memStrdup - allocator shims
+//
+// The parser is called from two contexts:
+//   - request-scoped (URL params, validators) → KAlloc arena, freed
+//     automatically at end of request
+//   - sub-cache build (parsed tree must outlive any request and any
+//     KAlloc arena) → caller passes NULL and the parser uses malloc;
+//     ldTypeExprFree releases the tree later.
+//
+static void* memAlloc(KAlloc* kaP, unsigned long long size)
+{
+  return (kaP != NULL) ? kaAlloc(kaP, size) : calloc(1, (size_t) size);
+}
+
+static char* memStrdup(KAlloc* kaP, const char* s)
+{
+  return (kaP != NULL) ? kaStrdup(kaP, s) : strdup(s);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // expandType - expand a single type name via the request's @context
 //
 static char* expandType(const char* name, KAlloc* kaP)
 {
   char* expanded = swldExpand(swNgsild.contextP, name, kaP, NULL, NULL);
 
-  return (expanded != NULL) ? expanded : kaStrdup(kaP, name);
+  if (expanded != NULL)
+  {
+    // swldExpand uses kaP; if we're in malloc-mode (kaP == NULL) the
+    // returned pointer wouldn't survive a request boundary. Re-strdup
+    // it on the heap so the tree is fully malloc-owned.
+    return (kaP != NULL) ? expanded : strdup(expanded);
+  }
+
+  return memStrdup(kaP, name);
 }
 
 
@@ -51,7 +83,7 @@ static bool parseGroup(char* str, LdTypeGroup* group, KAlloc* kaP)
       count++;
   }
 
-  group->typeV = (char**) kaAlloc(kaP, (count + 1) * sizeof(char*));
+  group->typeV = (char**) memAlloc(kaP, (count + 1) * sizeof(char*));
   group->count = count;
 
   // Split on ';'
@@ -101,8 +133,11 @@ LdTypeExpr* ldTypeExprParse(const char* value, KAlloc* kaP)
   if (value == NULL || value[0] == 0)
     return NULL;
 
-  // Work on a copy
-  char* buf = kaStrdup(kaP, value);
+  // Work on a copy. In malloc-mode we'll free this scratch buffer
+  // before returning — it's only used during parsing; the result
+  // tree holds independent copies of each leaf type string.
+  char* bufOrig = memStrdup(kaP, value);
+  char* buf     = bufOrig;
 
   // § 4.17 allows superfluous outer parens — `(Building|Tower)` is
   // semantically identical to `Building|Tower`. Strip them only when
@@ -144,9 +179,9 @@ LdTypeExpr* ldTypeExprParse(const char* value, KAlloc* kaP)
   //
   // Allocate result
   //
-  LdTypeExpr* expr = (LdTypeExpr*) kaAlloc(kaP, sizeof(LdTypeExpr));
+  LdTypeExpr* expr = (LdTypeExpr*) memAlloc(kaP, sizeof(LdTypeExpr));
 
-  expr->groupV     = (LdTypeGroup*) kaAlloc(kaP, groupCount * sizeof(LdTypeGroup));
+  expr->groupV     = (LdTypeGroup*) memAlloc(kaP, groupCount * sizeof(LdTypeGroup));
   expr->groupCount = groupCount;
   expr->isSimple   = true;
 
@@ -196,5 +231,41 @@ LdTypeExpr* ldTypeExprParse(const char* value, KAlloc* kaP)
     }
   }
 
+  if (kaP == NULL)
+    free(bufOrig);
+
   return expr;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldTypeExprFree - release a malloc-mode parsed tree
+//
+// Only call on trees parsed with kaP == NULL. KAlloc-allocated trees
+// are freed automatically when the arena is reset; calling this on
+// one would double-free.
+//
+void ldTypeExprFree(LdTypeExpr* expr)
+{
+  if (expr == NULL)
+    return;
+
+  if (expr->groupV != NULL)
+  {
+    for (int gix = 0; gix < expr->groupCount; gix++)
+    {
+      LdTypeGroup* grp = &expr->groupV[gix];
+      if (grp->typeV != NULL)
+      {
+        for (int tix = 0; tix < grp->count; tix++)
+          free(grp->typeV[tix]);
+        free(grp->typeV);
+      }
+    }
+    free(expr->groupV);
+  }
+
+  free(expr);
 }
