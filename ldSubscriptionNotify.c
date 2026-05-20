@@ -186,8 +186,9 @@ static bool entityHasType(KjNode* entityTypeP, const char* type)
 //
 static bool selectorMatches(LdSubEntitySelector* selP, const char* entityId, KjNode* entityTypeP)
 {
-  // Type check
-  if (selP->type != NULL && !entityHasType(entityTypeP, selP->type))
+  // Type check — use the parsed § 4.17 expression so (A|B), A&B and
+  // !A operators match correctly. typeExpr is set whenever type is.
+  if (selP->typeExpr != NULL && !ldEntityMatchType(entityTypeP, selP->typeExpr))
     return false;
 
   // id check (takes precedence over idPattern)

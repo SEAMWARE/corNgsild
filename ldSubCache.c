@@ -23,6 +23,7 @@
 #include "swNgsild/LdSubCache.h"                       // LdSubCache, LdSubCacheItem
 #include "swNgsild/LdScopeExpr.h"                      // ldScopeExprParse
 #include "swNgsild/LdGeoRel.h"                         // ldGeoRelParse
+#include "swNgsild/LdTypeExpr.h"                       // ldTypeExprParse
 #include "swNgsild/ldCheckDateTime.h"                  // ldCheckDateTime
 #include "swJsonld/swldExpand.h"                       // swldExpand, swldAlreadyExpanded
 #include "swNgsild/ldSubscriptionNotify.h"              // ldTriggerFromString
@@ -36,7 +37,7 @@
 //
 // entitySelectorsExtract - parse the entities[] array into a linked list
 //
-static LdSubEntitySelector* entitySelectorsExtract(KjNode* entitiesP)
+static LdSubEntitySelector* entitySelectorsExtract(KjNode* entitiesP, KAlloc* faP)
 {
   if (entitiesP == NULL || entitiesP->type != KjArray)
     return NULL;
@@ -51,10 +52,17 @@ static LdSubEntitySelector* entitySelectorsExtract(KjNode* entitiesP)
 
     LdSubEntitySelector* esP = (LdSubEntitySelector*) calloc(1, sizeof(LdSubEntitySelector));
 
-    // type (borrowed pointer into the cloned subTree)
+    // type (borrowed pointer into the cloned subTree) — also parse
+    // it as a § 4.17 type-selection expression so matching honours
+    // (A|B), A&B, !A operators. The parsed tree is allocated from
+    // the sub-cache's persistent KAlloc and lives for the cache's
+    // lifetime, just like the cloned subTree itself.
     KjNode* typeP = kjLookup(selP, "type");
     if (typeP != NULL && typeP->type == KjString)
-      esP->type = typeP->value.s;
+    {
+      esP->type     = typeP->value.s;
+      esP->typeExpr = ldTypeExprParse(typeP->value.s, faP);
+    }
 
     // id (borrowed pointer)
     KjNode* idP = kjLookup(selP, "id");
@@ -217,7 +225,7 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
   // Pre-parse matching fields from the cloned tree
   //
   KjNode* entitiesP = kjLookup(itemP->subTree, LD_VOCAB_ENTITIES);
-  itemP->entitySelectors = entitySelectorsExtract(entitiesP);
+  itemP->entitySelectors = entitySelectorsExtract(entitiesP, &cacheP->alloc);
 
   KjNode* watchedP = kjLookup(itemP->subTree, LD_VOCAB_WATCHED_ATTRS);
   itemP->watchedAttrsV = watchedAttrsExtract(watchedP);

@@ -27,6 +27,7 @@
 #include "swNgsild/LdQ.h"                              // LdQNode
 #include "swNgsild/LdScopeExpr.h"                      // LdScopeExpr
 #include "swNgsild/LdGeoRel.h"                         // LdGeoRel
+#include "swNgsild/LdTypeExpr.h"                       // LdTypeExpr
 
 
 
@@ -49,7 +50,15 @@ typedef struct LdSubIdPattern
 //
 typedef struct LdSubEntitySelector
 {
-  char*                       type;         // expanded IRI (borrowed from subTree)
+  char*                       type;         // expanded IRI as text (borrowed from
+                                            // subTree) — kept for diagnostics and
+                                            // for the plain-string fast path
+  LdTypeExpr*                 typeExpr;     // parsed § 4.17 type-selection
+                                            // expression; non-NULL whenever
+                                            // `type` is set. Use this for
+                                            // matching — `type` is only the
+                                            // raw text and won't honour
+                                            // (A|B), A&B, !A operators.
   char*                       id;           // exact entity id (borrowed, NULL if absent)
   LdSubIdPattern*             idPatternList;// compiled idPattern regexes (NULL if absent)
   struct LdSubEntitySelector* next;
