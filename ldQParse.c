@@ -452,6 +452,35 @@ static LdQNode* parseTerm(const char** pp, KAlloc* kaP)
       return nodeP;
     }
 
+    // § 4.9 — q is URL-encoded; spaces and other reserved chars come
+    // through as %xx. Decode in-place so the match value is the raw
+    // string (046_05_01: `name=="Eiffel%20Tower"` vs entity name
+    // "Eiffel Tower").
+    {
+      char* r = s;
+      char* w = s;
+      while (*r != 0)
+      {
+        if (r[0] == '%' && r[1] != 0 && r[2] != 0)
+        {
+          int hi = (r[1] >= '0' && r[1] <= '9') ? r[1] - '0' :
+                   (r[1] >= 'A' && r[1] <= 'F') ? r[1] - 'A' + 10 :
+                   (r[1] >= 'a' && r[1] <= 'f') ? r[1] - 'a' + 10 : -1;
+          int lo = (r[2] >= '0' && r[2] <= '9') ? r[2] - '0' :
+                   (r[2] >= 'A' && r[2] <= 'F') ? r[2] - 'A' + 10 :
+                   (r[2] >= 'a' && r[2] <= 'f') ? r[2] - 'a' + 10 : -1;
+          if (hi >= 0 && lo >= 0)
+          {
+            *w++ = (char) ((hi << 4) | lo);
+            r += 3;
+            continue;
+          }
+        }
+        *w++ = *r++;
+      }
+      *w = 0;
+    }
+
     nodeP->term.valueType = LdQString;
     nodeP->term.value.s   = s;
   }
