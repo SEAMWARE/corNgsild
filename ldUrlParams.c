@@ -216,6 +216,15 @@ void ldParamHook(const char* name, const char* value)
   else if (strcmp(name, "limit") == 0)
   {
     swNgsild.limit = atoi(value);
+    if (swNgsild.limit < 0)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid request",
+              "'limit' must be a non-negative integer (got '%s')", value);
+      return;
+    }
+    // If `page` was already seen, complete the translation now.
+    if (swNgsild.page > 0 && swNgsild.offset == 0)
+      swNgsild.offset = (swNgsild.page - 1) * (swNgsild.limit > 0 ? swNgsild.limit : 20);
   }
   else if (strcmp(name, "lastN") == 0)
   {
@@ -229,7 +238,37 @@ void ldParamHook(const char* name, const char* value)
   }
   else if (strcmp(name, "offset") == 0)
   {
+    if (swNgsild.page != 0)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid request",
+              "'page' and 'offset' cannot be used together");
+      return;
+    }
     swNgsild.offset = atoi(value);
+  }
+  else if (strcmp(name, "page") == 0)
+  {
+    // § 5.5.9 defines pagination via `limit` + `offset`. `page` is
+    // NOT a NGSI-LD spec parameter — accepted here as a compatibility
+    // shim (ETSI tests + some legacy clients use it) and translated
+    // to `offset = (page - 1) * limit` as soon as both values are
+    // known (regardless of URL param order).
+    swNgsild.page = atoi(value);
+    if (swNgsild.page < 0)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid request",
+              "'page' must be a positive integer (got '%s')", value);
+      return;
+    }
+    if (swNgsild.offset != 0)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid request",
+              "'page' and 'offset' cannot be used together");
+      return;
+    }
+    // If `limit` was already seen, complete the translation now.
+    if (swNgsild.page > 0 && swNgsild.limit >= 0)
+      swNgsild.offset = (swNgsild.page - 1) * (swNgsild.limit > 0 ? swNgsild.limit : 20);
   }
   else if (strcmp(name, "format") == 0)
   {

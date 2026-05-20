@@ -33,6 +33,7 @@ SwRestParam ldParamRegistryV[] =
   { "csf",                   LD_PARAM_CSF },
   { "limit",                 LD_PARAM_LIMIT },
   { "offset",                LD_PARAM_OFFSET },
+  { "page",                  LD_PARAM_PAGE },
   { "count",                 LD_PARAM_COUNT },
   { "options",               LD_PARAM_OPTIONS },
   { "pick",                  LD_PARAM_PICK },

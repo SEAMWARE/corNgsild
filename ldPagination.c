@@ -67,21 +67,26 @@ void ldPaginationLinkHeader(bool hasMore)
 {
   int offset = swNgsild.offset;
   int limit  = swNgsild.limit;
+  // If the request used `?page=<N>` instead of `?offset=`, mirror that
+  // in the Link header values (compat with clients that issued page-
+  // style pagination).
+  bool usePage = (swNgsild.page > 0);
 
   // No header needed if this is the first page and there are no more results
   if (!hasMore && offset == 0)
     return;
 
-  // Build the query string from original URI params, skipping limit/offset
-  // (we'll add our own limit/offset values)
+  // Build the query string from original URI params, skipping limit /
+  // offset / page (we'll add our own pagination values).
   char params[2048];
+  params[0] = '\0';
   int  pLen = 0;
 
   for (int i = 0; i < swRest.in.uriParamCount; i++)
   {
     const char* name = swRest.in.uriParamV[i].key;
 
-    if (strcmp(name, "limit") == 0 || strcmp(name, "offset") == 0)
+    if (strcmp(name, "limit") == 0 || strcmp(name, "offset") == 0 || strcmp(name, "page") == 0)
       continue;
 
     pLen += snprintf(params + pLen, sizeof(params) - pLen, "%s=%s&", name, swRest.in.uriParamV[i].value);
@@ -101,23 +106,43 @@ void ldPaginationLinkHeader(bool hasMore)
     int prevOffset = offset - limit;
     if (prevOffset < 0)
       prevOffset = 0;
+    int prevPage = (limit > 0) ? (prevOffset / limit) + 1 : 1;
 
-    bLen += snprintf(buf + bLen, bufSize - bLen, "<%s?%slimit=%d&offset=0>; rel=\"first\"; type=\"application/json\", ",
-                     swRest.in.urlPath, params, limit);
-    bLen += snprintf(buf + bLen, bufSize - bLen, "<%s?%slimit=%d&offset=%d>; rel=\"prev\"; type=\"application/json\"",
-                     swRest.in.urlPath, params, limit, prevOffset);
+    if (usePage)
+    {
+      bLen += snprintf(buf + bLen, bufSize - bLen, "<%s?%slimit=%d&page=1>; rel=\"first\"; type=\"application/json\", ",
+                       swRest.in.urlPath, params, limit);
+      bLen += snprintf(buf + bLen, bufSize - bLen, "<%s?%slimit=%d&page=%d>; rel=\"prev\"; type=\"application/json\"",
+                       swRest.in.urlPath, params, limit, prevPage);
+    }
+    else
+    {
+      bLen += snprintf(buf + bLen, bufSize - bLen, "<%s?%slimit=%d&offset=0>; rel=\"first\"; type=\"application/json\", ",
+                       swRest.in.urlPath, params, limit);
+      bLen += snprintf(buf + bLen, bufSize - bLen, "<%s?%slimit=%d&offset=%d>; rel=\"prev\"; type=\"application/json\"",
+                       swRest.in.urlPath, params, limit, prevOffset);
+    }
   }
 
   // next link (when more results exist)
   if (hasMore)
   {
     int nextOffset = offset + limit;
+    int nextPage   = (limit > 0) ? (nextOffset / limit) + 1 : 1;
 
     if (bLen > 0)
       bLen += snprintf(buf + bLen, bufSize - bLen, ", ");
 
-    bLen += snprintf(buf + bLen, bufSize - bLen, "<%s?%slimit=%d&offset=%d>; rel=\"next\"; type=\"application/json\"",
-                     swRest.in.urlPath, params, limit, nextOffset);
+    if (usePage)
+    {
+      bLen += snprintf(buf + bLen, bufSize - bLen, "<%s?%slimit=%d&page=%d>; rel=\"next\"; type=\"application/json\"",
+                       swRest.in.urlPath, params, limit, nextPage);
+    }
+    else
+    {
+      bLen += snprintf(buf + bLen, bufSize - bLen, "<%s?%slimit=%d&offset=%d>; rel=\"next\"; type=\"application/json\"",
+                       swRest.in.urlPath, params, limit, nextOffset);
+    }
   }
 
   // Add Link header to response
