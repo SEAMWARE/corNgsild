@@ -1407,3 +1407,52 @@ intersecting). § 6.5.3 — bad geometry → 400 BadRequestData.
 near-A edge has even modest separation in either lat or lon —
 e.g. shifting B east by another ~0.005° eliminates the
 self-intersection without changing the test's intent.
+
+
+## 57. `020_17_0[1-3] / 020_18_0[1-3]` — fixture deletes via the current-state endpoint on a temporal-only entity
+
+**Hit:** the test setup is
+```robot
+Test Setup    Create Temporal Entity
+```
+which calls `POST /temporal/entities`. The test body then does
+```robot
+Delete Entity Attributes
+   entityId=${temporal_entity_representation_id}
+   attributeId=${attr_name}
+```
+which expands to `DELETE /entities/{id}/attrs/{name}` — i.e.
+the current-state endpoint. Then the test retrieves the
+temporal representation with `?timeproperty=deletedAt` and
+expects to see the deleted attribute with a `deletedAt`
+timestamp and `urn:ngsi-ld:null` as the value-marker.
+
+The broker returns 404 on the DELETE because the entity does
+not exist in current state — and so no deletion event is
+logged into the temporal store. The follow-up GET returns
+`{id, type}` with no attributes, so deep-diff reports the
+expected attribute as "removed from dictionary".
+
+**Spec:** § 5.7.2.1 (Create Temporal Representation):
+> "If the corresponding Entity does not already exist in the
+>  current state, the Context Broker shall NOT create the
+>  Entity in the current state."
+
+So the test's assumption that `POST /temporal/entities` will
+populate current state is contrary to the spec.
+
+**Broker:** correct.
+
+**Fix wanted:** the test should either
+- create the entity in both stores (call `Create Entity`
+  before `Create Temporal Entity`), or
+- use `DELETE /temporal/entities/{id}/attrs/{name}` — the
+  temporal-side delete that exists for exactly this purpose
+  (§ 5.7.2.4). The `Delete Attribute From Temporal Entity`
+  keyword is already defined in
+  `resources/ApiUtils/TemporalContextInformationProvision.resource`.
+
+**Note:** 020_17_01 and 020_18_01 (the Property subtests)
+occasionally pass in the full suite due to cross-test state
+leak — when run in isolation, all six subtests fail with the
+same fixture root cause.
