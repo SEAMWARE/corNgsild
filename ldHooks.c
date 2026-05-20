@@ -1055,14 +1055,17 @@ static void ldRenderHook(void)
     // (geo+json content-type was already set above when ldToGeoJson ran)
   }
 
-  if (ctxUrl != NULL)
+  if (ctxUrl != NULL && !acceptLdJson)
   {
-    // Always advertise the context via Link header — required for json,
-    // recommended for ld+json/geo+json so non-Link-aware clients can
-    // discover it without parsing the body.
-    const char* suffix  = ">; rel=\"http://www.w3.org/ns/json-ld#context\"; type=\"application/ld+json\"";
-    int         linkLen = 1 + strlen(ctxUrl) + strlen(suffix) + 1;
-    char*       linkBuf = kaAlloc(&swRest.kalloc, linkLen);
+    // Advertise the context via Link header for application/json
+    // responses. § 6.3.5: with application/ld+json the @context is
+    // already inline in the body — adding a Link header in that case
+    // is duplicative and trips conformance tests that split the Link
+    // header by comma to count pagination relations (031_02_*,
+    // 041_03_*, 046_14_01).
+    static const char suffix[] = ">; rel=\"http://www.w3.org/ns/json-ld#context\"; type=\"application/ld+json\"";
+    int               linkLen  = 1 + strlen(ctxUrl) + (sizeof(suffix) - 1) + 1;
+    char*             linkBuf  = kaAlloc(&swRest.kalloc, linkLen);
 
     strcpy(linkBuf, "<");
     strcat(linkBuf, ctxUrl);

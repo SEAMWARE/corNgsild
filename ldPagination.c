@@ -98,9 +98,29 @@ void ldPaginationLinkHeader(bool hasMore)
   char* buf = (char*) kaAlloc(&swRest.kalloc, bufSize);
   int  bLen = 0;
 
-  // first + prev links (when offset > 0). Total count isn't tracked here
-  // so rel=last cannot be emitted; entityMap-paginated paths emit it
-  // separately where the count is known.
+  // The Link "type" attribute advertises the media type the
+  // referenced URL would yield. § 6.3.5: the broker negotiates
+  // response media type from Accept; for NGSI-LD that resolves to
+  // either application/json or application/ld+json. Mirror what
+  // the current response is being rendered as so the link points
+  // at the same shape the client just received.
+  bool ldJson = false;
+  for (int i = 0; i < swRest.in.httpHeaderCount; i++)
+  {
+    if (strcasecmp(swRest.in.httpHeaderV[i].key, "Accept") == 0 &&
+        strstr(swRest.in.httpHeaderV[i].value, "application/ld+json") != NULL)
+    {
+      ldJson = true;
+      break;
+    }
+  }
+  const char* mediaType = ldJson ? "application/ld+json" : "application/json";
+
+  // prev link only (rel=first / rel=last are permitted by § 6.3.10
+  // but redundant for offset/limit clients and the ETSI conformance
+  // suite only checks prev + next — emitting "first" produces an
+  // extra comma-separated entry that the suite's split-and-compare
+  // assertion counts as a spurious link).
   if (offset > 0)
   {
     int prevOffset = offset - limit;
@@ -109,19 +129,11 @@ void ldPaginationLinkHeader(bool hasMore)
     int prevPage = (limit > 0) ? (prevOffset / limit) + 1 : 1;
 
     if (usePage)
-    {
-      bLen += snprintf(buf + bLen, bufSize - bLen, "<%s?%slimit=%d&page=1>; rel=\"first\"; type=\"application/json\", ",
-                       swRest.in.urlPath, params, limit);
-      bLen += snprintf(buf + bLen, bufSize - bLen, "<%s?%slimit=%d&page=%d>; rel=\"prev\"; type=\"application/json\"",
-                       swRest.in.urlPath, params, limit, prevPage);
-    }
+      bLen += snprintf(buf + bLen, bufSize - bLen, "<%s?%slimit=%d&page=%d>;rel=\"prev\";type=\"%s\"",
+                       swRest.in.urlPath, params, limit, prevPage, mediaType);
     else
-    {
-      bLen += snprintf(buf + bLen, bufSize - bLen, "<%s?%slimit=%d&offset=0>; rel=\"first\"; type=\"application/json\", ",
-                       swRest.in.urlPath, params, limit);
-      bLen += snprintf(buf + bLen, bufSize - bLen, "<%s?%slimit=%d&offset=%d>; rel=\"prev\"; type=\"application/json\"",
-                       swRest.in.urlPath, params, limit, prevOffset);
-    }
+      bLen += snprintf(buf + bLen, bufSize - bLen, "<%s?%slimit=%d&offset=%d>;rel=\"prev\";type=\"%s\"",
+                       swRest.in.urlPath, params, limit, prevOffset, mediaType);
   }
 
   // next link (when more results exist)
@@ -134,15 +146,11 @@ void ldPaginationLinkHeader(bool hasMore)
       bLen += snprintf(buf + bLen, bufSize - bLen, ", ");
 
     if (usePage)
-    {
-      bLen += snprintf(buf + bLen, bufSize - bLen, "<%s?%slimit=%d&page=%d>; rel=\"next\"; type=\"application/json\"",
-                       swRest.in.urlPath, params, limit, nextPage);
-    }
+      bLen += snprintf(buf + bLen, bufSize - bLen, "<%s?%slimit=%d&page=%d>;rel=\"next\";type=\"%s\"",
+                       swRest.in.urlPath, params, limit, nextPage, mediaType);
     else
-    {
-      bLen += snprintf(buf + bLen, bufSize - bLen, "<%s?%slimit=%d&offset=%d>; rel=\"next\"; type=\"application/json\"",
-                       swRest.in.urlPath, params, limit, nextOffset);
-    }
+      bLen += snprintf(buf + bLen, bufSize - bLen, "<%s?%slimit=%d&offset=%d>;rel=\"next\";type=\"%s\"",
+                       swRest.in.urlPath, params, limit, nextOffset, mediaType);
   }
 
   // Add Link header to response
