@@ -1114,3 +1114,29 @@ exists" predicate. Perfectly valid.
 **Fix wanted:** rewrite the fixture's `q` to something genuinely
 invalid (mismatched parentheses, unsupported operator, etc.), or
 drop the test.
+
+
+## 45. `041_01_01 / 041_02_03 / 038_02_01` — fixture omits `notificationTrigger` (API-version drift)
+
+**Hit:** CSR-subscription create/retrieve fixtures omit
+`notificationTrigger` in both the POSTed body and the retrieval
+expectation file.
+
+**Spec:** `notificationTrigger` is a § 5.2.12 field that appears
+in newer NGSI-LD spec revisions (post-1.6.1). When omitted, the
+default is `["attributeCreated", "attributeUpdated"]`. Brokers
+surface that default on retrieve so the user sees what's in force.
+
+**Broker:** does that — adds `notificationTrigger:
+["attributeCreated","attributeUpdated"]` on retrieve when the
+user didn't provide one. The deepdiff fails with
+`'notificationTrigger' added to dictionary`.
+
+**Why it's a doubt:** the test fixtures look authored against an
+older spec revision (1.6.1 or earlier) where the field didn't
+exist. Newer-broker correctness collides with older-test
+expectations.
+
+**Fix wanted:** update the affected fixtures + expectations to
+the current spec, OR drop deep-diff in favour of asserting only
+user-set fields.
