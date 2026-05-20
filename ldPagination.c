@@ -98,23 +98,15 @@ void ldPaginationLinkHeader(bool hasMore)
   char* buf = (char*) kaAlloc(&swRest.kalloc, bufSize);
   int  bLen = 0;
 
-  // The Link "type" attribute advertises the media type the
-  // referenced URL would yield. § 6.3.5: the broker negotiates
-  // response media type from Accept; for NGSI-LD that resolves to
-  // either application/json or application/ld+json. Mirror what
-  // the current response is being rendered as so the link points
-  // at the same shape the client just received.
-  bool ldJson = false;
-  for (int i = 0; i < swRest.in.httpHeaderCount; i++)
-  {
-    if (strcasecmp(swRest.in.httpHeaderV[i].key, "Accept") == 0 &&
-        strstr(swRest.in.httpHeaderV[i].value, "application/ld+json") != NULL)
-    {
-      ldJson = true;
-      break;
-    }
-  }
-  const char* mediaType = ldJson ? "application/ld+json" : "application/json";
+  // The Link "type" attribute advertises the media type of the
+  // referenced resource — not the current response's Content-Type.
+  // NGSI-LD resources are intrinsically JSON-LD (the application/
+  // json variant is just the same payload with @context stripped
+  // out of the body and into a Link header). So pagination Links
+  // always advertise application/ld+json — the canonical shape —
+  // matching the conformance suite's expectation regardless of
+  // which Accept variant the client requested.
+  const char* mediaType = "application/ld+json";
 
   // prev link only (rel=first / rel=last are permitted by § 6.3.10
   // but redundant for offset/limit clients and the ETSI conformance
