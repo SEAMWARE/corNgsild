@@ -111,8 +111,32 @@ void ldParamHook(const char* name, const char* value)
 
   if (strcmp(name, "id") == 0)
   {
+    // § 4.1 / § 5.7.2.4 — each id MUST be a URI. Reject up front
+    // so the rest of the request doesn't quietly return an empty
+    // result for "invalidUri".
     swNgsild.id  = (char*) value;
     swNgsild.idV = ldParamSplit((char*) value, faP);
+    if (swNgsild.idV != NULL)
+    {
+      for (int i = 0; swNgsild.idV[i] != NULL; i++)
+      {
+        const char* s     = swNgsild.idV[i];
+        const char* colon = (s != NULL) ? strchr(s, ':') : NULL;
+        bool ok = (s != NULL && s[0] != 0 && colon != NULL && colon != s && colon[1] != 0);
+        if (ok)
+        {
+          for (const char* p = s; *p != 0 && ok; p++)
+            if (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r')
+              ok = false;
+        }
+        if (!ok)
+        {
+          ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Bad Request",
+                  "'%s' is not a valid URI", s);
+          return;
+        }
+      }
+    }
   }
   else if (strcmp(name, "idPattern") == 0)
   {
