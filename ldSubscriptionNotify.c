@@ -948,7 +948,9 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   swRestClientRequestInit(&req, SwVerbPost, itemP->endpointUri, NULL);
   swRestClientRequestHeader(&req, "Content-Type", contentType);
 
-  if (linkBuf[0] != 0)
+  // § 5.8.6 / § 6.3.5 — ld+json carries @context inline; Link would be a
+  // duplicate (and 046_14_01 asserts its absence). geo+json keeps Link.
+  if (linkBuf[0] != 0 && !acceptLdJson)
     swRestClientRequestHeader(&req, "Link", linkBuf);
 
   // § 5.2.15 endpoint.receiverInfo — emit each {key,value} as a request header

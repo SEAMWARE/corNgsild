@@ -23,8 +23,9 @@
 #include "swRest/SwRestState.h"                        // swRest (for thread-local init)
 #include "swRest/swRestClient.h"                       // SwRestClientRequest, swRestClientSend
 
-#include "swJsonld/swldCompactTree.h"                  // swldCompactTree
-#include "swJsonld/swldInit.h"                         // swldCoreContext
+#include "swJsonld/swldCompactTree.h"                  // swldCompactTree, swldCompactTreeWith
+#include "swJsonld/swldDownload.h"                     // swldContextFromUrl
+#include "swJsonld/swldInit.h"                         // swldCoreContext, SwldContext
 #include "swJsonld/SwldContext.h"                      // SwldContext
 
 #include "swNgsild/LdVocab.h"                          // LD_VOCAB_*
@@ -115,8 +116,19 @@ static bool pernotSendNotification(LdPernotItem* itemP, KjNode* entityArray, KAl
     ldLinkedEntitiesHookInvoke(dataArray, itemP->notifJoin, level, false, itemP->tenantP);
   }
 
-  // Compact
-  swldCompactTree(notification);
+  // Compact using the subscription's @context so attribute IRIs (e.g.
+  // `https://ngsi-ld-test-suite/context#airQualityLevel`) come back as
+  // their short names — otherwise notifications ship expanded IRIs as
+  // keys (046_02_01). Falls back to core if the URL can't be resolved.
+  {
+    SwldContext* notifCtx = NULL;
+    if (itemP->contextUrl != NULL)
+      notifCtx = swldContextFromUrl(itemP->contextUrl, kaP);
+    if (notifCtx != NULL)
+      swldCompactTreeWith(notification, notifCtx);
+    else
+      swldCompactTree(notification);
+  }
 
   // Render to JSON
   int bodySize = kjFastRenderSize(notification);
