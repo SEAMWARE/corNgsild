@@ -307,13 +307,14 @@ that the spec doesn't mandate.
 
 ---
 
-## 10. `043_01_*` expects HTTP 503 for `LdContextNotAvailable`; spec says 504
+## 10. `043_01_*` + `028_07_02` expects HTTP 503 for `LdContextNotAvailable`; spec says 504
 
 **Hit:** `043_01_01`, `043_01_02`, `043_01_03`, `043_01_04`, `043_01_05`
 — "Verify receiving 503 - LdContextNotAvailable error if remote
 JSON-LD @context cannot be retrieved" across Create Entity / Create
 Subscription / Create Temporal Representation / Batch Create / CSR
-Create. All five hard-code:
+Create. Plus `028_07_02` (subscription create with unreachable
+`jsonldContext` URL — same pattern, asserts 503). All hard-code:
 
 ```
 ${expected_status_code}=        503
@@ -1192,3 +1193,31 @@ invalid" perspective. 400 is more diagnostic.
 the broker. Same logic should also apply to other
 attrs/{empty}/... routes (016_02_05 is the same shape but uses
 `invalid(Id` instead of empty and asserts 400 — broker matches).
+
+
+## 48. `034_05_01` — fixture uses real JSON null to unset `expiresAt`
+
+**Hit:** `PATCH /csourceRegistrations/{id}` with body
+`{ "expiresAt": null }` (real JSON null). Test expects **204**
+and afterwards `expiresAt` to be gone from the registration.
+
+**Where:**
+`data/csourceRegistrations/fragments/context-source-registration-null-expiresAt.json`.
+
+**Spec:** § 4.5.21 introduces the explicit sentinel
+`"urn:ngsi-ld:null"` to mean "delete this member" in a merge
+patch. Real JSON null is NOT the agreed signal for that — and
+§ 7.4.4 of JSON-LD (Expansion algorithm) explicitly drops
+members whose value is `null` *before* the request body is
+interpreted. So a JSON-LD-conformant pre-processor sees
+**no** `expiresAt` member at all — the merge becomes a no-op.
+
+**Broker:** rejects with **400** "'expiresAt' must be a DateTime
+string". Correct per § 4.5.21 — null is not a valid
+DateTime, and the sentinel `"urn:ngsi-ld:null"` was designed
+precisely to make this case unambiguous.
+
+**Fix wanted:** the fixture should send
+`{ "expiresAt": "urn:ngsi-ld:null" }` (with `Content-Type:
+application/json` — the sentinel survives JSON-LD expansion
+because it is a string, not null). The broker is correct.
