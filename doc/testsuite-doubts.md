@@ -1522,3 +1522,62 @@ entries matching the subscription's entity scope (§ 5.11.7
 SHOULD), and (b) compacts using the subscription's @context so
 attribute IRIs come back as short names. Both were genuine
 broker bugs visible regardless of the assertion typo.
+
+
+## 60. `008_01_01` — fixture's expected temporal slice matches neither TRoE history nor current-state shape
+
+**Hit:** suite does two consecutive `POST /temporal/entities/`
+with the same id:
+
+setup body:
+```
+speed:     [{val:120, obs:12:03}, {val:80, obs:12:05}]
+fuelLevel: [{val:67, obs:12:03}, {val:53, obs:13:05},
+            {val:40, obs:14:07, datasetId:"12345-fuel"}]
+```
+update body:
+```
+speed:     [{val:121, obs:12:03}, {val:80, obs:12:05},
+            {val:100, obs:12:07}]
+fuelLevel: [{val:67, obs:12:03}, {val:53, obs:13:05},
+            {val:40, obs:14:07}]   ← no datasetId
+```
+Then `GET /temporal/entities/{id}` and the expectation has
+**3 speed + 4 fuelLevel** entries: the update's three speed
+instances, and (3 update fuel + 1 setup datasetId-bearing fuel
+that wasn't covered by the update).
+
+That matches an implicit dedup-by-(datasetId, observedAt) rule
+where the second POST replaces same-key instances and merges
+new ones — applied to the temporal layer.
+
+**Spec — two layers, two semantics:**
+
+- **TRoE** (what the endpoint queried by the test serves):
+  § 5.6.10 / § 5.6.11 say a second `POST /temporal/entities/`
+  on an existing entity ADDS the new instances to the history.
+  Strict spec reading: the TRoE rows after both POSTs are the
+  union — 5 speed + 6 fuelLevel.
+- **Current state**: in our broker, `POST /temporal/entities/`
+  on an entity that doesn't already exist in current state
+  intentionally skips current-state creation (§ 5.7.2.1),
+  so a follow-up `GET /entities/{id}` returns 404 here. A
+  broker that DID create the entity in current state would, on
+  the second POST, REPLACE the no-datasetId instances at the
+  current-state layer (because current state stores at most
+  one instance per (attr, datasetId)) — landing at exactly the
+  3 speed + 4 fuelLevel shape the test expects. But that
+  isn't where the test is looking.
+
+**Broker:** spec-correct on the TRoE layer (appends). Returns
+5+6 from the temporal endpoint.
+
+**Verdict:** the test fixture conflates the two layers. The
+expected shape is the current-state outcome of the upsert, but
+the assertion reads from the TRoE endpoint. Either the
+expected file should be the union (5+6) — matching what the
+temporal endpoint truly produces per spec — or the test should
+GET the current-state endpoint (which then also needs a setup
+that puts the entity into current state to begin with, since
+`POST /temporal/entities/` against a non-existent current
+entity skips creation per § 5.7.2.1).
