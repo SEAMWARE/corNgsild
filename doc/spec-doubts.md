@@ -3230,6 +3230,54 @@ exactly the streaming-action subscriber's natural ask.
 
 ---
 
+<a name="89"></a>
+## 89. § 4.9 — q-value grammar requires quotes around strings, but real-world clients (and the ETSI suite) send unquoted URIs
+
+**Hit:** the § 4.9 grammar for q value is roughly
+```
+QueryValue = String / Number / DateTime / TimeStamp / Range / List
+String     = """ *char """      ; must be quoted
+```
+so `locatedIn=="urn:ngsi-ld:City:Pisa"` is well-formed, but
+`locatedIn==urn:ngsi-ld:City:Pisa` (no quotes) is **not** —
+the value is grammatically required to be Number / DateTime /
+etc. when not quoted.
+
+In practice:
+
+- The ETSI conformance suite (019_09_08, 019_09_10, and
+  numerous others) sends URIs **unquoted** in q.
+- orionld accepts unquoted strings as a lenient convenience.
+- Strict parsers (like the swBroker parser before this change)
+  fell through to `strtod`, returning 0.0 for any non-numeric
+  unquoted value — and the q never matched.
+
+**Spec:** § 4.9 grammar is strict. § 4.9 prose is silent on
+lenient parsing.
+
+**Our call:** when an unquoted value doesn't fully consume as a
+number (range, datetime, list), accept the raw bytes as a
+string. The implementation requires `strtod` to consume the
+entire token to count as numeric; anything left over flips the
+term to `LdQString`. Boolean/datetime/range/list paths run
+first and are unaffected.
+
+**Fix wanted:** the spec should pick one:
+
+- **Tighten** §4.9 prose: brokers SHALL reject unquoted
+  non-numeric values with 400 BadRequestData. The conformance
+  suite is then wrong and must quote URIs.
+- **Loosen** §4.9 grammar: unquoted string is a valid q value
+  shape, with the same character class as quoted (URI-safe
+  chars + `:`, `_`, `-`, etc.). Brokers SHALL accept.
+
+Either is fine; the current "grammar says one thing, suite
+tests another" gap is the actual problem. We've taken the
+lenient interpretation because the suite already depends on
+it.
+
+---
+
 ## Template for new entries
 
 ```
