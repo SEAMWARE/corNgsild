@@ -1042,3 +1042,75 @@ request to `/a/b/attrs` (missing trailing slash) or
   (c) switch tests that need precise URL matching to `Wait For
       Request` + manual reply instead of the stub mechanism.
 
+
+
+## 41. `020_14_01/02` — default temporal page size is not in the spec
+
+**Hit:** 60-instance fixture (`speed` Jan 1, `fuelLevel` Jan 2)
+queried with `timerel=after&timeAt=2019-01-01`. Test expects
+`fuelLevel` to come back empty — the implicit assumption is the
+broker applies a default pagination on temporal retrieves that
+sorts the union of all instances by `observedAt` and truncates
+at some threshold < 118.
+
+**Spec:** § 6.3.10 doesn't pin a default temporal page size. swBroker
+returns all 118 instances → the `Check Data Is Empty` assertion on
+`fuelLevel` fails.
+
+**Why it's wrong:** two defensible interpretations exist; the
+fixture is committed to one without spec backing.
+
+**Fix wanted:** either nail down a default page size in the spec,
+or rewrite the test to assert pagination via an explicit `lastN=`.
+
+
+## 42. `021_25` — expectation file missing one of the entities
+
+**Hit:** `Setup Initial Temporal Entities` creates `Vehicle:021-06-A`
+and `Vehicle:021-06-B`. The query `?local=true&timerel=after&timeAt=
+2020-07-01` matches both. Expectation file
+`data/temporalEntities/expectations/vehicles-temporal-representation-021-06.jsonld`
+contains only entity A.
+
+Test is tagged `not-implemented` already, so the author knew it
+was WIP. Broker correctly returns both → deepdiff complains
+`Vehicle:021-06-B added to dictionary`.
+
+**Fix wanted:** add entity B to the expectation file (or drop the
+test's `not-implemented` tag once the fixture is repaired).
+
+
+## 43. `047_03/04/08/09/16` — CSR-sub vs CSR fixture entity-type mismatch
+
+**Hit:** the CSR-subscription notification tests pair
+`csourceSubscriptions/subscription.jsonld` (`entities: [type:
+Building]`) with `csourceRegistrations/context-source-registration.jsonld`
+(`entities: [type: Vehicle], [type: OffStreetParking]`). The CSR
+doesn't overlap with the sub's entity scope, so per § 5.11.7 no
+`newlyMatching` notification should fire.
+
+**Broker:** correctly fires nothing in isolation → test times out
+("Timeout: request was not received"). In the full suite the test
+sometimes "succeeds" structurally because a Building CSR created by
+another test lingers in the regCache and its id ends up in the
+notification body, then deepdiff complains `<old-id> does not
+contain <expected-new-id>`.
+
+**Fix wanted:** rework the fixture pair so the CSR entities match
+the subscription's `entities[type:Building]` (or drop the `entities`
+filter from the sub if the intent is "any new CSR").
+
+
+## 44. `038_08_03 InvalidQuery` — bare attribute name is a valid q
+
+**Hit:** fixture `csourceSubscriptions/subscription-invalid-query.jsonld`
+sets `q: "invalidQuery"` and the test asserts 400 BadRequestData.
+
+**Spec:** § 4.9 — a bare attribute name in q is the "attribute
+exists" predicate. Perfectly valid.
+
+**Broker:** correctly returns 201.
+
+**Fix wanted:** rewrite the fixture's `q` to something genuinely
+invalid (mismatched parentheses, unsupported operator, etc.), or
+drop the test.
