@@ -1652,3 +1652,48 @@ That would mask this fixture bug, but it changes semantics the
 spec doesn't actually mandate, and would also need an opt-out
 for clients that intentionally want default-vocab semantics.
 Not pursuing for now.
+
+
+## 62. `020_14_01 / 020_14_02` — "cut at attribute boundary" for temporal pagination is broker-specific
+
+**Hit:** the fixture has 59 `speed` instances on
+`2020-01-01T01:01..01:59` and 59 `fuelLevel` instances on
+`2020-01-02T01:01..01:59` (the two attributes have
+non-overlapping time ranges, hence "unsynchronized").
+
+- **020_14_01** — `timerel=after timeAt=2019-01-01Z`:
+  asks for everything. Expects the response `fuelLevel` to be
+  **empty** — broker is supposed to truncate at the cap and
+  cut at the attribute boundary, so only the first attribute
+  (`speed`) survives.
+- **020_14_02** — `lastN=100 timerel=before timeAt=2021-01-01Z`:
+  asks for the 100 most-recent instances. Expects the response
+  `speed` to be **empty** — the same cut-at-boundary, but in
+  reverse (lastN sorts descending so fuelLevel is the "first"
+  attribute and survives, while speed is cut).
+
+**Broker:** does not cut at the attribute boundary. Returns
+instances of BOTH attributes (the prefix that fits under the
+configured `--troeInstanceCap`, default 20 per § 6.3.10),
+interleaved. So both attributes end up with some instances and
+both assertions fail.
+
+**Spec:** § 6.3.10 says when the result exceeds the broker's
+configured page size, the response is 206 with a Content-Range
+header. The spec is **not explicit** about "cut at attribute
+boundary" — that is one valid pagination strategy among
+several (uniform per-attribute cut, time-window cut, attribute-
+boundary cut, etc.). The ETSI suite encodes the boundary-cut
+choice without spec backing.
+
+Same family as doubt #41 (`020_14` is "since v1.5.1" — and the
+v1.5.1 wording introduced the cap concept without nailing the
+cut algorithm).
+
+**Verdict:** the broker's interleave-within-cap approach is
+spec-compliant; the suite's expectation requires a specific
+implementation. Either the spec adopts boundary-cut as the
+mandated algorithm (and 020_14 gets explicit normative
+backing) or the suite needs to assert observably (e.g.
+"total instance count ≤ cap" rather than "this attribute is
+empty").

@@ -201,12 +201,23 @@ bool ldCheckEntity(KjNode* entityP, LdOp op, KjNode* dbEntityP, KAlloc* faP)
     }
   }
 
-  // Validate "type" if present — string or array of non-empty strings
+  // Validate "type" if present — string or array of non-empty strings.
+  // Any value beginning with '@' is a JSON-LD keyword (`@type`, `@id`,
+  // `@vocab`, …) and is never a valid entity type per § 4.6.2; reject
+  // those explicitly. Test ETSI 001_02_04 sends `"type": "type"` which
+  // the core context's `"type": "@type"` term mapping expands into the
+  // bare keyword — without this guard the broker happily stores the
+  // entity with `@type` as its type.
   if (typeNodeP != NULL)
   {
     if (typeNodeP->type == KjString)
     {
-      // single string — OK (existing behavior)
+      if (typeNodeP->value.s[0] == '@')
+      {
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Entity Type",
+                "Entity 'type' must not be a JSON-LD keyword ('%s')", typeNodeP->value.s);
+        return false;
+      }
     }
     else if (typeNodeP->type == KjArray)
     {
@@ -227,6 +238,13 @@ bool ldCheckEntity(KjNode* entityP, LdOp op, KjNode* dbEntityP, KAlloc* faP)
         if (elemP->value.s[0] == 0)
         {
           ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Entity Type", "Entity 'type' array elements must not be empty strings");
+          return false;
+        }
+
+        if (elemP->value.s[0] == '@')
+        {
+          ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Entity Type",
+                  "Entity 'type' must not be a JSON-LD keyword ('%s')", elemP->value.s);
           return false;
         }
       }
