@@ -6,6 +6,7 @@
 // Copyright 2026 Seamware
 // 
 //
+#include <stdio.h>                                       // snprintf
 #include <string.h>                                      // strcmp, strncasecmp, memset
 
 #include "kalloc/kaAlloc.h"                             // kaAlloc
@@ -286,6 +287,44 @@ static void ldParseHook(void)
     return;
   }
 
+  // § 6.3.5 — same rule on the batch path: an array element carrying
+  // an in-body @context with Content-Type application/json is per-
+  // entity bad request (003_06_01). Mirror the ld+json batch branch.
+  if (!isLdJson && isArrayBody && isBatchOp)
+  {
+    KjNode* prev = NULL;
+    KjNode* elemP = swRest.in.requestTree->value.firstChildP;
+    while (elemP != NULL)
+    {
+      KjNode* nextP = elemP->next;
+      if (elemP->type == KjObject && kjLookup(elemP, "@context") != NULL)
+      {
+        if (swNgsild.batchPreErrors == NULL)
+          swNgsild.batchPreErrors = kjArray(swRest.kjsonP, NULL);
+
+        const char* eid = "";
+        KjNode* idP = kjLookup(elemP, "id");
+        if (idP != NULL && idP->type == KjString) eid = idP->value.s;
+
+        KjNode* entry = kjObject(swRest.kjsonP, NULL);
+        kjChildAdd(entry, kjString(swRest.kjsonP, "entityId", eid));
+        KjNode* errObj = kjObject(swRest.kjsonP, "error");
+        kjChildAdd(errObj, kjString(swRest.kjsonP, "type",   LD_ERROR_BAD_REQUEST_DATA));
+        kjChildAdd(errObj, kjString(swRest.kjsonP, "title",  "Unexpected @context"));
+        kjChildAdd(errObj, kjString(swRest.kjsonP, "detail", "@context in body not allowed for Content-Type application/json"));
+        kjChildAdd(entry, errObj);
+        kjChildAdd(swNgsild.batchPreErrors, entry);
+
+        kjNodeDecouple(swRest.in.requestTree, elemP, prev);
+      }
+      else
+      {
+        prev = elemP;
+      }
+      elemP = nextP;
+    }
+  }
+
   //
   // For application/json: inject @context from Link header or default user context.
   // Skip array bodies — JSON arrays can't carry @context at the root.
@@ -467,6 +506,70 @@ static void ldParseHook(void)
               "unable to retrieve @context from '%s'", offendingUrl);
       swNgsild.contextError = true;
       return;
+    }
+  }
+
+  // § 6.3.4 — same check for batch array bodies (043_01_04). Each
+  // element carries its own @context; an unreachable URL on any
+  // element becomes a per-entity error in the batch response. The
+  // batch handler then folds batchPreErrors into errors[] and the
+  // overall status is 207.
+  if (isArrayBody && isBatchOp)
+  {
+    KjNode* prev = NULL;
+    KjNode* elemP = swRest.in.requestTree->value.firstChildP;
+    while (elemP != NULL)
+    {
+      KjNode* nextP = elemP->next;
+      if (elemP->type == KjObject)
+      {
+        KjNode* elemCtx = kjLookup(elemP, "@context");
+        const char* badUrl = NULL;
+        if (elemCtx != NULL && elemCtx->type == KjString)
+        {
+          if (swldContextFromUrl(elemCtx->value.s, &swRest.kalloc) == NULL)
+            badUrl = elemCtx->value.s;
+        }
+        else if (elemCtx != NULL && elemCtx->type == KjArray)
+        {
+          for (KjNode* c = elemCtx->value.firstChildP; c != NULL; c = c->next)
+          {
+            if (c->type == KjString && swldContextFromUrl(c->value.s, &swRest.kalloc) == NULL)
+            { badUrl = c->value.s; break; }
+          }
+        }
+        if (badUrl != NULL)
+        {
+          if (swNgsild.batchPreErrors == NULL)
+            swNgsild.batchPreErrors = kjArray(swRest.kjsonP, NULL);
+
+          const char* eid = "";
+          KjNode* idP = kjLookup(elemP, "id");
+          if (idP != NULL && idP->type == KjString) eid = idP->value.s;
+
+          KjNode* entry = kjObject(swRest.kjsonP, NULL);
+          kjChildAdd(entry, kjString(swRest.kjsonP, "entityId", eid));
+          KjNode* errObj = kjObject(swRest.kjsonP, "error");
+          kjChildAdd(errObj, kjString(swRest.kjsonP, "type",   LD_ERROR_LD_CONTEXT_NOT_AVAILABLE));
+          kjChildAdd(errObj, kjString(swRest.kjsonP, "title",  "Context Not Available"));
+          char detail[512];
+          snprintf(detail, sizeof(detail), "unable to retrieve @context from '%s'", badUrl);
+          kjChildAdd(errObj, kjString(swRest.kjsonP, "detail", detail));
+          kjChildAdd(entry, errObj);
+          kjChildAdd(swNgsild.batchPreErrors, entry);
+
+          kjNodeDecouple(swRest.in.requestTree, elemP, prev);
+        }
+        else
+        {
+          prev = elemP;
+        }
+      }
+      else
+      {
+        prev = elemP;
+      }
+      elemP = nextP;
     }
   }
 
