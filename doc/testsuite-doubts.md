@@ -2111,3 +2111,61 @@ Append Entity Attributes
 
 — and the test passes `context=${ngsild_test_suite_context}`
 alongside `${CONTENT_TYPE_JSON}`.
+
+
+## 71. `D004_01_exc` — PATCH-attrs body carries an id that doesn't match the URL id
+
+**Hit:** `D004_01_exc Create Entity and Registration And Start
+Context Source Mock Server` returns 400 BadRequestData where
+the test expects 204:
+
+```json
+{
+  "type": "https://uri.etsi.org/ngsi-ld/errors/BadRequestData",
+  "title": "Entity Id Mismatch",
+  "status": 400,
+  "detail": "Entity 'id' in body ('urn:ngsi-ld:Vehicle:randomUUID')
+             does not match URL ('urn:ngsi-ld:Vehicle:<random>')"
+}
+```
+
+**Why:** the fixture
+`data/entities/fragmentEntities/vehicle-speed-different-attribute.jsonld`
+carries `"id": "urn:ngsi-ld:Vehicle:randomUUID"` and
+`"type": "Vehicle"` alongside the `speed` attribute it wants
+to update. The `Update Entity Attributes` keyword
+(`ContextInformationProvision.resource` line 316) reads the
+file verbatim via `Get File` and PATCHes it to
+`…/entities/<test-generated-id>/attrs/` — the URL's
+`<test-generated-id>` is a fresh `urn:ngsi-ld:Vehicle:<digits>`,
+so the body id is a real entity id but it's *not* the same
+entity id the URL targets.
+
+§ 5.2.5 lets an EntityFragment omit id/type, but when an id
+*is* supplied the broker has to enforce that it matches the
+URL — otherwise the request is ambiguous about which entity
+to mutate. `ldCheckEntity.c::isUpdateOp` covers exactly
+PATCH-style ops (`LdOpUpdateEntity`, `LdOpAppendAttrs`,
+`LdOpMergeEntity`); the rejection is by design.
+
+**Broker:** correct. § 5.6.2 mandates the URL id is
+authoritative for partial-update ops and the body MUST NOT
+disagree.
+
+**Fix wanted:** either
+  (a) strip `id` from the fixture (the `type` can stay — per
+      § 5.6.17.4 it's unioned into the entity's type set, so
+      sending the existing `Vehicle` is a no-op), or
+  (b) make the `Update Entity Attributes` keyword swap the
+      fixture's id for `${id}` before PATCHing, the way
+      `Create Entity` and `Prepare Context Source Registration
+      From File` already do:
+
+      ```robot
+      ${fragment_payload}=  Load JSON From File  …/${fragment_filename}
+      ${fragment_payload}=  Update Value To JSON  ${fragment_payload}  $.id  ${id}
+      ```
+
+Variant (a) is the smaller fix — `id` simply isn't part of
+the EntityFragment semantics for partial updates; only the
+URL id matters.
