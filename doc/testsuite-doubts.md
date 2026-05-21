@@ -1856,3 +1856,104 @@ separator slash — matching the surrounding keywords:
 ```robot
     url=${final_url}/${ENTITIES_ENDPOINT_PATH}
 ```
+
+
+## 66. `D002_01_red` — Create-Entity stub URL includes the entity id (which POST /entities never carries)
+
+**Hit:** `D002_01_red Delete Entities On Both Context Sources`
+fails its very first assertion: the test's `Create Entity` call
+returns 409 Conflict with body
+`{"success":[],"errors":[{"entityId":"…","error":{"…title":
+"Bad Gateway","detail":"forward failed …"}}]}` instead of the
+expected 201.
+
+**Why:** the test sets these stubs on the HttpCtrl mock:
+
+```robot
+Set Stub Reply  POST  /broker1/ngsi-ld/v1/entities/${entity_id}   201
+Set Stub Reply  POST  /broker2/ngsi-ld/v1/entities/${entity_id2}  201
+```
+
+But § 5.6.1 (Create Entity) defines exactly one URL for POST:
+`POST /ngsi-ld/v1/entities` — with the body carrying the entity
+(including its `id`). The entity id is **not** in the URL on
+create; it only appears in the `Location` header of the
+response (and on subsequent Retrieve / Update / Delete URLs).
+
+The broker correctly forwards
+`POST http://0.0.0.0:8086/broker1/ngsi-ld/v1/entities` (verified
+via swBroker trace level `KtDistOpRequest=400`). HttpCtrl
+matches on the full URL incl. query string (per §40), so the
+stub at `…/entities/<id>` never fires. The forward times out at
+the broker's distOpTimeout → broker reports it as transport
+failure → with redirect-mode CSRs there is no local creation
+either, so `anySucceeded == false` and § 5.2.17 emits 409 with
+the BatchOperationResult shape (see postEntities.c line 783).
+
+**Broker:** correct. The 409 + `errors[].title=Bad Gateway`
+response shape is what § 5.2.17 prescribes when every CSR leg
+of a Create-Entity fails and there is no local leg (redirect
+mode).
+
+**Fix wanted:** the two `Set Stub Reply` lines should drop the
+`/${entity_id}` suffix:
+
+```robot
+Set Stub Reply  POST  /broker1/ngsi-ld/v1/entities    201
+Set Stub Reply  POST  /broker2/ngsi-ld/v1/entities    201
+```
+
+The same test then sets up DELETE stubs *with* the id, which is
+correct for DELETE — `/entities/{id}` is the right URL there
+(§ 5.6.6).
+
+
+## 67. `D002_02_01_inc / D002_02_02_inc` — broker treats CSR's 404 on DELETE forward as idempotent success, not as an error
+
+**Hit:** Both tests do `Delete Entity` against an inclusive CSR
+where one of the two legs (local or remote) is supposed to
+return 404. The test then expects:
+
+```
+Check Response Status Code              207   ${response.status_code}
+Check JSON Value In Response Body  ['status']  404
+```
+
+— i.e. 207 Multi-Status with a per-entity error entry
+reporting the 404. The broker instead returns 204 No Content
+(success).
+
+**Broker logic:** in `deleteEntity.c` line 135 and `purgeEntities.c`
+line 330, the broker explicitly skips adding an entry to
+`errorsArrayP` when a CSR forward returns 404 — the rationale
+is the standard HTTP-DELETE idempotency: "404 on delete means
+the resource is already gone, which is exactly what we wanted".
+The same is done for the local leg when the entity is absent
+locally but at least one CSR succeeded.
+
+**Spec:** § 5.6.6.4 lists the possible response codes but does
+not prescribe whether a per-CSR 404 must surface as a 207-style
+error or roll up into the parent success. § 6.3.18 (Status
+Codes) and § 5.2.17 (BatchOperationResult) are also silent on
+this specific case.
+
+**Our reading:** broker is defensibly correct — once any leg
+confirms the entity is deleted (or already absent), the
+end-state is what the client asked for; surfacing the 404 as an
+"error" is noise. Same reading underlies our purge and
+batch-delete behaviour.
+
+**Fix wanted:** either
+  (a) clarify in the spec that per-CSR 404 must be reported in
+      BatchOperationResult.errors[] regardless of overall
+      success — at which point we'd flip the `sc != 404`
+      check in deleteEntity.c and purgeEntities.c to always
+      record, or
+  (b) accept the broker's idempotent reading and adjust these
+      tests (and any matching siblings) to expect 204 / 207
+      based on whether a true error occurred, not just whether
+      a 404 was encountered.
+
+This same interpretation gap likely affects sibling tests in
+the D002 / D004 / D006 / D017 families that mix-and-match
+local-vs-CSR delete legs.
