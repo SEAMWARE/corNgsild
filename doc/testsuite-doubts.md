@@ -1035,6 +1035,26 @@ request to `/a/b/attrs` (missing trailing slash) or
    would silently break the spec-mandated merge for multi-source
    reads. The fix belongs on the testsuite side.
 
+3. **Forward URL carries `?options=update` for batch upsert.** §
+   5.6.9.4 forwards the original `options=update|replace` URL
+   param so the upstream CP applies the same merge mode. The
+   ETSI batch-upsert tests stub `Set Stub Reply  POST
+   /broker1/ngsi-ld/v1/entityOperations/upsert  204` — no query
+   string — so HttpCtrl never matches, the broker sees status 0
+   (transport-level fail) on the forward, and returns 207 with
+   a Bad-Gateway entry per entity.
+
+   This affects:
+     * D013_02_exc, D013_02_inc (exclusive / inclusive upsertBatch
+       with `update` flag)
+     * D013_01_inc (default `replace` flag; the test stubs the
+       bare URL but the broker still forwards `?options=replace`)
+
+   Confirmed end-to-end: with a Python mock that ignores the
+   query string and replies 204 to any POST under
+   `/broker1/.../upsert`, the broker correctly returns 204. Only
+   HttpCtrl's strict match breaks these.
+
 **Fix wanted upstream:** either
   (a) loosen `HttpStubCriteria.__eq__` to compare just the path
       (with optional `?…` glob support), or
