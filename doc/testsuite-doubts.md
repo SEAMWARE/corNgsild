@@ -2194,3 +2194,44 @@ disagree.
 Variant (a) is the smaller fix — `id` simply isn't part of
 the EntityFragment semantics for partial updates; only the
 URL id matters.
+
+
+## 72. `D001_02_inc` / `D001_03_03_inc` — flaky in full-suite due to leftover Vehicle entities in current state
+
+**Hit:** Both tests query `Query Entities entity_types=Vehicle
+local=true` near the end and assert about the set:
+  * D001_02_inc — `Should Be Empty` (after rejecting a
+    malformed-id Create, no Vehicle should remain locally).
+  * D001_03_03_inc — `Check Response Body Containing Entities
+    URIS set to [${entity_id}]` (the just-created entity is
+    the only Vehicle).
+
+In a full-folder run the broker has Vehicles in `etsi.entities`
+from earlier DistOps tests that never deleted them (their
+teardowns drop the CSR + the entity-by-id, but tests that
+generate Vehicles transitively or skip the teardown leave
+strays). The query returns one or more extra entities and
+the assertion fails — `'[…]' should be empty` for D001_02_inc
+or `Lengths are different: 1 != N` for D001_03_03_inc.
+
+**Verified:** both tests PASS in isolation via
+`robot --test 'D001_02_inc*' …` and
+`robot --test 'D001_03_03_inc*' …`. Broker behaviour is
+correct in both runs.
+
+**Same class as §63** (`047_07_*` notification leftovers):
+the broker is right, the test-suite needs sturdier
+isolation.
+
+**Fix wanted upstream:** either
+  (a) wrap each test in a Vehicle-only purge at setup
+      (`DELETE /entities?type=Vehicle&local=true`), or
+  (b) add a suite-level `DELETE /entities?type=Vehicle&local=true`
+      between tests that mutate the Vehicle pool, or
+  (c) rephrase the assertion to "MUST contain
+      `${entity_id}`" instead of "MUST be exactly that one"
+      — the test's narrative doesn't actually need
+      exclusivity, only presence.
+
+Variant (c) is the smallest change; (b) is the cleanest
+isolation.
