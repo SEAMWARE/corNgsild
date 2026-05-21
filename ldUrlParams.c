@@ -240,10 +240,14 @@ void ldParamHook(const char* name, const char* value)
   else if (strcmp(name, "limit") == 0)
   {
     swNgsild.limit = atoi(value);
-    if (swNgsild.limit < 0)
+    if (swNgsild.limit <= 0)
     {
+      // § 6.3.10: limit, when present, MUST be a positive integer
+      // (> 0). limit=0 reaches us only when the client explicitly
+      // sent it — defaults route through a NULL value-string and
+      // never enter this branch.
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid request",
-              "'limit' must be a non-negative integer (got '%s')", value);
+              "'limit' must be a positive integer (got '%s')", value);
       return;
     }
     // If `page` was already seen, complete the translation now.
@@ -278,7 +282,7 @@ void ldParamHook(const char* name, const char* value)
     // to `offset = (page - 1) * limit` as soon as both values are
     // known (regardless of URL param order).
     swNgsild.page = atoi(value);
-    if (swNgsild.page < 0)
+    if (swNgsild.page <= 0)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid request",
               "'page' must be a positive integer (got '%s')", value);
