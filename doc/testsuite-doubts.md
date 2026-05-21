@@ -1030,6 +1030,13 @@ request to `/a/b/attrs` (missing trailing slash) or
    In every case the underlying HttpCtrl strict-match bug
    stays.
 
+   **Test-suite-side ask:** stubs (and the matching `Get
+   Stub Count` calls) should accept both `…/attrs` and
+   `…/attrs/` — the spec wording is ambiguous enough that
+   brokers MAY emit either. Personal preference: drop the
+   trailing slash everywhere (terser, matches the rest of
+   the attribute-level URI templates in § 6.6).
+
 2. **Forward URL carries `?sysAttrs=true` and `&type=…`.** For
    retrieveEntity through CSRs the broker has to ask the upstream for
    sysAttrs (createdAt / modifiedAt are needed at the merge tiebreaker
