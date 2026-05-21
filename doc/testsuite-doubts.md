@@ -1811,3 +1811,48 @@ variants of the same family (`D011_03_inc_01`,
 `D011_04_inc_01`). #64 here is purely the body/Link @context
 shape mismatch and is the dominant 400 for the POST `_02`
 variants.
+
+
+## 65. `D017_01_inc / D017_01_red / D017_01_exc` — `Purge Entities` keyword joins URL without a slash
+
+**Hit:** All three D017_01 Purge-Entities tests fail at the
+first assertion: `204 != 404`. The broker emits a clean 404
+ResourceNotFound. The forward to the CSR never happens.
+
+**Why:** the Robot keyword `Purge Entities` in
+`resources/ApiUtils/ContextInformationConsumption.resource`
+(line 389) builds the request URL as:
+
+```robot
+    url=${final_url}${ENTITIES_ENDPOINT_PATH}
+```
+
+— **no `/` between the two parts**. With `${final_url} =
+"http://localhost:1026/ngsi-ld/v1"` and
+`${ENTITIES_ENDPOINT_PATH} = "entities/"`, the resulting URL
+is `http://localhost:1026/ngsi-ld/v1entities/?type=Vehicle`
+— a route that does not exist. The broker returns 404
+"ResourceNotFound", which is what the test sees as the
+"actual" status.
+
+Every other keyword in the same file (`Query Entities`,
+`Retrieve Entity`, `Batch Upsert Entities`, etc.) uses the
+correct join `${url}/${ENTITIES_ENDPOINT_PATH}`.
+
+**Broker:** correct — there is no `/ngsi-ld/v1entities/`
+endpoint by any spec reading; 404 is the right answer.
+
+**Confirmed end-to-end:** issuing `DELETE
+/ngsi-ld/v1/entities?type=Vehicle` directly (correct path)
+through curl returns 204 No Content, with the broker
+forwarding `DELETE /ngsi-ld/v1/entities?type=Vehicle` to the
+CSR endpoint as expected (verified via swBroker trace level
+`KtDistOpRequest=400`).
+
+**Fix wanted:** change the line in
+`ContextInformationConsumption.resource` to include the
+separator slash — matching the surrounding keywords:
+
+```robot
+    url=${final_url}/${ENTITIES_ENDPOINT_PATH}
+```
