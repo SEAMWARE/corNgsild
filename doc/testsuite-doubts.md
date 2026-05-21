@@ -1976,63 +1976,60 @@ also accepts a bare entity object and re-wraps it as a
 one-element array, matching § 6.3.16 (JSON-LD compaction's
 unwrap rule for single-member arrays).
 
-**Doesn't fully recover the tests:** even with the broker
-fix, the family still fails for an unrelated reason — see §69
-about the broker → HttpCtrl transport-level interop quirk in
-this test order.
+**Why the broker can't recover from this on its own:** the
+fixture passes a Python `dict` (from `Load Entity` →
+`Load JSON From File`) directly into HttpCtrl's
+`Set Stub Reply`. At response time `HttpHandler.__send_response`
+runs `self.send_header("Content-Length", str(len(body)))` —
+with body being a dict, that gives `len(dict)` = number of
+keys (3 for a Vehicle entity) — flushes the headers, then
+calls `self.wfile.write(body)` which raises
+`TypeError: a bytes-like object is required, not 'dict'`. The
+exception is caught by the broad `try/except` around
+`__send_response` (it just logs "Response was not sent…") and
+the socket closes. The broker has the headers but the
+promised body never arrives.
 
-**Fix wanted upstream:** the stubs should ship the body as a
-JSON array literal:
+Trace level `KtDistOpRequest=400` on swBroker — together with
+the multi-engine errorDetail enrichment landed in the same
+fix — prints this exactly:
 
-```robot
-@{entity_list}=   Create List   ${entity_body}
-Set Stub Reply    GET    /ngsi-ld/v1/entities?type=Vehicle    200    ${entity_list}
+```
+forward response: status=0, bodyLen=0,
+  error=Connection closed by peer (n=0, errno=…, bufLen=63,
+        head=HTTP/1.0 200 OK|~…|~Content-Length: 3|~|~)
 ```
 
-That stays well-formed regardless of how strictly the broker
-interprets § 6.3.16.
+`bufLen=63` is just headers, no body bytes, then EOF.
+`swRestClientResponseComplete` correctly reports
+"incomplete: promised 3 bytes, got 0 before close" and the
+multi engine flags the connection as malformed.
 
+Confirmed end-to-end: a Python mock that announces
+`Content-Length: 3` and then closes without sending the body
+reproduces the broker's exact failure signature; a Python
+mock that ships a properly-stringified JSON array returns
+the entity through the broker and lights up the JSON-LD-
+unwrap codepath as expected.
 
-## 69. `D011_01_*` family — broker forward to HttpCtrl returns "transport failure" within ~1 ms
+**Fix wanted upstream:** serialise the body before stubbing
+so HttpCtrl gets a `str` it can `.encode('utf-8')`:
 
-**Hit:** The same six tests in §68. Even with the JSON-LD
-single-object fix applied, every per-CSR forward returns with
-status=0 and `errorDetail="transport failure"` ~1 ms after
-the broker initiates it. Trace level `KtDistOpRequest=400`
-makes this visible directly.
+```robot
+@{entity_list}=    Create List               ${entity_body}
+${entity_json}=    Convert JSON To String    ${entity_list}
+Set Stub Reply     GET    /ngsi-ld/v1/entities?type=Vehicle    200    ${entity_json}
+```
 
-**Verified non-issues:**
-  * HttpCtrl binds 0.0.0.0:8086 correctly — a manual curl
-    against `http://0.0.0.0:8086/…?type=Vehicle` from outside
-    the test process returns 200 with the stubbed body.
-  * A purpose-built Python mock at the same address that
-    deliberately returns a single-entity object (mimicking
-    HttpCtrl's stub shape) works end-to-end with the broker:
-    forward, response received, JSON-LD-unwrap applied, entity
-    returned.
-  * The endpoint string and `?type=Vehicle` URL pass HttpCtrl's
-    lowercased exact-match check.
+That gives HttpCtrl a string body with a matching
+`Content-Length`. The broker reads the full response and the
+single-object branch of § 6.3.16 (JSON-LD compaction) is no
+longer reached at all.
 
-So the transport failure is specific to the broker → HttpCtrl
-combination, in the test's exact ordering (CSR first → mock
-later → query). Suspected causes (un-narrowed):
-  * HttpCtrl's `socketserver.TCPServer` is single-threaded;
-    the failed /info/sourceIdentity probe at CSR creation
-    leaves something in HttpCtrl's request/response queue
-    that blocks the next handler.
-  * Broker's swRestClientMulti connection-pool entry from
-    the failed probe (state-tracked per host:port) interferes
-    with the fresh forward.
-  * Race between `Start Context Source Mock Server` returning
-    and the listen socket actually being bound on Linux's
-    TCP stack.
-
-**Where to dig next:** instrument `swRestClient.c`'s
-`swRestClientPoolGet` (sw) / `httpClientPoolGet` (fw) to
-see what pool state survives a failed connect; and confirm
-HttpCtrl's `__create_ipv4_tcp_server` actually completes
-binding before its `start()` returns.
-
-The combination of §68 (fixture body shape) + §69 (transport
-quirk) is what makes the whole D011_01_* family red even
-after the broker's JSON-LD-unwrap fix landed.
+**Independent HttpCtrl bug worth filing upstream:**
+`__send_response` should reject (or auto-serialise) non-bytes
+non-string `body` BEFORE sending the headers, instead of
+silently swallowing the TypeError after `Content-Length` is
+on the wire. That'd surface as a clear "stub body must be
+str/bytes" failure rather than a mysterious half-response
+and broker-side "transport failure".
