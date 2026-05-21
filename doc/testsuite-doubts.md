@@ -1739,3 +1739,55 @@ other direction (PASSes in full-suite, FAILs in isolation).
 This direction-flip across the suite is the strongest
 indicator that the suite's listener/teardown sequencing is
 the actual problem, not the broker.
+
+
+## 64. `D011_02_exc_02 / D011_02_red_02` — queryBatch test sends `Content-Type: application/ld+json` with `@context` in Link header instead of body
+
+**Hit:** Two DistOps tests do `POST /entityOperations/query` with:
+- `Content-Type: application/ld+json`
+- `Link: <…compound.jsonld>; rel="http://www.w3.org/ns/json-ld#context"; type="application/ld+json"`
+- Body: `{"type":"Query","entities":[{"type":"Vehicle"}]}` — **no `@context` field**
+
+Expects 200 with the entity from the CSR forward.
+
+**Spec:** § 6.3.5 (Use of @context) — when `Content-Type` is
+`application/ld+json`, `@context` *shall* be carried in the
+payload body and *shall not* be supplied as a Link header.
+The reverse (Link header) is only valid with
+`Content-Type: application/json`.
+
+The broker enforces this in `ldContextResolve` /
+`ldRequestParse` and rejects 400 `BadRequestData` "Missing
+@context — @context is mandatory for Content-Type
+application/ld+json" before the request ever reaches the
+query / forward logic.
+
+**Broker:** correct per § 6.3.5 — the two
+`Content-Type` choices are mutually exclusive about where
+the `@context` may live, and ld+json forbids the Link form.
+
+**Why the tests trigger it:** Robot's `Query Entities Via
+POST` keyword always wraps the body in a fresh `&{body}` dict
+that contains `type` + `entities` (etc.) but never appends
+`@context`, while the caller passes `content_type=
+${CONTENT_TYPE_LD_JSON}` and `context=
+${ngsild_test_suite_context}` — the latter is then placed in
+the Link header. The combination is invalid by § 6.3.5.
+
+**Fix wanted:** either
+  (a) when `content_type == application/ld+json`, `Query
+      Entities Via POST` should inline `@context` into the body
+      (alongside the existing `type`/`entities`/… fields) and
+      drop the Link header, or
+  (b) the two test cases should explicitly pass
+      `content_type=${CONTENT_TYPE_JSON}` so the existing Link
+      header path remains valid (this is what the matching
+      GET-variant tests in this family already do — only the
+      `_02` POST variants regress).
+
+**Not the same as #28:** that one is about `?id=` alone being
+flagged "too wide" by § 5.7.2.4 and affects the `_01` GET
+variants of the same family (`D011_03_inc_01`,
+`D011_04_inc_01`). #64 here is purely the body/Link @context
+shape mismatch and is the dominant 400 for the POST `_02`
+variants.
