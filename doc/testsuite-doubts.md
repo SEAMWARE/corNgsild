@@ -1006,17 +1006,29 @@ request to `/a/b/attrs` (missing trailing slash) or
 
 1. **Trailing-slash mismatch on the attribute-list endpoint.** § 6.6.3
    Table 6.6.3.1-1 shows the URI template as `/entities/{entityId}/attrs/`
-   (with trailing slash). Many test stubs include the trailing slash;
-   our broker used to send `/attrs` (no slash) on forwarded requests.
-   D003_01_red, D004_01_red, D006_02_exc, D014_01_red, D014_02_red all
-   failed with `204 != 404` because the mock never matched the
-   stub → mock fell back to the default reply → forward "failed" from
-   the broker's perspective → `anyCsrSucceeded` stayed false → broker
-   returned 404 "entity not found".
+   (with trailing slash).
 
-   **Worked around** on the broker side (postEntityAttrs / patchEntityAttrs /
-   postEntityTemporalAttrs now emit the trailing slash) but the
-   underlying mock-matching bug stays.
+   Many tests historically stubbed the trailing-slash form;
+   our broker used to send `/attrs` (no slash) on forwarded
+   requests and broke them:
+   D003_01_red, D004_01_red, D006_02_exc, D014_01_red, D014_02_red.
+   **Worked around** on the broker side (postEntityAttrs /
+   patchEntityAttrs / postEntityTemporalAttrs now emit the
+   trailing slash to match the spec).
+
+   The opposite case also occurs: tests that stub
+   `…/attrs` WITHOUT the trailing slash — these miss now
+   that the broker forwards the spec-correct `…/attrs/`.
+   Affects D004_01_inc (`Set Stub Reply PATCH
+   /ngsi-ld/v1/entities/<id>/attrs 204`). Broker forwards
+   `…/attrs/` per § 6.6.3, HttpCtrl misses, forward fails,
+   `anyCsrSucceeded` stays false, entity not found locally
+   → 404 instead of the test-expected 207. The fix is on
+   the test side: align every stub with the spec-template
+   trailing slash.
+
+   In every case the underlying HttpCtrl strict-match bug
+   stays.
 
 2. **Forward URL carries `?sysAttrs=true` and `&type=…`.** For
    retrieveEntity through CSRs the broker has to ask the upstream for
