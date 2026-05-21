@@ -1047,7 +1047,13 @@ request to `/a/b/attrs` (missing trailing slash) or
    stub never matches the broker's request.
 
    This affects:
-     * D010_01_inc, D010_01_red (single-CSR retrieve)
+     * D010_01_inc, D010_01_red (single-CSR retrieve —
+       inclusive / redirect)
+     * D010_01_exc (exclusive retrieve where the local
+       entity is missing the attrs the CSR owns — when
+       the forward fails the broker can't satisfy the
+       request and returns 502 instead of 200; visible
+       in the test as `200 != 502`)
      * D010_03_inc_01..03 (chained retrieve)
 
    **Not worked around** — dropping `sysAttrs=true` from the forward
