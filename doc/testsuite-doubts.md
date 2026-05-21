@@ -1035,25 +1035,34 @@ request to `/a/b/attrs` (missing trailing slash) or
    would silently break the spec-mandated merge for multi-source
    reads. The fix belongs on the testsuite side.
 
-3. **Forward URL carries `?options=update` for batch upsert.** §
-   5.6.9.4 forwards the original `options=update|replace` URL
-   param so the upstream CP applies the same merge mode. The
-   ETSI batch-upsert tests stub `Set Stub Reply  POST
-   /broker1/ngsi-ld/v1/entityOperations/upsert  204` — no query
-   string — so HttpCtrl never matches, the broker sees status 0
-   (transport-level fail) on the forward, and returns 207 with
-   a Bad-Gateway entry per entity.
+3. **Forward URL carries an `options=` / similar query for
+   write ops.** Several spec clauses require propagating the
+   original `options=` (and `deleteAll=`, etc.) URL param to
+   the upstream CP so the same mode applies on both legs.
+   ETSI stubs at the bare path miss HttpCtrl's strict match
+   → broker sees a transport-level fail (Request timeout or
+   immediate Connection closed) and rolls up to 207 with a
+   Bad-Gateway entry per entity.
 
    This affects:
-     * D013_02_exc, D013_02_inc (exclusive / inclusive upsertBatch
-       with `update` flag)
-     * D013_01_inc (default `replace` flag; the test stubs the
-       bare URL but the broker still forwards `?options=replace`)
+     * D013_02_exc, D013_02_inc — POST upsertBatch with
+       `?options=update` (§ 5.6.9.4)
+     * D013_01_inc — POST upsertBatch with `?options=replace`
+       (the default mode)
+     * D003_02_red — POST appendAttrs with
+       `?options=noOverwrite` (§ 5.6.3.4). Broker correctly
+       forwards `/attrs/?options=noOverwrite`; stub at the
+       bare URL misses. Visible in the `KtDistOpRequest=400`
+       trace.
+     * D006_02_inc — DELETE attrs with `?deleteAll=true`
+       (§ 5.6.5.4). Broker forwards
+       `/attrs/speed?deleteAll=true`; stub at the bare URL
+       misses. Surfaces in the 207 body's
+       `error.detail="forward failed: Request timeout"`.
 
-   Confirmed end-to-end: with a Python mock that ignores the
-   query string and replies 204 to any POST under
-   `/broker1/.../upsert`, the broker correctly returns 204. Only
-   HttpCtrl's strict match breaks these.
+   Confirmed end-to-end with a Python mock that ignores the
+   query string: broker returns the test-expected status.
+   Only HttpCtrl's strict match breaks these.
 
 **Fix wanted upstream:** either
   (a) loosen `HttpStubCriteria.__eq__` to compare just the path
@@ -2033,3 +2042,72 @@ silently swallowing the TypeError after `Content-Length` is
 on the wire. That'd surface as a clear "stub body must be
 str/bytes" failure rather than a mysterious half-response
 and broker-side "transport failure".
+
+
+## 70. `D003_01_exc` — Append-Attrs fragment sent as `application/json` with no Link header, so attribute names don't expand to the CSR's
+
+**Hit:** `D003_01_exc Append Entity Attribute` fails the
+post-forward stub-count check (`0 != 1`): the broker never
+forwards the request to the CSR, so the mock counter stays at
+zero. The request itself returns 204 (broker correctly updated
+the local copy).
+
+**Why:** the fixture posts
+`vehicle-speed-isParked-fragment.json` — a bare attrs object,
+no `@context` field, no `id`/`type` — using the
+`Append Entity Attributes` keyword
+(`resources/ApiUtils/ContextInformationProvision.resource`),
+which sets `Content-Type: application/json` and **does not**
+attach the `Link: <…>` header that carries the user
+`@context`.
+
+So when the broker parses the request body it has only the
+core context to expand attribute names against. `speed` and
+`isParked` resolve to
+`https://uri.etsi.org/ngsi-ld/default-context/speed` /
+`…/isParked` (the default-vocab fallback). The CSR was
+registered earlier with `Content-Type: application/ld+json`
+and the test-suite compound context — its
+`propertyNames=["speed"]` got expanded to
+`https://ngsi-ld-test-suite/context#speed`.
+
+In `ldEntityFragmentForInfo` the `nameInList(curP->name,
+riP->propertyNamesV)` check compares those two URIs, fails,
+and the per-CSR fragment ends up empty
+(`matched == 0 → return NULL`). The dispatch loop in
+`postEntityAttrs.c` then skips this CSR entirely — verified
+via swBroker trace level `KtDistOpRequest=400`:
+
+```
+postEntityAttrs dispatch: entityId=urn:…:Vehicle:… type=(none) excl=1 redir=0 incl=0
+```
+
+— the CSR matches by id but the fragment-extract drops every
+attribute, so no `forward: POST …` trace follows.
+
+**Broker:** correct. With two different `@context`s on the
+two requests, the broker has no way to know that
+default-vocab `speed` and test-suite `speed` are the same
+property.
+
+**Fix wanted upstream:** the `Append Entity Attributes`
+keyword should accept (and forward) a `context` argument the
+way the matching consumption keywords do. The test then
+calls it with `context=${ngsild_test_suite_context}` and
+broker / CSR agree on the expansion.
+
+Practical fix in the keyword:
+
+```robot
+Append Entity Attributes
+    [Arguments]    ${id}    ${fragment_filename}    ${content_type}    ${context}=${EMPTY}
+    &{headers}=    Create Dictionary    Content-Type=${content_type}
+    IF    '${context}' != ''
+        ${context_link}=    Build Context Link    ${context}
+        Set To Dictionary   ${headers}    Link=${context_link}
+    END
+    ...
+```
+
+— and the test passes `context=${ngsild_test_suite_context}`
+alongside `${CONTENT_TYPE_JSON}`.
