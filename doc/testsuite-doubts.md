@@ -1957,3 +1957,82 @@ batch-delete behaviour.
 This same interpretation gap likely affects sibling tests in
 the D002 / D004 / D006 / D017 families that mix-and-match
 local-vs-CSR delete legs.
+
+
+## 68. `D011_01_*` family — query-response stubs supply a single entity object instead of an array
+
+**Hit:** All six `D011_01_*` distributed-query tests
+(`D011_01_01_inc`, `_03_inc`, `_04_inc`, `_05_inc`, `_exc`,
+`_red`) configure the CSR mock with `Set Stub Reply  GET
+…/entities?type=Vehicle  200  ${entity_body}`, where
+`${entity_body}` is one entity dict loaded from
+`vehicle-simple-attributes.{json,jsonld}`. § 5.7.2.4 defines
+the queryEntities response as an Array of NGSI-LD Entities.
+
+**Broker:** historically discarded any forward response whose
+parsed root wasn't a JSON array — those tests reported zero
+entities, length / content mismatches, etc. The broker now
+also accepts a bare entity object and re-wraps it as a
+one-element array, matching § 6.3.16 (JSON-LD compaction's
+unwrap rule for single-member arrays).
+
+**Doesn't fully recover the tests:** even with the broker
+fix, the family still fails for an unrelated reason — see §69
+about the broker → HttpCtrl transport-level interop quirk in
+this test order.
+
+**Fix wanted upstream:** the stubs should ship the body as a
+JSON array literal:
+
+```robot
+@{entity_list}=   Create List   ${entity_body}
+Set Stub Reply    GET    /ngsi-ld/v1/entities?type=Vehicle    200    ${entity_list}
+```
+
+That stays well-formed regardless of how strictly the broker
+interprets § 6.3.16.
+
+
+## 69. `D011_01_*` family — broker forward to HttpCtrl returns "transport failure" within ~1 ms
+
+**Hit:** The same six tests in §68. Even with the JSON-LD
+single-object fix applied, every per-CSR forward returns with
+status=0 and `errorDetail="transport failure"` ~1 ms after
+the broker initiates it. Trace level `KtDistOpRequest=400`
+makes this visible directly.
+
+**Verified non-issues:**
+  * HttpCtrl binds 0.0.0.0:8086 correctly — a manual curl
+    against `http://0.0.0.0:8086/…?type=Vehicle` from outside
+    the test process returns 200 with the stubbed body.
+  * A purpose-built Python mock at the same address that
+    deliberately returns a single-entity object (mimicking
+    HttpCtrl's stub shape) works end-to-end with the broker:
+    forward, response received, JSON-LD-unwrap applied, entity
+    returned.
+  * The endpoint string and `?type=Vehicle` URL pass HttpCtrl's
+    lowercased exact-match check.
+
+So the transport failure is specific to the broker → HttpCtrl
+combination, in the test's exact ordering (CSR first → mock
+later → query). Suspected causes (un-narrowed):
+  * HttpCtrl's `socketserver.TCPServer` is single-threaded;
+    the failed /info/sourceIdentity probe at CSR creation
+    leaves something in HttpCtrl's request/response queue
+    that blocks the next handler.
+  * Broker's swRestClientMulti connection-pool entry from
+    the failed probe (state-tracked per host:port) interferes
+    with the fresh forward.
+  * Race between `Start Context Source Mock Server` returning
+    and the listen socket actually being bound on Linux's
+    TCP stack.
+
+**Where to dig next:** instrument `swRestClient.c`'s
+`swRestClientPoolGet` (sw) / `httpClientPoolGet` (fw) to
+see what pool state survives a failed connect; and confirm
+HttpCtrl's `__create_ipv4_tcp_server` actually completes
+binding before its `start()` returns.
+
+The combination of §68 (fixture body shape) + §69 (transport
+quirk) is what makes the whole D011_01_* family red even
+after the broker's JSON-LD-unwrap fix landed.
