@@ -1993,15 +1993,16 @@ the D002 / D004 / D006 / D017 families that mix-and-match
 local-vs-CSR delete legs.
 
 
-## 68. `D011_01_*` family — query-response stubs supply a single entity object instead of an array
+## 68. `D011_01_*` / `D011_02_red_01` family — query-response stubs supply a single entity object instead of an array
 
-**Hit:** All six `D011_01_*` distributed-query tests
+**Hit:** The six `D011_01_*` distributed-query tests
 (`D011_01_01_inc`, `_03_inc`, `_04_inc`, `_05_inc`, `_exc`,
-`_red`) configure the CSR mock with `Set Stub Reply  GET
-…/entities?type=Vehicle  200  ${entity_body}`, where
-`${entity_body}` is one entity dict loaded from
-`vehicle-simple-attributes.{json,jsonld}`. § 5.7.2.4 defines
-the queryEntities response as an Array of NGSI-LD Entities.
+`_red`) plus `D011_02_red_01` configure the CSR mock with
+`Set Stub Reply  GET  …/entities?type=Vehicle  200
+${entity_body}`, where `${entity_body}` is one entity dict
+loaded from `vehicle-simple-attributes.{json,jsonld}`.
+§ 5.7.2.4 defines the queryEntities response as an Array of
+NGSI-LD Entities.
 
 **Broker:** historically discarded any forward response whose
 parsed root wasn't a JSON array — those tests reported zero
@@ -2196,15 +2197,19 @@ the EntityFragment semantics for partial updates; only the
 URL id matters.
 
 
-## 72. `D001_02_inc` / `D001_03_03_inc` — flaky in full-suite due to leftover Vehicle entities in current state
+## 72. `D001_02_inc` / `D001_03_03_inc` / `D011_02_inc` — flaky in full-suite due to leftover Vehicle entities in current state
 
-**Hit:** Both tests query `Query Entities entity_types=Vehicle
-local=true` near the end and assert about the set:
+**Hit:** Three tests query
+`Query Entities entity_types=Vehicle local=true` near the end
+and assert about the set:
   * D001_02_inc — `Should Be Empty` (after rejecting a
     malformed-id Create, no Vehicle should remain locally).
   * D001_03_03_inc — `Check Response Body Containing Entities
     URIS set to [${entity_id}]` (the just-created entity is
     the only Vehicle).
+  * D011_02_inc — `Should Be Empty` (with `local=true` and
+    no local entity created, the broker must skip the CSR
+    forward and return an empty array).
 
 In a full-folder run the broker has Vehicles in `etsi.entities`
 from earlier DistOps tests that never deleted them (their
