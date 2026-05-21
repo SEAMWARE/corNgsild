@@ -2240,3 +2240,47 @@ isolation.
 
 Variant (c) is the smallest change; (b) is the cleanest
 isolation.
+
+
+## 73. `037_07_02` — Within Polygon URL params carry LineString-shaped coordinates
+
+**Hit:** `037_07_02 Within Polygon` issues
+`GET /csourceRegistrations?georel=within&geometry=Polygon&coordinates=[[-13.503,47.202],[6.541,52.961],[20.37,44.653],[9.46,32.57],[-15.23,21.37]]&geoproperty=location`
+and expects 200 + the CSR registered at setup. The broker
+correctly answers 400 BadRequestData ("GeoJSON polygon ring
+must have at least 4 positions").
+
+**Why:** GeoJSON (RFC 7946 § 3.1.6 / § 3.1.10) defines Polygon
+coordinates as an Array of LinearRings, i.e. **triple-nested**
+positions:
+
+```json
+[ [ [lon1,lat1], [lon2,lat2], ..., [lonN,latN], [lon1,lat1] ] ]
+```
+
+— an outer array of rings, each ring a closed sequence of ≥4
+positions. The test fixture sends a **double-nested** array
+(`[[lon,lat], [lon,lat], …]`) which is the LineString shape.
+NGSI-LD § 4.10 references GeoJSON for the `geometry` /
+`coordinates` URL-param pair, so the same shape constraint
+applies.
+
+The broker's geo-check (`ldCheckGeo.c::checkPolygonCoords`)
+iterates the outer array as rings and finds the first
+"ring" has only 2 children (the lat/lon pair) — under the
+spec's 4-position minimum.
+
+**Broker:** correct per RFC 7946 / § 4.10.
+
+**Fix wanted:** the fixture's coordinates should be the
+spec-correct triple-nested form, with the polygon explicitly
+closed:
+
+```python
+coordinates=[[[-13.503,47.202],[6.541,52.961],[20.37,44.653],[9.46,32.57],[-15.23,21.37],[-13.503,47.202]]]
+```
+
+Or the geometry param should switch to `LineString` (with
+the existing coordinate shape) — but then the test is no
+longer a "Within Polygon" test, so option 1 is the right
+fix.
