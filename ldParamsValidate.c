@@ -148,8 +148,16 @@ bool ldParamsValidate(void)
   // already-stored entity map (§ 5.14) — the original selectors lived on the
   // request that built the map, so a continuation request needs no further
   // selector.
+  // Verb gate: the minimal-selector check is meaningful only for the
+  // URL-param query verbs (GET /entities, GET /temporal/entities).
+  // The POST body-based variants (POST /entityOperations/query and
+  // POST /temporal/entityOperations/query) carry their selectors in
+  // the body, which the parse hook can't translate to swNgsild fields
+  // — that happens in the service routine, after this validate hook.
+  // Without the verb gate, body-based queries would falsely 400 here.
   uint64_t op = (swRest.serviceP != NULL) ? swRest.serviceP->ldOp : 0;
-  if ((op & (LdOpQueryEntities | LdOpQueryTemporal | LdOpBatchQuery)) &&
+  if ((op & (LdOpQueryEntities | LdOpQueryTemporal)) &&
+      swRest.in.verb == SwVerbGet &&
       swNgsild.entityMapId == NULL)
   {
     bool haveSelector = (swNgsild.type != NULL)
