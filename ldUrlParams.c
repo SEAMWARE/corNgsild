@@ -240,12 +240,11 @@ void ldParamHook(const char* name, const char* value)
   else if (strcmp(name, "limit") == 0)
   {
     swNgsild.limit = atoi(value);
-    if (swNgsild.limit <= 0)
+    if (swNgsild.limit < 0)
     {
-      // § 6.3.10: limit, when present, MUST be a positive integer
-      // (> 0). limit=0 reaches us only when the client explicitly
-      // sent it — defaults route through a NULL value-string and
-      // never enter this branch.
+      // § 6.3.10: limit, when present, MUST be a non-negative integer.
+      // limit=0 is valid only in combination with count=true (handled by
+      // ldParamsValidate); negative values are always invalid.
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid request",
               "'limit' must be a positive integer (got '%s')", value);
       return;

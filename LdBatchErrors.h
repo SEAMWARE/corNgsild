@@ -58,9 +58,9 @@ extern void ldBatchErrorListInit(LdBatchErrorList* listP, KAlloc* allocP);
 
 // -----------------------------------------------------------------------------
 //
-// ldBatchErrorListAdd - append one BatchEntityError. The string fields are
-// stored by reference; callers must ensure they outlive the list (typically
-// they live in the same arena).
+// ldBatchErrorListAdd - append one BatchEntityError. String fields are
+// copied into the list's arena (listP->allocP), so callers may pass stack
+// buffers or any other transient strings without lifetime concerns.
 //
 extern void ldBatchErrorListAdd(LdBatchErrorList* listP,
                                 const char*       entityId,

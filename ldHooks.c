@@ -240,9 +240,10 @@ static void ldParseHook(void)
         KjNode* entry = kjObject(swRest.kjsonP, NULL);
         kjChildAdd(entry, kjString(swRest.kjsonP, "entityId", eid));
         KjNode* errObj = kjObject(swRest.kjsonP, "error");
-        kjChildAdd(errObj, kjString(swRest.kjsonP, "type",   LD_ERROR_BAD_REQUEST_DATA));
-        kjChildAdd(errObj, kjString(swRest.kjsonP, "title",  "Missing @context"));
-        kjChildAdd(errObj, kjString(swRest.kjsonP, "detail", "@context is mandatory on every element of an application/ld+json array body"));
+        kjChildAdd(errObj, kjString (swRest.kjsonP, "type",   LD_ERROR_BAD_REQUEST_DATA));
+        kjChildAdd(errObj, kjString (swRest.kjsonP, "title",  "Missing @context"));
+        kjChildAdd(errObj, kjInteger(swRest.kjsonP, "status", 400));
+        kjChildAdd(errObj, kjString (swRest.kjsonP, "detail", "@context is mandatory on every element of an application/ld+json array body"));
         kjChildAdd(entry, errObj);
         kjChildAdd(swNgsild.batchPreErrors, entry);
 

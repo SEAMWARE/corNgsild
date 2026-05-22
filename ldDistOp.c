@@ -527,6 +527,7 @@ int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
 //
 void ldDistOpBatchErrorAdd(KjNode*      errorsArrayP,
                            const char*  entityId,
+                           int          statusCode,
                            const char*  errorType,
                            const char*  errorTitle,
                            const char*  errorDetail,
@@ -539,9 +540,10 @@ void ldDistOpBatchErrorAdd(KjNode*      errorsArrayP,
   kjChildAdd(entry, kjString(swRest.kjsonP, "entityId", entityId));
 
   KjNode* pd = kjObject(swRest.kjsonP, "error");
-  kjChildAdd(pd, kjString(swRest.kjsonP, "type",   errorType));
-  kjChildAdd(pd, kjString(swRest.kjsonP, "title",  errorTitle));
-  kjChildAdd(pd, kjString(swRest.kjsonP, "detail", errorDetail));
+  kjChildAdd(pd, kjString (swRest.kjsonP, "type",   errorType));
+  kjChildAdd(pd, kjString (swRest.kjsonP, "title",  errorTitle));
+  kjChildAdd(pd, kjInteger(swRest.kjsonP, "status", statusCode));
+  kjChildAdd(pd, kjString (swRest.kjsonP, "detail", errorDetail));
   kjChildAdd(entry, pd);
 
   if (regId != NULL)
@@ -786,7 +788,7 @@ int ldDistOpEntriesBuild(const LdDistOpGroup  groupV[],
           snprintf(detail, sizeof(detail),
                    "%s registration does not support %s",
                    grp->modeTag, opName);
-          ldDistOpBatchErrorAdd(errorsArrayP, entityIdForErrors,
+          ldDistOpBatchErrorAdd(errorsArrayP, entityIdForErrors, 409,
                                 LD_ERROR_CONFLICT, "Conflict", detail, csr->regId);
         }
         continue;

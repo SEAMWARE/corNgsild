@@ -185,13 +185,15 @@ extern int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
 // ldDistOpBatchErrorAdd - append one BatchEntityError (§ 5.2.17) to errors[]
 //
 // Used by the decision-matrix at the end of every distributed write op to
-// carry per-CSR failures into the 207/409 response body.
+// carry per-CSR failures into the 207/409 response body. The error object
+// is rendered as a full ProblemDetails (RFC 7807) — type/title/status/detail.
 //
-// errorDetail may reference short-lived caller storage; a caller-side copy
-// is advised when reusing a static buffer.
+// String fields are copied into swRest.kjsonP; callers may pass stack
+// buffers without lifetime concerns.
 //
 extern void ldDistOpBatchErrorAdd(KjNode*      errorsArrayP,
                                   const char*  entityId,
+                                  int          statusCode,
                                   const char*  errorType,
                                   const char*  errorTitle,
                                   const char*  errorDetail,

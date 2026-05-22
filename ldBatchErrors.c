@@ -9,6 +9,7 @@
 #include <string.h>                                    // strcmp
 
 #include "kalloc/kaAlloc.h"                            // kaAlloc
+#include "kalloc/kaStrdup.h"                           // kaStrdup
 #include "kjson/KjNode.h"                              // KjNode
 #include "kjson/kjson.h"                               // Kjson
 #include "kjson/kjBuilder.h"                           // kjObject, kjArray, kjString, kjInteger, kjChildAdd
@@ -72,12 +73,12 @@ void ldBatchErrorListAdd(LdBatchErrorList* listP,
   }
 
   LdBatchError* e = &listP->entries[listP->count++];
-  e->entityId    = entityId;
+  e->entityId    = kaStrdup(listP->allocP, entityId);
   e->statusCode  = statusCode;
-  e->errorType   = errorType;
-  e->errorTitle  = errorTitle;
-  e->errorDetail = errorDetail;
-  e->regId       = regId;
+  e->errorType   = kaStrdup(listP->allocP, errorType);
+  e->errorTitle  = kaStrdup(listP->allocP, errorTitle);
+  e->errorDetail = kaStrdup(listP->allocP, errorDetail);
+  e->regId       = kaStrdup(listP->allocP, regId);
 }
 
 
