@@ -260,7 +260,24 @@ static KjNode* buildInstanceFromScalar(const char* attrName,
 
     kjChildAdd(inst, kjString(targetAllocP, "type", "LanguageProperty"));
 
+    // The merge path replaces the whole "value" wholesale (§ 4.5.21 — see
+    // replaceWhole in rfc7396Merge). Pre-seed the constructed languageMap with
+    // the target's existing entries so the single-lang URL-param update adds/
+    // overrides just one key instead of wiping en, fr, etc.
     KjNode* languageMap = kjObject(targetAllocP, "value");
+    if (targetInstance != NULL)
+    {
+      KjNode* targetValue = kjLookup(targetInstance, "value");
+      if (targetValue != NULL && targetValue->type == KjObject)
+      {
+        for (KjNode* langP = targetValue->value.firstChildP; langP != NULL; langP = langP->next)
+        {
+          if (langP->name != NULL && strcmp(langP->name, swNgsild.lang) == 0)
+            continue;  // skip — will be overwritten by the URL-param entry below
+          kjChildAdd(languageMap, kjClone(targetAllocP, langP));
+        }
+      }
+    }
     kjChildAdd(languageMap, kjString(targetAllocP, swNgsild.lang, fragScalar->value.s));
     kjChildAdd(inst, languageMap);
     break;
