@@ -15,3 +15,5 @@ plugins/
 *.name
 *.stderr
 *.d
+*.gcno
+*.gcda
