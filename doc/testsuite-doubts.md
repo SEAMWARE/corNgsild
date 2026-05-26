@@ -108,7 +108,7 @@ Start Context Source Mock Server     # only AFTER the POST returned
 keywords (e.g. D003_01_red.robot, D004_01_red.robot, ...).
 
 **Why it's wrong:** The broker probes `<endpoint>/info/sourceIdentity`
-at CSR-registration time (§ 5.15 / § 5.2.40). If the mock isn't up yet,
+at CSR-registration time (TS 104-175 § 15 / TS 104-175 § 5.2.6.5.6). If the mock isn't up yet,
 the probe fails. Our broker treats probe failure as benign (CSR still
 active, reactive Via-loop detection still works — see
 `swNgsild/ldRegCache.c:402-418`), but a stricter implementation could
@@ -187,7 +187,7 @@ returning the full Temporal Evolution of an Entity. `021_03_01` (with
 
 **Where:** `TP/NGSI-LD/ContextInformation/Consumption/TemporalEntity/...`
 
-**Why it's wrong:** § 6.3.10 defines 206 + Content-Range as **conditional**
+**Why it's wrong:** TS 104-176 § 6.4.7 defines 206 + Content-Range as **conditional**
 on truncation: "if the implementation is not able to respond with the
 full representation at once". A response that fits within the
 implementation cap is a normal 200. The ETSI fixtures contradict this
@@ -203,7 +203,7 @@ expectation drift); 1 fails the other way.
 
 **Fix wanted:** Pick a coherent rule and propagate to all temporal
 fixtures. Our reading: 206 whenever any truncation happened, including
-client-requested via `?lastN`; 200 otherwise. § 6.3.10 should be amended
+client-requested via `?lastN`; 200 otherwise. TS 104-176 § 6.4.7 should be amended
 to make this unambiguous.
 
 ---
@@ -225,11 +225,10 @@ without logs.
 without @context defaults to core, and core-Vehicle is a different IRI
 than compound-Vehicle, so don't merge" — every DistOps test would fail.
 swBroker now handles this by expanding the CSR response in the user's
-context (commits `95fc80d` swJsonld + `676b267` sw broker on the
-sw stack; `246836e` / `56f2051` on fw). But the spec is ambiguous about
+context (commits `95fc80d` swJsonld + `676b267` swBroker). But the spec is ambiguous about
 which @context wins for an unannotated CSR response.
 
-**Fix wanted:** § 4.5 should pick a side. Either "CSR response without
+**Fix wanted:** TS 104-175 § 5.3.2 should pick a side. Either "CSR response without
 @context inherits the request's @context" (what we and ETSI do
 implicitly) or "always defaults to core". One of the two needs to be
 explicit in the spec.
@@ -278,9 +277,9 @@ Test Setup           Create Temporal Entity   # → POST /temporal/entities only
     expect: the deleted attribute appears with `deletedAt`
 ```
 
-**Why it's wrong:** `POST /temporal/entities` (§ 5.6.11) creates a
+**Why it's wrong:** `POST /temporal/entities` (TS 104-175 § 11.2.2) creates a
 *Temporal Evolution of an Entity* — instances in the temporal store.
-`DELETE /entities/{id}/attrs/{name}` (§ 5.6.5) is a *current-state*
+`DELETE /entities/{id}/attrs/{name}` (TS 104-175 § 10.2.7) is a *current-state*
 operation that requires the entity to exist in the current-state
 representation. The two stores are architecturally separate: a
 temporal-only entity has no current-state attribute to delete, so
@@ -291,7 +290,7 @@ The test fixtures assume — implicitly and undocumented — that the
 implementation under test treats current-state and temporal as a
 single unified entity (so a `POST /temporal/entities` magically also
 creates the corresponding current-state entity, even though
-§ 5.6.11.4 only says "create the provided Temporal Evolution of an
+TS 104-175 § 11.2.2.4 only says "create the provided Temporal Evolution of an
 Entity", with no mention of current-state mirroring).
 
 **Impact:** 13 tests fail in this family. Our broker keeps the two
@@ -322,15 +321,15 @@ ${expected_status_code}=        503
 
 **Where:** `TP/NGSI-LD/CommonBehaviours/CommonResponses/VerifyLdContextNotAvailable/043_01.robot`
 
-**Why it's wrong:** § 6.3.4 Table 6.3.4-1 of v1.9.1 explicitly maps
-`LdContextNotAvailable` to HTTP **504**, not 503:
+**Why it's wrong:** TS 104-176 § 6.3.2 (Table "Mapping of error types to HTTP
+status codes") explicitly maps `LdContextNotAvailable` to HTTP **504**, not 503:
 
 ```
 https://uri.etsi.org/ngsi-ld/errors/LdContextNotAvailable    504
 ```
 
-§ 6.30.3.2 (Delete and Reload) likewise pairs the same problem type
-with 504 Gateway Timeout. There's no place in v1.9.1 that maps it to
+TS 104-176 § 10.3.3.2 (Delete and Reload) likewise pairs the same problem type
+with 504 Gateway Timeout. There's no place in the spec that maps it to
 503.
 
 **Impact:** All five tests fail with `expected 503, got 504`. Our
@@ -366,7 +365,7 @@ ${implicit_id}=    Evaluate    '${implicit_id}'.split('/')[-1]
 ```
 i.e. takes the last path segment (the locally unique identifier).
 
-**Why it's wrong:** § 5.13.5.3 says the operation takes "the locally
+**Why it's wrong:** TS 104-175 § 13.5.3 says the operation takes "the locally
 unique identifier that identifies the desired @context in the broker's
 internal storage. For @contexts of kind 'Cached' this can also be the
 original URL the broker downloaded the @context from." The URL form is
@@ -398,13 +397,13 @@ crossing non-adjacent edges:
 ```
 
 MongoDB's 2dsphere index rejects it with *"Loop is not valid: Edges 1
-and 4 cross"*; per § 4.10 a self-intersecting polygon is not a valid
+and 4 cross"*; per TS 104-175 § 7.2.4 a self-intersecting polygon is not a valid
 GeoJSON, so the broker now rejects the entity create with 400
 BadRequestData (see swNgsild commit "ldCheckGeo: reject
 self-intersecting polygons up front"). The test setup then fails and
 every test in the suite is marked `FAIL`.
 
-**Why it's wrong:** § 4.10 / RFC 7946 require polygon rings to be
+**Why it's wrong:** TS 104-175 § 7.2.4 / RFC 7946 require polygon rings to be
 simple (no self-intersection). The fixture is invalid GeoJSON and was
 only "working" against brokers that didn't validate.
 
@@ -424,14 +423,14 @@ similar.
 request payload, send it, then compare the response body to the
 request via `deep_diff` and assert the result is empty.
 
-**Why it's wrong:** § 5.2.12 makes `isActive` a 0..1 member with
-default `true`. § 6.3.13 shows it on every Subscription representation
+**Why it's wrong:** TS 104-175 § 5.2.6.5.2 makes `isActive` a 0..1 member with
+default `true`. TS 104-176 § 6.4.6 shows it on every Subscription representation
 example. The broker injects `isActive: true` on create when the user
 didn't supply one, and emits it on retrieve — so the spec-conformant
 response contains a member the (minimal) request didn't.
 
 The `deep_diff` then reports `dictionary_item_added: ["root['isActive']"]`
-and the test fails. Same pattern would break for `status` (§ 5.2.12 too
+and the test fails. Same pattern would break for `status` (TS 104-175 § 5.2.6.5.2 too
 — always emitted by the broker since it's computed, not user-supplied)
 and any other defaulted member.
 
@@ -463,7 +462,7 @@ appearing) is satisfied.
 
 **Why it's wrong:** the broker stamps `createdAt`/`modifiedAt` from
 the request clock; no broker can satisfy a fixture that demands a
-specific past datetime. § 4.5.4 / § 5.2.20 are explicit that these
+specific past datetime. TS 104-175 § 5.3.2.4 / TS 104-175 § 5.2.6.4.2 are explicit that these
 are computed.
 
 **Fix wanted:** strip `createdAt`/`modifiedAt` from the expectation
@@ -474,7 +473,7 @@ JSON files for these tests, OR move them through `deep_diff`'s
 
 ## 15. `046_34_04` vs `046_37_01` LanguageProperty null-marker shape
 
-**Hit:** when emitting the § 5.8.6 null-marker for a deleted
+**Hit:** when emitting the TS 104-175 § 10.5.7 null-marker for a deleted
 LanguageProperty, the two fixtures disagree on the wire form:
 
   * `046_34_04` (attribute-delete) expects
@@ -489,7 +488,7 @@ LanguageProperty, the two fixtures disagree on the wire form:
                 "previousLanguageMap": { fr: ..., nl: ... } }
     ```
 
-Spec § 5.8.6 only says "the value (or object) shall be set to
+Spec TS 104-175 § 10.5.7 only says "the value (or object) shall be set to
 `urn:ngsi-ld:null`". The bare-string form is the natural fit for
 a single-value scalar key like `value` / `object` / `vocab` /
 `json`, but for `languageMap` (whose normal shape is a JSON object)
@@ -501,7 +500,7 @@ notifications and bare `"urn:ngsi-ld:null"` on entity-delete
 notifications, matching each fixture exactly. Both are spec-allowed.
 
 **Fix wanted:** fixtures should agree (preferably both bare null,
-since other types use bare null and § 5.8.6 reads more naturally
+since other types use bare null and TS 104-175 § 10.5.7 reads more naturally
 that way). Once aligned, the broker's two code paths can be
 unified.
 
@@ -533,7 +532,7 @@ nothing to fix on our side.
 
 **Hit:** the test generates a 16-digit random string with `Generate
 Random String 16 [NUMBERS]` and DELETEs `/jsonldContexts/<digits>`,
-expecting 404 ResourceNotFound. Per § 5.13.5.4 a context-id that is
+expecting 404 ResourceNotFound. Per TS 104-175 § 13.5.4 a context-id that is
 not a valid URI must yield 400 BadRequestData — the broker correctly
 returns 400.
 
@@ -551,7 +550,7 @@ broker with a path that triggers `LdContextNotAvailable` (e.g. DELETE
 ?reload=true on a Cached context whose source is gone). They assert
 `Check Response Status Code 503` with reason "Service Unavailable".
 
-ETSI GS CIM 009 v1.9.1 § 6.3.17 (and the table in ch6 line 260) maps
+TS 104-176 § 6.3.5 maps
 `LdContextNotAvailable` to **504** — `Gateway Timeout`. The broker
 emits 504 per spec.
 
@@ -583,7 +582,7 @@ last `/`-segment of the URL.
 **Hit:** `resources/variables.py` sets
 `core_context = 'https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context-v1.6.jsonld'`.
 The broker's actual core (compile-time) is v1.9 / v1.9.1. Per spec
-(§ 5.13.5.4 / § 5.13.6.4), only the implementation's *actual* core
+(TS 104-175 § 13.5.4), only the implementation's *actual* core
 context is undeletable / un-reloadable — older or unrelated core URLs
 are user contexts to the API and may be deleted normally.
 
@@ -609,7 +608,7 @@ header, with no `@context` in the body. The broker returns 400
 BadRequestData ("Missing @context") and the test fails with
 "expected 200, got 400" (~6 tests).
 
-**Spec:** § 6.3.5 is explicit:
+**Spec:** TS 104-176 § 6.2.4 is explicit:
 > "the presence of a JSON-LD Link header in the incoming HTTP request
 >  when the Content-Type header is application/ld+json shall result
 >  in an HTTP error response of type BadRequestData."
@@ -631,8 +630,8 @@ Currently they emit a hybrid that the spec mandates rejecting.
 **Hit:** `Set Stub Reply <method> <url> <status> <body>` registers an
 HttpCtrl stub keyed on the URL string `/broker1/ngsi-ld/v1/...` (or
 similar). The broker, when forwarding a distributed operation to the
-mocked Context Source, appends URL parameters mandated by § 5.7.2 /
-§ 5.6.x — typically `?type=<expanded>&pick=<expanded>&sysAttrs=true`,
+mocked Context Source, appends URL parameters mandated by TS 104-175 § 10.4.3 /
+TS 104-175 § 10.2.x — typically `?type=<expanded>&pick=<expanded>&sysAttrs=true`,
 plus `id=` lists for queries. HttpCtrl matches stubs by exact URL
 string, so the request misses the stub. The mock then either:
   - returns nothing (timeout → 7 tests fail with `Timeout: request
@@ -640,9 +639,9 @@ string, so the request misses the stub. The mock then either:
   - returns a default 404/empty (broker reports CS forward failed →
     207 instead of 204, 502 instead of 200 — ~30+ tests).
 
-**Spec:** § 5.7.2 entitles the broker to attach the matching CSR's
+**Spec:** TS 104-175 § 10.4.3 entitles the broker to attach the matching CSR's
 property/relationship constraints as query params on the forward
-(`pick`, `omit`, `type`, etc.). § 4.5 / § 5.7.1 say sysAttrs and
+(`pick`, `omit`, `type`, etc.). TS 104-175 § 5.3.2 / TS 104-175 § 10.4.2 say sysAttrs and
 similar shall be honoured end-to-end. Broker is correct.
 
 **Our call:** broker emits canonical distop URLs.
@@ -682,7 +681,7 @@ this keyword, or rewrite the affected tests with what the installed
 version offers.
 
 
-## 25. § 5.10.2.5 / 037_08, 037_09_*, 037_10_02 — ETSI fixtures expect the un-filtered RegistrationInfo set
+## 25. TS 104-175 § 12.3.3.5 / 037_08, 037_09_*, 037_10_02 — ETSI fixtures expect the un-filtered RegistrationInfo set
 
 **Hit:** Eight `GET /csourceRegistrations?…` tests (037_05_01,
 037_08_01, 037_09_01..04, 037_10_02, 037_11_*) assert against an
@@ -695,7 +694,7 @@ The broker today returns only the matching entries (i.e. `entry.entities
 fixture lists → `Compare Dictionaries Ignoring Keys` reports the
 missing entries as `Item …['information'][N] removed from iterable`.
 
-**Spec:** § 5.10.2.5 says implementations **should** return filtered
+**Spec:** TS 104-175 § 12.3.3.5 says implementations **should** return filtered
 registrations — only matching RegistrationInfo elements. "Should",
 not "shall" — so both shapes are spec-compliant.
 
@@ -709,19 +708,19 @@ opt into the un-filtered shape and pass these eight tests.
 spec-doubts § 26 for the proposal).
 
 
-## 26. § 5.10.2.4 / 037_10_01 — three separate bugs in one test (one was on broker side, two on fixture side)
+## 26. TS 104-175 § 12.3.3.4 / 037_10_01 — three separate bugs in one test (one was on broker side, two on fixture side)
 
 The test calls `GET /csourceRegistrations?id=<csr1>,<csr3>` and expects 200 + two specific CSRs.
 
 ### 26a. Too-wide rejection on `?id=` alone — RESOLVED broker-side
 
-§ 5.10.2.4 lists `type / attrs / q / geoQ` as the required sufficient selectors. `id` and `idPattern` are not in that list verbatim, but they bound the candidate set at least as tightly. Broker now accepts `?id=` and `?idPattern=` as sufficient selectors for CSR Discovery, mirroring the same relaxation already applied to `/entities`. Match function handles comma-separated `?id=A,B` as OR-of-any.
+TS 104-175 § 12.3.3.4 lists `type / attrs / q / geoQ` as the required sufficient selectors. `id` and `idPattern` are not in that list verbatim, but they bound the candidate set at least as tightly. Broker now accepts `?id=` and `?idPattern=` as sufficient selectors for CSR Discovery, mirroring the same relaxation already applied to `/entities`. Match function handles comma-separated `?id=A,B` as OR-of-any.
 
-Spec gap still worth raising with ETSI TC DATA — § 5.10.2.4 should mention id / idPattern.
+Spec gap still worth raising with ETSI TC DATA — TS 104-175 § 12.3.3.4 should mention id / idPattern.
 
 ### 26b. `?id=` semantic — fixture confuses CSR's own id with EntityInfo.id
 
-Per § 5.10.2, `?id` filters on `EntityInfo.id` (entities the CSR claims to know about), **not** on the CSR's own identifier. The CSRs in this test are created with `entities: [{ "type": "Building" }]` — no `id` field — so the EntityInfo-id constraint is "any". Filtering on `?id=urn:ngsi-ld:ContextSourceRegistration:X` doesn't narrow anything; the broker returns all CSRs with matching information.
+Per TS 104-175 § 12.3.3, `?id` filters on `EntityInfo.id` (entities the CSR claims to know about), **not** on the CSR's own identifier. The CSRs in this test are created with `entities: [{ "type": "Building" }]` — no `id` field — so the EntityInfo-id constraint is "any". Filtering on `?id=urn:ngsi-ld:ContextSourceRegistration:X` doesn't narrow anything; the broker returns all CSRs with matching information.
 
 The test author has mistaken the EntityInfo-id filter for a CSR-id filter. Either:
 - the fixture should query by something the EntityInfo actually has (a specific entity id, a type), or
@@ -736,7 +735,7 @@ The expectation file looks like Robot string-formatted `${first_id},${third_id}`
 **Fix wanted:** regenerate the expectation file with proper id substitution; once that's done, fix 26b by changing the query to a meaningful filter (e.g. `?type=Building`).
 
 
-## 27. § 5.5.9 / 037_11_01 + 037_11_02 — pagination expects offset to index page-by-page, not item-by-item
+## 27. TS 104-175 § 7.4 / 037_11_01 + 037_11_02 — pagination expects offset to index page-by-page, not item-by-item
 
 **Hit:** Setup creates 3 CSRs with two different fixtures; `?type=Building` matches 2 of them. The two tests then query with limit/offset:
 
@@ -744,49 +743,51 @@ The expectation file looks like Robot string-formatted `${first_id},${third_id}`
 - 037_11_02: `limit=2, offset=2` expects **1** result.
 - 037_11_03: `limit=15, offset=0` expects **2** results — passing.
 
-The 03 fixture confirms the matching-set size is 2. With § 5.5.9's zero-based item offset:
+The 03 fixture confirms the matching-set size is 2. With TS 104-175 § 7.4's zero-based item offset:
 - offset=2, limit=1 → skip 2 of 2 items → 0 results.
 - offset=2, limit=2 → same → 0 results.
 
-For the tests to expect 1, the fixtures must either (a) count all three CSRs as matching `?type=Building` (one of them has no Building EntityInfo so this is wrong), or (b) interpret offset as a page index multiplied by limit (which contradicts § 5.5.9).
+For the tests to expect 1, the fixtures must either (a) count all three CSRs as matching `?type=Building` (one of them has no Building EntityInfo so this is wrong), or (b) interpret offset as a page index multiplied by limit (which contradicts TS 104-175 § 7.4).
 
 **Our call:** broker is spec-strict on offset.
 
 **Fix wanted:** rewrite the fixtures with an offset and matching-set count that line up, or — if 037_11_03's "expects 2" is actually correct — pick offset values that don't exceed the matching-set size.
 
 
-## 28. § 5.7.2.4 / D011_03_inc_01/02 + D011_04_inc_01/02 — `?id=urn:…` alone rejected as "too wide"
+## 28. TS 104-175 § 10.4.3.4 / D011_03_inc_01/02 + D011_04_inc_01/02 — `?id=urn:…` alone rejected as "too wide"
 
 **Hit:** Four distributed-query tests call `GET /entities?id=urn:ngsi-ld:Vehicle:<uuid>` (and the queryBatch POST equivalent) with no `type`, `attrs`, `q`, geoQ, `scopeQ`, or `local=true`. Expects 200 with the entity from the matching CSR.
 
-**Spec:** § 5.7.2.4 enumerates exactly five sufficient selectors:
+**Spec:** TS 104-175 § 10.4.3.4 enumerates exactly five sufficient selectors:
 - (a) selector of Entity Types
 - (b) list of Attribute names with at least one non-system Attribute
 - (c) NGSI-LD Query with at least one non-system Attribute
 - (d) NGSI-LD GeoQuery
 - (e) local scope
 
-`id` and `idPattern` are NOT in that list. The broker rejects 400 "too wide query (§ 5.7.2.4 — id / idPattern alone is too wide)" per `ldParamsValidate.c`.
+`id` and `idPattern` are NOT in that list. The broker rejects 400 "too wide query (TS 104-175 § 10.4.3.4 — id / idPattern alone is too wide)" per `ldParamsValidate.c`.
 
-**Broker:** stays spec-strict — the listing in § 5.7.2.4 is enumerative ("the following input data shall be provided"), and `id` is conspicuously absent. A `getEntity by id` operation already exists (`GET /entities/{id}` — single entity, no query semantics); the queryEntities path is for filtering, where unbounded id-filter has no use.
+**Broker:** stays spec-strict — the listing in TS 104-175 § 10.4.3.4 is enumerative ("the following input data shall be provided"), and `id` is conspicuously absent. A `getEntity by id` operation already exists (`GET /entities/{id}` — single entity, no query semantics); the queryEntities path is for filtering, where unbounded id-filter has no use.
 
 **Our call:** broker correct, tests wrong. The CSR Discovery variant of this (§ 26a) WAS relaxed because there the `id` filter applies to EntityInfo.id, not to the resource being listed — different semantics.
 
 **Fix wanted:** the four tests should each add a `&type=Vehicle` or use `GET /entities/{id}` directly. Either passes a sufficient selector while still exercising the CSR forward.
 
 
-## 29. § 5.5.9 / 041_03_01..03 — `?page=` is not a NGSI-LD pagination parameter
+## 29. TS 104-175 § 7.4 / 041_03_01..03 — `?page=` is not a NGSI-LD pagination parameter
 
 **Hit:** Tests 041_03_01, 041_03_02, 041_03_03 query CSR subscriptions with `GET /csourceSubscriptions?limit=1&page=2` (and `page=3`). Expect 200 with the entity at that page.
 
-**Spec:** § 5.5.9 / § 6.3.13 define pagination via `limit` (page size) and `offset` (zero-based item index). There is no `page` URL parameter anywhere in the NGSI-LD 1.9.1 spec — pagination is item-index-based, not page-number-based.
+**Spec:** TS 104-175 § 7.4 / TS 104-176 § 6.4.6 define pagination via `limit` (page size) and `offset` (zero-based item index). There is no `page` URL parameter anywhere in the NGSI-LD 1.9.1 spec — pagination is item-index-based, not page-number-based.
 
-**Broker:** rejects 400 InvalidRequest "Unknown/unsupported URL parameter: page". Correct per § 6.3.4 (unknown URL params must be rejected for body-bearing endpoints; for read endpoints the broker is also strict, which matches § 5.5.9's enumerated list).
+**Broker:** rejects 400 InvalidRequest "Unknown/unsupported URL parameter: page". Correct per TS 104-176 § 6.2.2 (unknown URL params must be rejected for body-bearing endpoints; for read endpoints the broker is also strict, which matches TS 104-175 § 7.4's enumerated list).
 
 **Fix wanted:** the test fixtures should use `offset=2` / `offset=3` / etc. — actual NGSI-LD pagination — instead of `page=N`.
 
 
 ## 30. D001_04_inc — Robot keyword typo `Generate Random Vehice Id`
+
+**Status:** RESOLVED — fixed upstream in MR !263.
 
 **Hit:** Test D001_04_inc setup calls `Generate Random Vehice Id`. Robot reports: `No keyword with name 'Generate Random Vehice Id' found. Did you mean: 'Generate Random Vehicle Entity Id'`.
 
@@ -815,9 +816,11 @@ For the tests to expect 1, the fixtures must either (a) count all three CSRs as 
 
 ## 33. 053_06_01 — fixture sends path-only context id `/api/v1/context.jsonld`
 
-**Hit:** Setup retrieves an implicitly-created context via path `/api/v1/context.jsonld` (no scheme, no host). Broker (correctly per § 5.13) rejects with 400 BadRequestData "context id '/api/v1/context.jsonld' is not a valid URI". Fixture expects 200.
+**Status:** RESOLVED — fixed upstream in MR !263.
 
-**Spec:** § 5.13 mandates context ids be URIs (scheme://...). A bare path is not a URI.
+**Hit:** Setup retrieves an implicitly-created context via path `/api/v1/context.jsonld` (no scheme, no host). Broker (correctly per TS 104-175 § 13) rejects with 400 BadRequestData "context id '/api/v1/context.jsonld' is not a valid URI". Fixture expects 200.
+
+**Spec:** TS 104-175 § 13 mandates context ids be URIs (scheme://...). A bare path is not a URI.
 
 **Fix wanted:** the fixture should generate the full URL (broker base + path) before issuing the GET.
 
@@ -836,7 +839,7 @@ Polygon coordinates: `[[13.2865906,52.5648645], [13.2879639,52.5648645],
 at y=52.5648645, then BC goes far SW and EA (the closing edge) cuts back
 across BC just before reaching A.
 
-**Spec:** § 4.7.1 says polygons "should" not be self-intersecting (SHOULD,
+**Spec:** TS 104-175 § 5.2.6.11.1 says polygons "should" not be self-intersecting (SHOULD,
 not MUST), so technically valid input — but any storage layer using S2
 (which most do) will refuse to index it.
 
@@ -866,16 +869,16 @@ don't expect notificationTrigger or notification stats
 **Hit:** Create/Update/Retrieve of a CSR-Subscription. ETSI expectation
 for the retrieved sub:
 - `isActive: true` present (broker now suppresses defaults; 028_06 expects suppression)
-- No `notificationTrigger` (broker now default-emits per § 5.2.12)
+- No `notificationTrigger` (broker now default-emits per TS 104-175 § 5.2.6.5.2)
 - No `notification.timesSent`/`timesFailed`/etc. (broker emits stats per
-  § 5.2.14)
+  TS 104-175 § 5.2.6.7.3)
 
 028_06 (regular Subscription) expects the OPPOSITE: no isActive, yes
 notificationTrigger default. So ETSI's own fixtures disagree on the
 spec-default-emission rules across the two endpoints.
 
-**Spec:** § 5.2.12 — defaults aren't supposed to be persisted as user
-fields; § 5.2.14 — notification counters are part of the Subscription
+**Spec:** TS 104-175 § 5.2.6.5.2 — defaults aren't supposed to be persisted as user
+fields; TS 104-175 § 5.2.6.7.3 — notification counters are part of the Subscription
 representation.
 
 **Fix wanted:** decide and apply consistently across all subscription
@@ -897,10 +900,10 @@ NOT also `DELETE /ngsi-ld/v1/temporal/entities/{id}` (history
 cleanup). TRoE rows from every prior test linger for the entire run.
 By the time the temporal tests run, the per-entity attribute-instance
 history (across all tests sharing the broker's timescale DB) exceeds
-the broker's `-troeCap` (default 100, § 6.3.10). The TRoE driver
+the broker's `-troeCap` (default 100, TS 104-176 § 6.4.7). The TRoE driver
 correctly returns 206 + Content-Range; the test expected 200.
 
-**Spec:** § 6.3.10 — 206 + Content-Range is the right answer for a
+**Spec:** TS 104-176 § 6.4.7 — 206 + Content-Range is the right answer for a
 truncated temporal result. Spec-correct broker, fixture-side problem.
 
 **Why this matters beyond the count drift:** the suite is no longer
@@ -938,11 +941,11 @@ All three assert `400 BadRequestData`.
 **Broker:** returns `400 InvalidRequest` for the two cases that
 include `?page=` (test names ending _02 and _03), because `page` is
 not a registered URL parameter and the broker correctly classifies an
-unknown URL parameter as InvalidRequest per § 6.3.20.
+unknown URL parameter as InvalidRequest per TS 104-176 § 6.3.6.
 
 **Spec:** NGSI-LD defines two pagination parameters — **`limit`**
-(§ 6.3.10 Table 6.3.10-1) and **`offset`** (§ 6.3.10 Table 6.3.10-2).
-There is no `page` parameter. § 6.3.20: "If an HTTP request for an
+(TS 104-176 § 6.4.7.2 Table "Pagination: limit parameter") and **`offset`** (TS 104-176 § 6.4.7.2 Table "Pagination: offset parameter").
+There is no `page` parameter. TS 104-176 § 6.3.6: "If an HTTP request for an
 operation contains parameters that are incompatible with the
 operation … an HTTP error response of type InvalidRequest should be
 returned." So `?page=…` is unknown → InvalidRequest, not
@@ -952,7 +955,7 @@ BadRequestData.
 pagination parameters. The intent ("reject negative pagination") is
 correct and worth keeping, but it should use `offset=-3` (the actual
 NGSI-LD analogue of "page") to validate the broker's value-range
-rejection on a known parameter, which IS BadRequestData per § 5.5.9.
+rejection on a known parameter, which IS BadRequestData per TS 104-175 § 7.4.
 Alternatively, the test can keep `?page=` and reclassify its expected
 error to InvalidRequest.
 
@@ -963,19 +966,19 @@ returns BadRequestData for it.
 ## 39. 059_01_* + 007_02_02 + 015_01_01 (AddAttribute) + 050_02_02 — BadRequestData vs InvalidRequest split
 
 **Test pattern:** ETSI tests across several sections assert
-**InvalidRequest** for what § 5.5.4 / § 6.3.20 classify as
+**InvalidRequest** for what TS 104-175 § 8.2.3 / TS 104-176 § 6.3.6 classify as
 syntactic/transport errors (as opposed to semantic errors in a
 parsed NGSI-LD payload, which are BadRequestData):
 
 - **059_01_xx** — `?invalidParams=invalidValue` on every endpoint
-  family. § 6.3.20: unknown URL param → InvalidRequest.
+  family. TS 104-176 § 6.3.6: unknown URL param → InvalidRequest.
 - **007_02_02 Create A Temporal Entity With An Empty Json** —
-  empty request body. § 5.5.4: "not a valid JSON document" →
+  empty request body. TS 104-175 § 8.2.3: "not a valid JSON document" →
   InvalidRequest.
 - **015_01_01 (setup) Append Attribute With Empty Body** — same as
   above.
 - **050_02_02 Checking Wrong JSON** — POST `/jsonldContexts` with
-  malformed JSON. § 5.5.4 again — not a valid JSON document.
+  malformed JSON. TS 104-175 § 8.2.3 again — not a valid JSON document.
 - **050_02_01 Checking Incorrect Payload** — POST
   `/jsonldContexts` with a JSON object whose shape is wrong
   (missing required key). Our broker returns InvalidRequest here
@@ -984,8 +987,8 @@ parsed NGSI-LD payload, which are BadRequestData):
   @context-content validation. The test agrees.
 
 No fixture changes needed — this entry exists so future readers
-understand the rationale for the broker behaviour. The 11 fw
-failures + the symmetric 1 sw failure for these tests cleared after
+understand the rationale for the broker behaviour. The
+failures for these tests cleared after
 the broker stopped over-using BadRequestData on transport-layer
 issues.
 
@@ -1002,10 +1005,10 @@ registered as `Set Stub Reply  POST  /a/b/attrs/` will *not* match a
 request to `/a/b/attrs` (missing trailing slash) or
 `/a/b/attrs/?sysAttrs=true` (extra query string).
 
-**Concrete impact on the swBroker / fwBroker DistOps tests:**
+**Concrete impact on the swBroker DistOps tests:**
 
-1. **Trailing-slash mismatch on the attribute-list endpoint.** § 6.6.3
-   Table 6.6.3.1-1 shows the URI template as `/entities/{entityId}/attrs/`
+1. **Trailing-slash mismatch on the attribute-list endpoint.** TS 104-176 § 7.4.3
+   TS 104-176 § 7.4.2 (Table "URI variables") shows the URI template as `/entities/{entityId}/attrs/`
    (with trailing slash).
 
    Many tests historically stubbed the trailing-slash form;
@@ -1021,7 +1024,7 @@ request to `/a/b/attrs` (missing trailing slash) or
    that the broker forwards the spec-correct `…/attrs/`.
    Affects D004_01_inc (`Set Stub Reply PATCH
    /ngsi-ld/v1/entities/<id>/attrs 204`). Broker forwards
-   `…/attrs/` per § 6.6.3, HttpCtrl misses, forward fails,
+   `…/attrs/` per TS 104-176 § 7.4.3, HttpCtrl misses, forward fails,
    `anyCsrSucceeded` stays false, entity not found locally
    → 404 instead of the test-expected 207. The fix is on
    the test side: align every stub with the spec-template
@@ -1035,13 +1038,13 @@ request to `/a/b/attrs` (missing trailing slash) or
    `…/attrs/` — the spec wording is ambiguous enough that
    brokers MAY emit either. Personal preference: drop the
    trailing slash everywhere (terser, matches the rest of
-   the attribute-level URI templates in § 6.6).
+   the attribute-level URI templates in TS 104-176 § 7.4).
 
 2. **Forward URL carries `?sysAttrs=true` and `&type=…`.** For
    retrieveEntity through CSRs the broker has to ask the upstream for
    sysAttrs (createdAt / modifiedAt are needed at the merge tiebreaker
-   per § 4.5.5.3) and the entity type is added when the CSR's
-   RegistrationInfo specifies one. Both are correct per § 5.7.1 / §
+   per TS 104-175 § 8.5.3) and the entity type is added when the CSR's
+   RegistrationInfo specifies one. Both are correct per TS 104-175 § 10.4.2 / §
    4.3.6.3. The ETSI stubs are registered with `Set Stub Reply  GET
    /ngsi-ld/v1/entities/{id}  200  …` — no query string — so the
    stub never matches the broker's request.
@@ -1071,16 +1074,16 @@ request to `/a/b/attrs` (missing trailing slash) or
 
    This affects:
      * D013_02_exc, D013_02_inc — POST upsertBatch with
-       `?options=update` (§ 5.6.9.4)
+       `?options=update` (TS 104-175 § 10.3.4.4)
      * D013_01_inc — POST upsertBatch with `?options=replace`
        (the default mode)
      * D003_02_red — POST appendAttrs with
-       `?options=noOverwrite` (§ 5.6.3.4). Broker correctly
+       `?options=noOverwrite` (TS 104-175 § 10.2.4.4). Broker correctly
        forwards `/attrs/?options=noOverwrite`; stub at the
        bare URL misses. Visible in the `KtDistOpRequest=400`
        trace.
      * D006_02_inc — DELETE attrs with `?deleteAll=true`
-       (§ 5.6.5.4). Broker forwards
+       (TS 104-175 § 10.2.7.4). Broker forwards
        `/attrs/speed?deleteAll=true`; stub at the bare URL
        misses. Surfaces in the 207 body's
        `error.detail="forward failed: Request timeout"`.
@@ -1108,7 +1111,7 @@ broker applies a default pagination on temporal retrieves that
 sorts the union of all instances by `observedAt` and truncates
 at some threshold < 118.
 
-**Spec:** § 6.3.10 doesn't pin a default temporal page size. swBroker
+**Spec:** TS 104-176 § 6.4.7 doesn't pin a default temporal page size. swBroker
 returns all 118 instances → the `Check Data Is Empty` assertion on
 `fuelLevel` fails.
 
@@ -1141,7 +1144,7 @@ test's `not-implemented` tag once the fixture is repaired).
 `csourceSubscriptions/subscription.jsonld` (`entities: [type:
 Building]`) with `csourceRegistrations/context-source-registration.jsonld`
 (`entities: [type: Vehicle], [type: OffStreetParking]`). The CSR
-doesn't overlap with the sub's entity scope, so per § 5.11.7 no
+doesn't overlap with the sub's entity scope, so per TS 104-175 § 12.4.7 no
 `newlyMatching` notification should fire.
 
 **Broker:** correctly fires nothing in isolation → test times out
@@ -1161,7 +1164,7 @@ filter from the sub if the intent is "any new CSR").
 **Hit:** fixture `csourceSubscriptions/subscription-invalid-query.jsonld`
 sets `q: "invalidQuery"` and the test asserts 400 BadRequestData.
 
-**Spec:** § 4.9 — a bare attribute name in q is the "attribute
+**Spec:** TS 104-175 § 7.2.3 — a bare attribute name in q is the "attribute
 exists" predicate. Perfectly valid.
 
 **Broker:** correctly returns 201.
@@ -1177,7 +1180,7 @@ drop the test.
 `notificationTrigger` in both the POSTed body and the retrieval
 expectation file.
 
-**Spec:** `notificationTrigger` is a § 5.2.12 field that appears
+**Spec:** `notificationTrigger` is a TS 104-175 § 5.2.6.5.2 field that appears
 in newer NGSI-LD spec revisions (post-1.6.1). When omitted, the
 default is `["attributeCreated", "attributeUpdated"]`. Brokers
 surface that default on retrieve so the user sees what's in force.
@@ -1207,7 +1210,7 @@ write verb and no id, each expecting a different status:
 - `056_02_02` — `PATCH /entities/`  — expects **400**
 
 **Spec:**
-- `DELETE /entities` IS a real endpoint (§ 6.4.3.3 — Purge
+- `DELETE /entities` IS a real endpoint (TS 104-176 § 7.2.3.3 — Purge
   Entities). Purge was added post-1.6.1, so the test fixture
   (likely authored against pre-purge spec) treats it as
   non-existent and expects 405. The broker correctly handles
@@ -1235,8 +1238,8 @@ the empty attr-name segment). Test asserts **405**.
 
 **Broker:** routes the request via wildcard matching to the
 partial-update-temporal-attr handler, validates the empty attr
-name as a § 4.6.2 violation, returns **400** "invalid attribute
-name '' (§ 4.6.2)".
+name as a TS 104-175 § 5.2.2.3 violation, returns **400** "invalid attribute
+name '' (TS 104-175 § 5.2.2.3)".
 
 **Why it's a doubt:** both interpretations are defensible — 405
 from a strict router perspective (URL doesn't match a valid
@@ -1258,7 +1261,7 @@ and afterwards `expiresAt` to be gone from the registration.
 **Where:**
 `data/csourceRegistrations/fragments/context-source-registration-null-expiresAt.json`.
 
-**Spec:** § 4.5.21 introduces the explicit sentinel
+**Spec:** TS 104-175 § 5.2.6.4.8 introduces the explicit sentinel
 `"urn:ngsi-ld:null"` to mean "delete this member" in a merge
 patch. Real JSON null is NOT the agreed signal for that — and
 § 7.4.4 of JSON-LD (Expansion algorithm) explicitly drops
@@ -1267,7 +1270,7 @@ interpreted. So a JSON-LD-conformant pre-processor sees
 **no** `expiresAt` member at all — the merge becomes a no-op.
 
 **Broker:** rejects with **400** "'expiresAt' must be a DateTime
-string". Correct per § 4.5.21 — null is not a valid
+string". Correct per TS 104-175 § 5.2.6.4.8 — null is not a valid
 DateTime, and the sentinel `"urn:ngsi-ld:null"` was designed
 precisely to make this case unambiguous.
 
@@ -1291,7 +1294,7 @@ Each fails with `KeyError` because the broker compacts the
 response back to short names (`almostFull`, `Building`) as
 spec wants.
 
-**Spec:** § 6.3.5 — `application/json` responses are compacted
+**Spec:** TS 104-176 § 6.2.4 — `application/json` responses are compacted
 using the user @context. Short names are correct on the wire.
 
 **Broker:** correct (compacts).
@@ -1305,7 +1308,7 @@ the short names that JSON-LD compaction produces.
 
 **Hit:** broker emits **206 Partial Content** + `Content-Range`
 when the temporal slice exceeds the per-entity instance cap
-(`--troeInstanceCap`, default 20 per § 6.3.10). Tests expect
+(`--troeInstanceCap`, default 20 per TS 104-176 § 6.4.7). Tests expect
 **200** in cases where the slice still fits, OR **206** in
 cases where the slice fits but the test predates the cap rule.
 
@@ -1314,7 +1317,7 @@ interpretation of when 206 should fire, but the broker (using
 a uniform "instance count > cap" rule) crosses the test's
 expectation at different points.
 
-**Spec:** § 6.3.10 / § 6.3.5 — the broker SHALL emit 206 +
+**Spec:** TS 104-176 § 6.4.7 / TS 104-176 § 6.2.4 — the broker SHALL emit 206 +
 Content-Range when an entity's instance count exceeds the
 configured pageSize. The configured pageSize is broker-
 dependent; the test suite hard-codes one specific value.
@@ -1340,7 +1343,7 @@ The two timestamps differ by ~20 ms because the broker records
 and compares to a fixture timestamp generated at a different
 moment.
 
-**Spec:** § 4.5.10 — `modifiedAt` is broker-assigned; the
+**Spec:** TS 104-175 § 5.2.6.10.5 — `modifiedAt` is broker-assigned; the
 client cannot predict its exact value.
 
 **Broker:** correct (writes its own timestamp).
@@ -1388,7 +1391,7 @@ expectation files don't list these.
 Same shape as doubt #45 (`041_01_01 / 041_02_03 / 038_02_01`
 — fixtures omit `notificationTrigger`).
 
-**Broker:** correct (per § 5.11 the CSR-sub maintains delivery
+**Broker:** correct (per TS 104-175 § 12.4 the CSR-sub maintains delivery
 stats; the spec doesn't forbid surfacing them).
 
 **Fix wanted:** regenerate the expectations against a current-
@@ -1418,7 +1421,7 @@ and assert specific status codes (variously 204 / 404 / 400).
 The broker treats the core context as immutable and rejects
 with 400 ("core context cannot be deleted").
 
-**Spec:** § 6.5 — does not define what should happen when a
+**Spec:** TS 104-176 § 7.3 — does not define what should happen when a
 client tries to delete the core JSON-LD @context. The tests
 disagree with each other on which status to expect (204 from
 one, 404 from another), confirming the spec gap.
@@ -1452,8 +1455,8 @@ intersection check (mirroring MongoDB 2dsphere strictness)
 correctly returns 400 at setup time, which cascades the entire
 019_11_* suite plus the related polygon test 021_09_02.
 
-**Spec:** § 4.7 — Polygons must be simple (non-self-
-intersecting). § 6.5.3 — bad geometry → 400 BadRequestData.
+**Spec:** TS 104-175 § 5.2.6.4.5 — Polygons must be simple (non-self-
+intersecting). TS 104-176 § 7.3.3 — bad geometry → 400 BadRequestData.
 
 **Broker:** correct.
 
@@ -1487,7 +1490,7 @@ logged into the temporal store. The follow-up GET returns
 `{id, type}` with no attributes, so deep-diff reports the
 expected attribute as "removed from dictionary".
 
-**Spec:** § 5.7.2.1 (Create Temporal Representation):
+**Spec:** TS 104-175 § 10.4.3.1 (Create Temporal Representation):
 > "If the corresponding Entity does not already exist in the
 >  current state, the Context Broker shall NOT create the
 >  Entity in the current state."
@@ -1502,7 +1505,7 @@ populate current state is contrary to the spec.
   before `Create Temporal Entity`), or
 - use `DELETE /temporal/entities/{id}/attrs/{name}` — the
   temporal-side delete that exists for exactly this purpose
-  (§ 5.7.2.4). The `Delete Attribute From Temporal Entity`
+  (TS 104-175 § 10.4.3.4). The `Delete Attribute From Temporal Entity`
   keyword is already defined in
   `resources/ApiUtils/TemporalContextInformationProvision.resource`.
 
@@ -1522,7 +1525,7 @@ Registrations` but only cleans up the most-recently-saved
 `${registration_id}` variable — 033_01_01's CSR stays in the
 broker between tests.
 
-Per § 5.9.2.4: "An exclusive registration shall conflict with
+Per TS 104-175 § 12.2.2.4: "An exclusive registration shall conflict with
 another registration covering the same Entity scope (regardless
 of mode)." Two CSRs with overlapping entityInfo, at least one
 exclusive → 409 Conflict on the second create.
@@ -1556,8 +1559,8 @@ the broker correctly returns `"type": "Building"` (string),
 the test collects `"B"` into the list and the assertion fails
 with `Index 0: Building != B`.
 
-**Spec:** § 5.2.8 defines `EntityInfo.type` as "an NGSI-LD
-attribute name" — singular, scalar string. § 6.3.5 compaction
+**Spec:** TS 104-175 § 5.2.6.6.2 defines `EntityInfo.type` as "an NGSI-LD
+attribute name" — singular, scalar string. TS 104-176 § 6.2.4 compaction
 returns a single value as a string, not an array.
 
 **Broker:** correct (returns `"type": "Building"`). Verified by
@@ -1572,7 +1575,7 @@ Append To List    ${notification_data_entities}
 
 **Broker improvements landed alongside this triage:** the CSR-
 sub notification now (a) filters `information[]` to only the
-entries matching the subscription's entity scope (§ 5.11.7
+entries matching the subscription's entity scope (TS 104-175 § 12.4.7
 SHOULD), and (b) compacts using the subscription's @context so
 attribute IRIs come back as short names. Both were genuine
 broker bugs visible regardless of the assertion typo.
@@ -1608,13 +1611,13 @@ new ones — applied to the temporal layer.
 **Spec — two layers, two semantics:**
 
 - **TRoE** (what the endpoint queried by the test serves):
-  § 5.6.10 / § 5.6.11 say a second `POST /temporal/entities/`
+  TS 104-175 § 10.3.6 / TS 104-175 § 11.2.2 say a second `POST /temporal/entities/`
   on an existing entity ADDS the new instances to the history.
   Strict spec reading: the TRoE rows after both POSTs are the
   union — 5 speed + 6 fuelLevel.
 - **Current state**: in our broker, `POST /temporal/entities/`
   on an entity that doesn't already exist in current state
-  intentionally skips current-state creation (§ 5.7.2.1),
+  intentionally skips current-state creation (TS 104-175 § 10.4.3.1),
   so a follow-up `GET /entities/{id}` returns 404 here. A
   broker that DID create the entity in current state would, on
   the second POST, REPLACE the no-datasetId instances at the
@@ -1634,7 +1637,7 @@ temporal endpoint truly produces per spec — or the test should
 GET the current-state endpoint (which then also needs a setup
 that puts the entity into current state to begin with, since
 `POST /temporal/entities/` against a non-existent current
-entity skips creation per § 5.7.2.1).
+entity skips creation per TS 104-175 § 10.4.3.1).
 
 
 ## 61. `047_16_01 / 047_16_03` — PATCH /csourceSubscriptions has no @context, so the new entity-selector terms expand differently than the CSR's terms
@@ -1658,7 +1661,7 @@ Test body:
 PATCH /csourceSubscriptions/{id}    json={"entities":[{"type":"Vehicle"}]}
 ```
 which `requests` sends as `Content-Type: application/json`
-with NO Link header. Per § 6.3.5 the broker resolves `Vehicle`
+with NO Link header. Per TS 104-176 § 6.2.4 the broker resolves `Vehicle`
 against the core context's `@vocab` because no @context
 information arrives with the request. The PATCH ends up
 overwriting `entities[0].type` in the cached subscription as
@@ -1728,11 +1731,11 @@ non-overlapping time ranges, hence "unsynchronized").
 
 **Broker:** does not cut at the attribute boundary. Returns
 instances of BOTH attributes (the prefix that fits under the
-configured `--troeInstanceCap`, default 20 per § 6.3.10),
+configured `--troeInstanceCap`, default 20 per TS 104-176 § 6.4.7),
 interleaved. So both attributes end up with some instances and
 both assertions fail.
 
-**Spec:** § 6.3.10 says when the result exceeds the broker's
+**Spec:** TS 104-176 § 6.4.7 says when the result exceeds the broker's
 configured page size, the response is 206 with a Content-Range
 header. The spec is **not explicit** about "cut at attribute
 boundary" — that is one valid pagination strategy among
@@ -1804,7 +1807,7 @@ the actual problem, not the broker.
 
 Expects 200 with the entity from the CSR forward.
 
-**Spec:** § 6.3.5 (Use of @context) — when `Content-Type` is
+**Spec:** TS 104-176 § 6.2.4 (Use of @context) — when `Content-Type` is
 `application/ld+json`, `@context` *shall* be carried in the
 payload body and *shall not* be supplied as a Link header.
 The reverse (Link header) is only valid with
@@ -1816,7 +1819,7 @@ The broker enforces this in `ldContextResolve` /
 application/ld+json" before the request ever reaches the
 query / forward logic.
 
-**Broker:** correct per § 6.3.5 — the two
+**Broker:** correct per TS 104-176 § 6.2.4 — the two
 `Content-Type` choices are mutually exclusive about where
 the `@context` may live, and ld+json forbids the Link form.
 
@@ -1826,7 +1829,7 @@ that contains `type` + `entities` (etc.) but never appends
 `@context`, while the caller passes `content_type=
 ${CONTENT_TYPE_LD_JSON}` and `context=
 ${ngsild_test_suite_context}` — the latter is then placed in
-the Link header. The combination is invalid by § 6.3.5.
+the Link header. The combination is invalid by TS 104-176 § 6.2.4.
 
 **Fix wanted:** either
   (a) when `content_type == application/ld+json`, `Query
@@ -1840,7 +1843,7 @@ the Link header. The combination is invalid by § 6.3.5.
       `_02` POST variants regress).
 
 **Not the same as #28:** that one is about `?id=` alone being
-flagged "too wide" by § 5.7.2.4 and affects the `_01` GET
+flagged "too wide" by TS 104-175 § 10.4.3.4 and affects the `_01` GET
 variants of the same family (`D011_03_inc_01`,
 `D011_04_inc_01`). #64 here is purely the body/Link @context
 shape mismatch and is the dominant 400 for the POST `_02`
@@ -1848,6 +1851,8 @@ variants.
 
 
 ## 65. `D017_01_inc / D017_01_red / D017_01_exc` — `Purge Entities` keyword joins URL without a slash
+
+**Status:** RESOLVED — fixed upstream in MR !263.
 
 **Hit:** All three D017_01 Purge-Entities tests fail at the
 first assertion: `204 != 404`. The broker emits a clean 404
@@ -1894,6 +1899,8 @@ separator slash — matching the surrounding keywords:
 
 ## 66. `D002_01_red` — Create-Entity stub URL includes the entity id (which POST /entities never carries)
 
+**Status:** RESOLVED — fixed upstream in MR !263.
+
 **Hit:** `D002_01_red Delete Entities On Both Context Sources`
 fails its very first assertion: the test's `Create Entity` call
 returns 409 Conflict with body
@@ -1908,7 +1915,7 @@ Set Stub Reply  POST  /broker1/ngsi-ld/v1/entities/${entity_id}   201
 Set Stub Reply  POST  /broker2/ngsi-ld/v1/entities/${entity_id2}  201
 ```
 
-But § 5.6.1 (Create Entity) defines exactly one URL for POST:
+But TS 104-175 § 10.2.2 (Create Entity) defines exactly one URL for POST:
 `POST /ngsi-ld/v1/entities` — with the body carrying the entity
 (including its `id`). The entity id is **not** in the URL on
 create; it only appears in the `Location` header of the
@@ -1921,11 +1928,11 @@ matches on the full URL incl. query string (per §40), so the
 stub at `…/entities/<id>` never fires. The forward times out at
 the broker's distOpTimeout → broker reports it as transport
 failure → with redirect-mode CSRs there is no local creation
-either, so `anySucceeded == false` and § 5.2.17 emits 409 with
+either, so `anySucceeded == false` and TS 104-175 § 5.2.6.8.2 emits 409 with
 the BatchOperationResult shape (see postEntities.c line 783).
 
 **Broker:** correct. The 409 + `errors[].title=Bad Gateway`
-response shape is what § 5.2.17 prescribes when every CSR leg
+response shape is what TS 104-175 § 5.2.6.8.2 prescribes when every CSR leg
 of a Create-Entity fails and there is no local leg (redirect
 mode).
 
@@ -1939,7 +1946,7 @@ Set Stub Reply  POST  /broker2/ngsi-ld/v1/entities    201
 
 The same test then sets up DELETE stubs *with* the id, which is
 correct for DELETE — `/entities/{id}` is the right URL there
-(§ 5.6.6).
+(TS 104-175 § 10.2.8).
 
 
 ## 67. `D002_02_01_inc / D002_02_02_inc` — broker treats CSR's 404 on DELETE forward as idempotent success, not as an error
@@ -1965,10 +1972,10 @@ the resource is already gone, which is exactly what we wanted".
 The same is done for the local leg when the entity is absent
 locally but at least one CSR succeeded.
 
-**Spec:** § 5.6.6.4 lists the possible response codes but does
+**Spec:** TS 104-175 § 10.2.8.4 lists the possible response codes but does
 not prescribe whether a per-CSR 404 must surface as a 207-style
-error or roll up into the parent success. § 6.3.18 (Status
-Codes) and § 5.2.17 (BatchOperationResult) are also silent on
+error or roll up into the parent success. TS 104-176 § 6.4.11 (Status
+Codes) and TS 104-175 § 5.2.6.8.2 (BatchOperationResult) are also silent on
 this specific case.
 
 **Our reading:** broker is defensibly correct — once any leg
@@ -2001,14 +2008,14 @@ local-vs-CSR delete legs.
 `Set Stub Reply  GET  …/entities?type=Vehicle  200
 ${entity_body}`, where `${entity_body}` is one entity dict
 loaded from `vehicle-simple-attributes.{json,jsonld}`.
-§ 5.7.2.4 defines the queryEntities response as an Array of
+TS 104-175 § 10.4.3.4 defines the queryEntities response as an Array of
 NGSI-LD Entities.
 
 **Broker:** historically discarded any forward response whose
 parsed root wasn't a JSON array — those tests reported zero
 entities, length / content mismatches, etc. The broker now
 also accepts a bare entity object and re-wraps it as a
-one-element array, matching § 6.3.16 (JSON-LD compaction's
+one-element array, matching TS 104-176 § 6.3.4 (JSON-LD compaction's
 unwrap rule for single-member arrays).
 
 **Why the broker can't recover from this on its own:** the
@@ -2058,7 +2065,7 @@ Set Stub Reply     GET    /ngsi-ld/v1/entities?type=Vehicle    200    ${entity_j
 
 That gives HttpCtrl a string body with a matching
 `Content-Length`. The broker reads the full response and the
-single-object branch of § 6.3.16 (JSON-LD compaction) is no
+single-object branch of TS 104-176 § 6.3.4 (JSON-LD compaction) is no
 longer reached at all.
 
 **Independent HttpCtrl bug worth filing upstream:**
@@ -2167,20 +2174,20 @@ file verbatim via `Get File` and PATCHes it to
 so the body id is a real entity id but it's *not* the same
 entity id the URL targets.
 
-§ 5.2.5 lets an EntityFragment omit id/type, but when an id
+TS 104-175 § 5.2.6.4.3 lets an EntityFragment omit id/type, but when an id
 *is* supplied the broker has to enforce that it matches the
 URL — otherwise the request is ambiguous about which entity
 to mutate. `ldCheckEntity.c::isUpdateOp` covers exactly
 PATCH-style ops (`LdOpUpdateEntity`, `LdOpAppendAttrs`,
 `LdOpMergeEntity`); the rejection is by design.
 
-**Broker:** correct. § 5.6.2 mandates the URL id is
+**Broker:** correct. TS 104-175 § 10.2.3 mandates the URL id is
 authoritative for partial-update ops and the body MUST NOT
 disagree.
 
 **Fix wanted:** either
   (a) strip `id` from the fixture (the `type` can stay — per
-      § 5.6.17.4 it's unioned into the entity's type set, so
+      TS 104-175 § 10.2.9.4 it's unioned into the entity's type set, so
       sending the existing `Vehicle` is a no-op), or
   (b) make the `Update Entity Attributes` keyword swap the
       fixture's id for `${id}` before PATCHing, the way
@@ -2261,7 +2268,7 @@ positions:
 — an outer array of rings, each ring a closed sequence of ≥4
 positions. The test fixture sends a **double-nested** array
 (`[[lon,lat], [lon,lat], …]`) which is the LineString shape.
-NGSI-LD § 4.10 references GeoJSON for the `geometry` /
+NGSI-LD TS 104-175 § 7.2.4 references GeoJSON for the `geometry` /
 `coordinates` URL-param pair, so the same shape constraint
 applies.
 
@@ -2270,7 +2277,7 @@ iterates the outer array as rings and finds the first
 "ring" has only 2 children (the lat/lon pair) — under the
 spec's 4-position minimum.
 
-**Broker:** correct per RFC 7946 / § 4.10.
+**Broker:** correct per RFC 7946 / TS 104-175 § 7.2.4.
 
 **Fix wanted:** the fixture's coordinates should be the
 spec-correct triple-nested form, with the polygon explicitly
