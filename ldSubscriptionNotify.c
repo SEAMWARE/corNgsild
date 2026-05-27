@@ -949,6 +949,17 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   swRestClientRequestInit(&req, SwVerbPost, itemP->endpointUri, NULL);
   swRestClientRequestHeader(&req, "Content-Type", contentType);
 
+  // Ngsild-Attribute-Format — non-default representation format of the
+  // notification data, as the lowercase NGSI-LD format value (concise /
+  // simplified). The default (normalized) carries no header, and the v2 synonym
+  // "keyValues" is normalised to "simplified". (Orion-LD extension carried from
+  // Orion's Fiware-AttrsFormat; pending addition to TS 104-176.)
+  if ((itemP->format != NULL) && (strcmp(itemP->format, "normalized") != 0))
+  {
+    const char* attrFormat = (strcmp(itemP->format, "keyValues") == 0) ? "simplified" : itemP->format;
+    swRestClientRequestHeader(&req, "Ngsild-Attribute-Format", attrFormat);
+  }
+
   // § 5.8.6 / § 6.3.5 — ld+json carries @context inline; Link would be a
   // duplicate (and 046_14_01 asserts its absence). geo+json keeps Link.
   if (linkBuf[0] != 0 && !acceptLdJson)
