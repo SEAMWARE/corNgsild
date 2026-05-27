@@ -291,9 +291,23 @@ bool ldToSimplified(KjNode* entityP, KAlloc* faP)
 
       if (valueP != NULL)
       {
-        // Replace the attribute object with just the value
-        childP->type  = valueP->type;
-        childP->value = valueP->value;
+        if ((strcmp(valueP->name, LD_VOCAB_HAS_LANGUAGE_MAP) == 0) ||
+            (strcmp(valueP->name, LD_VOCAB_HAS_VOCAB)        == 0) ||
+            (strcmp(valueP->name, LD_VOCAB_HAS_JSON)         == 0))
+        {
+          // § 5.2.6.4: LanguageProperty / VocabProperty / JsonProperty keep the
+          // { languageMap | vocab | json : value } wrapper in simplified form.
+          // Drop "type" and any sub-attrs, keeping just the value node.
+          valueP->next              = NULL;
+          childP->value.firstChildP = valueP;
+          childP->lastChild         = valueP;
+        }
+        else
+        {
+          // Property / GeoProperty / Relationship / List* reduce to the bare value.
+          childP->type  = valueP->type;
+          childP->value = valueP->value;
+        }
       }
     }
 

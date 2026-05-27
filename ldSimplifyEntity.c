@@ -16,10 +16,14 @@
 //   Relationship:      { "type": "Relationship", "object": "uri" }  → "uri"
 //   GeoProperty:       { "type": "GeoProperty", "value": {...} }    → {...}  (GeoJSON)
 //   LanguageProperty:  { "type": "LanguageProperty", "languageMap": {...} } → {"languageMap": {...}}
-//   VocabProperty:     { "type": "VocabProperty", "vocab": "X" }   → "X"
+//   VocabProperty:     { "type": "VocabProperty", "vocab": "X" }   → {"vocab": "X"}
 //   JsonProperty:      { "type": "JsonProperty", "json": {...} }   → {"json": {...}}
 //   ListProperty:      { "type": "ListProperty", "valueList": [...] } → [...]
 //   ListRelationship:  { "type": "ListRelationship", "objectList": [...] } → [...]
+//
+// § 5.2.6.4: LanguageProperty / JsonProperty / VocabProperty keep the value-key
+// wrapper in simplified form; Property / GeoProperty / Relationship / ListProperty
+// / ListRelationship reduce to the bare value.
 //
 // Concise:
 //   Property (no sub-attrs):  → X  (same as simplified)
@@ -111,6 +115,26 @@ static const char* primaryValueKey(const char* typeStr)
 
 // -----------------------------------------------------------------------------
 //
+// simplifiedKeepsWrapper - does the simplified form keep the { <valueKey>: value } wrapper?
+//
+// Per § 5.2.6.4 the simplified value of a LanguageProperty / JsonProperty /
+// VocabProperty is a JSON Object holding the single value-key ("languageMap" /
+// "json" / "vocab") — NOT the bare value. Property, GeoProperty, Relationship,
+// ListProperty and ListRelationship reduce to the bare value (scalar / GeoJSON /
+// URI / ordered array).
+//
+static bool simplifiedKeepsWrapper(const char* typeStr)
+{
+  if (strcmp(typeStr, "LanguageProperty") == 0) return true;
+  if (strcmp(typeStr, "JsonProperty")     == 0) return true;
+  if (strcmp(typeStr, "VocabProperty")    == 0) return true;
+  return false;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldSimplifyEntity -
 //
 // Per spec § 4.5.4:
@@ -163,10 +187,22 @@ void ldSimplifyEntity(KjNode* entityP)
         KjNode* dsP  = kjLookup(instP, "datasetId");
         const char* dsKey = (dsP != NULL && dsP->type == KjString) ? dsP->value.s : "@none";
 
-        // Detach the value node and rename it to the dsKey.
         kjChildRemove(instP, valP);
-        valP->name = (char*) dsKey;
-        kjChildAdd(datasetMap, valP);
+
+        if (simplifiedKeepsWrapper(typeP->value.s))
+        {
+          // Dataset entry is the simplified value itself: { <valKey>: value }.
+          KjNode* wrapP = kjObject(NULL, dsKey);
+          valP->name = (char*) valKey;
+          kjChildAdd(wrapP, valP);
+          kjChildAdd(datasetMap, wrapP);
+        }
+        else
+        {
+          // Bare value, renamed to the dsKey.
+          valP->name = (char*) dsKey;
+          kjChildAdd(datasetMap, valP);
+        }
       }
 
       // Replace the array with an object  { "dataset": <map> }.
@@ -216,10 +252,20 @@ void ldSimplifyEntity(KjNode* entityP)
 
     if (valueNode != NULL)
     {
-      // Replace the attribute object with just the value
-      // Copy the value node's content into the attribute node
-      childP->type            = valueNode->type;
-      childP->value           = valueNode->value;
+      if (simplifiedKeepsWrapper(typeP->value.s))
+      {
+        // Keep the { <valKey>: value } wrapper; drop "type" and any sub-attrs.
+        valueNode->name           = (char*) valKey;
+        valueNode->next           = NULL;
+        childP->value.firstChildP = valueNode;
+        childP->lastChild         = valueNode;
+      }
+      else
+      {
+        // Replace the attribute object with just the bare value.
+        childP->type  = valueNode->type;
+        childP->value = valueNode->value;
+      }
     }
 
     childP = nextP;
