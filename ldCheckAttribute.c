@@ -96,6 +96,7 @@ static bool ldIsCoreAttrTerm(const char* name)
   if (strcmp(name, LD_VOCAB_OBSERVED_AT)      == 0)  return true;
   if (strcmp(name, LD_VOCAB_UNIT_CODE)        == 0)  return true;
   if (strcmp(name, LD_VOCAB_DATASET_ID)       == 0)  return true;
+  if (strcmp(name, "valueType")               == 0)  return true;
 
   return false;
 }
@@ -113,6 +114,11 @@ static bool isAllowedCoreAttrTerm(const char* name, const char* valueKey)
   if (strcmp(name, LD_VOCAB_OBSERVED_AT) == 0)  return true;
   if (strcmp(name, LD_VOCAB_UNIT_CODE)  == 0)  return true;
   if (strcmp(name, LD_VOCAB_DATASET_ID) == 0)  return true;
+
+  // valueType is valid for the Property family only (§ 5.2.x) — not for a
+  // Relationship / ListRelationship (object / objectList).
+  if (strcmp(name, "valueType") == 0)
+    return ((strcmp(valueKey, LD_VOCAB_HAS_OBJECT) != 0) && (strcmp(valueKey, LD_VOCAB_HAS_OBJECT_LIST) != 0));
 
   return false;
 }
@@ -379,6 +385,14 @@ bool ldCheckAttribute(KjNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc*
           return false;
         }
         URI_CHECK(childP->value.s);
+      }
+      else if (strcmp(childP->name, "valueType") == 0)
+      {
+        if (childP->type != KjString)
+        {
+          ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid valueType", "Attribute '%s': 'valueType' must be a string", attrP->name);
+          return false;
+        }
       }
 
       continue;  // Core term handled -- skip sub-attribute recursion
