@@ -276,6 +276,72 @@ void ldSimplifyEntity(KjNode* entityP)
 
 // -----------------------------------------------------------------------------
 //
+// conciseValueReducible - may a value-only Property collapse to its bare value?
+//
+// § 5.2.6.4 step 3: only a JSON primitive (or GeoJSON) collapses; a plain JSON
+// object or array is kept as { value: ... } so the concise->normalized
+// round-trip stays lossless and unambiguous.
+//
+static bool conciseValueReducible(const KjNode* valueP)
+{
+  return ((valueP->type != KjObject) && (valueP->type != KjArray));
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// conciseAttr - concise-compact one attribute, recursing into sub-attributes
+//
+static void conciseAttr(KjNode* attrP)
+{
+  if (attrP->type != KjObject)
+    return;
+
+  KjNode* typeP = kjLookup(attrP, "type");
+  if (typeP == NULL || typeP->type != KjString)
+    return;
+
+  const char* typeStr = typeP->value.s;
+
+  // GeoProperty stays normalized in concise (value is a JSON object with "type")
+  if (strcmp(typeStr, "GeoProperty") == 0)
+    return;
+
+  const char* valKey = primaryValueKey(typeStr);
+
+  // Recurse into real sub-attributes — object children other than type/value-key.
+  // (observedAt/unitCode/datasetId/createdAt/modifiedAt are scalars, not objects,
+  // so they're naturally skipped here.)
+  for (KjNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
+  {
+    if ((childP->type == KjObject) &&
+        (strcmp(childP->name, "type") != 0) &&
+        ((valKey == NULL) || (strcmp(childP->name, valKey) != 0)))
+      conciseAttr(childP);
+  }
+
+  // value-only Property/ListProperty with a primitive value -> bare value
+  if ((attrSubAttrCount(attrP, typeStr) == 0) &&
+      ((strcmp(typeStr, "Property") == 0) || (strcmp(typeStr, "ListProperty") == 0)))
+  {
+    KjNode* valueNode = (valKey != NULL) ? kjLookup(attrP, valKey) : NULL;
+    if ((valueNode != NULL) && conciseValueReducible(valueNode))
+    {
+      attrP->type  = valueNode->type;
+      attrP->value = valueNode->value;
+      return;
+    }
+  }
+
+  // All other cases: drop "type", keep value-key + sub-attrs + metadata.
+  kjChildRemove(attrP, typeP);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldConciseEntity -
 //
 void ldConciseEntity(KjNode* entityP)
@@ -283,68 +349,11 @@ void ldConciseEntity(KjNode* entityP)
   if (entityP == NULL || entityP->type != KjObject)
     return;
 
-  KjNode* childP = entityP->value.firstChildP;
-
-  while (childP != NULL)
+  for (KjNode* childP = entityP->value.firstChildP; childP != NULL; childP = childP->next)
   {
-    KjNode* nextP = childP->next;
-
-    if (childP->name == NULL || isEntityKeyword(childP->name) || childP->type != KjObject)
-    {
-      childP = nextP;
+    if ((childP->name == NULL) || isEntityKeyword(childP->name) || (childP->type != KjObject))
       continue;
-    }
 
-    KjNode* typeP = kjLookup(childP, "type");
-    if (typeP == NULL || typeP->type != KjString)
-    {
-      childP = nextP;
-      continue;
-    }
-
-    const char* typeStr = typeP->value.s;
-
-    //
-    // GeoProperty: stays normalized in concise (value is JSON object with "type" field)
-    //
-    if (strcmp(typeStr, "GeoProperty") == 0)
-    {
-      childP = nextP;
-      continue;
-    }
-
-    int subAttrs = attrSubAttrCount(childP, typeStr);
-
-    //
-    // Property / ListProperty without sub-attrs: collapse to just the value
-    //
-    if (subAttrs == 0 && (strcmp(typeStr, "Property") == 0 || strcmp(typeStr, "ListProperty") == 0))
-    {
-      const char* valField = (strcmp(typeStr, "Property") == 0) ? "value" : "valueList";
-      KjNode* valueNode = kjLookup(childP, valField);
-
-      if (valueNode != NULL)
-      {
-        childP->type  = valueNode->type;
-        childP->value = valueNode->value;
-      }
-
-      childP = nextP;
-      continue;
-    }
-
-    //
-    // All other cases: drop "type" field, keep everything else
-    // This covers:
-    //   - Property/ListProperty WITH sub-attrs (keep value/valueList + sub-attrs)
-    //   - Relationship (keep object + optional sub-attrs)
-    //   - LanguageProperty (keep languageMap + optional sub-attrs)
-    //   - VocabProperty (keep vocab + optional sub-attrs)
-    //   - JsonProperty (keep json + optional sub-attrs)
-    //   - ListRelationship (keep objectList + optional sub-attrs)
-    //
-    kjChildRemove(childP, typeP);
-
-    childP = nextP;
+    conciseAttr(childP);
   }
 }

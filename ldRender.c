@@ -198,6 +198,31 @@ static void attrToConcise(KjNode* attrP)
     if (isAttrKeyword(childP->name) == false)
       attrToConcise(childP);
   }
+
+  // § 5.2.6.4 step 3: a value-only Property/ListProperty whose value is a JSON
+  // primitive collapses to the bare value (matching the simplified format).
+  // A plain JSON object or array is KEPT as { value: ... } so the
+  // concise->normalized round-trip stays lossless and unambiguous.
+  if ((attrType == LdAttrProperty) || (attrType == LdAttrListProperty))
+  {
+    const char* vk        = (attrType == LdAttrProperty) ? LD_VOCAB_HAS_VALUE : LD_VOCAB_HAS_VALUE_LIST;
+    KjNode*     valueP    = NULL;
+    bool        valueOnly = true;
+
+    for (KjNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
+    {
+      if (strcmp(childP->name, vk) == 0)
+        valueP = childP;
+      else
+        valueOnly = false;   // "type" already removed above; any remaining member blocks reduction
+    }
+
+    if ((valueOnly == true) && (valueP != NULL) && (valueP->type != KjObject) && (valueP->type != KjArray))
+    {
+      attrP->type  = valueP->type;
+      attrP->value = valueP->value;
+    }
+  }
 }
 
 
