@@ -18,6 +18,7 @@
 #include "kjson/kjLookup.h"                             // kjLookup
 #include "swRest/swRest.h"                             // swRest
 
+#include "swJsonld/swldExpand.h"                          // KJF_ATTR_TERM
 #include "swNgsild/LdVocab.h"                            // LD_VOCAB_*
 #include "swNgsild/LdAttrType.h"                         // LdAttrType, LdAttrGeoProperty
 #include "swNgsild/ldAttrTypeDetect.h"                   // ldAttrTypeDetect
@@ -206,24 +207,15 @@ static const char* extractDatasetId(KjNode* attrP)
 
 // -----------------------------------------------------------------------------
 //
-// isCoreAttrTerm - check if a name is a known NGSI-LD core context attribute-level term
+// isCoreAttrTerm - is this node a structural attribute member (NOT a sub-attribute)?
 //
-static bool isCoreAttrTerm(const char* name)
+// KJF_ATTR_TERM is classified once at core-context load and copied onto each node
+// during swldExpandTree (and stamped on the structural keys ldNormalizeInput
+// creates). A single bit test instead of a strcmp chain.
+//
+static bool isCoreAttrTerm(const KjNode* nodeP)
 {
-  if (strcmp(name, "type")                    == 0)  return true;
-  if (strcmp(name, LD_VOCAB_HAS_VALUE)        == 0)  return true;
-  if (strcmp(name, LD_VOCAB_HAS_OBJECT)       == 0)  return true;
-  if (strcmp(name, LD_VOCAB_HAS_LANGUAGE_MAP) == 0)  return true;
-  if (strcmp(name, LD_VOCAB_HAS_VOCAB)        == 0)  return true;
-  if (strcmp(name, LD_VOCAB_HAS_VALUE_LIST)   == 0)  return true;
-  if (strcmp(name, LD_VOCAB_HAS_OBJECT_LIST)  == 0)  return true;
-  if (strcmp(name, LD_VOCAB_HAS_JSON)         == 0)  return true;
-  if (strcmp(name, LD_VOCAB_OBSERVED_AT)      == 0)  return true;
-  if (strcmp(name, LD_VOCAB_EXPIRES_AT)       == 0)  return true;
-  if (strcmp(name, LD_VOCAB_UNIT_CODE)        == 0)  return true;
-  if (strcmp(name, LD_VOCAB_DATASET_ID)       == 0)  return true;
-
-  return false;
+  return ((nodeP->flags & KJF_ATTR_TERM) != 0);
 }
 
 
@@ -243,7 +235,7 @@ static void attrToDbModel(KjNode* attrP, uint64_t ts, KAlloc* faP)
   // Recurse into sub-attributes (non-core-context object children)
   for (KjNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
   {
-    if (childP->type == KjObject && !isCoreAttrTerm(childP->name))
+    if (childP->type == KjObject && !isCoreAttrTerm(childP))
       attrToDbModel(childP, ts, faP);
   }
 

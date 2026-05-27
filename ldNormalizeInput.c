@@ -23,6 +23,7 @@
 #include "kjson/kjBuilder.h"                             // kjObject
 #include "kjson/kjChildReplace.h"                       // kjChildReplace
 
+#include "swJsonld/swldExpand.h"                          // KJF_CORE_TERM
 #include "swNgsild/LdVocab.h"                            // LD_VOCAB_*
 #include "swNgsild/LdAttrType.h"                         // LdAttrType
 #include "swNgsild/ldTypes.h"                             // ldAttrTypeToString
@@ -34,23 +35,21 @@
 
 // -----------------------------------------------------------------------------
 //
-// isAttrKeyword - attribute-level keywords that are NOT sub-attributes
+// isAttrKeyword - is this node a structural attribute member (NOT a sub-attribute)?
 //
-static bool isAttrKeyword(const char* name)
+// The specific structural members (type, value, object, languageMap, vocab,
+// valueList, objectList, json, observedAt, expiresAt, unitCode, datasetId,
+// valueType) are classified once at core-context load and the KJF_ATTR_TERM bit
+// is copied onto each matching node during swldExpandTree. ldNormalizeInput runs
+// only after swldExpandTree (ldHooks), so the bit is set by the time we look.
+// One bit test instead of a strcmp chain — and it picks up valueType, which the
+// old list omitted (causing valueType to be wrongly reified as a sub-Property).
+// Note: a sub-attribute may itself be a core-context term, so this tests the
+// specific KJF_ATTR_TERM marking, not a generic "from core context" flag.
+//
+static bool isAttrKeyword(const KjNode* nodeP)
 {
-  if (strcmp(name, "type")                    == 0)  return true;
-  if (strcmp(name, LD_VOCAB_HAS_VALUE)        == 0)  return true;
-  if (strcmp(name, LD_VOCAB_HAS_OBJECT)       == 0)  return true;
-  if (strcmp(name, LD_VOCAB_HAS_LANGUAGE_MAP) == 0)  return true;
-  if (strcmp(name, LD_VOCAB_HAS_VOCAB)        == 0)  return true;
-  if (strcmp(name, LD_VOCAB_HAS_VALUE_LIST)   == 0)  return true;
-  if (strcmp(name, LD_VOCAB_HAS_OBJECT_LIST)  == 0)  return true;
-  if (strcmp(name, LD_VOCAB_HAS_JSON)         == 0)  return true;
-  if (strcmp(name, LD_VOCAB_OBSERVED_AT)      == 0)  return true;
-  if (strcmp(name, LD_VOCAB_UNIT_CODE)        == 0)  return true;
-  if (strcmp(name, LD_VOCAB_DATASET_ID)       == 0)  return true;
-
-  return false;
+  return ((nodeP->flags & KJF_ATTR_TERM) != 0);
 }
 
 
@@ -179,6 +178,9 @@ static void addTypeField(KjNode* attrP, const char* typeName, KAlloc* kaP)
   KjNode* typeNodeP = kjString(swRest.kjsonP, "type", typeName);
   if (typeNodeP != NULL)
   {
+    // Structural member created here (after expansion) — stamp it so the
+    // sub-attribute checks (KJF_ATTR_TERM) don't mistake it for a sub-attr.
+    typeNodeP->flags |= KJF_CORE_TERM | KJF_ATTR_TERM;
     typeNodeP->next = attrP->value.firstChildP;
     attrP->value.firstChildP = typeNodeP;
   }
@@ -209,6 +211,7 @@ static void wrapAsProperty(KjNode* entityP, KjNode* childP, KAlloc* kaP)
   valueNodeP->type  = childP->type;
   valueNodeP->value = childP->value;
   valueNodeP->next  = NULL;
+  valueNodeP->flags = KJF_CORE_TERM | KJF_ATTR_TERM | (KJF_VK_VALUE << KJF_VK_SHIFT);
 
   kjChildAdd(wrapperP, valueNodeP);
   addTypeField(wrapperP, "Property", kaP);
@@ -243,6 +246,7 @@ void ldWrapAsGeoProperty(KjNode* entityP, KjNode* childP, KAlloc* kaP)
   valueNodeP->type  = childP->type;
   valueNodeP->value = childP->value;
   valueNodeP->next  = NULL;
+  valueNodeP->flags = KJF_CORE_TERM | KJF_ATTR_TERM | (KJF_VK_VALUE << KJF_VK_SHIFT);
 
   kjChildAdd(wrapperP, valueNodeP);
   addTypeField(wrapperP, "GeoProperty", kaP);
@@ -326,7 +330,7 @@ static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool m
     while (subP != NULL)
     {
       KjNode* subNextP = subP->next;
-      if (isAttrKeyword(subP->name) == false)
+      if (isAttrKeyword(subP) == false)
         normalizeAttr(attrP, subP, kaP, mergeMode);
       subP = subNextP;
     }
@@ -364,7 +368,7 @@ static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool m
     while (subP != NULL)
     {
       KjNode* subNextP = subP->next;
-      if (isAttrKeyword(subP->name) == false)
+      if (isAttrKeyword(subP) == false)
         normalizeAttr(attrP, subP, kaP, mergeMode);
       subP = subNextP;
     }
@@ -393,7 +397,7 @@ static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool m
     while (subP != NULL)
     {
       KjNode* subNextP = subP->next;
-      if (isAttrKeyword(subP->name) == false)
+      if (isAttrKeyword(subP) == false)
         normalizeAttr(attrP, subP, kaP, mergeMode);
       subP = subNextP;
     }
