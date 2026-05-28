@@ -163,6 +163,18 @@ static bool checkLanguageMap(KjNode* lmP)
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid LanguageProperty", "languageMap values must be strings or arrays of strings (key '%s')", childP->name);
       return false;
     }
+
+    // § 5.2.6.4.6 — an array of ONE string collapses to a scalar on storage,
+    // so it round-trips as a String in every format and under lang reduction.
+    if ((childP->type == KjArray) &&
+        (childP->value.firstChildP != NULL) &&
+        (childP->value.firstChildP->next == NULL) &&
+        (childP->value.firstChildP->type == KjString))
+    {
+      KjNode* onlyP = childP->value.firstChildP;
+      childP->type    = KjString;
+      childP->value.s = onlyP->value.s;
+    }
   }
 
   return true;
@@ -324,6 +336,17 @@ bool ldCheckAttribute(KjNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc*
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid VocabProperty", "VocabProperty '%s': 'vocab' must be a string or array of strings", attrP->name);
       return false;
+    }
+
+    // Array of one - collapse to scalar so it round-trips as a String.
+    if ((valueNodeP->type == KjArray) &&
+        (valueNodeP->value.firstChildP != NULL) &&
+        (valueNodeP->value.firstChildP->next == NULL) &&
+        (valueNodeP->value.firstChildP->type == KjString))
+    {
+      KjNode* onlyP       = valueNodeP->value.firstChildP;
+      valueNodeP->type    = KjString;
+      valueNodeP->value.s = onlyP->value.s;
     }
     break;
 
