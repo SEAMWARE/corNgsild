@@ -31,6 +31,7 @@
 #include "swNgsild/swNgsild.h"                         // LD_ERROR_CONFLICT
 #include "swNgsild/ldCsourceAlias.h"                   // ldViaHasAlias
 #include "swNgsild/ldRequestSubstitute.h"              // ldRequestSubstitute
+#include "swJsonld/SwldContext.h"                      // SwldContext (forwardCtxP->url for Link header)
 #include "swNgsild/ldDistOp.h"                         // Own interface
 
 
@@ -88,21 +89,34 @@ static bool verbHasBody(SwRestVerb verb)
 // buildHeaders - assemble outbound headers for the forward
 //
 // Shared rules across all write ops:
-//   * Content-Type: defaults to "application/ld+json" for body-carrying
-//     verbs, overridden by csi.contentType if present; suppressed for
-//     GET / DELETE.
-//   * Accept: emitted only if csi.accept is present.
+//   * Content-Type: defaults to "application/json" + Link header for
+//     body-carrying verbs (NOT ld+json — array bodies would force one
+//     @context copy per element; json+Link carries it once). § 9.5.2
+//     csi.jsonldContext also forces json. Only an explicit csi.contentType
+//     = ld+json overrides — the spec § 9.5.2 says the broker must then
+//     place @context in the body, but we keep that as a follow-up: the
+//     distop body marshaller doesn't inject @context today, so explicit
+//     ld+json + no jsonldContext yields a malformed forward. Operators
+//     opt into that by setting csi.contentType.
+//   * Link: emitted whenever the chosen Content-Type is application/json,
+//     pointing at the CSR's forwardCtxP URL (csi.jsonldContext if set,
+//     else core). Suppressed for ld+json — the @context belongs IN BODY
+//     and mixing both is a 400 per [[feedback_context_header_rules]].
+//   * Accept: csi.accept when set; otherwise no Accept header (receiver
+//     defaults to ld+json per HTTP binding, which is fine on the way
+//     back — we'll convert during aggregation if needed).
 //   * Via: every incoming Via pass-through, then own-alias as final hop.
 //   * NGSILD-Tenant: csr->tenant if set (§ 5.2.9).
 //   * Arbitrary csi entries appended verbatim, minus the banned set
 //     (§ 4.3.6.5: Content-Length, Host, NGSILD-Tenant, and the TODO
 //     keys jsonldContext + ngsildConformance).
 //
-static SwRestKeyValue* buildHeaders(SwRestVerb   verb,
-                                    const char*  ownAlias,
-                                    const char*  csrTenant,
-                                    char**       csrInfoKV,
-                                    int*         hcP)
+static SwRestKeyValue* buildHeaders(SwRestVerb     verb,
+                                    const char*    ownAlias,
+                                    const char*    csrTenant,
+                                    char**         csrInfoKV,
+                                    SwldContext*   forwardCtxP,
+                                    int*           hcP)
 {
   bool wantBody = verbHasBody(verb);
 
@@ -134,41 +148,42 @@ static SwRestKeyValue* buildHeaders(SwRestVerb   verb,
     }
   }
 
+  // Pick chosenCT first; the Link decision keys off it.
+  //   csiContentType set (operator override)  → take it verbatim
+  //   csiJsonldContext set (spec § 9.5.2)     → application/json
+  //   default                                  → application/json (avoid ld+json)
+  const char* chosenCT;
+  if (csiContentType != NULL)
+    chosenCT = csiContentType;
+  else
+    chosenCT = "application/json";   // covers both jsonldContext-set and default
+
+  bool sendingJson = (strcasecmp(chosenCT, "application/json") == 0);
+
   if (wantBody)
   {
-    //
-    // § 6.3.19: when jsonldContext is present in contextSourceInfo,
-    // the broker shall place the URL in a Link header and set
-    // Content-Type to application/json (NOT ld+json) on the forward.
-    // Explicit csi "contentType" still wins — it's a client-level
-    // override that post-dates the jsonldContext rule.
-    //
-    const char* chosenCT;
-    if (csiContentType != NULL)
-      chosenCT = csiContentType;
-    else if (csiJsonldContext != NULL)
-      chosenCT = "application/json";
-    else
-      chosenCT = "application/ld+json";
-
     hv[hc].key   = (char*) "Content-Type";
     hv[hc].value = (char*) chosenCT;
     hc++;
   }
 
   //
-  // § 6.3.19 Link header when jsonldContext is present (outside of
-  // wantBody guard — Link is also useful on GETs where the receiver
-  // needs to know which context to compact the response against).
+  // Link header: emitted whenever the forward is application/json (in body
+  // verbs AND in GET/DELETE where there's no Content-Type but the receiver
+  // still needs the context to interpret URL params + response). For
+  // application/ld+json the @context goes in the body — Link is forbidden
+  // (mix → 400). URL comes from forwardCtxP — csi.jsonldContext if the CSR
+  // declared one, else core context.
   //
-  if (csiJsonldContext != NULL)
+  if (sendingJson && forwardCtxP != NULL && forwardCtxP->url != NULL)
   {
+    const char* url     = forwardCtxP->url;
     const char* suffix  = ">; rel=\"http://www.w3.org/ns/json-ld#context\"; type=\"application/ld+json\"";
-    int   urlLen = strlen(csiJsonldContext);
+    int   urlLen = strlen(url);
     int   sufLen = strlen(suffix);
     char* linkVal = (char*) kaAlloc(&swRest.kalloc, 1 + urlLen + sufLen + 1);
     linkVal[0] = '<';
-    strcpy(linkVal + 1, csiJsonldContext);
+    strcpy(linkVal + 1, url);
     strcpy(linkVal + 1 + urlLen, suffix);
     hv[hc].key   = (char*) "Link";
     hv[hc].value = linkVal;
@@ -291,7 +306,7 @@ int ldDistOpSendReceiveEx(LdRegCacheItem*  csr,
   }
 
   int             hc = 0;
-  SwRestKeyValue* hv = buildHeaders(verb, ownAlias, csr->tenant, csr->contextSourceInfoKV, &hc);
+  SwRestKeyValue* hv = buildHeaders(verb, ownAlias, csr->tenant, csr->contextSourceInfoKV, csr->forwardCtxP, &hc);
 
   // Append optional extra headers (e.g. NGSILD-EntityMap for entity-map distops)
   if (extraHeaderV != NULL && extraHeaderCount > 0)
@@ -431,7 +446,7 @@ int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
     LdRegCacheItem* csr = itemV[i].csr;
 
     int             hc = 0;
-    SwRestKeyValue* hv = buildHeaders(verb, ownAlias, csr->tenant, csr->contextSourceInfoKV, &hc);
+    SwRestKeyValue* hv = buildHeaders(verb, ownAlias, csr->tenant, csr->contextSourceInfoKV, csr->forwardCtxP, &hc);
 
     int idx = swRestClientMultiAdd(multi,
                                    verb,
