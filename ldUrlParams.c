@@ -98,6 +98,37 @@ void ldContextResolve(void)
 
 
 
+// parseBool - strict boolean URL param parser
+//
+// URL params and their values are case-sensitive (RFC 3986 § 6.2.2.1).
+// NGSI-LD § 4 specifies boolean URL params as lowercase "true" / "false".
+// Anything else (mixed case "True", empty value, "1"/"0", "yes"/"no") is
+// invalid → 400 BadRequestData. The previous silent fallback "anything
+// not 'true' is false" masked client bugs — e.g. Robot Framework's
+// ${True} serialises as the string "True", which would silently disable
+// `local=True` and turn a local-only retrieve into a distributed forward.
+//
+static bool parseBool(const char* name, const char* value, bool* outP)
+{
+  if (value != NULL && strcmp(value, "true") == 0)
+  {
+    *outP = true;
+    return true;
+  }
+  if (value != NULL && strcmp(value, "false") == 0)
+  {
+    *outP = false;
+    return true;
+  }
+
+  ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid request",
+          "'%s' must be 'true' or 'false' (lowercase); got '%s'",
+          name, value != NULL ? value : "");
+  return false;
+}
+
+
+
 // ldParamHook - callback for swRest param validation
 //
 void ldParamHook(const char* name, const char* value)
@@ -313,11 +344,11 @@ void ldParamHook(const char* name, const char* value)
   }
   else if (strcmp(name, "count") == 0)
   {
-    swNgsild.count = (value != NULL && strcmp(value, "true") == 0);
+    if (!parseBool("count", value, &swNgsild.count)) return;
   }
   else if (strcmp(name, "sysAttrs") == 0)
   {
-    swNgsild.sysAttrs = (value != NULL && strcmp(value, "true") == 0);
+    if (!parseBool("sysAttrs", value, &swNgsild.sysAttrs)) return;
   }
   else if (strcmp(name, "q") == 0 || strcmp(name, "csf") == 0)
   {
@@ -329,11 +360,11 @@ void ldParamHook(const char* name, const char* value)
   }
   else if (strcmp(name, "local") == 0)
   {
-    swNgsild.local = (value != NULL && strcmp(value, "true") == 0);
+    if (!parseBool("local", value, &swNgsild.local)) return;
   }
   else if (strcmp(name, "noForward") == 0)
   {
-    swNgsild.noForward = (value != NULL && strcmp(value, "true") == 0);
+    if (!parseBool("noForward", value, &swNgsild.noForward)) return;
   }
   else if (strcmp(name, "hops") == 0)
   {
@@ -366,10 +397,12 @@ void ldParamHook(const char* name, const char* value)
   }
   else if (strcmp(name, "deleteAll") == 0)
   {
-    // Case-insensitive boolean parse — Python's requests serialises a Python
-    // True as the string "True", and tooling commonly varies. Spec doesn't
-    // pin down the case explicitly for bool URL params.
-    swNgsild.deleteAll = (value != NULL && strcasecmp(value, "true") == 0);
+    // RFC 3986 § 6.2.2.1: URL params + values are case-sensitive. NGSI-LD
+    // § 4 specifies booleans lowercase. Client tooling that ships "True"
+    // (Python requests with bool, Robot Framework ${True}) is the client's
+    // bug — surfacing it as 400 here means it gets fixed instead of
+    // silently behaving wrong.
+    if (!parseBool("deleteAll", value, &swNgsild.deleteAll)) return;
   }
   else if (strcmp(name, "entityMap") == 0)
   {
@@ -381,7 +414,7 @@ void ldParamHook(const char* name, const char* value)
   else if (strcmp(name, "splitEntities") == 0)
   {
     swNgsild.splitEntitiesSet = true;
-    swNgsild.splitEntitiesVal = (value != NULL && strcmp(value, "true") == 0);
+    if (!parseBool("splitEntities", value, &swNgsild.splitEntitiesVal)) return;
   }
   else if (strcmp(name, "kind") == 0)
   {

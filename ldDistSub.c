@@ -248,12 +248,13 @@ static char* derivedSubBody(LdSubCacheItem* itemP,
     kjChildAdd(clone, narrowedEntities);
   }
 
-  // Add @context so the receiving broker JSON-LD-parses correctly.
-  if (kjLookup(clone, "@context") == NULL)
-  {
-    const char* ctxUrl = (itemP->contextUrl != NULL) ? itemP->contextUrl : SWLD_CORE_CONTEXT_URL;
-    kjChildAdd(clone, kjString(swRest.kjsonP, "@context", ctxUrl));
-  }
+  // Strip any inherited @context — the forward goes out as
+  // application/json + Link header (ldDistOp/buildHeaders), and mixing
+  // body @context with application/json is a 400 per
+  // feedback_context_header_rules. The Link header carries the URL.
+  KjNode* atCtxP = kjLookup(clone, "@context");
+  if (atCtxP != NULL)
+    kjChildRemove(clone, atCtxP);
 
   int   sz  = kjFastRenderSize(clone) + 1;
   char* buf = (char*) kaAlloc(&swRest.kalloc, sz);
@@ -477,11 +478,10 @@ static char* patchBody(LdSubCacheItem* itemP, KjNode* fragmentP, int* bodyLenP)
   KjNode* jcrP = kjLookup(clone, "_jcResolved");
   if (jcrP != NULL) kjChildRemove(clone, jcrP);
 
-  if (kjLookup(clone, "@context") == NULL)
-  {
-    const char* ctxUrl = (itemP->contextUrl != NULL) ? itemP->contextUrl : SWLD_CORE_CONTEXT_URL;
-    kjChildAdd(clone, kjString(swRest.kjsonP, "@context", ctxUrl));
-  }
+  // Strip body @context — forward goes out as application/json + Link.
+  KjNode* atCtxP2 = kjLookup(clone, "@context");
+  if (atCtxP2 != NULL)
+    kjChildRemove(clone, atCtxP2);
 
   int   sz  = kjFastRenderSize(clone) + 1;
   char* buf = (char*) kaAlloc(&swRest.kalloc, sz);

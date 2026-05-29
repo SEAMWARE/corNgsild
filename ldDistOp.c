@@ -92,12 +92,9 @@ static bool verbHasBody(SwRestVerb verb)
 //   * Content-Type: defaults to "application/json" + Link header for
 //     body-carrying verbs (NOT ld+json — array bodies would force one
 //     @context copy per element; json+Link carries it once). § 9.5.2
-//     csi.jsonldContext also forces json. Only an explicit csi.contentType
-//     = ld+json overrides — the spec § 9.5.2 says the broker must then
-//     place @context in the body, but we keep that as a follow-up: the
-//     distop body marshaller doesn't inject @context today, so explicit
-//     ld+json + no jsonldContext yields a malformed forward. Operators
-//     opt into that by setting csi.contentType.
+//     csi.jsonldContext also forces json. Only explicit csi.contentType =
+//     ld+json overrides; in that case Link is suppressed and the body
+//     marshaller is responsible for embedding @context.
 //   * Link: emitted whenever the chosen Content-Type is application/json,
 //     pointing at the CSR's forwardCtxP URL (csi.jsonldContext if set,
 //     else core). Suppressed for ld+json — the @context belongs IN BODY
@@ -149,14 +146,17 @@ static SwRestKeyValue* buildHeaders(SwRestVerb     verb,
   }
 
   // Pick chosenCT first; the Link decision keys off it.
-  //   csiContentType set (operator override)  → take it verbatim
-  //   csiJsonldContext set (spec § 9.5.2)     → application/json
-  //   default                                  → application/json (avoid ld+json)
+  //   csiJsonldContext set + body  → application/json (spec § 9.5.2 SHALL,
+  //                                   overrides any csi.contentType)
+  //   csiContentType set           → take it verbatim
+  //   default                      → application/json (avoid ld+json)
   const char* chosenCT;
-  if (csiContentType != NULL)
+  if (csiJsonldContext != NULL && wantBody)
+    chosenCT = "application/json";
+  else if (csiContentType != NULL)
     chosenCT = csiContentType;
   else
-    chosenCT = "application/json";   // covers both jsonldContext-set and default
+    chosenCT = "application/json";
 
   bool sendingJson = (strcasecmp(chosenCT, "application/json") == 0);
 
