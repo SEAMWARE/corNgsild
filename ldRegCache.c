@@ -20,6 +20,8 @@
 
 #include "kalloc/KAlloc.h"                              // KAlloc
 #include "swJsonld/swldExpand.h"                       // swldExpand, swldAlreadyExpanded
+#include "swJsonld/swldDownload.h"                     // swldContextFromUrl
+#include "swJsonld/swldInit.h"                         // swldCoreContext
 #include "swNgsild/LdVocab.h"                          // LD_VOCAB_*
 #include "swNgsild/LdRegCache.h"                       // LdRegCache, LdRegCacheItem
 #include "swNgsild/ldCheckDateTime.h"                  // ldIsoToNanoseconds
@@ -492,6 +494,34 @@ LdRegCacheItem* ldRegCacheItemAdd(LdRegCache* cacheP, KjNode* regTree)
       itemP->contextSourceInfoKV[ix] = NULL;
     }
   }
+
+  // Forwarding @context: pre-resolve once at registration time so every
+  // distop forward to this CSR can compact alias-bearing values (type,
+  // pick attrs, ...) into short names that the receiver will recognise.
+  // Source hierarchy (the spec is silent on the no-jsonldContext case;
+  // we default to core and revisit if the ETSI TC clarifies):
+  //   1) contextSourceInfo.jsonldContext (the CSR's explicit declaration,
+  //      § 9 — "forwarding with this JSON-LD context using an appropriate
+  //      binding").
+  //   2) Core context (always present, neutral, never lies about a CSR's
+  //      vocabulary).
+  // Never NULL — emission sites can `swldCompact(forwardCtxP, iri)`
+  // unconditionally and get back the short alias if available, or the
+  // expanded IRI unchanged otherwise (then URL-encoded on the way out).
+  itemP->forwardCtxP = NULL;
+  if (itemP->contextSourceInfoKV != NULL)
+  {
+    for (int i = 0; itemP->contextSourceInfoKV[i] != NULL; i += 2)
+    {
+      if (strcasecmp(itemP->contextSourceInfoKV[i], "jsonldContext") == 0)
+      {
+        itemP->forwardCtxP = swldContextFromUrl(itemP->contextSourceInfoKV[i + 1], NULL);
+        break;
+      }
+    }
+  }
+  if (itemP->forwardCtxP == NULL)
+    itemP->forwardCtxP = swldCoreContext();
 
   // expiresAt
   KjNode* expiresP = kjLookup(itemP->regTree, LD_VOCAB_EXPIRES_AT);

@@ -135,6 +135,15 @@ typedef struct LdRegCacheItem
   // NULL-terminated char* array (kv[0]=key, kv[1]=val, kv[2]=key, ...).
   char**                 contextSourceInfoKV;
 
+  // Lazy-loaded SwldContext* for forwarding TO this CSR. Sourced (in
+  // order) from contextSourceInfo.jsonldContext (the CSR's declared
+  // "talk to me with this context"), the CSR's own top-level @context,
+  // or NULL if neither — the caller then falls back to the request's
+  // context or core. Materialised on first use via swldContextFromUrl,
+  // re-used for every subsequent forward to this CSR. NULL until first
+  // use (lazy) or when no @context source is available.
+  struct SwldContext*    forwardCtxP;
+
   // scope (§ 5.2.9) — scopes (or scope patterns, § 4.18) this Context
   // Source covers. NULL-terminated string array. NULL means wildcard
   // (CSR matches regardless of entity scope).
