@@ -15,6 +15,7 @@
 #include "kalloc/KAlloc.h"                             // KAlloc
 #include "kjson/KjNode.h"                               // KjNode
 #include "kjson/kjLookup.h"                            // kjLookup
+#include "kjson/kjBuilder.h"                           // kjChildRemove
 
 #include "swNgsild/LdOp.h"                               // LdOp
 #include "swNgsild/SwNgsild.h"                           // swNgsild
@@ -453,6 +454,18 @@ bool ldCheckSubscription(KjNode* subP, LdOp op, KAlloc* kaP)
   OBJECT_CHECK(subP, "Invalid Subscription", "Subscription payload must be a JSON object");
 
   KLOG_T(LdTCheckSub, "Checking subscription payload for op %s", ldOpToString(op));
+
+  // § 5.2 Subscription table: `notificationTrigger` "is not applicable and
+  // shall be ignored if the Subscription data type is used for a Context
+  // Source Registration Subscription". Strip silently on the CSR-sub paths
+  // (create + update) so it never reaches storage. Entity-sub paths keep
+  // the field — that's where it's meaningful.
+  if (op == LdOpCreateCsourceSubscription || op == LdOpUpdateCsourceSubscription)
+  {
+    KjNode* ntP = kjLookup(subP, "notificationTrigger");
+    if (ntP != NULL)
+      kjChildRemove(subP, ntP);
+  }
 
   KjNode*  typeP          = NULL;
   KjNode*  idP            = NULL;
