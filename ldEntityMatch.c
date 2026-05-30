@@ -213,13 +213,51 @@ static bool matchTerm(KjNode* entityP, LdQTerm* term)
   case LdQString:
     if (term->op == LdQPattern || term->op == LdQNotPattern)
     {
-      if (valueP->type != KjString) return false;
       regex_t re;
       if (regcomp(&re, term->value.s, REG_EXTENDED | REG_NOSUB) != 0)
         return false;
-      bool m = (regexec(&re, valueP->value.s, 0, NULL, 0) == 0);
+      bool m = false;
+      if (valueP->type == KjString)
+      {
+        m = (regexec(&re, valueP->value.s, 0, NULL, 0) == 0);
+      }
+      else if (valueP->type == KjArray)
+      {
+        // VocabProperty.vocab / Property with array value: match if ANY
+        // element matches (§ 4.9). Matches BSON's native array-containment
+        // semantics that the mongoc plugin gets for free.
+        for (KjNode* elemP = valueP->value.firstChildP; elemP != NULL; elemP = elemP->next)
+        {
+          if (elemP->type == KjString && regexec(&re, elemP->value.s, 0, NULL, 0) == 0)
+          { m = true; break; }
+        }
+      }
+      else
+      {
+        regfree(&re);
+        return false;
+      }
       regfree(&re);
       return (term->op == LdQPattern) ? m : !m;
+    }
+
+    // Equality / ordering. Scalar path identical to before; array path
+    // checks "any element matches" for ==, "no element matches" for !=
+    // (the spec's array-containment semantics, mirroring BSON $eq/$ne).
+    if (valueP->type == KjArray)
+    {
+      bool hit = false;
+      for (KjNode* elemP = valueP->value.firstChildP; elemP != NULL; elemP = elemP->next)
+      {
+        if (elemP->type == KjString && strcmp(elemP->value.s, term->value.s) == 0)
+        { hit = true; break; }
+      }
+      switch (term->op)
+      {
+      case LdQEqual:   return hit;
+      case LdQUnequal: return !hit;
+      default:         return false;   // ordering on array doesn't have a sensible semantic
+      }
     }
     if (valueP->type != KjString) return false;
     {
