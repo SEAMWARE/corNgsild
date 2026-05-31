@@ -327,10 +327,14 @@ static void ldParseHook(void)
   }
 
   //
-  // For application/json: inject @context from Link header or default user context.
-  // Skip array bodies — JSON arrays can't carry @context at the root.
+  // For application/json: resolve @context from Link header or default user
+  // context. For a single-object body the URL is injected as an @context
+  // child of the tree root — swldExpandTree picks it up. For an array body
+  // (batch op) JSON has no root to attach it to, so set swNgsild.contextP
+  // directly; swldExpandTree uses that as the per-element fallback when an
+  // element carries no @context of its own (003_04_01).
   //
-  if (!isLdJson && swRest.in.requestTree != NULL && !isArrayBody)
+  if (!isLdJson && swRest.in.requestTree != NULL)
   {
     const char* contextUrl = NULL;
 
@@ -365,12 +369,22 @@ static void ldParseHook(void)
     if (contextUrl == NULL && ldDefaultContextUrl != NULL)
       contextUrl = ldDefaultContextUrl;
 
-    // Inject @context string node into the tree so swldExpandTree picks it up
     if (contextUrl != NULL)
     {
-      KjNode* ctxNode = kjString(swRest.kjsonP, "@context", contextUrl);
-      kjChildAdd(swRest.in.requestTree, ctxNode);
       swNgsild.userContextUrl = contextUrl;
+
+      if (!isArrayBody)
+      {
+        // Single-object body: inject @context so swldExpandTree picks it up.
+        KjNode* ctxNode = kjString(swRest.kjsonP, "@context", contextUrl);
+        kjChildAdd(swRest.in.requestTree, ctxNode);
+      }
+      else
+      {
+        // Array body (batch op): can't inject at the root. Pre-resolve so
+        // swldExpandTree uses it as the per-element fallback.
+        swNgsild.contextP = swldContextFromUrl(contextUrl, &swRest.kalloc);
+      }
     }
   }
 
