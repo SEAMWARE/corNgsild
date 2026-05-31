@@ -19,6 +19,7 @@
 #include "kbase/kLibLog.h"                             // KLOG_T
 #include "kalloc/KAlloc.h"                             // KAlloc
 #include "kjson/KjNode.h"                               // KjNode
+#include "kjson/kjLookup.h"                             // kjLookup
 
 #include "swRest/SwRestState.h"                          // swRest (requestStartTime)
 
@@ -116,6 +117,67 @@ static bool checkStringArrayNonEmpty(KjNode* arrP, const char* fieldName)
     if (sP->type != KjString || sP->value.s[0] == 0)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration", "'%s' items must be non-empty strings", fieldName);
+      return false;
+    }
+  }
+
+  return true;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// checkExclusiveStructure - § 9.3.3 structural rules for exclusive mode
+//
+// An exclusive registration "shall always relate to specific Attributes
+// found on a single Entity" — so every information[] element must:
+//   - have entities[], every entry carrying a specific `id` (no idPattern,
+//     no type-only entries — those describe groups, which the spec
+//     explicitly says are "not supported for exclusive registrations").
+//   - have at least one of propertyNames / relationshipNames non-empty
+//     (no entity-wide claim).
+//
+// Caller has already run checkInformationArray, so the array shape is
+// known good and `entities` (if present) is a non-empty array of objects
+// with at least `type` (idPattern optionally present).
+//
+static bool checkExclusiveStructure(KjNode* infoArrayP)
+{
+  for (KjNode* infoP = infoArrayP->value.firstChildP; infoP != NULL; infoP = infoP->next)
+  {
+    KjNode* entitiesP = kjLookup(infoP, LD_VOCAB_ENTITIES);
+    KjNode* propsP    = kjLookup(infoP, "propertyNames");
+    KjNode* relsP     = kjLookup(infoP, "relationshipNames");
+
+    if (entitiesP == NULL)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
+              "exclusive Registration requires every 'information[]' element to carry 'entities[]' "
+              "with a specific entity id (§ 9.3.3)");
+      return false;
+    }
+
+    for (KjNode* entP = entitiesP->value.firstChildP; entP != NULL; entP = entP->next)
+    {
+      KjNode* idP    = kjLookup(entP, "id");
+      KjNode* idPatP = kjLookup(entP, LD_VOCAB_ID_PATTERN);
+
+      if (idP == NULL || idPatP != NULL)
+      {
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
+                "exclusive Registration 'entities[]' entry must specify a specific 'id' "
+                "(idPattern or type-only group selectors are not supported, § 9.3.3)");
+        return false;
+      }
+    }
+
+    if (propsP == NULL && relsP == NULL)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
+              "exclusive Registration 'information[]' element must declare at least one of "
+              "'propertyNames' or 'relationshipNames' — entity-wide exclusive claims are not "
+              "supported (§ 9.3.3)");
       return false;
     }
   }
@@ -687,6 +749,12 @@ bool ldCheckRegistration(KjNode* regP, LdOp op, KAlloc* faP)
       return false;
     }
   }
+
+  // § 9.3.3 — exclusive mode has stricter structural requirements than the
+  // generic information-array shape: every information[] element must carry
+  // a specific entity id AND at least one attribute name.
+  if (infoP != NULL && strcmp(modeStr, "exclusive") == 0 && checkExclusiveStructure(infoP) == false)
+    return false;
 
   // expiresAt — DateTime + must be in the future (§ 5.9.2)
   if (expiresAtP != NULL)
