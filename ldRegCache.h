@@ -171,4 +171,16 @@ static inline bool ldRegOpSupported(const LdRegCacheItem* itemP, LdOp opBit)
   return (itemP->operationsMask & (uint64_t) opBit) != 0;
 }
 
+// -----------------------------------------------------------------------------
+//
+// ldRegCacheLocalWriteConflict - § 9.3.3 guard for ?local=true writes.
+// Returns the regId of the first exclusive/redirect registration whose
+// claim overlaps the written (entityId, entityTypeV, attrIriV), or NULL.
+//
+extern const char* ldRegCacheLocalWriteConflict(LdRegCache* cacheP,
+                                                const char* entityId,
+                                                char**      entityTypeV,
+                                                char**      entityScopeV,
+                                                char**      attrIriV);
+
 #endif  // SWNGSILD_LDREGCACHE_OPS_H_

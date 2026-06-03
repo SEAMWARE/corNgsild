@@ -755,6 +755,97 @@ int ldRegCacheMatchForRetrieveScoped(LdRegCache*       cacheP,
 
 
 
+// -----------------------------------------------------------------------------
+//
+// ldRegCacheLocalWriteConflict - § 9.3.3 guard for ?local=true writes
+//
+// A local write must not create data that an exclusive or redirect
+// registration claims — the broker "holds no data locally in conflict to
+// the registration". Distops-enabled writes enforce this implicitly (the
+// claimed slice is chopped and forwarded); ?local=true skips the chop, so
+// the guard has to run explicitly. Returns the regId of the first
+// conflicting registration, or NULL.
+//
+//   entityId    - the written entity's id
+//   entityTypeV - NULL-terminated expanded type IRIs (or NULL)
+//   attrIriV    - NULL-terminated expanded attribute IRIs being written
+//                 (NULL/empty = id+type-only write)
+//
+// Overlap rules (mirror of registration-time conflictCheck):
+//   - RegInfo without entityInfoV covers any entity (attrs-only claim).
+//   - RegInfo with neither propertyNames nor relationshipNames covers the
+//     whole entity → any write to a matching entity conflicts.
+//   - Attr-scoped RegInfo conflicts only when the write carries one of
+//     the registered attributes.
+//
+const char* ldRegCacheLocalWriteConflict(LdRegCache* cacheP,
+                                         const char* entityId,
+                                         char**      entityTypeV,
+                                         char**      entityScopeV,
+                                         char**      attrIriV)
+{
+  if (cacheP == NULL || entityId == NULL)
+    return NULL;
+
+  struct timespec ts;
+  clock_gettime(CLOCK_REALTIME, &ts);
+  uint64_t nowNs = (uint64_t) ts.tv_sec * 1000000000ULL + (uint64_t) ts.tv_nsec;
+
+  for (LdRegCacheItem* itemP = cacheP->itemList; itemP != NULL; itemP = itemP->next)
+  {
+    if (itemP->mode != LdRegModeExclusive && itemP->mode != LdRegModeRedirect)
+      continue;
+    if (itemP->expiresAt > 0 && itemP->expiresAt <= nowNs)
+      continue;
+    if (!csrScopeMatches(itemP->scopeV, entityScopeV))
+      continue;
+
+    for (LdRegInfo* riP = itemP->infoV; riP != NULL; riP = riP->next)
+    {
+      bool entityCovered = (riP->entityInfoV == NULL);  // attrs-only claim: any entity
+
+      for (LdRegEntityInfo* eiP = riP->entityInfoV; eiP != NULL && !entityCovered; eiP = eiP->next)
+      {
+        if (entityInfoMatches(eiP, entityId, entityTypeV))
+          entityCovered = true;
+      }
+      if (!entityCovered)
+        continue;
+
+      // Whole-entity claim — every write to the entity conflicts
+      if (riP->propertyNamesV == NULL && riP->relationshipNamesV == NULL)
+        return itemP->regId;
+
+      if (attrIriV == NULL)
+        continue;
+
+      for (int ix = 0; attrIriV[ix] != NULL; ix++)
+      {
+        if (riP->propertyNamesV != NULL)
+        {
+          for (int px = 0; riP->propertyNamesV[px] != NULL; px++)
+          {
+            if (strcmp(attrIriV[ix], riP->propertyNamesV[px]) == 0)
+              return itemP->regId;
+          }
+        }
+        if (riP->relationshipNamesV != NULL)
+        {
+          for (int rx = 0; riP->relationshipNamesV[rx] != NULL; rx++)
+          {
+            if (strcmp(attrIriV[ix], riP->relationshipNamesV[rx]) == 0)
+              return itemP->regId;
+          }
+        }
+      }
+    }
+  }
+
+  return NULL;
+}
+
+
+
 // ldRegOpSupported is now a static inline in ldRegCache.h — a single AND.
 
 
