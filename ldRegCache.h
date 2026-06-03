@@ -183,4 +183,11 @@ extern const char* ldRegCacheLocalWriteConflict(LdRegCache* cacheP,
                                                 char**      entityScopeV,
                                                 char**      attrIriV);
 
+// Tree convenience: extracts type/scope/attr IRIs from an expanded API
+// entity/fragment tree and runs the same § 9.3.3 local-write guard.
+extern const char* ldRegCacheLocalWriteConflictTree(LdRegCache* cacheP,
+                                                    const char* entityId,
+                                                    KjNode*     fragP,
+                                                    KAlloc*     kaP);
+
 #endif  // SWNGSILD_LDREGCACHE_OPS_H_

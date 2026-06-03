@@ -580,6 +580,7 @@ void ldDistOpBatchErrorAdd(KjNode*      errorsArrayP,
 //
 //   - ResourceNotFound  → 404  (every entity in the batch was unknown)
 //   - Conflict          → 409  (e.g. exclusive CSR refusing the op for all)
+//   - AlreadyExists     → 409  (e.g. § 9.3.3 local-write overlap for all)
 //
 // In those cases a plain ProblemDetails reply is clearer than wrapping
 // a uniform error in a 207 envelope. Returns the matching status when the
@@ -596,6 +597,7 @@ int ldBatchErrorsSingleStatus(KjNode* errorsArrayP)
   static const struct { const char* type; int status; } collapsable[] = {
     { "https://uri.etsi.org/ngsi-ld/errors/ResourceNotFound", 404 },
     { "https://uri.etsi.org/ngsi-ld/errors/Conflict",         409 },
+    { "https://uri.etsi.org/ngsi-ld/errors/AlreadyExists",    409 },
   };
   const int N = (int) (sizeof(collapsable) / sizeof(collapsable[0]));
 

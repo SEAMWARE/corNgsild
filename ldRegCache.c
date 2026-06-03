@@ -846,6 +846,100 @@ const char* ldRegCacheLocalWriteConflict(LdRegCache* cacheP,
 
 
 
+// -----------------------------------------------------------------------------
+//
+// ldRegCacheLocalWriteConflictTree - tree convenience over
+// ldRegCacheLocalWriteConflict.
+//
+// Extracts the type IRIs, scope values and attribute IRIs from an
+// (expanded) API entity/fragment tree and runs the § 9.3.3 local-write
+// guard. 'id', 'type', 'scope' and @-prefixed members are entity
+// keywords, not attributes.
+//
+const char* ldRegCacheLocalWriteConflictTree(LdRegCache* cacheP,
+                                             const char* entityId,
+                                             KjNode*     fragP,
+                                             KAlloc*     kaP)
+{
+  if (cacheP == NULL || entityId == NULL || fragP == NULL || fragP->type != KjObject)
+    return NULL;
+
+  // type — string or array of strings
+  KjNode* typeP      = kjLookup(fragP, "type");
+  char*   typeBuf[2] = { NULL, NULL };
+  char**  typeV      = NULL;
+  if (typeP != NULL && typeP->type == KjString)
+  {
+    typeBuf[0] = typeP->value.s;
+    typeV      = typeBuf;
+  }
+  else if (typeP != NULL && typeP->type == KjArray)
+  {
+    int n = 0;
+    for (KjNode* tP = typeP->value.firstChildP; tP != NULL; tP = tP->next)
+      if (tP->type == KjString) n++;
+    if (n > 0)
+    {
+      typeV = (char**) kaAlloc(kaP, (n + 1) * sizeof(char*));
+      int ix = 0;
+      for (KjNode* tP = typeP->value.firstChildP; tP != NULL; tP = tP->next)
+        if (tP->type == KjString) typeV[ix++] = tP->value.s;
+      typeV[ix] = NULL;
+    }
+  }
+
+  // scope — string or array of strings
+  KjNode* scopeP      = kjLookup(fragP, "scope");
+  char*   scopeBuf[2] = { NULL, NULL };
+  char**  scopeV      = NULL;
+  if (scopeP != NULL && scopeP->type == KjString)
+  {
+    scopeBuf[0] = scopeP->value.s;
+    scopeV      = scopeBuf;
+  }
+  else if (scopeP != NULL && scopeP->type == KjArray)
+  {
+    int n = 0;
+    for (KjNode* sP = scopeP->value.firstChildP; sP != NULL; sP = sP->next)
+      if (sP->type == KjString) n++;
+    if (n > 0)
+    {
+      scopeV = (char**) kaAlloc(kaP, (n + 1) * sizeof(char*));
+      int ix = 0;
+      for (KjNode* sP = scopeP->value.firstChildP; sP != NULL; sP = sP->next)
+        if (sP->type == KjString) scopeV[ix++] = sP->value.s;
+      scopeV[ix] = NULL;
+    }
+  }
+
+  // attribute IRIs — every non-keyword member
+  int attrN = 0;
+  for (KjNode* aP = fragP->value.firstChildP; aP != NULL; aP = aP->next)
+  {
+    if (aP->name == NULL || aP->name[0] == '@')   continue;
+    if (strcmp(aP->name, "id")    == 0)           continue;
+    if (strcmp(aP->name, "type")  == 0)           continue;
+    if (strcmp(aP->name, "scope") == 0)           continue;
+    attrN++;
+  }
+
+  char** attrIriV = (char**) kaAlloc(kaP, (attrN + 1) * sizeof(char*));
+  int    aIx      = 0;
+  for (KjNode* aP = fragP->value.firstChildP; aP != NULL; aP = aP->next)
+  {
+    if (aP->name == NULL || aP->name[0] == '@')   continue;
+    if (strcmp(aP->name, "id")    == 0)           continue;
+    if (strcmp(aP->name, "type")  == 0)           continue;
+    if (strcmp(aP->name, "scope") == 0)           continue;
+    attrIriV[aIx++] = aP->name;
+  }
+  attrIriV[aIx] = NULL;
+
+  return ldRegCacheLocalWriteConflict(cacheP, entityId, typeV, scopeV, attrIriV);
+}
+
+
+
 // ldRegOpSupported is now a static inline in ldRegCache.h — a single AND.
 
 
