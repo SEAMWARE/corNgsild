@@ -24,6 +24,8 @@
 #include "kalloc/KAlloc.h"                             // KAlloc
 #include "kjson/KjNode.h"                              // KjNode
 
+#include "swNgsild/LdFormat.h"                     // LdFormat
+#include "swNgsild/ldAcceptParse.h"                  // LdAcceptType
 #include "swNgsild/LdSubStatus.h"                  // LdSubStatus
 #include "swNgsild/LdQ.h"                              // LdQNode
 #include "swNgsild/LdScopeExpr.h"                      // LdScopeExpr
@@ -115,13 +117,13 @@ typedef struct LdSubCacheItem
   // Subscription state (borrowed pointers into subTree)
   LdSubStatus               status;         // § 5.2.12 lifecycle (enum — wire form converted at parse/render)
   char*                     endpointUri;    // notification.endpoint.uri
-  char*                     endpointAccept; // notification.endpoint.accept (§ 5.2.15): application/json | application/ld+json | application/geo+json (NULL = json)
+  LdAcceptType              endpointAccept; // notification.endpoint.accept (§ 5.2.15) — LdAcceptJson default
   char*                     contextUrl;     // jsonldContext URL for notification compaction
   // ngsildConformance (§ 5.2.12 / § 4.3.6.8) — request notifications conformant
   // to an older NGSI-LD spec version. 0/0 = absent (no downgrade).
   short                     conformanceMajor;
   short                     conformanceMinor;
-  char*                     format;         // notification format: NULL=normalized, "simplified", "concise"
+  LdFormat                  format;         // notification format (§ 5.2.14) — LdFormatNone = normalized default
   bool                      sysAttrs;       // notification.sysAttrs (default false)
   bool                      showChanges;    // notification.showChanges (default false) — implies previousValue/Object/LanguageMap
 
@@ -145,6 +147,7 @@ typedef struct LdSubCacheItem
   KjNode*                   receiverInfo;     // notification.endpoint.receiverInfo (§ 5.2.15) — Array of {key, value} from subTree, NULL if none
   KjNode*                   notifierInfo;     // notification.endpoint.notifierInfo (§ 5.2.15) — used by transport-specific params (e.g. MQTT-QoS per § 7.2)
   char*                     notifJoin;        // notification.join (§ 5.2.14) — "flat" / "inline" / "@none" / NULL = absent
+  bool                      notifJoinActive;  // precomputed: notifJoin set and != "@none"
   int                       notifJoinLevel;   // notification.joinLevel (§ 5.2.14) — depth; 0 = absent (use spec default 1)
 
   // Distributed-subscription mapping (§ 5.8.1.4) — list of derived subs

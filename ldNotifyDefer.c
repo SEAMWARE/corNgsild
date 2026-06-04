@@ -8,6 +8,9 @@
 #include <stddef.h>                              // NULL
 #include <stdlib.h>                              // realloc, free
 
+#include "kjson/KjNode.h"                        // KjNode
+#include "kjson/kjLookup.h"                      // kjLookup
+
 #include "swNgsild/ldSubscriptionNotify.h"       // ldSubscriptionNotifyBatch, LdNotifyPendingEntry
 #include "swNgsild/ldNotifyDefer.h"              // Own interface
 
@@ -58,6 +61,16 @@ void ldNotifyDefer(LdSubCache* cacheP, KjNode* entityP, LdNotifyOp op, LdMergeRe
   pendingV[pendingN].op          = op;
   pendingV[pendingN].hasReport   = (reportP != NULL);
   pendingV[pendingN].deletedAtNs = 0;
+  pendingV[pendingN].reasonsMask = 0;
+  if (reportP != NULL && reportP->changes != NULL)
+  {
+    for (KjNode* chP = reportP->changes->value.firstChildP; chP != NULL; chP = chP->next)
+    {
+      KjNode* reasonP = kjLookup(chP, "reason");
+      if (reasonP != NULL && reasonP->type == KjString)
+        pendingV[pendingN].reasonsMask |= ldTriggerFromReport(reasonP->value.s);
+    }
+  }
   if (reportP != NULL)
     pendingV[pendingN].report    = *reportP;  // struct copy; referenced change-list tree lives in the request arena
   pendingN++;
@@ -90,6 +103,7 @@ void ldNotifyDeferDelete(LdSubCache* cacheP, KjNode* entityP, uint64_t deletedAt
   pendingV[pendingN].op          = LdNotifyEntityDelete;
   pendingV[pendingN].hasReport   = false;
   pendingV[pendingN].deletedAtNs = deletedAtNs;
+  pendingV[pendingN].reasonsMask = 0;
   pendingN++;
 }
 

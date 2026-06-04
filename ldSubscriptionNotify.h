@@ -103,6 +103,9 @@ typedef struct LdNotifyPendingEntry
   LdNotifyOp     op;
   bool           hasReport;
   LdMergeReport  report;
+  int            reasonsMask;   // OR of LD_TRIGGER_ATTR_* for report.changes — computed
+                                // once at defer time so the per-sub trigger check is a
+                                // single AND (subs × changes strcmps otherwise)
   uint64_t       deletedAtNs;    // epoch-ns when op == LdNotifyEntityDelete; 0 otherwise
 } LdNotifyPendingEntry;
 

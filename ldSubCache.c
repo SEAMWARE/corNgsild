@@ -18,6 +18,8 @@
 #include "kjson/kjLookup.h"                            // kjLookup
 #include "kjson/kjBuilder.h"                           // kjChildRemove
 
+#include "swNgsild/ldTypes.h"                          // ldFormatFromString
+#include "swNgsild/ldAcceptParse.h"                    // ldAcceptParse
 #include "swNgsild/SwNgsild.h"                         // swNgsild (contextP)
 #include "swNgsild/LdVocab.h"                          // LD_VOCAB_*
 #include "swNgsild/LdSubCache.h"                       // LdSubCache, LdSubCacheItem
@@ -348,7 +350,7 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
     acceptP = kjLookup(endpointP, "https://uri.etsi.org/ngsi-ld/accept");
     if (acceptP == NULL) acceptP = kjLookup(endpointP, "accept");
   }
-  itemP->endpointAccept = (acceptP != NULL && acceptP->type == KjString) ? acceptP->value.s : NULL;
+  itemP->endpointAccept = ldAcceptParse((acceptP != NULL && acceptP->type == KjString) ? acceptP->value.s : NULL);
 
   // § 5.2.12 / § 4.3.6.8 ngsildConformance — back-compat target version
   KjNode* ncP = kjLookup(itemP->subTree, "ngsildConformance");
@@ -391,7 +393,10 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
   KjNode* joinP      = (notifP != NULL) ? kjLookup(notifP, "join")      : NULL;
   KjNode* joinLevelP = (notifP != NULL) ? kjLookup(notifP, "joinLevel") : NULL;
   if (joinP != NULL && joinP->type == KjString)
-    itemP->notifJoin = joinP->value.s;
+  {
+    itemP->notifJoin       = joinP->value.s;
+    itemP->notifJoinActive = (strcmp(joinP->value.s, "@none") != 0);
+  }
   if (joinLevelP != NULL && joinLevelP->type == KjInt && joinLevelP->value.i > 0)
     itemP->notifJoinLevel = (int) joinLevelP->value.i;
 
@@ -443,7 +448,7 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
     itemP->expiresAt = ldIsoToNanoseconds(expiresP->value.s);
 
   KjNode* formatP = (notifP != NULL) ? kjLookup(notifP, LD_VOCAB_FORMAT) : NULL;
-  itemP->format = (formatP != NULL && formatP->type == KjString) ? formatP->value.s : NULL;
+  itemP->format = ldFormatFromString((formatP != NULL && formatP->type == KjString) ? formatP->value.s : NULL);
 
   if (notifP != NULL)
   {

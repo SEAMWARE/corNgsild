@@ -35,6 +35,7 @@
 #include "swJsonld/swldCompactTree.h"                  // swldCompactTree, swldCompactTreeWith
 #include "swJsonld/swldDownload.h"                     // swldContextFromUrl
 
+#include "swNgsild/ldTypes.h"                          // ldFormatToString
 #include "swNgsild/LdVocab.h"                          // LD_VOCAB_*
 #include "swNgsild/SwNgsild.h"                         // swNgsild
 #include "swNgsild/LdSubCache.h"                       // LdSubCache, LdSubCacheItem
@@ -104,7 +105,7 @@ static void isoNow(char* buf, int bufSize)
 //
 // triggerMatches - check if the operation matches the subscription's trigger bitmask
 //
-static bool triggerMatches(LdSubCacheItem* itemP, LdNotifyOp op, LdMergeReport* reportP)
+static bool triggerMatches(LdSubCacheItem* itemP, LdNotifyOp op, int reasonsMask)
 {
   int mask = (itemP->triggerMask != 0) ? itemP->triggerMask : LD_TRIGGER_DEFAULT;
 
@@ -129,25 +130,12 @@ static bool triggerMatches(LdSubCacheItem* itemP, LdNotifyOp op, LdMergeReport* 
     return true;
 
   //
-  // Attribute-level triggers — check merge report reasons against the bitmask
+  // Attribute-level triggers — the per-entry reasonsMask was computed once
+  // at defer time; the per-sub check is a single AND.
   //
-  if (op == LdNotifyEntityUpdate && reportP != NULL && reportP->changes != NULL)
-  {
-    int attrMask = mask & (LD_TRIGGER_ATTR_CREATED | LD_TRIGGER_ATTR_MODIFIED | LD_TRIGGER_ATTR_DELETED);
-
-    if (attrMask != 0)
-    {
-      for (KjNode* chP = reportP->changes->value.firstChildP; chP != NULL; chP = chP->next)
-      {
-        KjNode* reasonP = kjLookup(chP, "reason");
-        if (reasonP == NULL || reasonP->type != KjString)
-          continue;
-
-        if (ldTriggerFromReport(reasonP->value.s) & attrMask)
-          return true;
-      }
-    }
-  }
+  if (op == LdNotifyEntityUpdate &&
+      (mask & reasonsMask & (LD_TRIGGER_ATTR_CREATED | LD_TRIGGER_ATTR_MODIFIED | LD_TRIGGER_ATTR_DELETED)) != 0)
+    return true;
 
   return false;
 }
@@ -452,7 +440,7 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
         // instance's `value`. Storage normalises typed primary keys to
         // "value", so the previousX label comes from typeStr.
         if (itemP->showChanges && anyInstP != NULL && anyInstP->type == KjObject &&
-            (itemP->format == NULL || strcmp(itemP->format, "simplified") != 0))
+            (itemP->format != LdFormatSimplified))
         {
           KjNode* preVal = kjLookup(anyInstP, "value");
           if (preVal != NULL)
@@ -648,7 +636,7 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
   // per spec, so we only emit it when format is default/concise.
   //
   if (itemP->showChanges && reportP != NULL && reportP->changes != NULL &&
-      (itemP->format == NULL || strcmp(itemP->format, "simplified") != 0))
+      (itemP->format != LdFormatSimplified))
   {
     for (KjNode* chP = reportP->changes->value.firstChildP; chP != NULL; chP = chP->next)
     {
@@ -790,7 +778,7 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   // § 5.2.14 notification.join — linked-entity retrieval (§ 4.5.23).
   // Hook is installed by the broker (it owns db.* and the reg cache);
   // a no-op when the broker hasn't registered or join is "@none".
-  if (itemP->notifJoin != NULL && strcmp(itemP->notifJoin, "@none") != 0)
+  if (itemP->notifJoinActive)
   {
     int level = (itemP->notifJoinLevel > 0) ? itemP->notifJoinLevel : 1;
     ldLinkedEntitiesHookInvoke(dataArray, itemP->notifJoin, level, itemP->sysAttrs, swNgsild.tenantP);
@@ -801,12 +789,12 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   // Relationship when join=inline attached it — if simplify ran before
   // the join hook, the Relationship would already be collapsed to its
   // URI and the inlined Entity dropped on the floor.
-  if (itemP->format != NULL)
+  if (itemP->format != LdFormatNone)
   {
     void (*fmtFn)(KjNode*) = NULL;
-    if (strcmp(itemP->format, "simplified") == 0 || strcmp(itemP->format, "keyValues") == 0)
+    if (itemP->format == LdFormatSimplified)
       fmtFn = ldSimplifyEntity;
-    else if (strcmp(itemP->format, "concise") == 0)
+    else if (itemP->format == LdFormatConcise)
       fmtFn = ldConciseEntity;
     if (fmtFn != NULL)
     {
@@ -840,10 +828,8 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   // `data` array with a FeatureCollection. Each entity becomes a Feature
   // with id at the top level, geometry from the GeoProperty, and the rest
   // of the entity as `properties`.
-  bool acceptGeoJson = (itemP->endpointAccept != NULL &&
-                        strcmp(itemP->endpointAccept, "application/geo+json") == 0);
-  bool acceptLdJson  = (itemP->endpointAccept != NULL &&
-                        strcmp(itemP->endpointAccept, "application/ld+json") == 0);
+  bool acceptGeoJson = (itemP->endpointAccept == LdAcceptGeoJson);
+  bool acceptLdJson  = (itemP->endpointAccept == LdAcceptLdJson);
 
   // ld+json notification body: per § 5.8.6 + § 6.3.5, each entity in data[]
   // (and the FeatureCollection / each Feature for geo+json — § 6.3.7) shall
@@ -954,11 +940,8 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   // simplified). The default (normalized) carries no header, and the v2 synonym
   // "keyValues" is normalised to "simplified". (Orion-LD extension carried from
   // Orion's Fiware-AttrsFormat; pending addition to TS 104-176.)
-  if ((itemP->format != NULL) && (strcmp(itemP->format, "normalized") != 0))
-  {
-    const char* attrFormat = (strcmp(itemP->format, "keyValues") == 0) ? "simplified" : itemP->format;
-    swRestClientRequestHeader(&req, "Ngsild-Attribute-Format", attrFormat);
-  }
+  if (itemP->format != LdFormatNone && itemP->format != LdFormatNormalized)
+    swRestClientRequestHeader(&req, "Ngsild-Attribute-Format", ldFormatToString(itemP->format));
 
   // § 5.8.6 / § 6.3.5 — ld+json carries @context inline; Link would be a
   // duplicate (and 046_14_01 asserts its absence). geo+json keeps Link.
@@ -1064,7 +1047,7 @@ void ldSubscriptionNotifyBatch(LdSubCache*           cacheP,
       KjNode*     entityTypeP = kjLookup(p->entityP, "type");
       const char* entityId    = (entityIdP != NULL && entityIdP->type == KjString) ? entityIdP->value.s : NULL;
 
-      if (!triggerMatches(itemP, p->op, reportP))
+      if (!triggerMatches(itemP, p->op, p->reasonsMask))
         continue;
 
       if (!entitiesMatch(itemP, entityId, entityTypeP))
