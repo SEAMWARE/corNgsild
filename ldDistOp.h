@@ -165,6 +165,8 @@ typedef struct LdDistOpBatchItem
   const char*      url;
   const char*      body;     // NULL for GET/DELETE
   int              bodyLen;
+  bool             hasVerb;  // per-item verb override (mixed-verb batches —
+  SwRestVerb       verb;     // e.g. queryEntity GET next to queryBatch POST)
 } LdDistOpBatchItem;
 
 typedef struct LdDistOpBatchResult

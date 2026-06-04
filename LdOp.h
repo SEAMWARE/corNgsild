@@ -130,7 +130,9 @@ typedef enum LdOp
   (LdOpCreateEntity | LdOpUpdateEntity  | LdOpAppendAttrs | LdOpUpdateAttrs | \
    LdOpDeleteAttr   | LdOpDeleteEntity  | LdOpMergeEntity | \
    LdOpReplaceEntity | LdOpReplaceAttr  | LdOpRetrieveEntity | LdOpQueryEntities | \
-   LdOpPurgeEntity)
+   LdOpPurgeEntity | \
+   LdOpRetrieveEntityTypes | LdOpRetrieveEntityTypeDetails | LdOpRetrieveEntityTypeInfo | \
+   LdOpRetrieveAttrTypes   | LdOpRetrieveAttrTypeDetails   | LdOpRetrieveAttrTypeInfo)
 
 #define LD_OP_GROUP_BATCH        \
   (LdOpBatchCreate | LdOpBatchUpsert | LdOpBatchUpdate | \

@@ -484,11 +484,13 @@ int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
       continue;
     }
 
+    SwRestVerb itemVerb = itemV[i].hasVerb ? itemV[i].verb : verb;
+
     int             hc = 0;
-    SwRestKeyValue* hv = buildHeaders(verb, ownAlias, csr->tenant, csr->contextSourceInfoKV, csr->forwardCtxP, &hc);
+    SwRestKeyValue* hv = buildHeaders(itemVerb, ownAlias, csr->tenant, csr->contextSourceInfoKV, csr->forwardCtxP, &hc);
 
     int idx = swRestClientMultiAdd(multi,
-                                   verb,
+                                   itemVerb,
                                    itemV[i].url,
                                    hv, hc,
                                    itemV[i].body, itemV[i].bodyLen,
