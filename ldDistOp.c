@@ -281,6 +281,31 @@ int ldDistOpSendReceive(LdRegCacheItem*  csr,
 //
 // ldDistOpSendReceiveEx -
 //
+// -----------------------------------------------------------------------------
+//
+// ldDistOpCsrInCooldown - § 5.2.34 management.cooldown
+//
+// After a forward failure, the endpoint is not contacted again until the
+// cooldown has elapsed; the request behaves as an immediate timeout
+// ("a timeout error response for the registration is automatically
+// returned" / § 6.3.5 of the HTTP binding). A declined request is not an
+// attempt: counters and lastFailure stay untouched, so the cooldown ends
+// exactly cooldownMs after the real failure.
+//
+bool ldDistOpCsrInCooldown(LdRegCacheItem* csr)
+{
+  if (csr->cooldownMs <= 0 || csr->lastFailure == 0)
+    return false;
+
+  struct timespec ts;
+  clock_gettime(CLOCK_REALTIME, &ts);
+  uint64_t nowNs = (uint64_t) ts.tv_sec * 1000000000ULL + (uint64_t) ts.tv_nsec;
+
+  return nowNs < csr->lastFailure + (uint64_t) csr->cooldownMs * 1000000ULL;
+}
+
+
+
 int ldDistOpSendReceiveEx(LdRegCacheItem*  csr,
                           SwRestVerb       verb,
                           const char*      url,
@@ -327,6 +352,13 @@ int ldDistOpSendReceiveEx(LdRegCacheItem*  csr,
   req.headerCount      = hc;
   req.body             = body;
   req.bodyLen          = (body != NULL) ? bodyLen : 0;
+  if (ldDistOpCsrInCooldown(csr))
+  {
+    if (errorDetailPP != NULL)
+      *errorDetailPP = (char*) "registration endpoint in cooldown after failure";
+    return 504;
+  }
+
   req.connectTimeoutMs = 0;
   req.requestTimeoutMs = csr->timeoutMs;   // § 5.2.34 per-CSR override
 
@@ -444,6 +476,13 @@ int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
   for (int i = 0; i < itemCount; i++)
   {
     LdRegCacheItem* csr = itemV[i].csr;
+
+    if (ldDistOpCsrInCooldown(csr))
+    {
+      resultV[i].statusCode  = 504;
+      resultV[i].errorDetail = "registration endpoint in cooldown after failure";
+      continue;
+    }
 
     int             hc = 0;
     SwRestKeyValue* hv = buildHeaders(verb, ownAlias, csr->tenant, csr->contextSourceInfoKV, csr->forwardCtxP, &hc);

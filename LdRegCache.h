@@ -161,6 +161,7 @@ typedef struct LdRegCacheItem
   // management.timeout (§ 5.2.34) — max ms before a forwarded request is
   // assumed failed. 0 = plugin default (no per-CSR override).
   int                    timeoutMs;
+  int                    cooldownMs;         // management.cooldown (§ 5.2.34) in ms; 0 = no cooldown
 
   // Expiration
   uint64_t               expiresAt;          // epoch nanoseconds (0 = never)

@@ -424,6 +424,15 @@ static void sendCsourceNotification(LdSubCacheItem* subItemP,
   if (subItemP->endpointUri == NULL)
     return;
 
+  // § 5.2.15 endpoint.cooldown — skip if inside the cooldown window after
+  // the last failure. Default 30s when unspecified (same as entity subs).
+  if (subItemP->lastFailure > 0)
+  {
+    uint64_t cool = (subItemP->cooldownNs != 0) ? subItemP->cooldownNs : 30000000000ULL;
+    if (subItemP->lastFailure + cool > swRest.requestStartTime)
+      return;
+  }
+
   if (csrPendingN >= csrPendingCap)
   {
     int newCap = (csrPendingCap == 0) ? 8 : csrPendingCap * 2;
@@ -735,6 +744,15 @@ static void csrSubPeriodicTick(void* ctx, uint64_t now, KAlloc* kaP)
     uint64_t intervalNs = (uint64_t) subItemP->timeInterval * 1000000000ULL;
     if (subItemP->lastNotification + intervalNs > now)
       continue;
+
+    // § 5.2.15 endpoint.cooldown — skip while inside the cooldown window
+    // after the last failure (default 30s, same as entity subs).
+    if (subItemP->lastFailure > 0)
+    {
+      uint64_t cool = (subItemP->cooldownNs != 0) ? subItemP->cooldownNs : 30000000000ULL;
+      if (subItemP->lastFailure + cool > now)
+        continue;
+    }
 
     // Collect currently-matching CSRs.
     int cap = 16;

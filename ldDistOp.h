@@ -121,6 +121,9 @@ extern int ldDistOpSendReceive(LdRegCacheItem*  csr,
 // an additional set of request headers (e.g. NGSILD-EntityMap on
 // distributed entity-map pagination per § 6.4.3.2 / § 5.14.4.4).
 // Pass extraHeaderV=NULL, extraHeaderCount=0 for no extras.
+// § 5.2.34 management.cooldown — endpoint declined until cooldown elapses
+extern bool ldDistOpCsrInCooldown(LdRegCacheItem* csr);
+
 extern int ldDistOpSendReceiveEx(LdRegCacheItem*  csr,
                                  SwRestVerb       verb,
                                  const char*      url,

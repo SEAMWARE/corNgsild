@@ -435,6 +435,15 @@ LdRegCacheItem* ldRegCacheItemAdd(LdRegCache* cacheP, KjNode* regTree)
       if (toP->type == KjInt)    itemP->timeoutMs = (int) toP->value.i;
       else if (toP->type == KjFloat) itemP->timeoutMs = (int) toP->value.f;
     }
+
+    // management.cooldown (§ 5.2.34) — after a forward failure, decline
+    // to contact the endpoint until this many ms have elapsed
+    KjNode* cdP = kjLookup(mgmtP, "cooldown");
+    if (cdP != NULL)
+    {
+      if (cdP->type == KjInt)        itemP->cooldownMs = (int) cdP->value.i;
+      else if (cdP->type == KjFloat) itemP->cooldownMs = (int) cdP->value.f;
+    }
   }
 
   // scope (§ 5.2.9) — scope or scope[] the CSR claims. Normalize both
