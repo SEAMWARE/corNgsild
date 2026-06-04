@@ -28,6 +28,7 @@
 #include "swJsonld/swldInit.h"                         // swldCoreContext, SwldContext
 #include "swJsonld/SwldContext.h"                      // SwldContext
 
+#include "swNgsild/SwNgsild.h"                         // ldDefaultCooldownNs
 #include "swNgsild/LdVocab.h"                          // LD_VOCAB_*
 #include "swNgsild/LdPernotCache.h"                    // LdPernotCache, LdPernotItem
 #include "swNgsild/ldLinkedEntitiesHook.h"             // ldLinkedEntitiesHookInvoke
@@ -211,7 +212,7 @@ static void pernotTick(void* ctx, uint64_t now, KAlloc* kaP)
     {
       // § 5.2.15 endpoint.cooldown — minimum delay before retrying after
       // a failure. Default 30s when unspecified.
-      uint64_t cool = (itemP->cooldownNs != 0) ? itemP->cooldownNs : 30000000000ULL;
+      uint64_t cool = (itemP->cooldownNs != 0) ? itemP->cooldownNs : ldDefaultCooldownNs;
       if (itemP->lastFailure + cool > now)
         continue;
       itemP->state = LdPernotActive;

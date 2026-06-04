@@ -333,7 +333,7 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
   // Extract state fields (borrowed pointers into cloned tree)
   //
   KjNode* statusP = kjLookup(itemP->subTree, LD_VOCAB_STATUS);
-  itemP->status = (statusP != NULL && statusP->type == KjString) ? statusP->value.s : "active";
+  itemP->status = ldSubStatusFromString((statusP != NULL && statusP->type == KjString) ? statusP->value.s : NULL);
 
   KjNode* notifP    = kjLookup(itemP->subTree, LD_VOCAB_NOTIFICATION);
   KjNode* endpointP = (notifP != NULL) ? kjLookup(notifP, LD_VOCAB_ENDPOINT) : NULL;

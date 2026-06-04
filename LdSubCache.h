@@ -24,6 +24,7 @@
 #include "kalloc/KAlloc.h"                             // KAlloc
 #include "kjson/KjNode.h"                              // KjNode
 
+#include "swNgsild/LdSubStatus.h"                  // LdSubStatus
 #include "swNgsild/LdQ.h"                              // LdQNode
 #include "swNgsild/LdScopeExpr.h"                      // LdScopeExpr
 #include "swNgsild/LdGeoRel.h"                         // LdGeoRel
@@ -112,7 +113,7 @@ typedef struct LdSubCacheItem
   int                       triggerMask;    // bitmask of LD_TRIGGER_* values (0 = use LD_TRIGGER_DEFAULT)
 
   // Subscription state (borrowed pointers into subTree)
-  char*                     status;         // "active", "paused", "expired"
+  LdSubStatus               status;         // § 5.2.12 lifecycle (enum — wire form converted at parse/render)
   char*                     endpointUri;    // notification.endpoint.uri
   char*                     endpointAccept; // notification.endpoint.accept (§ 5.2.15): application/json | application/ld+json | application/geo+json (NULL = json)
   char*                     contextUrl;     // jsonldContext URL for notification compaction

@@ -377,8 +377,8 @@ static void csourceNotificationPost(LdSubCacheItem* subItemP, KjNode* notificati
   {
     subItemP->lastSuccess = swRest.requestStartTime;
     // A later successful delivery clears a previous failure state
-    if (subItemP->status != NULL && strcmp(subItemP->status, "failed") == 0)
-      subItemP->status = (char*) "active";
+    if (subItemP->status == LdSubStatusFailed)
+      subItemP->status = LdSubStatusActive;
   }
   else
   {
@@ -386,7 +386,7 @@ static void csourceNotificationPost(LdSubCacheItem* subItemP, KjNode* notificati
     subItemP->lastFailure = swRest.requestStartTime;
     // § 12.4.7: "If the notification is not sent successfully ...
     // Update the subscription status to 'failed'"
-    subItemP->status = (char*) "failed";
+    subItemP->status = LdSubStatusFailed;
   }
 
   ldNotifyStatsHookInvoke(true /*csrSub*/, ok);
@@ -428,7 +428,7 @@ static void sendCsourceNotification(LdSubCacheItem* subItemP,
   // the last failure. Default 30s when unspecified (same as entity subs).
   if (subItemP->lastFailure > 0)
   {
-    uint64_t cool = (subItemP->cooldownNs != 0) ? subItemP->cooldownNs : 30000000000ULL;
+    uint64_t cool = (subItemP->cooldownNs != 0) ? subItemP->cooldownNs : ldDefaultCooldownNs;
     if (subItemP->lastFailure + cool > swRest.requestStartTime)
       return;
   }
@@ -497,9 +497,7 @@ void ldCsrSubInitialNotify(LdRegCache* regCacheP, LdSubCacheItem* subItemP)
   // § 12.4.7 sits on top of the § 10.5.7 lifecycle rules: a subscription
   // created paused (isActive=false) or already expired gets NO initial
   // notification.
-  if (subItemP->status != NULL &&
-      (strcmp(subItemP->status, "paused")  == 0 ||
-       strcmp(subItemP->status, "expired") == 0))
+  if (subItemP->status == LdSubStatusPaused || subItemP->status == LdSubStatusExpired)
     return;
 
   if (subItemP->expiresAt > 0 && swRest.requestStartTime > subItemP->expiresAt)
@@ -549,9 +547,7 @@ static void fanOutForOneReg(LdSubCache* regSubCacheP, LdRegCacheItem* regItemP, 
   for (LdSubCacheItem* subItemP = regSubCacheP->itemList; subItemP != NULL; subItemP = subItemP->next)
   {
     // Skip inactive / expired subs
-    if (subItemP->status != NULL &&
-        (strcmp(subItemP->status, "paused")  == 0 ||
-         strcmp(subItemP->status, "expired") == 0))
+    if (subItemP->status == LdSubStatusPaused || subItemP->status == LdSubStatusExpired)
       continue;
 
     if (subItemP->expiresAt > 0 && swRest.requestStartTime > subItemP->expiresAt)
@@ -595,9 +591,7 @@ void ldCsrSubOnRegDelete(LdSubCache* regSubCacheP, LdRegCacheItem* regItemP)
 //
 static bool subEligibleForNotify(LdSubCacheItem* subItemP)
 {
-  if (subItemP->status != NULL &&
-      (strcmp(subItemP->status, "paused")  == 0 ||
-       strcmp(subItemP->status, "expired") == 0))
+  if (subItemP->status == LdSubStatusPaused || subItemP->status == LdSubStatusExpired)
     return false;
 
   if (subItemP->expiresAt > 0 && swRest.requestStartTime > subItemP->expiresAt)
@@ -732,9 +726,7 @@ static void csrSubPeriodicTick(void* ctx, uint64_t now, KAlloc* kaP)
 
     // Status / expiration gating: skip paused / expired. A "failed"
     // sub keeps notifying — delivery failure is not a lifecycle stop.
-    if (subItemP->status != NULL &&
-        (strcmp(subItemP->status, "paused")  == 0 ||
-         strcmp(subItemP->status, "expired") == 0))
+    if (subItemP->status == LdSubStatusPaused || subItemP->status == LdSubStatusExpired)
       continue;
     if (subItemP->expiresAt > 0 && subItemP->expiresAt <= now)
       continue;
@@ -749,7 +741,7 @@ static void csrSubPeriodicTick(void* ctx, uint64_t now, KAlloc* kaP)
     // after the last failure (default 30s, same as entity subs).
     if (subItemP->lastFailure > 0)
     {
-      uint64_t cool = (subItemP->cooldownNs != 0) ? subItemP->cooldownNs : 30000000000ULL;
+      uint64_t cool = (subItemP->cooldownNs != 0) ? subItemP->cooldownNs : ldDefaultCooldownNs;
       if (subItemP->lastFailure + cool > now)
         continue;
     }

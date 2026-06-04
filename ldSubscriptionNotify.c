@@ -768,7 +768,7 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   // unspecified.
   if (itemP->lastFailure > 0)
   {
-    uint64_t cool = (itemP->cooldownNs != 0) ? itemP->cooldownNs : 30000000000ULL;
+    uint64_t cool = (itemP->cooldownNs != 0) ? itemP->cooldownNs : ldDefaultCooldownNs;
     if (itemP->lastFailure + cool > swRest.requestStartTime)
       return;
   }
@@ -1030,15 +1030,12 @@ void ldSubscriptionNotifyBatch(LdSubCache*           cacheP,
     //
     // Per-sub static checks (done once, regardless of pending count)
     //
-    if (itemP->status != NULL)
-    {
-      if (strcmp(itemP->status, "paused")  == 0) continue;
-      if (strcmp(itemP->status, "expired") == 0) continue;
-    }
+    if (itemP->status == LdSubStatusPaused || itemP->status == LdSubStatusExpired)
+      continue;
 
     if (itemP->expiresAt > 0 && swRest.requestStartTime > itemP->expiresAt)
     {
-      itemP->status = "expired";
+      itemP->status = LdSubStatusExpired;
       continue;
     }
 

@@ -225,6 +225,7 @@ extern bool ldTestConformance;
 // ldDefaultContextUrl - default user @context URL (set by --userContext CLI arg, or NULL)
 //
 extern char* ldDefaultContextUrl;
+extern uint64_t ldDefaultCooldownNs;   // --cooldownMillis: default endpoint cooldown after a delivery failure (0 = only when the subscription specifies one)
 
 
 
