@@ -287,10 +287,32 @@ void ldParamHook(const char* name, const char* value)
   else if (strcmp(name, "lastN") == 0)
   {
     swNgsild.lastN = atoi(value);
-    if (swNgsild.lastN < 0)
+    if (swNgsild.lastN <= 0)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Bad Request",
               "lastN must be a positive integer (got '%s')", value);
+      return;
+    }
+  }
+  else if (strcmp(name, "firstN") == 0)
+  {
+    swNgsild.firstN = atoi(value);
+    if (swNgsild.firstN <= 0)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Bad Request",
+              "firstN must be a positive integer (got '%s')", value);
+      return;
+    }
+  }
+  else if (strcmp(name, "offsetN") == 0)
+  {
+    // § 6.4.7.3: only values >= 0. atoi("abc") == 0 is accepted as 0 —
+    // same leniency the other integer params get.
+    swNgsild.offsetN = atoi(value);
+    if (swNgsild.offsetN < 0)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Bad Request",
+              "offsetN must be a non-negative integer (got '%s')", value);
       return;
     }
   }

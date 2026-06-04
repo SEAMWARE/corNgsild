@@ -66,6 +66,15 @@ bool ldParamsValidate(void)
     return true;
   }
 
+  // § 6.4.7.3: firstN paginates ascending, lastN descending — both at
+  // once is contradictory.
+  if (swNgsild.firstN > 0 && swNgsild.lastN > 0)
+  {
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid request",
+            "?firstN= and ?lastN= cannot be combined (ascending vs descending temporal pagination)");
+    return true;
+  }
+
   // § 4.21: pick and omit are alternative projections — listing the same
   // entity member in both is contradictory and shall be 400.
   if (swNgsild.pickV != NULL && swNgsild.omitV != NULL)

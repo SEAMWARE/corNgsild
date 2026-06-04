@@ -29,4 +29,13 @@ extern bool ldPaginationTrim(KjNode* arrayP, int limit);
 //
 extern void ldPaginationLinkHeader(bool hasMore);
 
+
+
+// -----------------------------------------------------------------------------
+//
+// ldTemporalPaginationLinkHeader - Link rel="intervalafter"/"intervalbefore"
+//                                  page pointers (§ 6.4.7.3)
+//
+extern void ldTemporalPaginationLinkHeader(bool hasMore, int pageLimit);
+
 #endif  // SWNGSILD_LDPAGINATION_H_

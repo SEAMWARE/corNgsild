@@ -54,6 +54,8 @@ SwRestParam ldParamRegistryV[] =
   { "timeAt",                LD_PARAM_TIMEAT },
   { "endTimeAt",             LD_PARAM_ENDTIMEAT },
   { "lastN",                 LD_PARAM_LAST_N },
+  { "firstN",                LD_PARAM_FIRST_N },
+  { "offsetN",               LD_PARAM_OFFSET_N },
   { "aggrMethods",           LD_PARAM_AGGR_METHODS },
   { "aggrPeriodDuration",    LD_PARAM_AGGR_PERIOD_DURATION },
   { "sysAttrs",              LD_PARAM_SYSATTRS },

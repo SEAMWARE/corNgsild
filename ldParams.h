@@ -69,6 +69,8 @@
 #define LD_PARAM_JOIN_LEVEL            (1ULL << 47)  // § 4.5.23 — depth limit for linked-entity walk
 #define LD_PARAM_CONTAINED_BY          (1ULL << 48)  // § 5.7.1.4 — visited-set seed for cycle prevention in linked-entity retrieval
 #define LD_PARAM_PAGE                  (1ULL << 49)  // non-spec compat shim: ?page=<N> translates to offset = (page-1)*limit
+#define LD_PARAM_FIRST_N               (1ULL << 50)  // § 6.4.7.3 — temporal pagination, ascending order limit
+#define LD_PARAM_OFFSET_N              (1ULL << 51)  // § 6.4.7.3 — temporal pagination offset (with firstN/lastN)
 
 
 
@@ -157,6 +159,8 @@
   | LD_PARAM_TIMEAT              \
   | LD_PARAM_ENDTIMEAT           \
   | LD_PARAM_LAST_N              \
+  | LD_PARAM_FIRST_N             \
+  | LD_PARAM_OFFSET_N            \
   | LD_PARAM_PICK                \
   | LD_PARAM_OMIT                \
   | LD_PARAM_LANG                \
@@ -196,6 +200,8 @@
   | LD_PARAM_TIMEAT               \
   | LD_PARAM_ENDTIMEAT            \
   | LD_PARAM_LAST_N               \
+  | LD_PARAM_FIRST_N              \
+  | LD_PARAM_OFFSET_N             \
   | LD_PARAM_DATASETID            \
   | LD_PARAM_PICK                 \
   | LD_PARAM_OMIT                 \

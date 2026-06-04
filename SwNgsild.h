@@ -92,7 +92,9 @@ typedef struct SwNgsild
   char*      endTimeAt;    // raw ISO 8601 DateTime string (only for timerel=between)
   uint64_t   endTimeAtNs;  // endTimeAt parsed to epoch nanoseconds (0 if unset)
   char*      timeproperty; // observedAt / createdAt / modifiedAt / deletedAt — NULL = default observedAt
-  int        lastN;        // ?lastN= per-attribute instance cap (0 = unset)
+  int        lastN;        // ?lastN= per-attribute instance limit, descending order (0 = unset; § 6.4.7.3)
+  int        firstN;       // ?firstN= per-attribute instance limit, ascending order (0 = unset; § 6.4.7.3)
+  int        offsetN;      // ?offsetN= temporal pagination offset (with firstN or lastN; § 6.4.7.3)
 
   // URL parameters — aggregated temporal representation (§ 4.5.20)
   char*      aggrMethods;        // raw CSV: e.g. "sum,avg,min"
