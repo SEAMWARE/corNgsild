@@ -21,6 +21,7 @@
 //   - q (over CSR user-Properties per § 4.9)
 //   - geoQ, scopeQ, temporalQ, csf, lang
 //
+#include <stdlib.h>                                    // realloc
 #include <regex.h>                                     // regexec
 #include <stdio.h>                                     // snprintf
 #include <string.h>                                    // strcmp, strlen
@@ -234,15 +235,16 @@ static const char* notifIdGenerate(void)
 
 // -----------------------------------------------------------------------------
 //
-// sendCsourceNotification - build and POST the notification
+// csourceNotificationBuild - build the notification tree
 //
-static void sendCsourceNotification(LdSubCacheItem* subItemP,
-                                    LdRegCacheItem** matchV, int matchN,
-                                    const char* triggerReason)
+// Runs while the matched LdRegCacheItems are guaranteed alive (the same
+// request may delete them before a deferred send fires, so the data
+// array is cloned here, not at send time).
+//
+static KjNode* csourceNotificationBuild(LdSubCacheItem* subItemP,
+                                        LdRegCacheItem** matchV, int matchN,
+                                        const char* triggerReason)
 {
-  if (subItemP->endpointUri == NULL || matchN == 0)
-    return;
-
   char isoTimeBuf[64];
   isoNow(isoTimeBuf, sizeof(isoTimeBuf));
 
@@ -289,6 +291,20 @@ static void sendCsourceNotification(LdSubCacheItem* subItemP,
     kjChildAdd(dataArray, regClone);
   }
   kjChildAdd(notification, dataArray);
+
+  return notification;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// csourceNotificationPost - compact and POST a built notification
+//
+static void csourceNotificationPost(LdSubCacheItem* subItemP, KjNode* notification)
+{
+  if (subItemP->endpointUri == NULL || notification == NULL)
+    return;
 
   // Compact with the subscription's @context (parallel to the entity-
   // sub path in ldSubscriptionNotify / ldPernotLoop): if the sub
@@ -358,14 +374,88 @@ static void sendCsourceNotification(LdSubCacheItem* subItemP,
 
   bool ok = (resp.statusCode >= 200 && resp.statusCode < 300);
   if (ok)
+  {
     subItemP->lastSuccess = swRest.requestStartTime;
+    // A later successful delivery clears a previous failure state
+    if (subItemP->status != NULL && strcmp(subItemP->status, "failed") == 0)
+      subItemP->status = (char*) "active";
+  }
   else
   {
     subItemP->timesFailed++;
     subItemP->lastFailure = swRest.requestStartTime;
+    // § 12.4.7: "If the notification is not sent successfully ...
+    // Update the subscription status to 'failed'"
+    subItemP->status = (char*) "failed";
   }
 
   ldNotifyStatsHookInvoke(true /*csrSub*/, ok);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// Deferred csource-notification queue (per thread)
+//
+// A csource notification fired from inside a request handler would go on
+// the wire BEFORE the request's own response — a subscriber implemented as
+// "send request, then service the notification" (the ETSI suite's robot
+// client, for one) can then never answer in time and every delivery times
+// out. Queue the sends here and let the post-response hook flush them —
+// same MHD thread-per-connection assumption (and request-arena lifetime)
+// as ldNotifyDefer.c. The periodic tick runs on its own thread with no
+// post-response hook and builds + posts directly.
+//
+typedef struct CsrSubPending
+{
+  LdSubCacheItem*  subItemP;
+  KjNode*          notification;   // built at enqueue time — see csourceNotificationBuild
+} CsrSubPending;
+
+static __thread CsrSubPending* csrPendingV   = NULL;
+static __thread int            csrPendingN   = 0;
+static __thread int            csrPendingCap = 0;
+
+static void sendCsourceNotification(LdSubCacheItem* subItemP,
+                                    LdRegCacheItem** matchV, int matchN,
+                                    const char* triggerReason)
+{
+  if (subItemP->endpointUri == NULL)
+    return;
+
+  if (csrPendingN >= csrPendingCap)
+  {
+    int newCap = (csrPendingCap == 0) ? 8 : csrPendingCap * 2;
+    CsrSubPending* newV = (CsrSubPending*) realloc(csrPendingV, newCap * sizeof(CsrSubPending));
+    if (newV == NULL)
+      return;
+    csrPendingV   = newV;
+    csrPendingCap = newCap;
+  }
+
+  // The matched cache items may be deleted later in this same request
+  // (a CSR delete fans out, THEN removes the item) — build the
+  // notification tree NOW, defer only the POST.
+  csrPendingV[csrPendingN].subItemP     = subItemP;
+  csrPendingV[csrPendingN].notification = csourceNotificationBuild(subItemP, matchV, matchN, triggerReason);
+  csrPendingN++;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldCsrSubDispatchPending - flush the deferred csource notifications
+//
+// Called from the broker's post-response hook, after the response has
+// been handed to the HTTP layer. The request arena is still alive.
+//
+void ldCsrSubDispatchPending(void)
+{
+  for (int i = 0; i < csrPendingN; i++)
+    csourceNotificationPost(csrPendingV[i].subItemP, csrPendingV[i].notification);
+  csrPendingN = 0;
 }
 
 
@@ -377,6 +467,17 @@ static void sendCsourceNotification(LdSubCacheItem* subItemP,
 void ldCsrSubInitialNotify(LdRegCache* regCacheP, LdSubCacheItem* subItemP)
 {
   if (regCacheP == NULL || subItemP == NULL || subItemP->endpointUri == NULL)
+    return;
+
+  // § 12.4.7 sits on top of the § 10.5.7 lifecycle rules: a subscription
+  // created paused (isActive=false) or already expired gets NO initial
+  // notification.
+  if (subItemP->status != NULL &&
+      (strcmp(subItemP->status, "paused")  == 0 ||
+       strcmp(subItemP->status, "expired") == 0))
+    return;
+
+  if (subItemP->expiresAt > 0 && swRest.requestStartTime > subItemP->expiresAt)
     return;
 
   //
@@ -403,12 +504,9 @@ void ldCsrSubInitialNotify(LdRegCache* regCacheP, LdSubCacheItem* subItemP)
     matchV[n++] = regItemP;
   }
 
-  // § 5.11.7: send initial notification even if data is empty? Spec says
-  // "on initial subscription ... the Context Source Registration(s) that
-  // match". If zero match, don't POST (no payload content).
-  if (n == 0)
-    return;
-
+  // § 12.4.7: the csource notification "shall be sent on initial
+  // subscription" — unconditionally; with zero matching CSRs the
+  // notification simply carries an empty data array.
   sendCsourceNotification(subItemP, matchV, n, "newlyMatching");
 }
 
@@ -607,8 +705,11 @@ static void csrSubPeriodicTick(void* ctx, uint64_t now, KAlloc* kaP)
     // Periodic-only path: skip change-driven CSR-subs.
     if (subItemP->timeInterval <= 0) continue;
 
-    // Status / expiration gating (mirror of pernot tick — same § 5.2.12 rules).
-    if (subItemP->status != NULL && strcmp(subItemP->status, "active") != 0)
+    // Status / expiration gating: skip paused / expired. A "failed"
+    // sub keeps notifying — delivery failure is not a lifecycle stop.
+    if (subItemP->status != NULL &&
+        (strcmp(subItemP->status, "paused")  == 0 ||
+         strcmp(subItemP->status, "expired") == 0))
       continue;
     if (subItemP->expiresAt > 0 && subItemP->expiresAt <= now)
       continue;
@@ -637,12 +738,11 @@ static void csrSubPeriodicTick(void* ctx, uint64_t now, KAlloc* kaP)
       matchV[n++] = regItemP;
     }
 
-    if (n > 0)
-      sendCsourceNotification(subItemP, matchV, n, "updated");
-    else
-      // No matches — still update lastNotification so we honour the
-      // cadence rather than busy-looping every tick on an empty match set.
-      subItemP->lastNotification = now;
+    // § 12.4.7: periodic notifications go out when the interval has
+    // elapsed "regardless of any changes to the set of Context Source
+    // Registrations" — zero matches → empty data array. Direct send:
+    // this thread has no post-response hook to flush a deferral.
+    csourceNotificationPost(subItemP, csourceNotificationBuild(subItemP, matchV, n, "updated"));
   }
 }
 

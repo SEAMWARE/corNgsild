@@ -40,6 +40,15 @@ extern void ldCsrSubInitialNotify(LdRegCache* regCacheP, LdSubCacheItem* subItem
 
 // -----------------------------------------------------------------------------
 //
+// ldCsrSubDispatchPending - flush csource notifications deferred during the
+//                           request (call from the post-response hook)
+//
+extern void ldCsrSubDispatchPending(void);
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldCsrSubOnRegCreate - dispatch § 5.11.7 notifications on CSR creation
 //
 // Called from postCsourceRegistration after the new CSR is added to the
