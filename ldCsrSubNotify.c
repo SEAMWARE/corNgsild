@@ -446,6 +446,22 @@ static void sendCsourceNotification(LdSubCacheItem* subItemP,
 
 // -----------------------------------------------------------------------------
 //
+// ldCsrSubPendingDiscard - drop stale entries at request start
+//
+// The pending entries reference the request arena; if any path ever
+// skipped the post-response hook, flushing a leftover entry from a
+// LATER request on the same thread would dereference reused memory.
+// Discarding at request start makes that impossible.
+//
+void ldCsrSubPendingDiscard(void)
+{
+  csrPendingN = 0;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldCsrSubDispatchPending - flush the deferred csource notifications
 //
 // Called from the broker's post-response hook, after the response has

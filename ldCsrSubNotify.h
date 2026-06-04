@@ -44,6 +44,7 @@ extern void ldCsrSubInitialNotify(LdRegCache* regCacheP, LdSubCacheItem* subItem
 //                           request (call from the post-response hook)
 //
 extern void ldCsrSubDispatchPending(void);
+extern void ldCsrSubPendingDiscard(void);
 
 
 

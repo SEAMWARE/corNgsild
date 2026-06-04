@@ -34,6 +34,7 @@
 #include "swNgsild/ldToGeoJson.h"                        // ldToGeoJson
 #include "swNgsild/ldStripSysAttrs.h"                    // ldStripSysAttrs
 #include "swNgsild/ldLangReduce.h"                       // ldLangReduce
+#include "swNgsild/ldCsrSubNotify.h"                  // ldCsrSubPendingDiscard
 #include "swNgsild/ldAcceptParse.h"                      // ldAcceptParse, LdAcceptType
 #include "swNgsild/ldRender.h"                           // ldToSimplified, ldToConcise
 #include "swNgsild/LdNormalizeInput.h"                    // ldNormalizeInput
@@ -48,6 +49,7 @@
 static void ldRequestStartHook(void)
 {
   memset(&swNgsild, 0, sizeof(swNgsild));
+  ldCsrSubPendingDiscard();
   swNgsild.limit = 20;
 }
 
