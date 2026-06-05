@@ -33,6 +33,63 @@
 
 // -----------------------------------------------------------------------------
 //
+// Deferred source-identity probing — the probe is a best-effort network
+// call; deferring it off the request path makes CSR create/update latency
+// independent of the registered endpoint's reachability. The queue is
+// thread-local: items are enqueued while the request executes and drained
+// by ldRegCacheProbePending() right after the response goes out, on the
+// same thread (the broker's one-request-per-thread invariant).
+//
+// The queue holds (cache, regId) — never the item pointer: the response
+// has gone out by drain time, and the registration may have been deleted
+// (and its item freed) by another thread in between. The drain re-looks
+// the item up by regId and silently skips a vanished one.
+//
+// The drain writes itemP->csourceAlias while the item is visible in the
+// shared cache: a single aligned pointer store — concurrent readers see
+// either NULL (probe not done: Via-based detection covers them) or the
+// complete alias.
+//
+#define PROBE_PENDING_MAX 8
+typedef struct ProbePending
+{
+  LdRegCache* cacheP;
+  char*       regId;     // strdup'd — the item's own copy may be freed
+} ProbePending;
+static __thread ProbePending probePendingV[PROBE_PENDING_MAX];
+static __thread int          probePendingN = 0;
+
+static void probePendingAdd(LdRegCache* cacheP, LdRegCacheItem* itemP)
+{
+  if (probePendingN >= PROBE_PENDING_MAX || itemP->regId == NULL)
+    return;  // skip the probe — csourceAlias stays NULL, Via detection covers
+
+  probePendingV[probePendingN].cacheP = cacheP;
+  probePendingV[probePendingN].regId  = strdup(itemP->regId);
+  probePendingN++;
+}
+
+void ldRegCacheProbePending(void)
+{
+  for (int i = 0; i < probePendingN; i++)
+  {
+    LdRegCacheItem* itemP = ldRegCacheItemLookup(probePendingV[i].cacheP, probePendingV[i].regId);
+
+    if (itemP != NULL && itemP->endpoint != NULL && itemP->csourceAlias == NULL)
+    {
+      itemP->probedAlias  = ldProbeSourceIdentity(itemP->endpoint, itemP->tenant, 0);
+      itemP->csourceAlias = itemP->probedAlias;   // may be NULL on failure
+    }
+
+    free(probePendingV[i].regId);
+  }
+  probePendingN = 0;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // csrScopeMatches - does CSR's scopeV cover any entry in entityScopeV?
 //
 // Returns true if:
@@ -402,11 +459,14 @@ LdRegCacheItem* ldRegCacheItemAdd(LdRegCache* cacheP, KjNode* regTree)
   itemP->tenant = (tenantP != NULL && tenantP->type == KjString) ? tenantP->value.s : NULL;
 
   // contextSourceAlias (borrowed; NGSI-LD § 5.2.9 — distribution loop
-  // detection). If the client didn't provide one, probe the CSR's
-  // /info/sourceIdentity endpoint (§ 5.15) to learn it. The probe's
-  // result is process-heap malloc'd; probedAlias records ownership so
-  // the item-free path can free it. Probe failure leaves csourceAlias
-  // NULL — reactive Via-based detection still protects us.
+  // detection). If the client didn't provide one, the CSR's
+  // /info/sourceIdentity endpoint (§ 5.15) is probed to learn it — but
+  // NOT here: the probe is a network call (bounded, but an unreachable
+  // endpoint still costs the full timeout) and must not stall the CSR
+  // create/update response. The item queues for ldRegCacheProbePending(),
+  // which runs post-response on this same thread. Until then (and on
+  // probe failure) csourceAlias stays NULL — reactive Via-based
+  // detection still protects us.
   KjNode* aliasP = kjLookup(itemP->regTree, "contextSourceAlias");
   if (aliasP != NULL && aliasP->type == KjString)
   {
@@ -414,10 +474,7 @@ LdRegCacheItem* ldRegCacheItemAdd(LdRegCache* cacheP, KjNode* regTree)
     itemP->probedAlias  = NULL;
   }
   else if (itemP->endpoint != NULL)
-  {
-    itemP->probedAlias  = ldProbeSourceIdentity(itemP->endpoint, itemP->tenant, 0);
-    itemP->csourceAlias = itemP->probedAlias;   // may be NULL on failure
-  }
+    probePendingAdd(cacheP, itemP);
 
   // Geo coverage borrowed pointers — § 5.2.9. Match-time filtering
   // requires GEOS integration into swNgsild; tracked as a gap.
@@ -759,6 +816,158 @@ int ldRegCacheMatchForRetrieveScoped(LdRegCache*       cacheP,
   }
 
   *matchVP = v;
+  return count;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// entityInfoQueryMatches - one EntityInfo vs a QUERY's id selectors.
+//
+// See ldRegCacheMatchForQuery's header comment for the matching grid.
+// idV and idRegex may both be present (?id= AND ?idPattern= combine as
+// conjunctive constraints on the entity): a pinned registration id must
+// then satisfy both; for an idPattern-constrained EntityInfo only the
+// concrete queried ids are testable — the query-pattern side is
+// regex-vs-regex and always matches per ETSI agreement.
+//
+static bool entityInfoQueryMatches(LdRegEntityInfo* eiP,
+                                   char**           idV,
+                                   const regex_t*   idRegex,
+                                   char**           typeV)
+{
+  if (typeV != NULL && eiP->type != NULL)
+  {
+    bool typeOk = false;
+    for (int i = 0; typeV[i] != NULL; i++)
+      if (strcmp(eiP->type, typeV[i]) == 0) { typeOk = true; break; }
+    if (!typeOk)
+      return false;
+  }
+
+  // No id constraint on the EntityInfo — it covers any id of the type.
+  if (eiP->id == NULL && eiP->idPatternList == NULL)
+    return true;
+
+  // No id selector on the query — type-only matching.
+  if (idV == NULL && idRegex == NULL)
+    return true;
+
+  // Pinned registration id: must satisfy every query selector present.
+  if (eiP->id != NULL)
+  {
+    bool ok = true;
+
+    if (idV != NULL)
+    {
+      ok = false;
+      for (int i = 0; idV[i] != NULL; i++)
+        if (strcmp(eiP->id, idV[i]) == 0) { ok = true; break; }
+    }
+
+    if (ok && idRegex != NULL)
+      ok = (regexec(idRegex, eiP->id, 0, NULL, 0) == 0);
+
+    if (ok)
+      return true;
+  }
+
+  // idPattern-constrained EntityInfo: test the decidable side (queried
+  // concrete ids against the registration's patterns). When the query
+  // carries only ?idPattern=, this is regex-vs-regex → always matches.
+  if (eiP->idPatternList != NULL)
+  {
+    if (idV == NULL)
+      return true;
+
+    for (LdRegIdPattern* ripP = eiP->idPatternList; ripP != NULL; ripP = ripP->next)
+    {
+      for (int i = 0; idV[i] != NULL; i++)
+        if (regexec(&ripP->regex, idV[i], 0, NULL, 0) == 0) return true;
+    }
+  }
+
+  return false;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldRegCacheMatchForQuery -
+//
+int ldRegCacheMatchForQuery(LdRegCache*       cacheP,
+                            char**            entityIdV,
+                            const char*       idPattern,
+                            char**            entityTypeV,
+                            LdRegMode         modeFilter,
+                            LdRegCacheItem*** matchVP)
+{
+  if (cacheP == NULL || matchVP == NULL)
+    return 0;
+
+  regex_t idRegex;
+  bool    haveIdRegex = false;
+  if (idPattern != NULL && idPattern[0] != 0)
+  {
+    if (regcomp(&idRegex, idPattern, REG_EXTENDED | REG_NOSUB) == 0)
+      haveIdRegex = true;
+  }
+
+  char** idV = (entityIdV != NULL && entityIdV[0] != NULL) ? entityIdV : NULL;
+
+  struct timespec ts;
+  clock_gettime(CLOCK_REALTIME, &ts);
+  uint64_t nowNs = (uint64_t) ts.tv_sec * 1000000000ULL + (uint64_t) ts.tv_nsec;
+
+  // Two-pass: count first, then allocate exactly + populate.
+  int count = 0;
+  for (int pass = 0; pass < 2; pass++)
+  {
+    LdRegCacheItem** v  = NULL;
+    int              ix = 0;
+
+    if (pass == 1)
+    {
+      if (count == 0)
+        break;
+      v = (LdRegCacheItem**) malloc(count * sizeof(LdRegCacheItem*));
+    }
+
+    for (LdRegCacheItem* itemP = cacheP->itemList; itemP != NULL; itemP = itemP->next)
+    {
+      if (itemP->mode != modeFilter)
+        continue;
+      if (itemP->expiresAt > 0 && itemP->expiresAt <= nowNs)
+        continue;
+
+      bool match = false;
+      for (LdRegInfo* riP = itemP->infoV; riP != NULL && !match; riP = riP->next)
+      {
+        if (riP->entityInfoV == NULL)
+        {
+          match = true;  // no entity constraint at all — matches
+          continue;
+        }
+        for (LdRegEntityInfo* eiP = riP->entityInfoV; eiP != NULL; eiP = eiP->next)
+          if (entityInfoQueryMatches(eiP, idV, haveIdRegex ? &idRegex : NULL, entityTypeV)) { match = true; break; }
+      }
+
+      if (!match)
+        continue;
+
+      if (pass == 0) count++;
+      else           v[ix++] = itemP;
+    }
+
+    if (pass == 1)
+      *matchVP = v;
+  }
+
+  if (haveIdRegex)
+    regfree(&idRegex);
+
   return count;
 }
 

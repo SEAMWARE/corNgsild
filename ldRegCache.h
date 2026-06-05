@@ -113,6 +113,38 @@ extern int ldRegCacheMatchForRetrieveScoped(LdRegCache*       cacheP,
                                              LdRegCacheItem*** matchVP);
 
 
+// -----------------------------------------------------------------------------
+//
+// ldRegCacheMatchForQuery - find CSRs that may provide entities matching a
+// QUERY's id selectors (?id= list and/or ?idPattern=) plus type filter.
+//
+// Matching grid per EntityInfo (query-side vs registration-side):
+//   query id      vs reg id          → strcmp
+//   query id      vs reg idPattern   → regexec(reg pattern, queried id)
+//   query pattern vs reg id          → regexec(query pattern, pinned id)
+//   query pattern vs reg idPattern   → always matches (regex-vs-regex is
+//                                      not computable — ETSI agreement)
+// An EntityInfo without id constraints covers any id of its type; a query
+// without id selectors keeps today's type-only matching.
+//
+extern int ldRegCacheMatchForQuery(LdRegCache*       cacheP,
+                                   char**            entityIdV,
+                                   const char*       idPattern,
+                                   char**            entityTypeV,
+                                   LdRegMode         modeFilter,
+                                   LdRegCacheItem*** matchVP);
+
+
+// -----------------------------------------------------------------------------
+//
+// ldRegCacheProbePending - drain this thread's deferred source-identity
+// probes (queued at CSR insert when no contextSourceAlias was supplied).
+// Call from the broker's post-response hook — the probe is a network call
+// and must never stall the CSR create/update response.
+//
+extern void ldRegCacheProbePending(void);
+
+
 
 // -----------------------------------------------------------------------------
 //

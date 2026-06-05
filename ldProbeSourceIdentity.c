@@ -89,7 +89,11 @@ char* ldProbeSourceIdentity(const char* endpoint, const char* tenant, int timeou
   req.headerCount      = headerCount;
   req.body             = NULL;
   req.bodyLen          = 0;
-  req.connectTimeoutMs = 0;
+  // Bound the CONNECT leg too — connectTimeoutMs 0 falls back to the
+  // client's 5-second default, which is exactly the stall the probe's
+  // short request timeout is meant to avoid (an unreachable registered
+  // endpoint made every CSR create block 5s; 80+ creates per ETSI run).
+  req.connectTimeoutMs = (timeoutMs > 0) ? timeoutMs : LD_PROBE_TIMEOUT_DEFAULT_MS;
   req.requestTimeoutMs = (timeoutMs > 0) ? timeoutMs : LD_PROBE_TIMEOUT_DEFAULT_MS;
 
   resp.statusCode     = 0;
