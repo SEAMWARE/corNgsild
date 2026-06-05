@@ -322,7 +322,13 @@ static void transformEntity(KjNode* entityP, const char* timeProp, Kjson* kjsonP
 
   for (KjNode* childP = entityP->value.firstChildP; childP != NULL; childP = childP->next)
   {
-    if (childP->name == NULL || ldIsEntityKeyword(childP->name))
+    if (childP->name == NULL)
+      continue;
+    // § 5.3.2.5: the Scope's temporal evolution is represented as a Property,
+    // so it gets the same pair-compression as any attr in simplified-temporal
+    // mode (see TS 104-176 § A.3.4.3 for the wire example). Every other
+    // entity keyword stays untouched.
+    if (ldIsEntityKeyword(childP->name) && strcmp(childP->name, "scope") != 0)
       continue;
     if (childP->type != KjArray)
       continue;
