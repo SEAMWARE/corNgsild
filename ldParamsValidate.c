@@ -6,6 +6,7 @@
 // Copyright 2026 Seamware
 //
 #include <stdbool.h>                                     // bool
+#include <stdio.h>                                       // snprintf
 #include <string.h>                                      // strcmp, strchr
 
 #include "swRest/swRest.h"                               // swRest
@@ -132,6 +133,45 @@ bool ldParamsValidate(void)
                 "'?attrs': '%s' is a reserved entity member, not an Attribute name", a);
         return true;
       }
+    }
+  }
+
+  // § 7.2.4 — a geo-query is the georel + geometry + coordinates triple
+  // (plus optional geoproperty). Any of the three without the others is an
+  // incomplete geo-query → 400, on every query route (ETSI 037_03_03 sends
+  // a bare georel to /csourceRegistrations). Hoisted from getEntities so
+  // the messages stay identical across routes.
+  //
+  // Skipped when the URL-param parser already raised an error: a rejected
+  // value (georel= empty, geometry=Piont, …) leaves its parsed pointer
+  // NULL, and the generic "incomplete" message must not clobber the
+  // specific one.
+  if (swRest.out.httpStatusCode < 400)
+  {
+    bool hasGeorel      = (swNgsild.georel      != NULL);
+    bool hasGeometry    = (swNgsild.geometry    != NULL);
+    bool hasCoordinates = (swNgsild.coordinates != NULL);
+    bool hasGeoproperty = (swNgsild.geoproperty != NULL);
+
+    if (hasGeorel || hasGeometry || hasCoordinates)
+    {
+      if (!hasGeorel || !hasGeometry || !hasCoordinates)
+      {
+        char missing[128] = "";
+        int  len          = 0;
+
+        if (!hasGeorel)      len += snprintf(missing + len, sizeof(missing) - len, "georel");
+        if (!hasGeometry)    len += snprintf(missing + len, sizeof(missing) - len, "%sgeometry",    len > 0 ? ", " : "");
+        if (!hasCoordinates) len += snprintf(missing + len, sizeof(missing) - len, "%scoordinates", len > 0 ? ", " : "");
+
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid geo-query", "incomplete geo-query: missing %s", missing);
+        return true;
+      }
+    }
+    else if (hasGeoproperty)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid geo-query", "geoproperty without georel, geometry, and coordinates");
+      return true;
     }
   }
 

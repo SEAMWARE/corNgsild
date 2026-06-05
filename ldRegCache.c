@@ -1042,7 +1042,10 @@ bool ldRegInfoDiscoveryMatches(LdRegInfo*     riP,
       }
     }
 
-    // idPattern: request-side regex matched against EntityInfo.id (when present)
+    // idPattern: request-side regex matched against EntityInfo.id (when
+    // present). When the EntityInfo is itself idPattern-constrained there
+    // is nothing to test — matching a regex against a regex is not
+    // computable in general, so per ETSI agreement the two always match.
     if (idRegex != NULL && eiP->id != NULL)
     {
       if (regexec(idRegex, eiP->id, 0, NULL, 0) != 0)
