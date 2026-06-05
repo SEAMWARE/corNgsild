@@ -22,6 +22,7 @@
 #include "swNgsild/LdTypeExpr.h"                         // ldTypeExprParse, ldTypeExprFree
 #include "swNgsild/LdCheck.h"                            // OBJECT_CHECK, STRING_CHECK, ...
 #include "swNgsild/LdVocab.h"                            // LD_VOCAB_*
+#include "swNgsild/ldQParse.h"                           // ldQParse
 #include "swNgsild/ldTypes.h"                            // ldOpToString
 #include "swNgsild/ldError.h"                            // ldError
 #include "swNgsild/ldCheckSubscription.h"                // Own interface
@@ -730,11 +731,16 @@ bool ldCheckSubscription(KjNode* subP, LdOp op, KAlloc* kaP)
   }
 
   //
-  // "q" must be string
+  // "q" must be a string holding a syntactically valid query (§ 5.2.12:
+  // "q ... as per clause 4.9"). ldQParse raises the 400 ProblemDetails
+  // itself on a syntax error; the parse tree is thrown away — the matcher
+  // compiles its own at notification time.
   //
   if (qP != NULL)
   {
     STRING_CHECK(qP, "Invalid Subscription", "'q' must be a string");
+    if (ldQParse(qP->value.s, kaP) == NULL)
+      return false;
   }
 
   //
