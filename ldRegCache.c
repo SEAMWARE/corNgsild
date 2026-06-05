@@ -1016,14 +1016,30 @@ bool ldRegInfoDiscoveryMatches(LdRegInfo*     riP,
     }
 
     // id exact-match filter: OR across entityIdV (any-of). Ignored when
-    // the EntityInfo has no id constraint — the reg implicitly covers
-    // any id of the matched type, so it matches.
-    if (entityIdV != NULL && entityIdV[0] != NULL && eiP->id != NULL)
+    // the EntityInfo has no id constraint at all — the reg implicitly
+    // covers any id of the matched type, so it matches. An EntityInfo
+    // pinned by `id` must equal one of the queried ids; one constrained
+    // by `idPattern` must have at least one queried id matching the
+    // pattern (the reg cannot provide any other id — § 5.12).
+    if (entityIdV != NULL && entityIdV[0] != NULL)
     {
-      bool idOk = false;
-      for (int i = 0; entityIdV[i] != NULL; i++)
-        if (strcmp(eiP->id, entityIdV[i]) == 0) { idOk = true; break; }
-      if (!idOk) continue;
+      if (eiP->id != NULL)
+      {
+        bool idOk = false;
+        for (int i = 0; entityIdV[i] != NULL; i++)
+          if (strcmp(eiP->id, entityIdV[i]) == 0) { idOk = true; break; }
+        if (!idOk) continue;
+      }
+      else if (eiP->idPatternList != NULL)
+      {
+        bool idOk = false;
+        for (LdRegIdPattern* ripP = eiP->idPatternList; ripP != NULL && !idOk; ripP = ripP->next)
+        {
+          for (int i = 0; entityIdV[i] != NULL; i++)
+            if (regexec(&ripP->regex, entityIdV[i], 0, NULL, 0) == 0) { idOk = true; break; }
+        }
+        if (!idOk) continue;
+      }
     }
 
     // idPattern: request-side regex matched against EntityInfo.id (when present)
