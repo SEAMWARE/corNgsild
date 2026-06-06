@@ -33,6 +33,7 @@
 #include "swNgsild/ldRequestSubstitute.h"              // ldRequestSubstitute
 #include "swJsonld/SwldContext.h"                      // SwldContext (forwardCtxP->url for Link header)
 #include "swJsonld/swldInit.h"                         // swldCoreContext
+#include "swJsonld/swldDownload.h"                     // swldIsCoreContextUrl
 #include "swNgsild/ldDistOp.h"                         // Own interface
 
 
@@ -281,14 +282,35 @@ SwldContext* ldDistOpForwardContext(LdRegCacheItem* csr)
 
   SwldContext* ctxP = swNgsild.contextP;
 
-  // An in-body @context array of ONE element (the common ld+json form
-  // ["<url>"]) is equivalent to its element — unwrap so the Link header
-  // has a URL to point at. Multi-element/inline contexts must be HOSTED
-  // (ImplicitlyCreated served URL, like sub/reg jsonldContext
-  // auto-population) — until that lands they fall through to core.
-  // FIXME: host multi-element/inline @context for forwards.
-  while (ctxP != NULL && ctxP->isArray && ctxP->contexts == 1)
-    ctxP = ctxP->contextV[0];
+  // Resolve an in-body @context array to its USER part. Nearly every
+  // real request carries ["<user-ctx>", "<core-ctx>"] — often an OLD
+  // core version. Core elements are inert for the forward choice: the
+  // receiver applies its own core regardless, and core always wins. So
+  // skip them; what remains decides:
+  //   exactly one URL element → the user context (also covers ["<url>"])
+  //   none                    → core (the client really sent only core)
+  //   two-plus / inline       → must be HOSTED (ImplicitlyCreated served
+  //     URL, like sub/reg jsonldContext auto-population) — until that
+  //     lands they fall through to core.
+  //     FIXME: host multi-user-element/inline @context for forwards.
+  while (ctxP != NULL && ctxP->isArray)
+  {
+    SwldContext* soleP = NULL;
+    int          users = 0;
+
+    for (int i = 0; i < ctxP->contexts; i++)
+    {
+      SwldContext* eP = ctxP->contextV[i];
+      if (eP == NULL)                                        continue;
+      if (eP->url != NULL && swldIsCoreContextUrl(eP->url))  continue;
+      users++;
+      soleP = eP;
+    }
+
+    if (users != 1)
+      return swldCoreContext();
+    ctxP = soleP;   // may itself be an array — keep walking
+  }
 
   if (ctxP != NULL && ctxP->url != NULL)
     return ctxP;
