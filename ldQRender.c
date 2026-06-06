@@ -61,9 +61,9 @@ static char* urlEncode(const char* s, KAlloc* allocP)
 
 // -----------------------------------------------------------------------------
 //
-// compactOrEncode - compact an IRI against the @context, URL-encode if uncompactable
+// ldCompactOrEncode - compact an IRI against the @context, URL-encode if uncompactable
 //
-static const char* compactOrEncode(const char* iri, SwldContext* contextP, KAlloc* allocP)
+const char* ldCompactOrEncode(const char* iri, SwldContext* contextP, KAlloc* allocP)
 {
   // No context — internal storage mode: return the raw IRI unchanged.
   // URL-encoding is only needed for API responses where the consumer
@@ -120,7 +120,7 @@ static int renderNode(LdQNode* nodeP, SwldContext* contextP, KAlloc* allocP, cha
 //
 static int renderTerm(LdQTerm* term, SwldContext* contextP, KAlloc* allocP, char* buf, int bufSize)
 {
-  const char* attr = compactOrEncode(term->attr, contextP, allocP);
+  const char* attr = ldCompactOrEncode(term->attr, contextP, allocP);
   const char* op   = opToString(term->op);
   int n = 0;
 
@@ -191,7 +191,7 @@ static int renderNode(LdQNode* nodeP, SwldContext* contextP, KAlloc* allocP, cha
   if (nodeP->type == LdQLinkedNode)
   {
     // § 4.9 LinkedEntityRelation: attrName "{" sub-q "}"
-    const char* attr = compactOrEncode(nodeP->linked.relName, contextP, allocP);
+    const char* attr = ldCompactOrEncode(nodeP->linked.relName, contextP, allocP);
     int n = 0;
 
     int alen = strlen(attr);

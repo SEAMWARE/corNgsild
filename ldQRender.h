@@ -29,4 +29,18 @@
 //
 extern char* ldQRender(LdQNode* nodeP, SwldContext* contextP, KAlloc* allocP);
 
+
+
+// -----------------------------------------------------------------------------
+//
+// ldCompactOrEncode - compact an IRI against the @context, URL-encode if uncompactable
+//
+// For names embedded in URLs (q-filter terms, pick= lists, /attrs/{attrId}
+// path segments): the receiver interprets them via the @context the request
+// carries, so compact against THAT context; when the IRI has no short form
+// there, %-encode it (everything but RFC 3986 unreserved) so URL syntax
+// survives. NULL contextP returns the IRI untouched (internal storage mode).
+//
+extern const char* ldCompactOrEncode(const char* iri, SwldContext* contextP, KAlloc* allocP);
+
 #endif  // SWNGSILD_LDQRENDER_H_
