@@ -32,6 +32,7 @@
 #include "swNgsild/ldCsourceAlias.h"                   // ldViaHasAlias
 #include "swNgsild/ldRequestSubstitute.h"              // ldRequestSubstitute
 #include "swJsonld/SwldContext.h"                      // SwldContext (forwardCtxP->url for Link header)
+#include "swJsonld/swldInit.h"                         // swldCoreContext
 #include "swNgsild/ldDistOp.h"                         // Own interface
 
 
@@ -259,6 +260,46 @@ static SwRestKeyValue* buildHeaders(SwRestVerb     verb,
 
 // -----------------------------------------------------------------------------
 //
+// ldDistOpForwardContext - effective @context for a forward to this CSR
+//
+// Precedence (§ 9.5.2 + sensible fallback):
+//   1. csi.jsonldContext — the CSR explicitly declared the context its
+//      source speaks (csr->forwardCtxP != core; forwardCtxP is never NULL).
+//   2. The incoming request's @context, when URL-addressable — the source
+//      registered no preference, so forward in the vocabulary the client
+//      used; the Link header can carry it (url != NULL).
+//   3. Core context — nothing better is referencable by URL.
+//
+// Body compaction and the Link header MUST use the same context — emission
+// sites call this and pass the result to swldCompactTreeWith; buildHeaders
+// gets the same pointer so the Link URL matches the body's short names.
+//
+SwldContext* ldDistOpForwardContext(LdRegCacheItem* csr)
+{
+  if (csr->forwardCtxP != swldCoreContext())
+    return csr->forwardCtxP;
+
+  SwldContext* ctxP = swNgsild.contextP;
+
+  // An in-body @context array of ONE element (the common ld+json form
+  // ["<url>"]) is equivalent to its element — unwrap so the Link header
+  // has a URL to point at. Multi-element/inline contexts must be HOSTED
+  // (ImplicitlyCreated served URL, like sub/reg jsonldContext
+  // auto-population) — until that lands they fall through to core.
+  // FIXME: host multi-element/inline @context for forwards.
+  while (ctxP != NULL && ctxP->isArray && ctxP->contexts == 1)
+    ctxP = ctxP->contextV[0];
+
+  if (ctxP != NULL && ctxP->url != NULL)
+    return ctxP;
+
+  return swldCoreContext();
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldDistOpSendReceive -
 //
 int ldDistOpSendReceive(LdRegCacheItem*  csr,
@@ -331,7 +372,7 @@ int ldDistOpSendReceiveEx(LdRegCacheItem*  csr,
   }
 
   int             hc = 0;
-  SwRestKeyValue* hv = buildHeaders(verb, ownAlias, csr->tenant, csr->contextSourceInfoKV, csr->forwardCtxP, &hc);
+  SwRestKeyValue* hv = buildHeaders(verb, ownAlias, csr->tenant, csr->contextSourceInfoKV, ldDistOpForwardContext(csr), &hc);
 
   // Append optional extra headers (e.g. NGSILD-EntityMap for entity-map distops)
   if (extraHeaderV != NULL && extraHeaderCount > 0)
@@ -487,7 +528,7 @@ int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
     SwRestVerb itemVerb = itemV[i].hasVerb ? itemV[i].verb : verb;
 
     int             hc = 0;
-    SwRestKeyValue* hv = buildHeaders(itemVerb, ownAlias, csr->tenant, csr->contextSourceInfoKV, csr->forwardCtxP, &hc);
+    SwRestKeyValue* hv = buildHeaders(itemVerb, ownAlias, csr->tenant, csr->contextSourceInfoKV, ldDistOpForwardContext(csr), &hc);
 
     int idx = swRestClientMultiAdd(multi,
                                    itemVerb,

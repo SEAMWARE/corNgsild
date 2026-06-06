@@ -23,6 +23,20 @@
 
 #include "swNgsild/LdOp.h"                             // LdOp
 #include "swNgsild/LdRegCache.h"                       // LdRegCacheItem, LdRegInfo
+#include "swJsonld/SwldContext.h"                      // SwldContext
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldDistOpForwardContext - effective @context for a forward to this CSR
+//
+// csi.jsonldContext if the CSR declared one; else the incoming request's
+// @context when URL-addressable; else core. Emission sites compact the
+// forward body with this (swldCompactTreeWith) — buildHeaders uses the same
+// pointer internally, so the Link header always matches the body.
+//
+extern SwldContext* ldDistOpForwardContext(LdRegCacheItem* csr);
 
 
 
