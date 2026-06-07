@@ -189,6 +189,12 @@ typedef struct LdDistOpBatchResult
   char*        responseBody;      // request-kalloc; NULL if empty
   int          responseBodyLen;
   const char*  errorDetail;       // NULL on success; otherwise request-kalloc
+  // The @context that travels WITH the response — the URL in the response's
+  // json-ld#context Link header (application/json). NULL if the response
+  // carried no such Link (then: embedded @context if ld+json, else core).
+  // A forwarded read body MUST be expanded via its own context, not the
+  // client's request context nor the outgoing forward context.
+  const char*  responseContextUrl;
 } LdDistOpBatchResult;
 
 extern int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,

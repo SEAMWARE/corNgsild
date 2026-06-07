@@ -531,6 +531,41 @@ int ldDistOpSend(LdRegCacheItem*  csr,
 
 // -----------------------------------------------------------------------------
 //
+// responseContextLink - extract the json-ld#context Link URL from a response.
+//
+// A forwarded read body is expanded via the context that travels WITH it; for
+// an application/json response that context is the URL in the response's Link
+// header (rel="http://www.w3.org/ns/json-ld#context"). Returns the URL copied
+// into the request kalloc, or NULL when the response carried no such Link.
+//
+static const char* responseContextLink(SwRestKeyValue* headerV, int headerCount)
+{
+  for (int h = 0; h < headerCount; h++)
+  {
+    if (headerV[h].key == NULL || headerV[h].value == NULL)              continue;
+    if (strcasecmp(headerV[h].key, "Link") != 0)                         continue;
+    if (strstr(headerV[h].value, "json-ld#context") == NULL)             continue;
+
+    char* v = headerV[h].value;
+    if (v[0] != '<')                                                     continue;
+    char* end = strchr(v + 1, '>');
+    if (end == NULL)                                                     continue;
+
+    int   len = (int) (end - (v + 1));
+    char* url = (char*) kaAlloc(&swRest.kalloc, len + 1);
+    if (url == NULL)                                                     return NULL;
+    memcpy(url, v + 1, len);
+    url[len] = 0;
+    return url;
+  }
+
+  return NULL;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldDistOpSendMulti -
 //
 // Fan out N CSR forwards concurrently over swRestClientMulti. The per-CSR
@@ -663,6 +698,10 @@ int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
     }
     else
       resultV[i].responseBody = NULL;
+
+    // The context the response speaks (its json-ld#context Link), so the
+    // caller can expand the body via its own vocabulary, not the request's.
+    resultV[i].responseContextUrl = responseContextLink(resp->headerV, resp->headerCount);
 
     if (resp->statusCode >= 200 && resp->statusCode < 300)
       csr->lastSuccess = nowNs;
