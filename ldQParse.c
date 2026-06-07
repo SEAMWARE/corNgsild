@@ -87,6 +87,79 @@ static char* expandAttr(const char* name, int len, KAlloc* kaP)
 
 // -----------------------------------------------------------------------------
 //
+// urlDecodeSegment - %XX-decode one attrPath segment
+//
+// IRI dots travel %2E-encoded inside q (the dot is the attrPath
+// separator), and round-tripped q strings carry fully %-encoded IRIs
+// (ldQRender's compactOrEncode) — decode AFTER splitting on raw dots.
+//
+static char* urlDecodeSegment(const char* s, int len, KAlloc* kaP)
+{
+  char* out = (char*) kaAlloc(kaP, len + 1);
+  int   o   = 0;
+
+  for (int i = 0; i < len; i++)
+  {
+    if (s[i] == '%' && i + 2 < len && isxdigit((unsigned char) s[i + 1]) && isxdigit((unsigned char) s[i + 2]))
+    {
+      int hi = (s[i + 1] <= '9') ? s[i + 1] - '0' : (tolower(s[i + 1]) - 'a' + 10);
+      int lo = (s[i + 2] <= '9') ? s[i + 2] - '0' : (tolower(s[i + 2]) - 'a' + 10);
+      out[o++] = (char) (hi * 16 + lo);
+      i += 2;
+    }
+    else
+      out[o++] = s[i];
+  }
+
+  out[o] = 0;
+  return out;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// expandAttrPath - split a § 4.9 attrPath on raw dots, decode + expand each segment
+//
+// First segment → term.attr, the rest → term.subPathV. All segments are
+// context aliases (sub-attribute names expand exactly like attribute
+// names do).
+//
+static void expandAttrPath(LdQTerm* termP, const char* start, int len, KAlloc* kaP)
+{
+  int segN = 1;
+  for (int i = 0; i < len; i++)
+    if (start[i] == '.') segN++;
+
+  termP->subPathV = NULL;
+  termP->subPathN = 0;
+  if (segN > 1)
+    termP->subPathV = (char**) kaAlloc(kaP, (segN - 1) * sizeof(char*));
+
+  int segStart = 0;
+  int segIx    = 0;
+  for (int i = 0; i <= len; i++)
+  {
+    if (i == len || start[i] == '.')
+    {
+      char* decoded  = urlDecodeSegment(start + segStart, i - segStart, kaP);
+      char* expanded = expandAttr(decoded, strlen(decoded), kaP);
+
+      if (segIx == 0)
+        termP->attr = expanded;
+      else
+        termP->subPathV[termP->subPathN++] = expanded;
+
+      segIx++;
+      segStart = i + 1;
+    }
+  }
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // isDateTimeChar - check if character can appear in an ISO 8601 date-time
 //
 static bool isDateTimeChar(char c)
@@ -306,7 +379,7 @@ static LdQNode* parseTerm(const char** pp, KAlloc* kaP)
   //
   const char* attrStart = p;
 
-  while (*p != 0 && *p != '=' && *p != '!' && *p != '>' && *p != '<' && *p != '~' && *p != ';' && *p != '|' && *p != ')' && *p != '{' && *p != '}' && *p != ' ')
+  while (*p != 0 && *p != '=' && *p != '!' && *p != '>' && *p != '<' && *p != '~' && *p != ';' && *p != '|' && *p != ')' && *p != '{' && *p != '}' && *p != '[' && *p != ' ')
     p++;
 
   if (p == attrStart)
@@ -356,7 +429,44 @@ static LdQNode* parseTerm(const char** pp, KAlloc* kaP)
   //
   LdQNode* nodeP = (LdQNode*) kaAlloc(kaP, sizeof(LdQNode));
   nodeP->type = LdQTermNode;
-  nodeP->term.attr = expandAttr(attrStart, attrLen, kaP);
+  expandAttrPath(&nodeP->term, attrStart, attrLen, kaP);
+
+  //
+  // § 4.9 "[...]" — path INTO the value. Opaque JSON member names: NO
+  // context expansion, dots separate members, %XX decoded per segment
+  // (a literal dot inside a member name travels %2E-encoded).
+  //
+  nodeP->term.valuePathV = NULL;
+  nodeP->term.valuePathN = 0;
+  if (*p == '[')
+  {
+    p++;  // consume '['
+    const char* vpStart = p;
+    while (*p != 0 && *p != ']')
+      p++;
+    if (*p != ']')
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid q parameter", "expected ']' after value path");
+      return NULL;
+    }
+    int vpLen = (int) (p - vpStart);
+    p++;  // consume ']'
+
+    int segN = 1;
+    for (int i = 0; i < vpLen; i++)
+      if (vpStart[i] == '.') segN++;
+    nodeP->term.valuePathV = (char**) kaAlloc(kaP, segN * sizeof(char*));
+
+    int segStart = 0;
+    for (int i = 0; i <= vpLen; i++)
+    {
+      if (i == vpLen || vpStart[i] == '.')
+      {
+        nodeP->term.valuePathV[nodeP->term.valuePathN++] = urlDecodeSegment(vpStart + segStart, i - segStart, kaP);
+        segStart = i + 1;
+      }
+    }
+  }
 
   //
   // Detect operator

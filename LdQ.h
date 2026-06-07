@@ -80,7 +80,18 @@ typedef struct LdQValue
 //
 typedef struct LdQTerm
 {
-  char*         attr;       // expanded attribute IRI
+  char*         attr;       // expanded attribute IRI (first path segment)
+  char**        subPathV;   // § 4.9 attrPath — expanded sub-attribute IRIs
+                            // (segments after the first '.'), or NULL.
+                            // Path dots are separators on the wire; IRI
+                            // dots travel %2E-encoded (ldQRender) and are
+                            // decoded segment-wise at parse.
+  int           subPathN;
+  char**        valuePathV;  // § 4.9 "[...]" — path INTO the value: opaque
+                             // JSON member names (NO context expansion /
+                             // compaction), dot-separated inside the
+                             // brackets, %XX round-trip-safe.
+  int           valuePathN;
   LdQOperator   op;
   LdQValueType  valueType;
   LdQValue      value;

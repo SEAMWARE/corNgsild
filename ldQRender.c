@@ -124,6 +124,58 @@ static int renderTerm(LdQTerm* term, SwldContext* contextP, KAlloc* allocP, char
   const char* op   = opToString(term->op);
   int n = 0;
 
+  //
+  // § 4.9 attrPath — append the sub-attribute segments, each compacted
+  // (or %-encoded — IRI dots become %2E, keeping the raw '.' unambiguous
+  // as the path separator) and joined with '.'.
+  //
+  if (term->subPathN > 0)
+  {
+    int total = strlen(attr) + 1;
+    const char** segV = (const char**) kaAlloc(allocP, term->subPathN * sizeof(char*));
+    for (int i = 0; i < term->subPathN; i++)
+    {
+      segV[i] = ldCompactOrEncode(term->subPathV[i], contextP, allocP);
+      total  += strlen(segV[i]) + 1;
+    }
+
+    char* joined = (char*) kaAlloc(allocP, total);
+    strcpy(joined, attr);
+    for (int i = 0; i < term->subPathN; i++)
+    {
+      strcat(joined, ".");
+      strcat(joined, segV[i]);
+    }
+    attr = joined;
+  }
+
+  //
+  // § 4.9 "[...]" — value-path members are opaque (no compaction):
+  // %-encode only, dots inside a member name become %2E, the joining
+  // dots stay raw.
+  //
+  if (term->valuePathN > 0)
+  {
+    int total = strlen(attr) + 3;
+    const char** vsegV = (const char**) kaAlloc(allocP, term->valuePathN * sizeof(char*));
+    for (int i = 0; i < term->valuePathN; i++)
+    {
+      vsegV[i] = urlEncode(term->valuePathV[i], allocP);
+      total   += strlen(vsegV[i]) + 1;
+    }
+
+    char* joined = (char*) kaAlloc(allocP, total);
+    strcpy(joined, attr);
+    strcat(joined, "[");
+    for (int i = 0; i < term->valuePathN; i++)
+    {
+      if (i > 0) strcat(joined, ".");
+      strcat(joined, vsegV[i]);
+    }
+    strcat(joined, "]");
+    attr = joined;
+  }
+
   if (term->op == LdQExists)
   {
     n = snprintf(buf, bufSize, "%s", attr);

@@ -175,19 +175,86 @@ static KjNode* getAttrValue(KjNode* entityP, const char* attrName)
 
 // -----------------------------------------------------------------------------
 //
+// attrInstanceOf - resolve an attribute's instance object inside `containerP`
+//
+// The object carrying "value"/"object" + sub-attributes — handles both
+// the flat API shape ({type, value, sub: {...}}) and the DB-model
+// instance-map shape (wrapper.firstChild → instance object). Returns the
+// raw wrapper for scalars (simplified form) and NULL when absent.
+//
+static KjNode* attrInstanceOf(KjNode* containerP, const char* attrName)
+{
+  KjNode* wrapperP = kjLookup(containerP, attrName);
+  if (wrapperP == NULL || wrapperP->type != KjObject)
+    return wrapperP;
+
+  if (kjLookup(wrapperP, "value") != NULL || kjLookup(wrapperP, "object") != NULL)
+    return wrapperP;   // flat API shape
+
+  KjNode* instP = wrapperP->value.firstChildP;   // DB-model: first instance
+  if (instP != NULL && instP->type == KjObject)
+    return instP;
+
+  return wrapperP;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // matchTerm - evaluate a single LdQTerm against an entity
 //
 static bool matchTerm(KjNode* entityP, LdQTerm* term)
 {
-  if (term->op == LdQExists)
+  //
+  // § 4.9 attrPath — descend through the sub-attribute segments: the
+  // value (or existence) under test is the LAST segment's, looked up
+  // inside the previous segment's instance object.
+  //
+  KjNode*     containerP = entityP;
+  const char* leafName   = term->attr;
+
+  if (term->subPathN > 0)
   {
-    KjNode* wrapperP = kjLookup(entityP, term->attr);
+    KjNode* instP = attrInstanceOf(entityP, term->attr);
+    if (instP == NULL || instP->type != KjObject)
+      return false;
+
+    for (int i = 0; i < term->subPathN - 1; i++)
+    {
+      instP = attrInstanceOf(instP, term->subPathV[i]);
+      if (instP == NULL || instP->type != KjObject)
+        return false;
+    }
+
+    containerP = instP;
+    leafName   = term->subPathV[term->subPathN - 1];
+  }
+
+  if (term->op == LdQExists && term->valuePathN == 0)
+  {
+    KjNode* wrapperP = kjLookup(containerP, leafName);
     return (wrapperP != NULL);
   }
 
-  KjNode* valueP = getAttrValue(entityP, term->attr);
+  KjNode* valueP = getAttrValue(containerP, leafName);
   if (valueP == NULL)
     return false;
+
+  //
+  // § 4.9 "[...]" — descend INTO the value through opaque member names.
+  //
+  for (int i = 0; i < term->valuePathN; i++)
+  {
+    if (valueP->type != KjObject)
+      return false;
+    valueP = kjLookup(valueP, term->valuePathV[i]);
+    if (valueP == NULL)
+      return false;
+  }
+
+  if (term->op == LdQExists)
+    return true;
 
   double entityNum = 0;
   bool   isNum     = false;
