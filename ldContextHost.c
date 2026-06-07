@@ -12,15 +12,17 @@
 #include <time.h>                                      // time
 
 #include "kalloc/KAlloc.h"                             // KAlloc, kaAlloc
+#include "kalloc/kaStrdup.h"                           // kaStrdup
 #include "kjson/KjNode.h"                              // KjNode
 #include "kjson/kjRenderSize.h"                        // kjFastRenderSize
 #include "kjson/kjRender.h"                            // kjFastRender
 
+#include "swRest/SwRestState.h"                        // swRest (per-request scratch allocator)
+
 #include "swJsonld/SwldContext.h"                      // SwldContext, SwldKindImplicit
 #include "swJsonld/SwldContextCache.h"                 // SwldContextCache
-#include "swJsonld/swldCache.h"                        // swldCacheInsert, swldCacheReapVolatile
+#include "swJsonld/swldCache.h"                        // swldCacheLookup, swldCacheInsert, swldCacheReapVolatile
 #include "swJsonld/swldContextParse.h"                 // swldContextFromObject, swldContextFromTree
-#include "swJsonld/swldIdGen.h"                        // swldIdGenerate
 
 #include "swNgsild/SwNgsild.h"                         // ldBrokerHttpEndpoint
 #include "swNgsild/ldPeriodicLoop.h"                   // ldPeriodicLoopRegister
@@ -32,7 +34,34 @@ extern SwldContextCache* swldCacheGet(void);
 
 // -----------------------------------------------------------------------------
 //
+// fnv1a64 - FNV-1a 64-bit hash, for content-addressing the served body.
+//
+static uint64_t fnv1a64(const char* s, int len)
+{
+  uint64_t h = 1469598103934665603ULL;
+
+  for (int i = 0; i < len; i++)
+  {
+    h ^= (unsigned char) s[i];
+    h *= 1099511628211ULL;
+  }
+
+  return h;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldContextHostVolatile - see header.
+//
+// Content-addressed + deduplicated: the served context's id is a hash of its
+// body, so identical inline @contexts (the common case — a client app sends
+// the same one on every request) collapse to ONE cache entry no matter the
+// request rate. Each call refreshes the TTL (sliding), so the entry lives as
+// long as it keeps being used and is reaped TTL seconds after the last use.
+// The cache is therefore bounded by the number of DISTINCT inline contexts
+// seen in a TTL window, not by request count.
 //
 SwldContext* ldContextHostVolatile(KjNode* ctxBody)
 {
@@ -46,30 +75,53 @@ SwldContext* ldContextHostVolatile(KjNode* ctxBody)
   if (storeP == NULL)
     return NULL;
 
-  char* id = swldIdGenerate(storeP);
-  if (id == NULL)
+  // Render the wrapper {"@context": <orig>} into the PER-REQUEST scratch
+  // allocator (not the cache arena): on a dedup hit we discard it with the
+  // request and never touch the arena — so repeated identical contexts under
+  // load don't grow the cache allocator at all.
+  int   bodyLen = kjFastRenderSize(ctxBody) + 32;
+  char* scratch = (char*) kaAlloc(&swRest.kalloc, bodyLen);
+  if (scratch == NULL)
     return NULL;
 
-  // Build the expansion / compaction maps from the body — same parse the
-  // sub/reg auto-population uses.
+  int p = 0;
+  p += snprintf(scratch + p, bodyLen - p, "{\"@context\":");
+  kjFastRender(ctxBody, scratch + p);
+  p += strlen(scratch + p);
+  p += snprintf(scratch + p, bodyLen - p, "}");
+
+  // id = urn:ngsi-ld:Context:v<hash>. The 'v' marks a content-addressed
+  // volatile context, distinct from the sub/reg counter-based ids.
+  char id[64];
+  snprintf(id, sizeof(id), "urn:ngsi-ld:Context:v%016llx",
+           (unsigned long long) fnv1a64(scratch, p));
+
+  double now = (double) time(NULL);
+
+  // Dedup: an identical body already hosted? Refresh its TTL and reuse it.
+  // The body-equality guard makes a (astronomically unlikely) hash collision
+  // a correctness non-event — a mismatch just falls through to re-host.
+  SwldContext* hitP = swldCacheLookup(id);
+  if (hitP != NULL && hitP->volatileCtx && hitP->body != NULL &&
+      strcmp(hitP->body, scratch) == 0)
+  {
+    hitP->expiresAt = now + LD_VOLATILE_CTX_TTL_SEC;
+    return hitP;
+  }
+
+  // Miss — build the entry. Copy id + body into the cache arena (they must
+  // outlive the request); the maps come from the same parse the sub/reg
+  // auto-population uses.
   SwldContext* ctxP = (ctxBody->type == KjObject)
                         ? swldContextFromObject(ctxBody, storeP, NULL)
                         : swldContextFromTree(ctxBody, storeP);
   if (ctxP == NULL)
     return NULL;
 
-  // Persist the wrapper {"@context": <orig>} as the served body so a GET of
-  // the served URL returns a self-contained context document.
-  int   bodyLen = kjFastRenderSize(ctxBody) + 32;
-  char* bodyBuf = (char*) kaAlloc(storeP, bodyLen);
-  if (bodyBuf == NULL)
+  char* idBuf  = kaStrdup(storeP, id);
+  char* bodyP  = kaStrdup(storeP, scratch);
+  if (idBuf == NULL || bodyP == NULL)
     return NULL;
-
-  int p = 0;
-  p += snprintf(bodyBuf + p, bodyLen - p, "{\"@context\":");
-  kjFastRender(ctxBody, bodyBuf + p);
-  p += strlen(bodyBuf + p);
-  snprintf(bodyBuf + p, bodyLen - p, "}");
 
   // Served URL = <httpEndpoint>/ngsi-ld/v1/jsonldContexts/{id}. Set it on
   // the context itself so emission sites (Link header) read ->url directly,
@@ -78,21 +130,21 @@ SwldContext* ldContextHostVolatile(KjNode* ctxBody)
   const char* base    = (ldBrokerHttpEndpoint != NULL) ? ldBrokerHttpEndpoint : "";
   int         baseLen = strlen(base);
   int         prefLen = strlen(prefix);
-  int         idLen   = strlen(id);
+  int         idLen   = strlen(idBuf);
   char*       urlBuf  = (char*) kaAlloc(storeP, baseLen + prefLen + idLen + 1);
   if (urlBuf == NULL)
     return NULL;
   memcpy(urlBuf, base, baseLen);
   memcpy(urlBuf + baseLen, prefix, prefLen);
-  memcpy(urlBuf + baseLen + prefLen, id, idLen);
+  memcpy(urlBuf + baseLen + prefLen, idBuf, idLen);
   urlBuf[baseLen + prefLen + idLen] = 0;
 
-  ctxP->id          = id;
+  ctxP->id          = idBuf;
   ctxP->url         = urlBuf;
-  ctxP->body        = bodyBuf;
+  ctxP->body        = bodyP;
   ctxP->kind        = SwldKindImplicit;
   ctxP->volatileCtx = true;
-  ctxP->expiresAt   = (double) time(NULL) + LD_VOLATILE_CTX_TTL_SEC;
+  ctxP->expiresAt   = now + LD_VOLATILE_CTX_TTL_SEC;
 
   swldCacheInsert(ctxP);   // cache only — never db.contextSave
 
@@ -103,7 +155,8 @@ SwldContext* ldContextHostVolatile(KjNode* ctxBody)
 
 // -----------------------------------------------------------------------------
 //
-// volatileReapTick - periodic backstop for never-fetched volatile contexts
+// volatileReapTick - periodic backstop: drop volatile contexts TTL seconds
+// after their last use.
 //
 static void volatileReapTick(void* ctx, uint64_t nowNs, KAlloc* kaP)
 {
