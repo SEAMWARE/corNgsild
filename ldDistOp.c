@@ -34,6 +34,7 @@
 #include "swJsonld/SwldContext.h"                      // SwldContext (forwardCtxP->url for Link header)
 #include "swJsonld/swldInit.h"                         // swldCoreContext
 #include "swJsonld/swldDownload.h"                     // swldIsCoreContextUrl
+#include "swNgsild/ldContextHost.h"                    // ldContextHostVolatile
 #include "swNgsild/ldDistOp.h"                         // Own interface
 
 
@@ -129,7 +130,7 @@ static SwRestKeyValue* buildHeaders(SwRestVerb     verb,
   if (csrInfoKV != NULL)
     for (int i = 0; csrInfoKV[i] != NULL; i += 2) csiCount++;
 
-  int cap = viaIn + 5 + csiCount;   // Content-Type + Accept + Link + own Via + NGSILD-Tenant + info[]
+  int cap = viaIn + 6 + csiCount;   // Content-Type + Accept + Link + NGSILD-Volatile-Context + own Via + NGSILD-Tenant + info[]
   SwRestKeyValue* hv = (SwRestKeyValue*) kaAlloc(&swRest.kalloc, cap * sizeof(SwRestKeyValue));
   int hc = 0;
 
@@ -190,6 +191,17 @@ static SwRestKeyValue* buildHeaders(SwRestVerb     verb,
     hv[hc].key   = (char*) "Link";
     hv[hc].value = linkVal;
     hc++;
+
+    // The Link points at a one-shot broker-hosted context (inline / multi
+    // element request @context with no URL of its own). Tell the receiver
+    // not to cache it — it vanishes after the first fetch. Belt-and-braces
+    // with the Cache-Control: no-store the served document also carries.
+    if (forwardCtxP->volatileCtx)
+    {
+      hv[hc].key   = (char*) "NGSILD-Volatile-Context";
+      hv[hc].value = (char*) "true";
+      hc++;
+    }
   }
 
   if (csiAccept != NULL)
@@ -261,15 +273,38 @@ static SwRestKeyValue* buildHeaders(SwRestVerb     verb,
 
 // -----------------------------------------------------------------------------
 //
+// forwardHostOrCore - host the in-body @context as a volatile served context,
+// or fall back to core when there's nothing to host.
+//
+// Used when the request's user @context cannot be referenced by URL as-is
+// (inline object, or multi-element array): the Link header needs a URL, so
+// we mint a one-shot hosted context and forward in that vocabulary.
+//
+static SwldContext* forwardHostOrCore(void)
+{
+  if (swNgsild.userContextBody != NULL)
+  {
+    SwldContext* hostedP = ldContextHostVolatile(swNgsild.userContextBody);
+    if (hostedP != NULL)
+      return hostedP;
+  }
+  return swldCoreContext();
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldDistOpForwardContext - effective @context for a forward to this CSR
 //
 // Precedence (§ 9.5.2 + sensible fallback):
 //   1. csi.jsonldContext — the CSR explicitly declared the context its
 //      source speaks (csr->forwardCtxP != core; forwardCtxP is never NULL).
-//   2. The incoming request's @context, when URL-addressable — the source
-//      registered no preference, so forward in the vocabulary the client
-//      used; the Link header can carry it (url != NULL).
-//   3. Core context — nothing better is referencable by URL.
+//   2. The incoming request's @context — forward in the vocabulary the
+//      client used. URL-addressable as-is when possible; an inline /
+//      multi-element @context is hosted as a volatile served URL so the
+//      Link header can carry it.
+//   3. Core context — the client sent only core (nothing to preserve).
 //
 // Body compaction and the Link header MUST use the same context — emission
 // sites call this and pass the result to swldCompactTreeWith; buildHeaders
@@ -289,10 +324,9 @@ SwldContext* ldDistOpForwardContext(LdRegCacheItem* csr)
   // skip them; what remains decides:
   //   exactly one URL element → the user context (also covers ["<url>"])
   //   none                    → core (the client really sent only core)
-  //   two-plus / inline       → must be HOSTED (ImplicitlyCreated served
-  //     URL, like sub/reg jsonldContext auto-population) — until that
-  //     lands they fall through to core.
-  //     FIXME: host multi-user-element/inline @context for forwards.
+  //   two-plus / inline       → must be HOSTED (volatile served URL) so
+  //     the Link header can reference it; a Link header carries a URL, not
+  //     an inline object or multi-element array.
   while (ctxP != NULL && ctxP->isArray)
   {
     SwldContext* soleP = NULL;
@@ -307,15 +341,20 @@ SwldContext* ldDistOpForwardContext(LdRegCacheItem* csr)
       soleP = eP;
     }
 
-    if (users != 1)
-      return swldCoreContext();
-    ctxP = soleP;   // may itself be an array — keep walking
+    if (users == 0)
+      return swldCoreContext();         // client really sent only core
+    if (users == 1)
+    {
+      ctxP = soleP;                     // unwrap, keep walking
+      continue;
+    }
+    return forwardHostOrCore();         // two-plus user elements → host
   }
 
   if (ctxP != NULL && ctxP->url != NULL)
-    return ctxP;
+    return ctxP;                        // single URL-addressable user ctx
 
-  return swldCoreContext();
+  return forwardHostOrCore();           // inline object (no url) → host
 }
 
 

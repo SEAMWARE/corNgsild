@@ -21,6 +21,7 @@
 #include "swJsonld/swldCompactTree.h"                      // swldCompactTree, swldCompactTreeWith
 #include "swJsonld/swldDownload.h"                         // swldContextFromUrl
 
+#include "swNgsild/ldContextHost.h"                      // ldContextHostVolatile
 #include "swNgsild/LdProblem.h"                          // LD_ERROR_*
 #include "swNgsild/LdVocab.h"                            // LD_VOCAB_*
 #include "swNgsild/LdOp.h"                               // LdOpRetrieveEntity, LdOpQueryEntities
@@ -1035,6 +1036,20 @@ static void ldRenderHook(void)
   SwldContext* ctxP   = respCtxP;
   const char*  ctxUrl = (ctxP != NULL) ? ctxP->url : NULL;
   bool         acceptLdJson = (acceptType == LdAcceptLdJson);
+
+  // The response is compacted in the request's vocabulary (above), so the
+  // @context it speaks must be referenceable — but a Link header carries a
+  // URL, and an inline / multi-element request @context has none. Host it
+  // as a one-shot served context so json responses get a resolvable Link
+  // and ld+json bodies a resolvable @context. Without this the response
+  // would carry compacted short names with no way to expand them.
+  if (ctxUrl == NULL && ctxP != NULL && ctxP != swldCoreContext() &&
+      swNgsild.userContextBody != NULL)
+  {
+    SwldContext* hostedP = ldContextHostVolatile(swNgsild.userContextBody);
+    if (hostedP != NULL)
+      ctxUrl = hostedP->url;
+  }
 
   // application/ld+json: @context lives in the body. Content-Type set to
   // application/ld+json.
