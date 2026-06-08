@@ -45,9 +45,16 @@
 
 // -----------------------------------------------------------------------------
 //
-// ldRequestStartHook - reset per-request NGSI-LD state
+// ldPreDispatchHook - reset per-request NGSI-LD state at the start of dispatch
 //
-static void ldRequestStartHook(void)
+// Runs as swRest's pre-dispatch hook (the start of the atomic final callback),
+// not at first-byte. swNgsild is __thread; resetting it here — rather than at
+// request-start — means its reset, population (param/parse hooks) and reads all
+// happen inside the one non-yielding dispatch, so another connection's request
+// interleaved on this pool thread can't leave stale swNgsild behind. No
+// post-response code reads swNgsild, so the dispatch window is the full extent.
+//
+static void ldPreDispatchHook(void)
 {
   memset(&swNgsild, 0, sizeof(swNgsild));
   ldCsrSubPendingDiscard();
@@ -1139,7 +1146,7 @@ static void ldRenderHook(void)
 //
 void ldHooksRegister(void)
 {
-  swRestSetRequestStartHook(ldRequestStartHook);
+  swRestSetPreDispatchHook(ldPreDispatchHook);
   swRestSetPayloadParseHook(ldParseHook);
   swRestSetPayloadRenderHook(ldRenderHook);
   swRestSetParamHook(ldParamHook);

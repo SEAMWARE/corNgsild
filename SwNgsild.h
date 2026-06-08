@@ -102,7 +102,7 @@ typedef struct SwNgsild
   char*      aggrPeriodDuration; // ISO 8601 duration: PT1H, PT5M, P1D, ... (NULL = whole window)
 
   // URL parameters — pagination
-  int      limit;        // parsed limit value (default 20, set in requestStartHook)
+  int      limit;        // parsed limit value (default 20, set in preDispatchHook)
   int      offset;       // parsed offset value (default 0)
   int      page;         // parsed ?page=<N> (1-based; 0 = unset). NOT a NGSI-LD
                          // spec parameter — accepted as a compatibility shim and
