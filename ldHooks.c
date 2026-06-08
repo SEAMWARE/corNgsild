@@ -1018,6 +1018,12 @@ static void ldRenderHook(void)
     if (linkUrl != NULL)
       respCtxP = swldContextFromUrl(linkUrl, &swRest.kalloc);
   }
+  // Default user @context (§ 4 / § 8.2.3): no body/Link context on this
+  // request → compact the response in, and advertise it via, the broker-
+  // configured default user context so a naked-json client can decode the
+  // short names. Core still wins term-by-term.
+  if (respCtxP == NULL && ldDefaultContextUrl != NULL)
+    respCtxP = swldContextFromUrl(ldDefaultContextUrl, &swRest.kalloc);
   if (respCtxP == NULL)
     respCtxP = swldCoreContext();
 

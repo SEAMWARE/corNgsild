@@ -93,6 +93,13 @@ void ldContextResolve(void)
     }
   }
 
+  // Default user @context (§ 4 / § 8.2.3): the request carried no @context of
+  // its own (no Link header, no body), so fall back to the broker-configured
+  // default user context before core. Core still wins term-by-term (it sits
+  // last in the chain), so this only adds the user's terms, never overrides.
+  if (swNgsild.contextP == NULL && ldDefaultContextUrl != NULL)
+    swNgsild.contextP = swldContextFromUrl(ldDefaultContextUrl, faP);
+
   if (swNgsild.contextP == NULL)
     swNgsild.contextP = swldCoreContext();
 }
