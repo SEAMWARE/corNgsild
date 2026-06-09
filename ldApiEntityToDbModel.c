@@ -176,10 +176,10 @@ static void normalizeValueKey(KjNode* attrP)
 //
 // timestampSet - add createdAt/modifiedAt to an KjObject node
 //
-static void timestampSet(KjNode* objP, uint64_t ts, KAlloc* faP)
+static void timestampSet(KjNode* objP, uint64_t createdAt, uint64_t modifiedAt, KAlloc* faP)
 {
-  kjChildAdd(objP, kjInteger(swRest.kjsonP, LD_VOCAB_CREATED_AT,  (long long) ts));
-  kjChildAdd(objP, kjInteger(swRest.kjsonP, LD_VOCAB_MODIFIED_AT, (long long) ts));
+  kjChildAdd(objP, kjInteger(swRest.kjsonP, LD_VOCAB_CREATED_AT,  (long long) createdAt));
+  kjChildAdd(objP, kjInteger(swRest.kjsonP, LD_VOCAB_MODIFIED_AT, (long long) modifiedAt));
 }
 
 
@@ -254,7 +254,7 @@ static void attrToDbModel(KjNode* attrP, uint64_t ts, KAlloc* faP)
   temporalPropertiesToNanoseconds(attrP);
 
   // Add timestamps to this attribute instance
-  timestampSet(attrP, ts, faP);
+  timestampSet(attrP, ts, ts, faP);
 }
 
 
@@ -326,7 +326,7 @@ static KjNode* wrapMultiAttr(KjNode* arrayP, uint64_t ts, KAlloc* faP)
 //
 // ldApiEntityToDbModel - transform API-format entity tree to DB storage format
 //
-void ldApiEntityToDbModel(KjNode* entityP, KAlloc* faP)
+void ldApiEntityToDbModel(KjNode* entityP, KAlloc* faP, int64_t createdAt)
 {
   if (entityP == NULL || entityP->type != KjObject)
     return;
@@ -394,6 +394,8 @@ void ldApiEntityToDbModel(KjNode* entityP, KAlloc* faP)
     break;
   }
 
-  // Add timestamps to the entity itself
-  timestampSet(entityP, ts, faP);
+  // Add timestamps to the entity itself. createdAt > 0 means preserve a stored
+  // value across a Replace (§ 6.5.3.3); 0 means this is a create — stamp 'now'.
+  uint64_t entityCreatedAt = (createdAt > 0) ? (uint64_t) createdAt : ts;
+  timestampSet(entityP, entityCreatedAt, ts, faP);
 }

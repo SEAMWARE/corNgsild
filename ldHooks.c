@@ -739,6 +739,20 @@ static void ldParseHook(void)
   }
 
   //
+  // § 5.2.4 — createdAt and modifiedAt are system-generated temporal Properties
+  // ("entered into" / "last modified in an NGSI-LD system"); a client cannot
+  // set them. Silently drop any incoming timestamps the moment the body is
+  // parsed, for every entity-bearing write: single entity, attribute fragment
+  // (which skips ldNormalizeInput below) and batch (/entityOperations, which
+  // never reaches the normalize block). Doing it here — not inside
+  // ldNormalizeInput — is the single point that covers them all.
+  //
+  if (swRest.in.requestTree != NULL && swRest.in.urlPath != NULL
+      && (strncmp(swRest.in.urlPath, "/ngsi-ld/v1/entities",         20) == 0
+          || strncmp(swRest.in.urlPath, "/ngsi-ld/v1/entityOperations", 28) == 0))
+    ldStripSysAttrs(swRest.in.requestTree);
+
+  //
   // Normalize input: convert simplified/concise NGSI-LD to normalized format.
   // Only applies to entity payloads — subscription and registration payloads
   // are passed through as-is.
