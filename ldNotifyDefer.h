@@ -65,10 +65,4 @@ extern void ldNotifyDeferDelete(LdSubCache* cacheP,
 //
 extern void ldNotifyDispatchPending(void);
 
-// Save/restore this thread's deferred-notification queue around an in-process
-// self-forward (Inc5b).
-typedef struct LdNotifyPendingSaved { void* v; int n; int cap; void* cache; } LdNotifyPendingSaved;
-extern void ldNotifyPendingSaveReset(LdNotifyPendingSaved* s);
-extern void ldNotifyPendingRestore(const LdNotifyPendingSaved* s);
-
 #endif  // SWNGSILD_LDNOTIFYDEFER_H_

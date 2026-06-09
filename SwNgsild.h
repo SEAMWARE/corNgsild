@@ -22,6 +22,10 @@
 #include "swNgsild/LdQ.h"                               // LdQNode
 #include "swNgsild/LdScopeExpr.h"                        // LdScopeExpr
 #include "swNgsild/LdTypeExpr.h"                         // LdTypeExpr
+#include "swNgsild/ldCsrSubNotify.h"                     // CsrSubPending (per-conn deferred cache)
+#include "swNgsild/ldSubscriptionNotify.h"              // LdNotifyPendingEntry (per-conn deferred cache)
+#include "swNgsild/LdSubCache.h"                         // LdSubCache (notify pending cache pointer)
+#include "swNgsild/ldRegCache.h"                         // ProbePending, PROBE_PENDING_MAX (per-conn)
 
 
 
@@ -185,6 +189,21 @@ typedef struct SwNgsild
 
   // Tenant (resolved in preServiceHook, opaque to swNgsild)
   void*  tenantP;
+
+  // Inc6c — per-connection deferred caches (were static __thread in their .c
+  // files). Drained by the post-response hook; the realloc'd buffers are freed
+  // in swNgsildStateFree when the connection's state is released.
+  CsrSubPending*         csrPendingV;        // ldCsrSubNotify.c
+  int                    csrPendingN;
+  int                    csrPendingCap;
+
+  LdNotifyPendingEntry*  pendingV;           // ldNotifyDefer.c
+  int                    pendingN;
+  int                    pendingCap;
+  LdSubCache*            pendingCache;
+
+  ProbePending           probePendingV[PROBE_PENDING_MAX];  // ldRegCache.c (fixed)
+  int                    probePendingN;
 
 } SwNgsild;
 

@@ -1161,7 +1161,20 @@ static void* swNgsildStateCreate(void)
 
 static void swNgsildStateFree(void* p)
 {
-  free(p);
+  SwNgsild* sn = (SwNgsild*) p;
+  if (sn == NULL)
+    return;
+
+  // Free the per-connection deferred-cache buffers (Inc6c). The notify/csr
+  // queues are realloc'd; probePending is an inline array but its entries hold
+  // strdup'd regIds — normally drained (freed) by the post-response hook, but
+  // free any that survive a path that skipped it.
+  for (int i = 0; i < sn->probePendingN; i++)
+    free(sn->probePendingV[i].regId);
+  free(sn->csrPendingV);
+  free(sn->pendingV);
+
+  free(sn);
 }
 
 

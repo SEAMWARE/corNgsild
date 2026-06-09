@@ -44,6 +44,7 @@
 
 #include "swNgsild/LdSubCache.h"                       // LdSubCacheItem, LdSubEntitySelector
 #include "swNgsild/LdRegCache.h"                       // LdRegCache, LdRegCacheItem, LdRegInfo, LdRegEntityInfo
+#include "swNgsild/SwNgsild.h"                          // swNgsild (per-conn csrPending* cache)
 #include "swNgsild/ldPeriodicLoop.h"                   // ldPeriodicLoopRegister
 #include "swNgsild/swNgsild.h"                         // swNgsild (for tenant access via opaque)
 #include "swNgsild/ldNotifyStatsHook.h"                // ldNotifyStatsHookInvoke
@@ -407,16 +408,10 @@ static void csourceNotificationPost(LdSubCacheItem* subItemP, KjNode* notificati
 // as ldNotifyDefer.c. The periodic tick runs on its own thread with no
 // post-response hook and builds + posts directly.
 //
-typedef struct CsrSubPending
-{
-  LdSubCacheItem*  subItemP;
-  KjNode*          notification;   // built at enqueue time — see csourceNotificationBuild
-} CsrSubPending;
-
-static __thread CsrSubPending* csrPendingV   = NULL;
-static __thread int            csrPendingN   = 0;
-static __thread int            csrPendingCap = 0;
-
+// The queue lives in the per-connection swNgsild (Inc6c: csrPendingV/N/Cap);
+// CsrSubPending is declared in ldCsrSubNotify.h. The buffer is freed in
+// swNgsildStateFree when the connection's state is released.
+//
 static void sendCsourceNotification(LdSubCacheItem* subItemP,
                                     LdRegCacheItem** matchV, int matchN,
                                     const char* triggerReason)
@@ -433,22 +428,22 @@ static void sendCsourceNotification(LdSubCacheItem* subItemP,
       return;
   }
 
-  if (csrPendingN >= csrPendingCap)
+  if (swNgsild.csrPendingN >= swNgsild.csrPendingCap)
   {
-    int newCap = (csrPendingCap == 0) ? 8 : csrPendingCap * 2;
-    CsrSubPending* newV = (CsrSubPending*) realloc(csrPendingV, newCap * sizeof(CsrSubPending));
+    int newCap = (swNgsild.csrPendingCap == 0) ? 8 : swNgsild.csrPendingCap * 2;
+    CsrSubPending* newV = (CsrSubPending*) realloc(swNgsild.csrPendingV, newCap * sizeof(CsrSubPending));
     if (newV == NULL)
       return;
-    csrPendingV   = newV;
-    csrPendingCap = newCap;
+    swNgsild.csrPendingV   = newV;
+    swNgsild.csrPendingCap = newCap;
   }
 
   // The matched cache items may be deleted later in this same request
   // (a CSR delete fans out, THEN removes the item) — build the
   // notification tree NOW, defer only the POST.
-  csrPendingV[csrPendingN].subItemP     = subItemP;
-  csrPendingV[csrPendingN].notification = csourceNotificationBuild(subItemP, matchV, matchN, triggerReason);
-  csrPendingN++;
+  swNgsild.csrPendingV[swNgsild.csrPendingN].subItemP     = subItemP;
+  swNgsild.csrPendingV[swNgsild.csrPendingN].notification = csourceNotificationBuild(subItemP, matchV, matchN, triggerReason);
+  swNgsild.csrPendingN++;
 }
 
 
@@ -457,39 +452,9 @@ static void sendCsourceNotification(LdSubCacheItem* subItemP,
 //
 // ldCsrSubPendingDiscard - drop stale entries at request start
 //
-// The pending entries reference the request arena; if any path ever
-// skipped the post-response hook, flushing a leftover entry from a
-// LATER request on the same thread would dereference reused memory.
-// Discarding at request start makes that impossible.
-//
 void ldCsrSubPendingDiscard(void)
 {
-  csrPendingN = 0;
-}
-
-
-
-// -----------------------------------------------------------------------------
-//
-// ldCsrSubPendingSaveReset / ldCsrSubPendingRestore - swap aside this thread's
-// pending queue around an in-process self-forward (Inc5b).
-//
-// The inner request resets/drains this __thread queue via the post-response
-// hook; save the outer's queue and start the inner empty, then free the inner's
-// (drained) buffer and restore the outer's on the way out. Removed when Inc6
-// makes this state per-connection.
-//
-void ldCsrSubPendingSaveReset(LdCsrSubPendingSaved* s)
-{
-  s->v = csrPendingV; s->n = csrPendingN; s->cap = csrPendingCap;
-  csrPendingV = NULL; csrPendingN = 0; csrPendingCap = 0;
-}
-
-void ldCsrSubPendingRestore(const LdCsrSubPendingSaved* s)
-{
-  if (csrPendingV != NULL)
-    free(csrPendingV);
-  csrPendingV = (CsrSubPending*) s->v; csrPendingN = s->n; csrPendingCap = s->cap;
+  swNgsild.csrPendingN = 0;
 }
 
 
@@ -503,9 +468,9 @@ void ldCsrSubPendingRestore(const LdCsrSubPendingSaved* s)
 //
 void ldCsrSubDispatchPending(void)
 {
-  for (int i = 0; i < csrPendingN; i++)
-    csourceNotificationPost(csrPendingV[i].subItemP, csrPendingV[i].notification);
-  csrPendingN = 0;
+  for (int i = 0; i < swNgsild.csrPendingN; i++)
+    csourceNotificationPost(swNgsild.csrPendingV[i].subItemP, swNgsild.csrPendingV[i].notification);
+  swNgsild.csrPendingN = 0;
 }
 
 

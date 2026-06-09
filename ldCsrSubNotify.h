@@ -19,9 +19,24 @@
 #include <stdbool.h>                                    // bool
 
 #include "kalloc/KAlloc.h"                              // KAlloc
+#include "kjson/KjNode.h"                               // KjNode
 
 #include "swNgsild/LdSubCache.h"                        // LdSubCacheItem
 #include "swNgsild/LdRegCache.h"                        // LdRegCache
+
+
+
+// -----------------------------------------------------------------------------
+//
+// CsrSubPending - one deferred csource-notification (queued during a request,
+// flushed by ldCsrSubDispatchPending in the post-response hook). Held in the
+// per-connection swNgsild (Inc6c) so concurrent in-flight requests don't share.
+//
+typedef struct CsrSubPending
+{
+  LdSubCacheItem*  subItemP;
+  KjNode*          notification;   // built at enqueue time — see csourceNotificationBuild
+} CsrSubPending;
 
 
 
@@ -45,11 +60,6 @@ extern void ldCsrSubInitialNotify(LdRegCache* regCacheP, LdSubCacheItem* subItem
 //
 extern void ldCsrSubDispatchPending(void);
 extern void ldCsrSubPendingDiscard(void);
-
-// Save/restore this thread's pending queue around an in-process self-forward.
-typedef struct LdCsrSubPendingSaved { void* v; int n; int cap; } LdCsrSubPendingSaved;
-extern void ldCsrSubPendingSaveReset(LdCsrSubPendingSaved* s);
-extern void ldCsrSubPendingRestore(const LdCsrSubPendingSaved* s);
 
 
 

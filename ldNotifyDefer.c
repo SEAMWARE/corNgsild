@@ -12,6 +12,7 @@
 #include "kjson/kjLookup.h"                      // kjLookup
 
 #include "swNgsild/ldSubscriptionNotify.h"       // ldSubscriptionNotifyBatch, LdNotifyPendingEntry
+#include "swNgsild/SwNgsild.h"                   // swNgsild (per-conn pending* cache)
 #include "swNgsild/ldNotifyDefer.h"              // Own interface
 
 
@@ -28,10 +29,8 @@
 //
 #define LD_NOTIFY_PENDING_INITIAL_CAP 16
 
-static __thread LdSubCache*           pendingCache   = NULL;
-static __thread LdNotifyPendingEntry* pendingV       = NULL;
-static __thread int                   pendingN       = 0;
-static __thread int                   pendingCap     = 0;
+// Inc6c — the queue lives in the per-connection swNgsild (swNgsild.pendingV/N/Cap +
+// swNgsild.pendingCache); its buffer is freed in swNgsildStateFree.
 
 
 
@@ -45,35 +44,35 @@ void ldNotifyDefer(LdSubCache* cacheP, KjNode* entityP, LdNotifyOp op, LdMergeRe
     return;
 
   // All pending entries within a request share one (sub) cache.
-  pendingCache = cacheP;
+  swNgsild.pendingCache = cacheP;
 
-  if (pendingN >= pendingCap)
+  if (swNgsild.pendingN >= swNgsild.pendingCap)
   {
-    int newCap = (pendingCap == 0) ? LD_NOTIFY_PENDING_INITIAL_CAP : pendingCap * 2;
-    LdNotifyPendingEntry* newV = (LdNotifyPendingEntry*) realloc(pendingV, newCap * sizeof(LdNotifyPendingEntry));
+    int newCap = (swNgsild.pendingCap == 0) ? LD_NOTIFY_PENDING_INITIAL_CAP : swNgsild.pendingCap * 2;
+    LdNotifyPendingEntry* newV = (LdNotifyPendingEntry*) realloc(swNgsild.pendingV, newCap * sizeof(LdNotifyPendingEntry));
     if (newV == NULL)
       return;
-    pendingV   = newV;
-    pendingCap = newCap;
+    swNgsild.pendingV   = newV;
+    swNgsild.pendingCap = newCap;
   }
 
-  pendingV[pendingN].entityP     = entityP;
-  pendingV[pendingN].op          = op;
-  pendingV[pendingN].hasReport   = (reportP != NULL);
-  pendingV[pendingN].deletedAtNs = 0;
-  pendingV[pendingN].reasonsMask = 0;
+  swNgsild.pendingV[swNgsild.pendingN].entityP     = entityP;
+  swNgsild.pendingV[swNgsild.pendingN].op          = op;
+  swNgsild.pendingV[swNgsild.pendingN].hasReport   = (reportP != NULL);
+  swNgsild.pendingV[swNgsild.pendingN].deletedAtNs = 0;
+  swNgsild.pendingV[swNgsild.pendingN].reasonsMask = 0;
   if (reportP != NULL && reportP->changes != NULL)
   {
     for (KjNode* chP = reportP->changes->value.firstChildP; chP != NULL; chP = chP->next)
     {
       KjNode* reasonP = kjLookup(chP, "reason");
       if (reasonP != NULL && reasonP->type == KjString)
-        pendingV[pendingN].reasonsMask |= ldTriggerFromReport(reasonP->value.s);
+        swNgsild.pendingV[swNgsild.pendingN].reasonsMask |= ldTriggerFromReport(reasonP->value.s);
     }
   }
   if (reportP != NULL)
-    pendingV[pendingN].report    = *reportP;  // struct copy; referenced change-list tree lives in the request arena
-  pendingN++;
+    swNgsild.pendingV[swNgsild.pendingN].report    = *reportP;  // struct copy; referenced change-list tree lives in the request arena
+  swNgsild.pendingN++;
 }
 
 
@@ -87,24 +86,24 @@ void ldNotifyDeferDelete(LdSubCache* cacheP, KjNode* entityP, uint64_t deletedAt
   if (cacheP == NULL || entityP == NULL)
     return;
 
-  pendingCache = cacheP;
+  swNgsild.pendingCache = cacheP;
 
-  if (pendingN >= pendingCap)
+  if (swNgsild.pendingN >= swNgsild.pendingCap)
   {
-    int newCap = (pendingCap == 0) ? LD_NOTIFY_PENDING_INITIAL_CAP : pendingCap * 2;
-    LdNotifyPendingEntry* newV = (LdNotifyPendingEntry*) realloc(pendingV, newCap * sizeof(LdNotifyPendingEntry));
+    int newCap = (swNgsild.pendingCap == 0) ? LD_NOTIFY_PENDING_INITIAL_CAP : swNgsild.pendingCap * 2;
+    LdNotifyPendingEntry* newV = (LdNotifyPendingEntry*) realloc(swNgsild.pendingV, newCap * sizeof(LdNotifyPendingEntry));
     if (newV == NULL)
       return;
-    pendingV   = newV;
-    pendingCap = newCap;
+    swNgsild.pendingV   = newV;
+    swNgsild.pendingCap = newCap;
   }
 
-  pendingV[pendingN].entityP     = entityP;
-  pendingV[pendingN].op          = LdNotifyEntityDelete;
-  pendingV[pendingN].hasReport   = false;
-  pendingV[pendingN].deletedAtNs = deletedAtNs;
-  pendingV[pendingN].reasonsMask = 0;
-  pendingN++;
+  swNgsild.pendingV[swNgsild.pendingN].entityP     = entityP;
+  swNgsild.pendingV[swNgsild.pendingN].op          = LdNotifyEntityDelete;
+  swNgsild.pendingV[swNgsild.pendingN].hasReport   = false;
+  swNgsild.pendingV[swNgsild.pendingN].deletedAtNs = deletedAtNs;
+  swNgsild.pendingV[swNgsild.pendingN].reasonsMask = 0;
+  swNgsild.pendingN++;
 }
 
 
@@ -115,41 +114,16 @@ void ldNotifyDeferDelete(LdSubCache* cacheP, KjNode* entityP, uint64_t deletedAt
 //
 void ldNotifyDispatchPending(void)
 {
-  if (pendingCache == NULL || pendingN == 0)
+  if (swNgsild.pendingCache == NULL || swNgsild.pendingN == 0)
   {
-    pendingN     = 0;
-    pendingCache = NULL;
+    swNgsild.pendingN     = 0;
+    swNgsild.pendingCache = NULL;
     return;
   }
 
-  ldSubscriptionNotifyBatch(pendingCache, pendingV, pendingN);
+  ldSubscriptionNotifyBatch(swNgsild.pendingCache, swNgsild.pendingV, swNgsild.pendingN);
 
-  pendingN     = 0;
-  pendingCache = NULL;
+  swNgsild.pendingN     = 0;
+  swNgsild.pendingCache = NULL;
 }
 
-
-
-// -----------------------------------------------------------------------------
-//
-// ldNotifyPendingSaveReset / ldNotifyPendingRestore - swap aside this thread's
-// deferred-notification queue around an in-process self-forward (Inc5b).
-//
-// The inner request drains this __thread queue via the post-response hook; save
-// the outer's queue and start the inner empty, then free the inner's (drained)
-// buffer and restore the outer's afterward. Removed when Inc6 makes this state
-// per-connection.
-//
-void ldNotifyPendingSaveReset(LdNotifyPendingSaved* s)
-{
-  s->v = pendingV; s->n = pendingN; s->cap = pendingCap; s->cache = pendingCache;
-  pendingV = NULL; pendingN = 0; pendingCap = 0; pendingCache = NULL;
-}
-
-void ldNotifyPendingRestore(const LdNotifyPendingSaved* s)
-{
-  if (pendingV != NULL)
-    free(pendingV);
-  pendingV = (LdNotifyPendingEntry*) s->v; pendingN = s->n; pendingCap = s->cap;
-  pendingCache = (LdSubCache*) s->cache;
-}

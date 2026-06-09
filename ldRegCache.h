@@ -152,10 +152,6 @@ typedef struct ProbePending
   char*       regId;     // strdup'd — the item's own copy may be freed
 } ProbePending;
 
-// Save/restore this thread's probe queue around an in-process self-forward (Inc5b).
-typedef struct LdProbePendingSaved { ProbePending v[PROBE_PENDING_MAX]; int n; } LdProbePendingSaved;
-extern void ldRegCacheProbePendingSaveReset(LdProbePendingSaved* s);
-extern void ldRegCacheProbePendingRestore(const LdProbePendingSaved* s);
 
 
 

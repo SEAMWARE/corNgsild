@@ -28,9 +28,7 @@
 #include "swNgsild/LdForwarding.h"                     // LdForwardRequest, LdForwardResponse, LdForwardingPlugin
 #include "swNgsild/ldForwarding.h"                     // ldForwardingForEndpoint
 #include "swNgsild/LdRegCache.h"                       // LdRegCacheItem
-#include "swNgsild/ldRegCache.h"                       // ldRegOpSupported, LdProbePendingSaved
-#include "swNgsild/ldCsrSubNotify.h"                    // LdCsrSubPendingSaved (self-forward save/restore)
-#include "swNgsild/ldNotifyDefer.h"                     // LdNotifyPendingSaved (self-forward save/restore)
+#include "swNgsild/ldRegCache.h"                       // ldRegOpSupported
 #include "swNgsild/swNgsild.h"                         // LD_ERROR_CONFLICT
 #include "swNgsild/ldCsourceAlias.h"                   // ldViaHasAlias
 #include "swNgsild/ldRequestSubstitute.h"              // ldRequestSubstitute
@@ -438,51 +436,6 @@ static const char* forwardPath(const char* url)
 
 
 
-// -----------------------------------------------------------------------------
-//
-// selfForward - run a self-targeted forward in-process (Inc5b)
-//
-// Wraps swRestProcessInProcess with save/restore of the thread-local NGSI-LD
-// state the inner pipeline resets (the swNgsild struct + the three deferred
-// caches). The outer request is paused inside its service routine on this same
-// thread, so without this its swNgsild (contextP, tenant, ...) would be wiped
-// by the inner's pre-dispatch memset. All of this save/restore disappears when
-// Inc6 makes that state per-connection. Returns the HTTP status, or -1 on
-// in-process setup failure.
-//
-static int selfForward(SwRestVerb       verb,
-                       const char*      path,
-                       SwRestKeyValue*  hv,
-                       int              hc,
-                       const char*      body,
-                       int              bodyLen,
-                       KAlloc*          respAllocP,
-                       char**           respBodyP,
-                       int*             respBodyLenP,
-                       SwRestKeyValue** respHdrVP,
-                       int*             respHdrCountP)
-{
-  // swNgsild is now per-connection (Inc6a): the inner request gets its own
-  // SwNgsild via swRest.userData, so it no longer shares — and can't clobber —
-  // the paused outer's. No swNgsild save/restore needed. The deferred caches are
-  // still __thread (Inc6c moves them per-connection too), so they're saved here.
-  LdCsrSubPendingSaved  savedCsr;
-  LdNotifyPendingSaved  savedNotify;
-  LdProbePendingSaved   savedProbe;
-
-  ldCsrSubPendingSaveReset(&savedCsr);
-  ldNotifyPendingSaveReset(&savedNotify);
-  ldRegCacheProbePendingSaveReset(&savedProbe);
-
-  int sc = swRestProcessInProcess(verb, path, hv, hc, body, bodyLen,
-                                  respAllocP, respBodyP, respBodyLenP, respHdrVP, respHdrCountP);
-
-  ldRegCacheProbePendingRestore(&savedProbe);
-  ldNotifyPendingRestore(&savedNotify);
-  ldCsrSubPendingRestore(&savedCsr);
-
-  return sc;
-}
 
 
 
@@ -582,7 +535,7 @@ int ldDistOpSendReceiveEx(LdRegCacheItem*  csr,
     // Self-forward short-circuit (Inc5b): the endpoint is this broker. Run the
     // request in-process rather than opening a socket back to ourselves (which
     // stalls the epoll pool thread — the self-forward stall).
-    int sc = selfForward(verb, forwardPath(url), hv, hc, body, req.bodyLen,
+    int sc = swRestProcessInProcess(verb, forwardPath(url), hv, hc, body, req.bodyLen,
                          resp.allocP, &resp.body, &resp.bodyLen,
                          &resp.headerV, &resp.headerCount);
     if (sc < 0)
@@ -805,7 +758,7 @@ int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
       SwRestKeyValue* respHdrV = NULL;
       int             respHdrCount = 0;
 
-      int sc = selfForward(itemVerb, forwardPath(itemV[i].url), selfHv[i], selfHc[i],
+      int sc = swRestProcessInProcess(itemVerb, forwardPath(itemV[i].url), selfHv[i], selfHc[i],
                            itemV[i].body, itemV[i].bodyLen, &swRest.kalloc,
                            &respBody, &respBodyLen, &respHdrV, &respHdrCount);
 

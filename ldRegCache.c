@@ -24,6 +24,7 @@
 #include "swJsonld/swldInit.h"                         // swldCoreContext
 #include "swNgsild/LdVocab.h"                          // LD_VOCAB_*
 #include "swNgsild/LdRegCache.h"                       // LdRegCache, LdRegCacheItem
+#include "swNgsild/SwNgsild.h"                          // swNgsild (per-conn probePending cache)
 #include "swNgsild/ldCheckDateTime.h"                  // ldIsoToNanoseconds
 #include "swNgsild/ldScopeMatch.h"                     // ldScopePatternMatch
 #include "swNgsild/ldProbeSourceIdentity.h"            // ldProbeSourceIdentity
@@ -50,24 +51,25 @@
 // either NULL (probe not done: Via-based detection covers them) or the
 // complete alias.
 //
-static __thread ProbePending probePendingV[PROBE_PENDING_MAX];
-static __thread int          probePendingN = 0;
-
+// Inc6c — the probe queue lives in the per-connection swNgsild
+// (probePendingV[PROBE_PENDING_MAX] / probePendingN); strdup'd regIds are freed
+// when drained below (post-response hook).
+//
 static void probePendingAdd(LdRegCache* cacheP, LdRegCacheItem* itemP)
 {
-  if (probePendingN >= PROBE_PENDING_MAX || itemP->regId == NULL)
+  if (swNgsild.probePendingN >= PROBE_PENDING_MAX || itemP->regId == NULL)
     return;  // skip the probe — csourceAlias stays NULL, Via detection covers
 
-  probePendingV[probePendingN].cacheP = cacheP;
-  probePendingV[probePendingN].regId  = strdup(itemP->regId);
-  probePendingN++;
+  swNgsild.probePendingV[swNgsild.probePendingN].cacheP = cacheP;
+  swNgsild.probePendingV[swNgsild.probePendingN].regId  = strdup(itemP->regId);
+  swNgsild.probePendingN++;
 }
 
 void ldRegCacheProbePending(void)
 {
-  for (int i = 0; i < probePendingN; i++)
+  for (int i = 0; i < swNgsild.probePendingN; i++)
   {
-    LdRegCacheItem* itemP = ldRegCacheItemLookup(probePendingV[i].cacheP, probePendingV[i].regId);
+    LdRegCacheItem* itemP = ldRegCacheItemLookup(swNgsild.probePendingV[i].cacheP, swNgsild.probePendingV[i].regId);
 
     if (itemP != NULL && itemP->endpoint != NULL && itemP->csourceAlias == NULL)
     {
@@ -75,37 +77,9 @@ void ldRegCacheProbePending(void)
       itemP->csourceAlias = itemP->probedAlias;   // may be NULL on failure
     }
 
-    free(probePendingV[i].regId);
+    free(swNgsild.probePendingV[i].regId);
   }
-  probePendingN = 0;
-}
-
-
-
-// -----------------------------------------------------------------------------
-//
-// ldRegCacheProbePendingSaveReset / ldRegCacheProbePendingRestore - swap aside
-// this thread's probe queue around an in-process self-forward (Inc5b).
-//
-// Save the outer's queue (the entries' strdup'd regIds stay live in the saved
-// copy), start the inner empty, then free any entries the inner left behind and
-// restore the outer's. Removed when Inc6 makes this state per-connection.
-//
-void ldRegCacheProbePendingSaveReset(LdProbePendingSaved* s)
-{
-  s->n = probePendingN;
-  for (int i = 0; i < probePendingN; i++)
-    s->v[i] = probePendingV[i];
-  probePendingN = 0;
-}
-
-void ldRegCacheProbePendingRestore(const LdProbePendingSaved* s)
-{
-  for (int i = 0; i < probePendingN; i++)
-    free(probePendingV[i].regId);
-  for (int i = 0; i < s->n; i++)
-    probePendingV[i] = s->v[i];
-  probePendingN = s->n;
+  swNgsild.probePendingN = 0;
 }
 
 
