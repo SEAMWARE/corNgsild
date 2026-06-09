@@ -205,6 +205,14 @@ typedef struct SwNgsild
   ProbePending           probePendingV[PROBE_PENDING_MAX];  // ldRegCache.c (fixed)
   int                    probePendingN;
 
+  // TRoE deferred-event queue (troeDispatch.c). Opaque TroeEvent* (a broker
+  // type) — the events live in the request arena, so nothing here is freed.
+  // Per-connection so the worker that runs the request and the I/O thread that
+  // drains it post-response see the same queue.
+  void*                  troeQHead;
+  void*                  troeQTail;
+  int                    troeQCount;
+
 } SwNgsild;
 
 
