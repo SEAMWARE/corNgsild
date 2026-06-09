@@ -462,7 +462,10 @@ static int selfForward(SwRestVerb       verb,
                        SwRestKeyValue** respHdrVP,
                        int*             respHdrCountP)
 {
-  SwNgsild              savedNgsild = swNgsild;
+  // swNgsild is now per-connection (Inc6a): the inner request gets its own
+  // SwNgsild via swRest.userData, so it no longer shares — and can't clobber —
+  // the paused outer's. No swNgsild save/restore needed. The deferred caches are
+  // still __thread (Inc6c moves them per-connection too), so they're saved here.
   LdCsrSubPendingSaved  savedCsr;
   LdNotifyPendingSaved  savedNotify;
   LdProbePendingSaved   savedProbe;
@@ -474,7 +477,6 @@ static int selfForward(SwRestVerb       verb,
   int sc = swRestProcessInProcess(verb, path, hv, hc, body, bodyLen,
                                   respAllocP, respBodyP, respBodyLenP, respHdrVP, respHdrCountP);
 
-  swNgsild = savedNgsild;
   ldRegCacheProbePendingRestore(&savedProbe);
   ldNotifyPendingRestore(&savedNotify);
   ldCsrSubPendingRestore(&savedCsr);
