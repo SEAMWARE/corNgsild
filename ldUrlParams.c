@@ -49,9 +49,11 @@ KjNode*     ldContextSourceExtras = NULL;
 
 // -----------------------------------------------------------------------------
 //
-// swNgsild - thread-local per-request state
+// swNgsildFallback - per-thread fallback used when no per-connection swNgsild
+// is bound (background threads, or before swRest.userData is set). The live
+// per-request state is per-connection (swRest.userData); see SwNgsild.h.
 //
-__thread SwNgsild swNgsild;
+__thread SwNgsild swNgsildFallback;
 
 
 

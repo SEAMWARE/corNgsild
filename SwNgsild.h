@@ -14,6 +14,7 @@
 
 #include "kjson/KjNode.h"                              // KjNode
 
+#include "swRest/SwRestState.h"                        // swRest (per-conn userData binding)
 #include "swJsonld/SwldContext.h"                     // SwldContext
 #include "swNgsild/LdFormat.h"                           // LdFormat
 #include "swNgsild/LdGeoRel.h"                           // LdGeoRel
@@ -191,9 +192,23 @@ typedef struct SwNgsild
 
 // -----------------------------------------------------------------------------
 //
-// swNgsild - thread-local per-request state
+// swNgsild - per-request NGSI-LD state, reached through the per-connection
+// swRest.userData slot (allocated/freed by the swRest userData hooks, see
+// swNgsildStateCreate/Free). Background threads — and any path before a
+// connection's userData is bound — fall back to a per-thread object, so every
+// access stays crash-proof. Holding this per-CONNECTION (not __thread) is what
+// makes processing a request off the I/O thread safe: the worker binds the
+// connection's swRest (and thus its swNgsild) regardless of which thread runs.
 //
-extern __thread SwNgsild swNgsild;
+extern __thread SwNgsild swNgsildFallback;
+
+static inline SwNgsild* swNgsildBind(void)
+{
+  SwNgsild* p = (SwNgsild*) swRest.userData;
+  return (p != NULL) ? p : &swNgsildFallback;
+}
+
+#define swNgsild (*swNgsildBind())
 
 
 

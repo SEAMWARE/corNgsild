@@ -7,6 +7,7 @@
 // 
 //
 #include <stdio.h>                                       // snprintf
+#include <stdlib.h>                                      // malloc, free
 #include <string.h>                                      // strcmp, strncasecmp, memset
 
 #include "kalloc/kaAlloc.h"                             // kaAlloc
@@ -1142,6 +1143,31 @@ static void ldRenderHook(void)
 
 // -----------------------------------------------------------------------------
 //
+// swNgsildStateCreate / swNgsildStateFree - per-connection swNgsild lifecycle
+//
+// Registered as swRest's userData hooks: swRest creates one SwNgsild per
+// connection (stored in swRest.userData) and frees it when the connection's
+// state is released. The swNgsild macro (SwNgsild.h) reaches it through
+// swRest.userData, so the live NGSI-LD state follows the connection rather than
+// the thread — required once a request can be processed off the I/O thread.
+//
+static void* swNgsildStateCreate(void)
+{
+  SwNgsild* p = (SwNgsild*) malloc(sizeof(SwNgsild));
+  if (p != NULL)
+    memset(p, 0, sizeof(SwNgsild));
+  return p;
+}
+
+static void swNgsildStateFree(void* p)
+{
+  free(p);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldHooksRegister - register all NGSI-LD hooks with swRest
 //
 void ldHooksRegister(void)
@@ -1150,4 +1176,5 @@ void ldHooksRegister(void)
   swRestSetPayloadParseHook(ldParseHook);
   swRestSetPayloadRenderHook(ldRenderHook);
   swRestSetParamHook(ldParamHook);
+  swRestSetUserDataHooks(swNgsildStateCreate, swNgsildStateFree);
 }
