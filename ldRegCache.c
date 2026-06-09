@@ -50,12 +50,6 @@
 // either NULL (probe not done: Via-based detection covers them) or the
 // complete alias.
 //
-#define PROBE_PENDING_MAX 8
-typedef struct ProbePending
-{
-  LdRegCache* cacheP;
-  char*       regId;     // strdup'd — the item's own copy may be freed
-} ProbePending;
 static __thread ProbePending probePendingV[PROBE_PENDING_MAX];
 static __thread int          probePendingN = 0;
 
@@ -84,6 +78,34 @@ void ldRegCacheProbePending(void)
     free(probePendingV[i].regId);
   }
   probePendingN = 0;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldRegCacheProbePendingSaveReset / ldRegCacheProbePendingRestore - swap aside
+// this thread's probe queue around an in-process self-forward (Inc5b).
+//
+// Save the outer's queue (the entries' strdup'd regIds stay live in the saved
+// copy), start the inner empty, then free any entries the inner left behind and
+// restore the outer's. Removed when Inc6 makes this state per-connection.
+//
+void ldRegCacheProbePendingSaveReset(LdProbePendingSaved* s)
+{
+  s->n = probePendingN;
+  for (int i = 0; i < probePendingN; i++)
+    s->v[i] = probePendingV[i];
+  probePendingN = 0;
+}
+
+void ldRegCacheProbePendingRestore(const LdProbePendingSaved* s)
+{
+  for (int i = 0; i < probePendingN; i++)
+    free(probePendingV[i].regId);
+  for (int i = 0; i < s->n; i++)
+    probePendingV[i] = s->v[i];
+  probePendingN = s->n;
 }
 
 

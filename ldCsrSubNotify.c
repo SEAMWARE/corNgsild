@@ -471,6 +471,31 @@ void ldCsrSubPendingDiscard(void)
 
 // -----------------------------------------------------------------------------
 //
+// ldCsrSubPendingSaveReset / ldCsrSubPendingRestore - swap aside this thread's
+// pending queue around an in-process self-forward (Inc5b).
+//
+// The inner request resets/drains this __thread queue via the post-response
+// hook; save the outer's queue and start the inner empty, then free the inner's
+// (drained) buffer and restore the outer's on the way out. Removed when Inc6
+// makes this state per-connection.
+//
+void ldCsrSubPendingSaveReset(LdCsrSubPendingSaved* s)
+{
+  s->v = csrPendingV; s->n = csrPendingN; s->cap = csrPendingCap;
+  csrPendingV = NULL; csrPendingN = 0; csrPendingCap = 0;
+}
+
+void ldCsrSubPendingRestore(const LdCsrSubPendingSaved* s)
+{
+  if (csrPendingV != NULL)
+    free(csrPendingV);
+  csrPendingV = (CsrSubPending*) s->v; csrPendingN = s->n; csrPendingCap = s->cap;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldCsrSubDispatchPending - flush the deferred csource notifications
 //
 // Called from the broker's post-response hook, after the response has

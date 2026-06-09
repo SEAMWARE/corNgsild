@@ -127,3 +127,29 @@ void ldNotifyDispatchPending(void)
   pendingN     = 0;
   pendingCache = NULL;
 }
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldNotifyPendingSaveReset / ldNotifyPendingRestore - swap aside this thread's
+// deferred-notification queue around an in-process self-forward (Inc5b).
+//
+// The inner request drains this __thread queue via the post-response hook; save
+// the outer's queue and start the inner empty, then free the inner's (drained)
+// buffer and restore the outer's afterward. Removed when Inc6 makes this state
+// per-connection.
+//
+void ldNotifyPendingSaveReset(LdNotifyPendingSaved* s)
+{
+  s->v = pendingV; s->n = pendingN; s->cap = pendingCap; s->cache = pendingCache;
+  pendingV = NULL; pendingN = 0; pendingCap = 0; pendingCache = NULL;
+}
+
+void ldNotifyPendingRestore(const LdNotifyPendingSaved* s)
+{
+  if (pendingV != NULL)
+    free(pendingV);
+  pendingV = (LdNotifyPendingEntry*) s->v; pendingN = s->n; pendingCap = s->cap;
+  pendingCache = (LdSubCache*) s->cache;
+}

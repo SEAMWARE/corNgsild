@@ -46,6 +46,11 @@ extern void ldCsrSubInitialNotify(LdRegCache* regCacheP, LdSubCacheItem* subItem
 extern void ldCsrSubDispatchPending(void);
 extern void ldCsrSubPendingDiscard(void);
 
+// Save/restore this thread's pending queue around an in-process self-forward.
+typedef struct LdCsrSubPendingSaved { void* v; int n; int cap; } LdCsrSubPendingSaved;
+extern void ldCsrSubPendingSaveReset(LdCsrSubPendingSaved* s);
+extern void ldCsrSubPendingRestore(const LdCsrSubPendingSaved* s);
+
 
 
 // -----------------------------------------------------------------------------

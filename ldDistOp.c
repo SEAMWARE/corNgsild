@@ -23,11 +23,14 @@
 #include "swRest/SwRestKeyValue.h"                     // SwRestKeyValue
 #include "swRest/SwRestVerb.h"                         // SwVerbGet, SwVerbDelete
 #include "swRest/swRestClient.h"                       // swRestClientMulti*
+#include "swRest/swRestInit.h"                          // swRestProcessInProcess (self-forward)
 
 #include "swNgsild/LdForwarding.h"                     // LdForwardRequest, LdForwardResponse, LdForwardingPlugin
 #include "swNgsild/ldForwarding.h"                     // ldForwardingForEndpoint
 #include "swNgsild/LdRegCache.h"                       // LdRegCacheItem
-#include "swNgsild/ldRegCache.h"                       // ldRegOpSupported
+#include "swNgsild/ldRegCache.h"                       // ldRegOpSupported, LdProbePendingSaved
+#include "swNgsild/ldCsrSubNotify.h"                    // LdCsrSubPendingSaved (self-forward save/restore)
+#include "swNgsild/ldNotifyDefer.h"                     // LdNotifyPendingSaved (self-forward save/restore)
 #include "swNgsild/swNgsild.h"                         // LD_ERROR_CONFLICT
 #include "swNgsild/ldCsourceAlias.h"                   // ldViaHasAlias
 #include "swNgsild/ldRequestSubstitute.h"              // ldRequestSubstitute
@@ -385,6 +388,104 @@ int ldDistOpSendReceive(LdRegCacheItem*  csr,
 //
 // -----------------------------------------------------------------------------
 //
+// authorityLen - length of a URL's "scheme://host:port" prefix (before the path)
+//
+static int authorityLen(const char* url)
+{
+  const char* p = strstr(url, "://");
+  if (p == NULL)
+    return (int) strlen(url);
+  p += 3;
+  const char* slash = strchr(p, '/');
+  return (slash != NULL) ? (int) (slash - url) : (int) strlen(url);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// endpointIsSelf - does this endpoint point back at this broker?
+//
+// Compares the scheme://host:port authority of the CSR endpoint against the
+// broker's own ldBrokerHttpEndpoint. A match means a forward would loop back to
+// us over a socket — the self-forward short-circuit runs it in-process instead.
+//
+static bool endpointIsSelf(const char* endpoint)
+{
+  if (ldBrokerHttpEndpoint == NULL || endpoint == NULL)
+    return false;
+
+  int a = authorityLen(endpoint);
+  int b = authorityLen(ldBrokerHttpEndpoint);
+  return (a == b) && (strncasecmp(endpoint, ldBrokerHttpEndpoint, a) == 0);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// forwardPath - the path (+query) portion of a full forward URL
+//
+static const char* forwardPath(const char* url)
+{
+  const char* p = strstr(url, "://");
+  if (p == NULL)
+    return url;
+  p += 3;
+  const char* slash = strchr(p, '/');
+  return (slash != NULL) ? slash : "/";
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// selfForward - run a self-targeted forward in-process (Inc5b)
+//
+// Wraps swRestProcessInProcess with save/restore of the thread-local NGSI-LD
+// state the inner pipeline resets (the swNgsild struct + the three deferred
+// caches). The outer request is paused inside its service routine on this same
+// thread, so without this its swNgsild (contextP, tenant, ...) would be wiped
+// by the inner's pre-dispatch memset. All of this save/restore disappears when
+// Inc6 makes that state per-connection. Returns the HTTP status, or -1 on
+// in-process setup failure.
+//
+static int selfForward(SwRestVerb       verb,
+                       const char*      path,
+                       SwRestKeyValue*  hv,
+                       int              hc,
+                       const char*      body,
+                       int              bodyLen,
+                       KAlloc*          respAllocP,
+                       char**           respBodyP,
+                       int*             respBodyLenP,
+                       SwRestKeyValue** respHdrVP,
+                       int*             respHdrCountP)
+{
+  SwNgsild              savedNgsild = swNgsild;
+  LdCsrSubPendingSaved  savedCsr;
+  LdNotifyPendingSaved  savedNotify;
+  LdProbePendingSaved   savedProbe;
+
+  ldCsrSubPendingSaveReset(&savedCsr);
+  ldNotifyPendingSaveReset(&savedNotify);
+  ldRegCacheProbePendingSaveReset(&savedProbe);
+
+  int sc = swRestProcessInProcess(verb, path, hv, hc, body, bodyLen,
+                                  respAllocP, respBodyP, respBodyLenP, respHdrVP, respHdrCountP);
+
+  swNgsild = savedNgsild;
+  ldRegCacheProbePendingRestore(&savedProbe);
+  ldNotifyPendingRestore(&savedNotify);
+  ldCsrSubPendingRestore(&savedCsr);
+
+  return sc;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldDistOpCsrInCooldown - § 5.2.34 management.cooldown
 //
 // After a forward failure, the endpoint is not contacted again until the
@@ -473,7 +574,28 @@ int ldDistOpSendReceiveEx(LdRegCacheItem*  csr,
   resp.error           = 0;
   resp.errorDetail[0]  = 0;
 
-  int rc = plugin->send(&req, &resp);
+  int rc;
+  if (endpointIsSelf(csr->endpoint))
+  {
+    // Self-forward short-circuit (Inc5b): the endpoint is this broker. Run the
+    // request in-process rather than opening a socket back to ourselves (which
+    // stalls the epoll pool thread — the self-forward stall).
+    int sc = selfForward(verb, forwardPath(url), hv, hc, body, req.bodyLen,
+                         resp.allocP, &resp.body, &resp.bodyLen,
+                         &resp.headerV, &resp.headerCount);
+    if (sc < 0)
+    {
+      rc = -1;
+      strcpy(resp.errorDetail, "in-process self-forward setup failed");
+    }
+    else
+    {
+      rc = 0;
+      resp.statusCode = sc;
+    }
+  }
+  else
+    rc = plugin->send(&req, &resp);
 
   // Counters — § 5.2.36 distribution accounting.
   struct timespec ts;
@@ -606,9 +728,16 @@ int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
 
   // Add every item. Failed adds (capacity exhausted, bad input) get
   // statusCode == 0 + errorDetail filled and skipped at perform time.
+  // Self-targeted items (endpoint == this broker) are NOT added to the socket
+  // multi-engine; they run in-process after the perform (addIndex == -2). Their
+  // headers are built here — while swNgsild is still intact — and stashed for
+  // the in-process call, because running it now would reset swNgsild mid-loop
+  // and corrupt buildHeaders for the remaining socket items.
   int addedCount = 0;
   int* addIndex = (int*) kaAlloc(&swRest.kalloc, itemCount * sizeof(int));
   for (int i = 0; i < itemCount; i++) addIndex[i] = -1;
+  SwRestKeyValue** selfHv = (SwRestKeyValue**) kaAlloc(&swRest.kalloc, itemCount * sizeof(SwRestKeyValue*));
+  int*             selfHc = (int*) kaAlloc(&swRest.kalloc, itemCount * sizeof(int));
 
   for (int i = 0; i < itemCount; i++)
   {
@@ -625,6 +754,14 @@ int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
 
     int             hc = 0;
     SwRestKeyValue* hv = buildHeaders(itemVerb, ownAlias, csr->tenant, csr->contextSourceInfoKV, ldDistOpForwardContext(csr), &hc);
+
+    if (endpointIsSelf(csr->endpoint))
+    {
+      selfHv[i]   = hv;
+      selfHc[i]   = hc;
+      addIndex[i] = -2;   // in-process; handled after perform
+      continue;
+    }
 
     int idx = swRestClientMultiAdd(multi,
                                    itemVerb,
@@ -655,6 +792,45 @@ int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
   {
     LdRegCacheItem* csr = itemV[i].csr;
     int             idx = addIndex[i];
+
+    if (idx == -2)
+    {
+      // Self-forward: run in-process now (after the socket batch was built and
+      // performed, so swNgsild was intact for the socket items' headers).
+      SwRestVerb      itemVerb = itemV[i].hasVerb ? itemV[i].verb : verb;
+      char*           respBody = NULL;
+      int             respBodyLen = 0;
+      SwRestKeyValue* respHdrV = NULL;
+      int             respHdrCount = 0;
+
+      int sc = selfForward(itemVerb, forwardPath(itemV[i].url), selfHv[i], selfHc[i],
+                           itemV[i].body, itemV[i].bodyLen, &swRest.kalloc,
+                           &respBody, &respBodyLen, &respHdrV, &respHdrCount);
+
+      csr->timesSent++;
+      if (sc < 0)
+      {
+        csr->timesFailed++;
+        csr->lastFailure = nowNs;
+        resultV[i].statusCode  = 0;
+        resultV[i].errorDetail = "in-process self-forward setup failed";
+        continue;
+      }
+
+      resultV[i].statusCode        = sc;
+      resultV[i].responseBody      = respBody;
+      resultV[i].responseBodyLen   = respBodyLen;
+      resultV[i].responseContextUrl = responseContextLink(respHdrV, respHdrCount);
+
+      if (sc >= 200 && sc < 300)
+        csr->lastSuccess = nowNs;
+      else
+      {
+        csr->timesFailed++;
+        csr->lastFailure = nowNs;
+      }
+      continue;
+    }
 
     if (idx < 0)
     {
