@@ -29,6 +29,41 @@ extern LdRegCache* ldRegCacheCreate(void);
 
 // -----------------------------------------------------------------------------
 //
+// ldRegCacheRdLock / ldRegCacheWrLock / ldRegCacheUnlock - caller-held cache
+// locking. Readers (Lookup + MatchFor*) rdlock for as long as they use the
+// borrowed items; writers (CSR POST/PATCH/DELETE) wrlock around the whole
+// read-modify-write. The cache primitives below do NOT self-lock. NULL-safe.
+//
+extern void ldRegCacheRdLock(LdRegCache* cacheP);
+extern void ldRegCacheWrLock(LdRegCache* cacheP);
+extern void ldRegCacheUnlock(LdRegCache* cacheP);
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldRegCacheMatchRelease - unpin a matchV returned by the ldRegCacheMatchFor*
+// functions and free the array. The matchers pin each matched item (refcount)
+// under a brief rdlock so the caller can forward to it LOCK-FREE; the caller
+// MUST call this once done (after the forward loop) instead of free(matchV).
+// Passing matchV==NULL / n==0 is a no-op.
+//
+extern void ldRegCacheMatchRelease(LdRegCacheItem** matchV, int n);
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldRegCacheItemUnpin - unpin one matched item without freeing the array. Use
+// when filtering a matchV in place before the forward so the later
+// ldRegCacheMatchRelease (with the reduced count) still balances every pin.
+//
+extern void ldRegCacheItemUnpin(LdRegCacheItem* itemP);
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldRegCacheItemAdd - parse a registration tree and add it to the cache
 //
 // regTree is kjClone'd internally (malloc allocator) — caller keeps ownership

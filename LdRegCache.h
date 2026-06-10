@@ -27,6 +27,7 @@
 #include <regex.h>                                     // regex_t
 #include <stdbool.h>                                   // bool
 #include <stdint.h>                                    // uint64_t
+#include <pthread.h>                                   // pthread_rwlock_t
 
 #include "kalloc/KAlloc.h"                             // KAlloc
 #include "kjson/KjNode.h"                              // KjNode
@@ -172,7 +173,18 @@ typedef struct LdRegCacheItem
   uint64_t               lastSuccess;        // epoch nanoseconds
   uint64_t               lastFailure;        // epoch nanoseconds
 
-  struct LdRegCacheItem* next;               // linked list chain
+  // Concurrency refcount (§ ldRegCache locking). A reader pins matched items
+  // (atomic ++) under the rdlock, then forwards LOCK-FREE (forwards are slow —
+  // we must not hold the cache lock across them) and unpins (atomic --) via
+  // ldRegCacheMatchRelease. A writer deleting/replacing a pinned item can't
+  // free it: it sets `retired` and moves it to LdRegCache.retiredList; the item
+  // is freed by a later writer's reap once refCount falls back to 0. Only
+  // writers free (under the wrlock) — readers only ever atomic-decrement.
+  int                    refCount;
+  bool                   retired;
+
+  struct LdRegCacheItem* next;               // linked list chain (also chains
+                                             // retiredList once unlinked)
 } LdRegCacheItem;
 
 
@@ -201,9 +213,19 @@ typedef struct LdRegCache
 {
   LdRegCacheItem*        itemList;           // linked list head
   LdRegCacheItem*        last;               // tail (O(1) append)
+  LdRegCacheItem*        retiredList;        // unlinked-but-still-pinned items
+                                             // awaiting reap (refCount → 0)
   LdCsrGeoMatchFunc      csrGeoMatchFunc;    // registered by broker; NULL = skip geo check
   KAlloc                 alloc;              // persistent allocator for parsed shortcuts
   char                   allocBuf[1024];     // initial allocation buffer
+
+  // Concurrency: the cache is shared per-tenant and read by the (hot) match
+  // paths on every entity write/query while CSR CRUD mutates it. WRITERS
+  // (reg POST/PATCH/DELETE service routines) take the wrlock; READERS (Lookup
+  // + the MatchFor* walks) take the rdlock and hold it for as long as they use
+  // the borrowed LdRegCacheItem pointers. Caller-held — the cache primitives
+  // do NOT self-lock, so a read-modify-write (PATCH) is one atomic section.
+  pthread_rwlock_t       lock;
 } LdRegCache;
 
 #endif  // SWNGSILD_LDREGCACHE_H_

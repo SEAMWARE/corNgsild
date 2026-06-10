@@ -20,6 +20,7 @@
 #include <regex.h>                                     // regex_t
 #include <stdbool.h>                                   // bool
 #include <stdint.h>                                    // uint64_t
+#include <pthread.h>                                   // pthread_rwlock_t
 
 #include "kalloc/KAlloc.h"                             // KAlloc
 #include "kjson/KjNode.h"                              // KjNode
@@ -156,7 +157,16 @@ typedef struct LdSubCacheItem
   LdSubSubordinate*         subordinateP;
   int                       subordinateRunNo;  // monotonic counter for derived-sub naming
 
-  struct LdSubCacheItem*    next;           // linked list chain
+  // Concurrency refcount — see LdRegCacheItem for the model. A reader (the
+  // post-response notify drain, the CSR-sub matchers) pins matched items under
+  // the rdlock, then sends notifications LOCK-FREE (sends are slow) and unpins.
+  // A writer deleting/replacing a pinned item parks it on retiredList; only
+  // writers free, under the wrlock, once refCount → 0.
+  int                       refCount;
+  bool                      retired;
+
+  struct LdSubCacheItem*    next;           // linked list chain (also chains
+                                            // retiredList once unlinked)
 } LdSubCacheItem;
 
 
@@ -180,9 +190,17 @@ typedef struct LdSubCache
 {
   LdSubCacheItem*     itemList;     // linked list head
   LdSubCacheItem*     last;         // linked list tail (O(1) append)
+  LdSubCacheItem*     retiredList;  // unlinked-but-still-pinned items awaiting reap
   LdGeoMatchFunc   geoMatchFunc; // registered by broker (NULL = skip geo check)
   KAlloc              alloc;        // persistent allocator for parsed trees (q, scope, etc.)
   char                allocBuf[1024]; // initial allocation buffer
+
+  // Concurrency (mirror of LdRegCache): writers (sub CRUD service routines) take
+  // the wrlock around the list mutation; readers (notify drain, CSR-sub match)
+  // take the rdlock for the walk and pin items they use across a notification
+  // send. LOCK ORDER: reg-cache lock BEFORE sub-cache lock — sub writers must
+  // pin + release the sub-lock before touching the reg cache, never sub→reg.
+  pthread_rwlock_t    lock;
 } LdSubCache;
 
 #endif  // SWNGSILD_LDSUBCACHE_H_

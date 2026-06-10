@@ -205,8 +205,82 @@ LdSubCache* ldSubCacheCreate(void)
   // Initialize persistent allocator for parsed q/scope trees.
   // Initial buffer is inline (1024 bytes); overflow allocates via calloc (4096 chunks).
   kaBufferInit(&cacheP->alloc, cacheP->allocBuf, sizeof(cacheP->allocBuf), 4096, NULL, "subCache");
+  pthread_rwlock_init(&cacheP->lock, NULL);
 
   return cacheP;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldSubCacheRdLock / ldSubCacheWrLock / ldSubCacheUnlock - caller-held locking
+// (mirror of the reg cache). Readers (notify drain, CSR-sub matchers) rdlock the
+// walk and pin items they use across a notification send; writers (sub CRUD)
+// wrlock the list mutation. LOCK ORDER: reg lock BEFORE sub lock. NULL-safe.
+//
+void ldSubCacheRdLock(LdSubCache* cacheP) { if (cacheP != NULL) pthread_rwlock_rdlock(&cacheP->lock); }
+void ldSubCacheWrLock(LdSubCache* cacheP) { if (cacheP != NULL) pthread_rwlock_wrlock(&cacheP->lock); }
+void ldSubCacheUnlock(LdSubCache* cacheP) { if (cacheP != NULL) pthread_rwlock_unlock(&cacheP->lock); }
+
+
+
+// -----------------------------------------------------------------------------
+//
+// Refcount-pin bookkeeping (mirror of the reg cache). Only writers free, under
+// the wrlock; readers ever only atomic-increment (pin, under rdlock) / decrement
+// (unpin, lock-free after the send).
+//
+static void cacheItemFree(LdSubCacheItem* itemP);   // fwd decl (defined below)
+
+void ldSubCacheItemPin(LdSubCacheItem* itemP)
+{
+  if (itemP != NULL)
+    __atomic_add_fetch(&itemP->refCount, 1, __ATOMIC_SEQ_CST);
+}
+
+void ldSubCacheItemUnpin(LdSubCacheItem* itemP)
+{
+  if (itemP != NULL)
+    __atomic_sub_fetch(&itemP->refCount, 1, __ATOMIC_SEQ_CST);
+}
+
+// Free retired (unlinked) items whose pin count has fallen to 0. Caller holds
+// the wrlock. Called at the head of every writer op.
+static void cacheReapRetired(LdSubCache* cacheP)
+{
+  LdSubCacheItem* itemP = cacheP->retiredList;
+  LdSubCacheItem* prevP = NULL;
+
+  while (itemP != NULL)
+  {
+    LdSubCacheItem* nextP = itemP->next;
+
+    if (__atomic_load_n(&itemP->refCount, __ATOMIC_SEQ_CST) == 0)
+    {
+      if (prevP == NULL) cacheP->retiredList = nextP;
+      else               prevP->next         = nextP;
+      cacheItemFree(itemP);
+    }
+    else
+      prevP = itemP;
+
+    itemP = nextP;
+  }
+}
+
+// The item is already unlinked from itemList. Free it now if unpinned, else park
+// on retiredList for a later reap. Caller holds the wrlock.
+static void cacheItemRetireOrFree(LdSubCache* cacheP, LdSubCacheItem* itemP)
+{
+  if (__atomic_load_n(&itemP->refCount, __ATOMIC_SEQ_CST) == 0)
+    cacheItemFree(itemP);
+  else
+  {
+    itemP->retired = true;
+    itemP->next    = cacheP->retiredList;
+    cacheP->retiredList = itemP;
+  }
 }
 
 
@@ -219,6 +293,8 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
 {
   if (cacheP == NULL || subTree == NULL)
     return NULL;
+
+  cacheReapRetired(cacheP);   // caller holds the wrlock (or single-threaded at load)
 
   LdSubCacheItem* itemP = (LdSubCacheItem*) calloc(1, sizeof(LdSubCacheItem));
 
@@ -636,10 +712,14 @@ static void cacheItemFree(LdSubCacheItem* itemP)
 //
 // ldSubCacheItemRemove -
 //
+// Caller MUST hold the wrlock. Unlinks + frees the item — UNLESS a reader still
+// has it pinned, in which case it is parked on retiredList (reaped later).
 bool ldSubCacheItemRemove(LdSubCache* cacheP, const char* subId)
 {
   if (cacheP == NULL || subId == NULL)
     return false;
+
+  cacheReapRetired(cacheP);
 
   LdSubCacheItem* itemP = cacheP->itemList;
   LdSubCacheItem* prevP = NULL;
@@ -656,7 +736,7 @@ bool ldSubCacheItemRemove(LdSubCache* cacheP, const char* subId)
       if (itemP == cacheP->last)
         cacheP->last = prevP;
 
-      cacheItemFree(itemP);
+      cacheItemRetireOrFree(cacheP, itemP);
       return true;
     }
 
@@ -687,5 +767,14 @@ void ldSubCacheRelease(LdSubCache* cacheP)
     itemP = nextP;
   }
 
+  itemP = cacheP->retiredList;
+  while (itemP != NULL)
+  {
+    LdSubCacheItem* nextP = itemP->next;
+    cacheItemFree(itemP);
+    itemP = nextP;
+  }
+
+  pthread_rwlock_destroy(&cacheP->lock);
   free(cacheP);
 }

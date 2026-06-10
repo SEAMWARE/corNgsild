@@ -388,8 +388,108 @@ LdRegCache* ldRegCacheCreate(void)
   LdRegCache* cacheP = (LdRegCache*) calloc(1, sizeof(LdRegCache));
 
   kaBufferInit(&cacheP->alloc, cacheP->allocBuf, sizeof(cacheP->allocBuf), 4096, NULL, "regCache");
+  pthread_rwlock_init(&cacheP->lock, NULL);
 
   return cacheP;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldRegCacheRdLock / ldRegCacheWrLock / ldRegCacheUnlock -
+//
+// Caller-held locking for the per-tenant registration cache. The MatchFor*
+// readers take the rdlock only for the brief list WALK and pin (refcount++)
+// the items they return, then drop the lock — the caller forwards lock-free and
+// calls ldRegCacheMatchRelease to unpin. Writers (CSR POST/PATCH/DELETE) take
+// the wrlock around the whole read-modify-write so it is one atomic unit, and
+// ldRegCacheItemLookup stays a pure caller-holds-lock primitive (writers call
+// it under the wrlock; readers under the rdlock) so there is no self-deadlock.
+// NULL-safe (some call sites guard a NULL cache).
+//
+void ldRegCacheRdLock(LdRegCache* cacheP) { if (cacheP != NULL) pthread_rwlock_rdlock(&cacheP->lock); }
+void ldRegCacheWrLock(LdRegCache* cacheP) { if (cacheP != NULL) pthread_rwlock_wrlock(&cacheP->lock); }
+void ldRegCacheUnlock(LdRegCache* cacheP) { if (cacheP != NULL) pthread_rwlock_unlock(&cacheP->lock); }
+
+
+
+// -----------------------------------------------------------------------------
+//
+// Refcount-pin bookkeeping (see LdRegCacheItem.refCount). Only writers free,
+// and only under the wrlock; readers ever only atomic-increment (pin, under the
+// rdlock) / atomic-decrement (unpin, lock-free after the forward).
+//
+static void cacheItemFree(LdRegCacheItem* itemP);   // fwd decl (defined below)
+
+static inline void cacheItemPin(LdRegCacheItem* itemP)
+{
+  __atomic_add_fetch(&itemP->refCount, 1, __ATOMIC_SEQ_CST);
+}
+
+void ldRegCacheMatchRelease(LdRegCacheItem** matchV, int n)
+{
+  if (matchV == NULL)
+    return;
+  for (int i = 0; i < n; i++)
+    __atomic_sub_fetch(&matchV[i]->refCount, 1, __ATOMIC_SEQ_CST);
+  free(matchV);
+}
+
+//
+// ldRegCacheItemUnpin - unpin a single matched item WITHOUT freeing the array.
+// For callers that filter a matchV in place (drop some matches before the
+// forward): unpin each dropped item here so the later ldRegCacheMatchRelease,
+// called with the now-reduced count, still balances every pin.
+//
+void ldRegCacheItemUnpin(LdRegCacheItem* itemP)
+{
+  if (itemP != NULL)
+    __atomic_sub_fetch(&itemP->refCount, 1, __ATOMIC_SEQ_CST);
+}
+
+//
+// cacheReapRetired - free retired (unlinked) items whose pin count has fallen
+// back to 0. Caller MUST hold the wrlock. Called at the head of every writer
+// op so retired items are reclaimed promptly once their last reader unpins.
+//
+static void cacheReapRetired(LdRegCache* cacheP)
+{
+  LdRegCacheItem* itemP = cacheP->retiredList;
+  LdRegCacheItem* prevP = NULL;
+
+  while (itemP != NULL)
+  {
+    LdRegCacheItem* nextP = itemP->next;
+
+    if (__atomic_load_n(&itemP->refCount, __ATOMIC_SEQ_CST) == 0)
+    {
+      if (prevP == NULL) cacheP->retiredList = nextP;
+      else               prevP->next         = nextP;
+      cacheItemFree(itemP);
+    }
+    else
+      prevP = itemP;
+
+    itemP = nextP;
+  }
+}
+
+//
+// cacheItemRetireOrFree - the item is already unlinked from itemList. If no
+// reader has it pinned, free it now; otherwise park it on retiredList for a
+// later reap. Caller holds the wrlock.
+//
+static void cacheItemRetireOrFree(LdRegCache* cacheP, LdRegCacheItem* itemP)
+{
+  if (__atomic_load_n(&itemP->refCount, __ATOMIC_SEQ_CST) == 0)
+    cacheItemFree(itemP);
+  else
+  {
+    itemP->retired = true;
+    itemP->next    = cacheP->retiredList;
+    cacheP->retiredList = itemP;
+  }
 }
 
 
@@ -402,6 +502,8 @@ LdRegCacheItem* ldRegCacheItemAdd(LdRegCache* cacheP, KjNode* regTree)
 {
   if (cacheP == NULL || regTree == NULL)
     return NULL;
+
+  cacheReapRetired(cacheP);   // caller holds the wrlock (or single-threaded at load)
 
   LdRegCacheItem* itemP = (LdRegCacheItem*) calloc(1, sizeof(LdRegCacheItem));
 
@@ -654,10 +756,15 @@ static void cacheItemFree(LdRegCacheItem* itemP)
 //
 // ldRegCacheItemRemove -
 //
+// Caller MUST hold the wrlock. Unlinks the item and frees it — UNLESS a reader
+// still has it pinned (refcount > 0), in which case it is parked on retiredList
+// and reclaimed by a later reap. Also reaps previously-retired items first.
 bool ldRegCacheItemRemove(LdRegCache* cacheP, const char* regId)
 {
   if (cacheP == NULL || regId == NULL)
     return false;
+
+  cacheReapRetired(cacheP);
 
   LdRegCacheItem* itemP = cacheP->itemList;
   LdRegCacheItem* prevP = NULL;
@@ -674,7 +781,7 @@ bool ldRegCacheItemRemove(LdRegCache* cacheP, const char* regId)
       if (itemP == cacheP->last)
         cacheP->last = prevP;
 
-      cacheItemFree(itemP);
+      cacheItemRetireOrFree(cacheP, itemP);
       return true;
     }
 
@@ -779,7 +886,11 @@ int ldRegCacheMatchForRetrieveScoped(LdRegCache*       cacheP,
   clock_gettime(CLOCK_REALTIME, &ts);
   uint64_t nowNs = (uint64_t) ts.tv_sec * 1000000000ULL + (uint64_t) ts.tv_nsec;
 
-  // Two-pass: count first, then allocate exactly + populate
+  // Two-pass: count first, then allocate exactly + populate. Both passes under
+  // the rdlock so the list is stable; each returned item is pinned so the caller
+  // can forward lock-free (release with ldRegCacheMatchRelease).
+  ldRegCacheRdLock(cacheP);
+
   int count = 0;
   for (LdRegCacheItem* itemP = cacheP->itemList; itemP != NULL; itemP = itemP->next)
   {
@@ -794,7 +905,10 @@ int ldRegCacheMatchForRetrieveScoped(LdRegCache*       cacheP,
   }
 
   if (count == 0)
+  {
+    ldRegCacheUnlock(cacheP);
     return 0;
+  }
 
   LdRegCacheItem** v = (LdRegCacheItem**) malloc(count * sizeof(LdRegCacheItem*));
   int ix = 0;
@@ -808,9 +922,13 @@ int ldRegCacheMatchForRetrieveScoped(LdRegCache*       cacheP,
     if (!csrScopeMatches(itemP->scopeV, entityScopeV))
       continue;
     if (itemMatches(itemP, entityId, entityTypeV))
+    {
       v[ix++] = itemP;
+      cacheItemPin(itemP);
+    }
   }
 
+  ldRegCacheUnlock(cacheP);
   *matchVP = v;
   return count;
 }
@@ -917,7 +1035,10 @@ int ldRegCacheMatchForQuery(LdRegCache*       cacheP,
   clock_gettime(CLOCK_REALTIME, &ts);
   uint64_t nowNs = (uint64_t) ts.tv_sec * 1000000000ULL + (uint64_t) ts.tv_nsec;
 
-  // Two-pass: count first, then allocate exactly + populate.
+  // Two-pass: count first, then allocate exactly + populate. Under the rdlock
+  // (list stable across both passes); each returned item is pinned for the
+  // caller's lock-free forward (release via ldRegCacheMatchRelease).
+  ldRegCacheRdLock(cacheP);
   int count = 0;
   for (int pass = 0; pass < 2; pass++)
   {
@@ -954,12 +1075,13 @@ int ldRegCacheMatchForQuery(LdRegCache*       cacheP,
         continue;
 
       if (pass == 0) count++;
-      else           v[ix++] = itemP;
+      else         { v[ix++] = itemP; cacheItemPin(itemP); }
     }
 
     if (pass == 1)
       *matchVP = v;
   }
+  ldRegCacheUnlock(cacheP);
 
   if (haveIdRegex)
     regfree(&idRegex);
@@ -1005,6 +1127,12 @@ const char* ldRegCacheLocalWriteConflict(LdRegCache* cacheP,
   clock_gettime(CLOCK_REALTIME, &ts);
   uint64_t nowNs = (uint64_t) ts.tv_sec * 1000000000ULL + (uint64_t) ts.tv_nsec;
 
+  // rdlock the walk so a concurrent CSR write can't mutate the list under us.
+  // The returned regId is borrowed (used synchronously for the § 9.3.3 409
+  // detail, no forward), so we don't pin — the post-return window is a few
+  // instructions with no I/O.
+  ldRegCacheRdLock(cacheP);
+
   for (LdRegCacheItem* itemP = cacheP->itemList; itemP != NULL; itemP = itemP->next)
   {
     if (itemP->mode != LdRegModeExclusive && itemP->mode != LdRegModeRedirect)
@@ -1028,7 +1156,7 @@ const char* ldRegCacheLocalWriteConflict(LdRegCache* cacheP,
 
       // Whole-entity claim — every write to the entity conflicts
       if (riP->propertyNamesV == NULL && riP->relationshipNamesV == NULL)
-        return itemP->regId;
+      { ldRegCacheUnlock(cacheP); return itemP->regId; }
 
       if (attrIriV == NULL)
         continue;
@@ -1040,7 +1168,7 @@ const char* ldRegCacheLocalWriteConflict(LdRegCache* cacheP,
           for (int px = 0; riP->propertyNamesV[px] != NULL; px++)
           {
             if (strcmp(attrIriV[ix], riP->propertyNamesV[px]) == 0)
-              return itemP->regId;
+            { ldRegCacheUnlock(cacheP); return itemP->regId; }
           }
         }
         if (riP->relationshipNamesV != NULL)
@@ -1048,13 +1176,14 @@ const char* ldRegCacheLocalWriteConflict(LdRegCache* cacheP,
           for (int rx = 0; riP->relationshipNamesV[rx] != NULL; rx++)
           {
             if (strcmp(attrIriV[ix], riP->relationshipNamesV[rx]) == 0)
-              return itemP->regId;
+            { ldRegCacheUnlock(cacheP); return itemP->regId; }
           }
         }
       }
     }
   }
 
+  ldRegCacheUnlock(cacheP);
   return NULL;
 }
 
@@ -1321,6 +1450,10 @@ int ldRegCacheMatchForDiscovery(LdRegCache*       cacheP,
   clock_gettime(CLOCK_REALTIME, &ts);
   uint64_t nowNs = (uint64_t) ts.tv_sec * 1000000000ULL + (uint64_t) ts.tv_nsec;
 
+  // Both passes under the rdlock; each returned item pinned for the caller's
+  // lock-free use (release via ldRegCacheMatchRelease).
+  ldRegCacheRdLock(cacheP);
+
   int count = 0;
   for (LdRegCacheItem* itemP = cacheP->itemList; itemP != NULL; itemP = itemP->next)
   {
@@ -1333,6 +1466,7 @@ int ldRegCacheMatchForDiscovery(LdRegCache*       cacheP,
 
   if (count == 0)
   {
+    ldRegCacheUnlock(cacheP);
     if (haveRegex) regfree(&idRegex);
     return 0;
   }
@@ -1346,9 +1480,13 @@ int ldRegCacheMatchForDiscovery(LdRegCache*       cacheP,
       continue;
     if (itemDiscoveryMatches(itemP, entityIdV, typeV,
                               haveRegex ? &idRegex : NULL, attrsV))
+    {
       v[ix++] = itemP;
+      cacheItemPin(itemP);
+    }
   }
 
+  ldRegCacheUnlock(cacheP);
   if (haveRegex) regfree(&idRegex);
 
   *matchVP = v;
@@ -1375,5 +1513,16 @@ void ldRegCacheRelease(LdRegCache* cacheP)
     itemP = nextP;
   }
 
+  // retired-but-not-yet-reaped items (any still-pinned ones are being released
+  // by readers that are about to finish — release runs at teardown).
+  itemP = cacheP->retiredList;
+  while (itemP != NULL)
+  {
+    LdRegCacheItem* nextP = itemP->next;
+    cacheItemFree(itemP);
+    itemP = nextP;
+  }
+
+  pthread_rwlock_destroy(&cacheP->lock);
   free(cacheP);
 }

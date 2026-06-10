@@ -39,6 +39,7 @@
 #include "swNgsild/LdVocab.h"                          // LD_VOCAB_*
 #include "swNgsild/SwNgsild.h"                         // swNgsild
 #include "swNgsild/LdSubCache.h"                       // LdSubCache, LdSubCacheItem
+#include "swNgsild/ldSubCache.h"                       // ldSubCacheRdLock, ldSubCacheItemPin, ...
 #include "swNgsild/ldEntityToApi.h"                    // ldEntityToApi
 #include "swNgsild/ldIsEntityKeyword.h"                // ldIsEntityKeyword
 #include "swNgsild/ldStripSysAttrs.h"                  // ldStripSysAttrs
@@ -1008,6 +1009,21 @@ void ldSubscriptionNotifyBatch(LdSubCache*           cacheP,
   // matches in encounter-order, then emit ONE notification per sub whose
   // data[] carries each matched entity (one entry per merged instance).
   //
+  // Concurrency: the cache is shared and a sub DELETE could free an item mid-
+  // walk. So we MATCH under the rdlock and PIN each sub that has matches into a
+  // send list, then drop the lock and SEND lock-free (sends are slow — can't
+  // hold the cache lock across them), unpinning afterwards.
+  //
+  typedef struct { LdSubCacheItem* itemP; LdNotifyPendingEntry** matched; int matchedN; } SendEntry;
+
+  ldSubCacheRdLock(cacheP);
+
+  int subCount = 0;
+  for (LdSubCacheItem* c = cacheP->itemList; c != NULL; c = c->next)
+    subCount++;
+  SendEntry* sendV = (subCount > 0) ? (SendEntry*) kaAlloc(&swRest.kalloc, subCount * sizeof(SendEntry)) : NULL;
+  int        sendN = 0;
+
   for (LdSubCacheItem* itemP = cacheP->itemList; itemP != NULL; itemP = itemP->next)
   {
     //
@@ -1079,7 +1095,23 @@ void ldSubscriptionNotifyBatch(LdSubCache*           cacheP,
       matched[matchedN++] = p;
     }
 
-    if (matchedN > 0)
-      notificationSendMany(itemP, matched, matchedN);
+    if (matchedN > 0 && sendV != NULL)
+    {
+      sendV[sendN].itemP    = itemP;
+      sendV[sendN].matched  = matched;
+      sendV[sendN].matchedN = matchedN;
+      ldSubCacheItemPin(itemP);    // keep alive across the (slow, lock-free) send
+      sendN++;
+    }
+  }
+
+  ldSubCacheUnlock(cacheP);
+
+  // Send lock-free; the items are pinned so a concurrent sub DELETE can't free
+  // them out from under us (it parks them on retiredList until we unpin).
+  for (int s = 0; s < sendN; s++)
+  {
+    notificationSendMany(sendV[s].itemP, sendV[s].matched, sendV[s].matchedN);
+    ldSubCacheItemUnpin(sendV[s].itemP);
   }
 }
