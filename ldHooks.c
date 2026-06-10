@@ -887,6 +887,69 @@ static void ldRenderHook(void)
     }
   }
 
+  //
+  // Flatten a *complete-failure* 207 into a single ProblemDetails.
+  //
+  // A distributed write builds a BatchOperationResult { success:[], errors:[] }
+  // and answers 207. When NOTHING succeeded (success empty) and every error
+  // carries the SAME status, the 207 wrapper adds nothing — collapse it to a
+  // plain ProblemDetails of that status: a lone exclusive-registration Conflict
+  // (→ 409), or several uniform 404s. Any success, or mixed error statuses, is
+  // a genuine partial result and stays 207. (ETSI-agreed; the spec is silent on
+  // the flattening, so we match what the test suite demands.) Reuse swRest's
+  // flat-error builder by handing it problemType/Title/Detail + clearing the tree.
+  //
+  // NOT for the /entityOperations batch ops: a batch always answers 207 with a
+  // per-entity BatchOperationResult, even for a single failing entity — only the
+  // single-entity distop writes (create/append/update/delete/...) flatten.
+  //
+  if ((swRest.out.httpStatusCode == 207) && (swRest.out.problemType == NULL) && (swRest.out.responseTree != NULL) &&
+      (swRest.serviceP != NULL) && ((swRest.serviceP->ldOp & LD_OP_GROUP_BATCH) == 0))
+  {
+    KjNode* successP = kjLookup(swRest.out.responseTree, "success");
+    KjNode* errorsP  = kjLookup(swRest.out.responseTree, "errors");
+
+    if ((successP != NULL) && (successP->type == KjArray) && (successP->value.firstChildP == NULL) &&
+        (errorsP  != NULL) && (errorsP->type  == KjArray) && (errorsP->value.firstChildP  != NULL))
+    {
+      int  status  = -1;
+      int  count   = 0;
+      bool uniform = true;
+
+      for (KjNode* eP = errorsP->value.firstChildP; eP != NULL; eP = eP->next)
+      {
+        KjNode* errObjP = kjLookup(eP, "error");
+        KjNode* stP     = (errObjP != NULL) ? kjLookup(errObjP, "status") : NULL;
+        int     st      = ((stP != NULL) && (stP->type == KjInt)) ? (int) stP->value.i : -1;
+
+        count++;
+        if      (status == -1) status = st;
+        else if (st != status) { uniform = false; }
+      }
+
+      //
+      // Flatten only a SINGLE error (collapse to its status), or MANY uniform
+      // 404s (→ a single 404). Several uniform NON-404 errors (e.g. an entity
+      // already existing both locally AND on a context source → two 409s) are a
+      // genuine multi-outcome result and stay 207.
+      //
+      if (uniform && (status > 0) && ((count == 1) || (status == 404)))
+      {
+        KjNode* errObjP = kjLookup(errorsP->value.firstChildP, "error");
+        KjNode* typeP   = kjLookup(errObjP, "type");
+        KjNode* titleP  = kjLookup(errObjP, "title");
+        KjNode* detailP = kjLookup(errObjP, "detail");
+
+        swRest.out.problemType    = ((typeP  != NULL) && (typeP->type  == KjString)) ? typeP->value.s  : NULL;
+        swRest.out.problemTitle   = ((titleP != NULL) && (titleP->type == KjString)) ? titleP->value.s : NULL;
+        if ((detailP != NULL) && (detailP->type == KjString))
+          snprintf(swRest.out.problemDetail, sizeof(swRest.out.problemDetail), "%s", detailP->value.s);
+        swRest.out.httpStatusCode = status;
+        swRest.out.responseTree   = NULL;
+      }
+    }
+  }
+
   // Bail out of body formatting on error — the response is a
   // ProblemDetails JSON object built by swRest from problemType /
   // problemTitle / problemDetail; nothing for us to compact.
