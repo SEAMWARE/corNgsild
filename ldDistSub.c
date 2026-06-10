@@ -28,8 +28,9 @@
 
 #include "swNgsild/SwNgsild.h"                         // ldBrokerHttpEndpoint
 #include "swNgsild/LdSubCache.h"                       // LdSubCacheItem, LdSubSubordinate
+#include "swNgsild/ldSubCache.h"                       // ldSubCacheRdLock, ldSubCacheUnlock
 #include "swNgsild/LdRegCache.h"                       // LdRegCache, LdRegCacheItem
-#include "swNgsild/ldRegCache.h"                       // ldRegOpSupported, ldRegCacheItemLookup
+#include "swNgsild/ldRegCache.h"                       // ldRegOpSupported, ldRegCacheItemLookup, ldRegCacheRdLock
 #include "swNgsild/LdOp.h"                             // LdOpCreateSubscription
 #include "swNgsild/LdVocab.h"                          // LD_VOCAB_*
 #include "swNgsild/ldDistOp.h"                         // ldDistOpSendReceive, ldDistOpCsrWouldLoop
@@ -383,6 +384,11 @@ int ldDistSubFanout(LdSubCacheItem*      itemP,
 
   int forwarded = 0;
 
+  // Reg-cache walk under its rdlock — top-level reg lock (the sub-side
+  // caller has already pinned its sub item and released the sub lock).
+  // Inline forwards (fanoutToReg → remote POST) stay inside the shared
+  // rdlock; it only delays the rare CSR writers.
+  ldRegCacheRdLock(regCacheP);
   for (LdRegCacheItem* regP = regCacheP->itemList; regP != NULL; regP = regP->next)
   {
     if (regP->endpoint == NULL)                                continue;
@@ -393,6 +399,7 @@ int ldDistSubFanout(LdSubCacheItem*      itemP,
     if (fanoutToReg(itemP, regP, ownAlias))
       forwarded++;
   }
+  ldRegCacheUnlock(regCacheP);
 
   if (forwarded > 0 && persistFunc != NULL)
     persistFunc(itemP, persistUserData);
@@ -417,6 +424,10 @@ int ldDistSubCascadeDelete(LdSubCacheItem* itemP, LdRegCache* regCacheP, const c
   int                subPathLen = (int) strlen(subPath);
   int                deleted    = 0;
 
+  // Whole subordinate loop under the reg rdlock — each iteration does a
+  // ldRegCacheItemLookup and then a remote DELETE using the looked-up
+  // item's endpoint; the rdlock keeps regP alive across the I/O.
+  ldRegCacheRdLock(regCacheP);
   for (LdSubSubordinate* sub = itemP->subordinateP; sub != NULL; sub = sub->next)
   {
     if (sub->regId == NULL || sub->remoteSubId == NULL)
@@ -450,6 +461,7 @@ int ldDistSubCascadeDelete(LdSubCacheItem* itemP, LdRegCache* regCacheP, const c
            (itemP->subId != NULL) ? itemP->subId : "?",
            status, (errorDetail != NULL) ? errorDetail : "");
   }
+  ldRegCacheUnlock(regCacheP);
 
   return deleted;
 }
@@ -539,6 +551,12 @@ int ldDistSubReconcile(LdSubCacheItem*      itemP,
   int   bodyLen = 0;
   char* body    = patchBody(itemP, fragmentP, &bodyLen);  // for kept subordinates
 
+  // Both passes touch the reg cache (ldRegCacheItemLookup + the Pass-2
+  // itemList walk) and do inline remote I/O against the looked-up items;
+  // hold the reg rdlock across both. Top-level reg lock — the sub-side
+  // caller has pinned its sub item and released the sub lock.
+  ldRegCacheRdLock(regCacheP);
+
   //
   // Pass 1 — walk existing subordinates. If the parent×reg overlap
   // still holds, PATCH the remote with the user's fragment. If the
@@ -624,6 +642,7 @@ int ldDistSubReconcile(LdSubCacheItem*      itemP,
       }
     }
   }
+  ldRegCacheUnlock(regCacheP);
 
   if (touched && persistFunc != NULL)
     persistFunc(itemP, persistUserData);
@@ -671,6 +690,9 @@ int ldDistSubOnRegCreate(LdSubCache*          subCacheP,
 
   int forwarded = 0;
 
+  // Entity-sub cache walk under its rdlock (reg->sub — the reg writer holds
+  // the reg-wrlock). Inline fanout + persist stay inside the shared rdlock.
+  ldSubCacheRdLock(subCacheP);
   for (LdSubCacheItem* itemP = subCacheP->itemList; itemP != NULL; itemP = itemP->next)
   {
     if (itemP->subId == NULL || itemP->entitySelectors == NULL)
@@ -687,6 +709,7 @@ int ldDistSubOnRegCreate(LdSubCache*          subCacheP,
         persistFunc(itemP, persistUserData);
     }
   }
+  ldSubCacheUnlock(subCacheP);
 
   return forwarded;
 }
@@ -716,6 +739,9 @@ int ldDistSubOnRegDelete(LdSubCache*          subCacheP,
   const char*        regId      = regItemP->regId;
   int                cleaned    = 0;
 
+  // Entity-sub cache walk under its rdlock (reg->sub — the reg writer holds
+  // the reg-wrlock). Inline remote DELETEs + persist stay inside the rdlock.
+  ldSubCacheRdLock(subCacheP);
   for (LdSubCacheItem* itemP = subCacheP->itemList; itemP != NULL; itemP = itemP->next)
   {
     LdSubSubordinate** prevP   = &itemP->subordinateP;
@@ -766,6 +792,7 @@ int ldDistSubOnRegDelete(LdSubCache*          subCacheP,
     if (touched && persistFunc != NULL)
       persistFunc(itemP, persistUserData);
   }
+  ldSubCacheUnlock(subCacheP);
 
   return cleaned;
 }

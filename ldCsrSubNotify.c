@@ -43,7 +43,9 @@
 #include "swJsonld/SwldContext.h"                      // SwldContext
 
 #include "swNgsild/LdSubCache.h"                       // LdSubCacheItem, LdSubEntitySelector
+#include "swNgsild/ldSubCache.h"                       // ldSubCacheRdLock, ldSubCacheUnlock
 #include "swNgsild/LdRegCache.h"                       // LdRegCache, LdRegCacheItem, LdRegInfo, LdRegEntityInfo
+#include "swNgsild/ldRegCache.h"                       // ldRegCacheRdLock, ldRegCacheUnlock
 #include "swNgsild/SwNgsild.h"                          // swNgsild (per-conn csrPending* cache)
 #include "swNgsild/ldPeriodicLoop.h"                   // ldPeriodicLoopRegister
 #include "swNgsild/swNgsild.h"                         // swNgsild (for tenant access via opaque)
@@ -501,6 +503,9 @@ void ldCsrSubInitialNotify(LdRegCache* regCacheP, LdSubCacheItem* subItemP)
   LdRegCacheItem** matchV = (LdRegCacheItem**) kaAlloc(&swRest.kalloc, cap * sizeof(LdRegCacheItem*));
   int n = 0;
 
+  // Walk the reg cache under its rdlock — the sub-side caller has already
+  // released its sub lock, so this is a top-level reg lock (no nesting).
+  ldRegCacheRdLock(regCacheP);
   for (LdRegCacheItem* regItemP = regCacheP->itemList; regItemP != NULL; regItemP = regItemP->next)
   {
     if (!subMatchesReg(subItemP, regItemP))
@@ -516,6 +521,7 @@ void ldCsrSubInitialNotify(LdRegCache* regCacheP, LdSubCacheItem* subItemP)
     }
     matchV[n++] = regItemP;
   }
+  ldRegCacheUnlock(regCacheP);
 
   // § 12.4.7: the csource notification "shall be sent on initial
   // subscription" — unconditionally; with zero matching CSRs the
@@ -534,6 +540,11 @@ static void fanOutForOneReg(LdSubCache* regSubCacheP, LdRegCacheItem* regItemP, 
   if (regSubCacheP == NULL || regItemP == NULL)
     return;
 
+  // CSR-sub cache walk under its rdlock. Reached from a reg writer that
+  // holds the reg-wrlock (reg->sub order — allowed). The rdlock is shared,
+  // so holding it across the inline notification send only delays the rare
+  // CSR-sub writers, not concurrent readers.
+  ldSubCacheRdLock(regSubCacheP);
   for (LdSubCacheItem* subItemP = regSubCacheP->itemList; subItemP != NULL; subItemP = subItemP->next)
   {
     // Skip inactive / expired subs
@@ -549,6 +560,7 @@ static void fanOutForOneReg(LdSubCache* regSubCacheP, LdRegCacheItem* regItemP, 
     LdRegCacheItem* oneItem[1] = { regItemP };
     sendCsourceNotification(subItemP, oneItem, 1, triggerReason);
   }
+  ldSubCacheUnlock(regSubCacheP);
 }
 
 
@@ -601,6 +613,12 @@ char** ldCsrSubMatchingSubIds(LdSubCache* regSubCacheP, LdRegCacheItem* regItemP
   if (regSubCacheP == NULL || regItemP == NULL)
     return NULL;
 
+  // Both passes run inside ONE rdlock region so the cache can't mutate
+  // between count and populate. Reached from a reg writer holding the
+  // reg-wrlock (reg->sub order). The returned subIds are COPIED into allocP
+  // (the cache items' own subId pointers must not escape the lock).
+  ldSubCacheRdLock(regSubCacheP);
+
   // Pass 1: count
   int count = 0;
   for (LdSubCacheItem* s = regSubCacheP->itemList; s != NULL; s = s->next)
@@ -610,7 +628,10 @@ char** ldCsrSubMatchingSubIds(LdSubCache* regSubCacheP, LdRegCacheItem* regItemP
     count++;
   }
   if (count == 0)
+  {
+    ldSubCacheUnlock(regSubCacheP);
     return NULL;
+  }
 
   char** v = (char**) kaAlloc(allocP, (count + 1) * sizeof(char*));
   int ix = 0;
@@ -618,9 +639,13 @@ char** ldCsrSubMatchingSubIds(LdSubCache* regSubCacheP, LdRegCacheItem* regItemP
   {
     if (!subEligibleForNotify(s))        continue;
     if (!subMatchesReg(s, regItemP))     continue;
-    v[ix++] = s->subId;
+    char* c = (char*) kaAlloc(allocP, strlen(s->subId) + 1);
+    strcpy(c, s->subId);
+    v[ix++] = c;
   }
   v[ix] = NULL;
+
+  ldSubCacheUnlock(regSubCacheP);
   return v;
 }
 
@@ -653,6 +678,9 @@ void ldCsrSubOnRegUpdate(LdSubCache* regSubCacheP,
 
   LdRegCacheItem* oneItem[1] = { regItemAfterP };
 
+  // CSR-sub cache walk under its rdlock (reg->sub — reg writer holds the
+  // reg-wrlock). Inline sends stay inside the shared rdlock.
+  ldSubCacheRdLock(regSubCacheP);
   for (LdSubCacheItem* subItemP = regSubCacheP->itemList; subItemP != NULL; subItemP = subItemP->next)
   {
     if (!subEligibleForNotify(subItemP))
@@ -669,6 +697,7 @@ void ldCsrSubOnRegUpdate(LdSubCache* regSubCacheP,
 
     sendCsourceNotification(subItemP, oneItem, 1, triggerReason);
   }
+  ldSubCacheUnlock(regSubCacheP);
 }
 
 

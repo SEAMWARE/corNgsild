@@ -422,9 +422,10 @@ void ldRegCacheUnlock(LdRegCache* cacheP) { if (cacheP != NULL) pthread_rwlock_u
 //
 static void cacheItemFree(LdRegCacheItem* itemP);   // fwd decl (defined below)
 
-static inline void cacheItemPin(LdRegCacheItem* itemP)
+void ldRegCacheItemPin(LdRegCacheItem* itemP)
 {
-  __atomic_add_fetch(&itemP->refCount, 1, __ATOMIC_SEQ_CST);
+  if (itemP != NULL)
+    __atomic_add_fetch(&itemP->refCount, 1, __ATOMIC_SEQ_CST);
 }
 
 void ldRegCacheMatchRelease(LdRegCacheItem** matchV, int n)
@@ -924,7 +925,7 @@ int ldRegCacheMatchForRetrieveScoped(LdRegCache*       cacheP,
     if (itemMatches(itemP, entityId, entityTypeV))
     {
       v[ix++] = itemP;
-      cacheItemPin(itemP);
+      ldRegCacheItemPin(itemP);
     }
   }
 
@@ -1075,7 +1076,7 @@ int ldRegCacheMatchForQuery(LdRegCache*       cacheP,
         continue;
 
       if (pass == 0) count++;
-      else         { v[ix++] = itemP; cacheItemPin(itemP); }
+      else         { v[ix++] = itemP; ldRegCacheItemPin(itemP); }
     }
 
     if (pass == 1)
@@ -1482,7 +1483,7 @@ int ldRegCacheMatchForDiscovery(LdRegCache*       cacheP,
                               haveRegex ? &idRegex : NULL, attrsV))
     {
       v[ix++] = itemP;
-      cacheItemPin(itemP);
+      ldRegCacheItemPin(itemP);
     }
   }
 

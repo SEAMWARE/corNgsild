@@ -37,6 +37,7 @@ extern LdRegCache* ldRegCacheCreate(void);
 extern void ldRegCacheRdLock(LdRegCache* cacheP);
 extern void ldRegCacheWrLock(LdRegCache* cacheP);
 extern void ldRegCacheUnlock(LdRegCache* cacheP);
+extern void ldRegCacheItemPin(LdRegCacheItem* itemP);   // pin one item (see ldRegCacheItemUnpin)
 
 
 
