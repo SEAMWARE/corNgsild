@@ -689,6 +689,42 @@ bool ldCheckRegistration(KjNode* regP, LdOp op, KAlloc* faP)
 
   for (KjNode* childP = regP->value.firstChildP; childP != NULL; childP = childP->next)
   {
+    //
+    // Delete-markers (TS 104-175 clause-8 / § 5.9.3). On the update path the
+    // "urn:ngsi-ld:null" sentinel string means "delete this member": convert it
+    // to an internal KjNull (which the DB plugin turns into a $unset) and skip
+    // the per-field type validation below — the marker node persists in the
+    // fragment for the plugin. Raw JSON null is never a valid value (JSON-LD
+    // drops nulls). Mandatory members (information, endpoint) can't be deleted.
+    // On create the sentinel is not allowed as a first-level value.
+    //
+    if (op == LdOpUpdateRegistration)
+    {
+      if (childP->type == KjNull)
+      {
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Value",
+                "JSON null is not allowed in NGSI-LD; use the 'urn:ngsi-ld:null' delete-marker (field: '%s')", childP->name);
+        return false;
+      }
+      if (childP->type == KjString && strcmp(childP->value.s, LD_VOCAB_NGSILD_NULL) == 0)
+      {
+        if (strcmp(childP->name, LD_VOCAB_INFORMATION) == 0 || strcmp(childP->name, LD_VOCAB_ENDPOINT) == 0)
+        {
+          ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
+                  "'%s' is mandatory and cannot be deleted", childP->name);
+          return false;
+        }
+        childP->type = KjNull;   // internal delete signal honoured by the DB plugin ($unset)
+        continue;
+      }
+    }
+    else if (childP->type == KjString && strcmp(childP->value.s, LD_VOCAB_NGSILD_NULL) == 0)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Value",
+              "'urn:ngsi-ld:null' is not allowed as a first-level value in Create Registration (field: '%s')", childP->name);
+      return false;
+    }
+
     if      (strcmp(childP->name, "type")                 == 0)  typeP                = childP;
     else if (strcmp(childP->name, LD_VOCAB_INFORMATION)   == 0)  infoP                = childP;
     else if (strcmp(childP->name, LD_VOCAB_ENDPOINT)      == 0)  endpointP            = childP;

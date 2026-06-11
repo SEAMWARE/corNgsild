@@ -487,6 +487,40 @@ bool ldCheckSubscription(KjNode* subP, LdOp op, KAlloc* kaP)
   {
     const char* name = childP->name;
 
+    //
+    // Delete-markers (TS 104-175 clause-8 / § 5.8.3) — see ldCheckRegistration
+    // for the rationale. On the update path the "urn:ngsi-ld:null" sentinel
+    // deletes the member (→ internal KjNull → DB plugin $unset); raw JSON null
+    // is rejected; 'notification' is mandatory and cannot be deleted. On create
+    // the sentinel is not allowed as a first-level value.
+    //
+    if (op == LdOpUpdateSubscription || op == LdOpUpdateCsourceSubscription)
+    {
+      if (childP->type == KjNull)
+      {
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Value",
+                "JSON null is not allowed in NGSI-LD; use the 'urn:ngsi-ld:null' delete-marker (field: '%s')", name);
+        return false;
+      }
+      if (childP->type == KjString && strcmp(childP->value.s, LD_VOCAB_NGSILD_NULL) == 0)
+      {
+        if (strcmp(name, LD_VOCAB_NOTIFICATION) == 0)
+        {
+          ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
+                  "'notification' is mandatory and cannot be deleted");
+          return false;
+        }
+        childP->type = KjNull;   // internal delete signal honoured by the DB plugin ($unset)
+        continue;
+      }
+    }
+    else if (childP->type == KjString && strcmp(childP->value.s, LD_VOCAB_NGSILD_NULL) == 0)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Value",
+              "'urn:ngsi-ld:null' is not allowed as a first-level value in Create Subscription (field: '%s')", name);
+      return false;
+    }
+
     if (strcmp(name, "type") == 0)
       DUPLICATE_CHECK(typeP, "type", childP);
     else if (strcmp(name, "id") == 0)
