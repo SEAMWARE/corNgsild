@@ -68,7 +68,7 @@
 #define LD_PARAM_JOIN                  (1ULL << 46)  // § 4.5.23 — flat | inline | @none
 #define LD_PARAM_JOIN_LEVEL            (1ULL << 47)  // § 4.5.23 — depth limit for linked-entity walk
 #define LD_PARAM_CONTAINED_BY          (1ULL << 48)  // § 5.7.1.4 — visited-set seed for cycle prevention in linked-entity retrieval
-#define LD_PARAM_PAGE                  (1ULL << 49)  // non-spec compat shim: ?page=<N> translates to offset = (page-1)*limit
+// bit 49 was LD_PARAM_PAGE (non-spec ?page= shim) — removed; pagination is limit+offset
 #define LD_PARAM_FIRST_N               (1ULL << 50)  // § 6.4.7.3 — temporal pagination, ascending order limit
 #define LD_PARAM_OFFSET_N              (1ULL << 51)  // § 6.4.7.3 — temporal pagination offset (with firstN/lastN)
 
@@ -91,7 +91,6 @@
   | LD_PARAM_CSF         \
   | LD_PARAM_LIMIT       \
   | LD_PARAM_OFFSET      \
-  | LD_PARAM_PAGE      \
   | LD_PARAM_COUNT       \
   | LD_PARAM_OPTIONS     \
   | LD_PARAM_PICK        \
@@ -173,7 +172,6 @@
   | LD_PARAM_COLLATION           \
   | LD_PARAM_LIMIT               \
   | LD_PARAM_OFFSET              \
-  | LD_PARAM_PAGE              \
   | LD_PARAM_COUNT               \
   | LD_PARAM_LOCAL               \
   | LD_PARAM_VIA                 \
@@ -317,7 +315,6 @@
 #define LD_PARAMS_GET_SUBSCRIPTIONS    \
   ( LD_PARAM_LIMIT       \
   | LD_PARAM_OFFSET      \
-  | LD_PARAM_PAGE      \
   | LD_PARAM_COUNT       \
   )
 
@@ -333,7 +330,6 @@
 #define LD_PARAMS_GET_CSOURCE_SUBSCRIPTIONS    \
   ( LD_PARAM_LIMIT       \
   | LD_PARAM_OFFSET      \
-  | LD_PARAM_PAGE      \
   | LD_PARAM_COUNT       \
   )
 
@@ -346,7 +342,6 @@
   | LD_PARAM_KIND     \
   | LD_PARAM_LIMIT    \
   | LD_PARAM_OFFSET   \
-  | LD_PARAM_PAGE   \
   | LD_PARAM_COUNT    \
   )
 
@@ -378,7 +373,6 @@
   | LD_PARAM_TIMEPROPERTY        \
   | LD_PARAM_LIMIT               \
   | LD_PARAM_OFFSET              \
-  | LD_PARAM_PAGE              \
   | LD_PARAM_COUNT               \
   )
 

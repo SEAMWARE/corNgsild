@@ -13,6 +13,7 @@
 #include "kalloc/kaAlloc.h"                            // kaAlloc
 #include "swRest/swRest.h"                             // swRest
 #include "swNgsild/SwNgsild.h"                           // swNgsild
+#include "swNgsild/ldParams.h"                           // LD_PARAM_LIMIT, LD_PARAM_OFFSET
 #include "swNgsild/ldAcceptParse.h"                      // ldAcceptParse, LdAcceptType
 
 #include "swNgsild/ldPagination.h"                       // Own interface
@@ -68,29 +69,25 @@ void ldPaginationLinkHeader(bool hasMore)
 {
   int offset = swNgsild.offset;
   int limit  = swNgsild.limit;
-  // If the request used `?page=<N>` instead of `?offset=`, mirror that
-  // in the Link header values (compat with clients that issued page-
-  // style pagination).
-  bool usePage = (swNgsild.page > 0);
 
   // No header needed if this is the first page and there are no more results
   if (!hasMore && offset == 0)
     return;
 
   // Build the query string from original URI params, skipping limit /
-  // offset / page (we'll add our own pagination values).
+  // offset (we'll add our own pagination values).
   char params[2048];
   params[0] = '\0';
   int  pLen = 0;
 
   for (int i = 0; i < swRest.in.uriParamCount; i++)
   {
-    const char* name = swRest.in.uriParamV[i].key;
-
-    if (strcmp(name, "limit") == 0 || strcmp(name, "offset") == 0 || strcmp(name, "page") == 0)
+    // Skip the pagination params we re-emit ourselves (tested by bit, not name).
+    if (swRest.in.uriParamV[i].bit & (LD_PARAM_LIMIT | LD_PARAM_OFFSET))
       continue;
 
-    pLen += snprintf(params + pLen, sizeof(params) - pLen, "%s=%s&", name, swRest.in.uriParamV[i].value);
+    pLen += snprintf(params + pLen, sizeof(params) - pLen, "%s=%s&",
+                     swRest.in.uriParamV[i].key, swRest.in.uriParamV[i].value);
   }
 
   // Build Link header value
@@ -119,31 +116,21 @@ void ldPaginationLinkHeader(bool hasMore)
     int prevOffset = offset - limit;
     if (prevOffset < 0)
       prevOffset = 0;
-    int prevPage = (limit > 0) ? (prevOffset / limit) + 1 : 1;
 
-    if (usePage)
-      bLen += snprintf(buf + bLen, bufSize - bLen, "<%s?%slimit=%d&page=%d>;rel=\"prev\";type=\"%s\"",
-                       swRest.in.urlPath, params, limit, prevPage, mediaType);
-    else
-      bLen += snprintf(buf + bLen, bufSize - bLen, "<%s?%slimit=%d&offset=%d>;rel=\"prev\";type=\"%s\"",
-                       swRest.in.urlPath, params, limit, prevOffset, mediaType);
+    bLen += snprintf(buf + bLen, bufSize - bLen, "<%s?%slimit=%d&offset=%d>;rel=\"prev\";type=\"%s\"",
+                     swRest.in.urlPath, params, limit, prevOffset, mediaType);
   }
 
   // next link (when more results exist)
   if (hasMore)
   {
     int nextOffset = offset + limit;
-    int nextPage   = (limit > 0) ? (nextOffset / limit) + 1 : 1;
 
     if (bLen > 0)
       bLen += snprintf(buf + bLen, bufSize - bLen, ", ");
 
-    if (usePage)
-      bLen += snprintf(buf + bLen, bufSize - bLen, "<%s?%slimit=%d&page=%d>;rel=\"next\";type=\"%s\"",
-                       swRest.in.urlPath, params, limit, nextPage, mediaType);
-    else
-      bLen += snprintf(buf + bLen, bufSize - bLen, "<%s?%slimit=%d&offset=%d>;rel=\"next\";type=\"%s\"",
-                       swRest.in.urlPath, params, limit, nextOffset, mediaType);
+    bLen += snprintf(buf + bLen, bufSize - bLen, "<%s?%slimit=%d&offset=%d>;rel=\"next\";type=\"%s\"",
+                     swRest.in.urlPath, params, limit, nextOffset, mediaType);
   }
 
   // Add Link header to response

@@ -7,8 +7,10 @@
 // 
 //
 #include <regex.h>                                       // regcomp, regfree
-#include <stdlib.h>                                      // atoi
+#include <stdlib.h>                                      // strtol
 #include <string.h>                                      // strcmp, strstr, strcasecmp
+#include <errno.h>                                        // errno, ERANGE
+#include <limits.h>                                       // INT_MAX
 
 #include "kalloc/KAlloc.h"                             // kaAlloc
 #include "kalloc/kaAlloc.h"                            // kaAlloc
@@ -135,6 +137,35 @@ static bool parseBool(const char* name, const char* value, bool* outP)
           "'%s' must be 'true' or 'false' (lowercase); got '%s'",
           name, value != NULL ? value : "");
   return false;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// intParam - parse + validate an integer URL param (single-param validation)
+//
+// Strict: rejects non-numeric values (atoi would silently take "100G" as 100
+// and "abc" as 0) and out-of-range values. `minVal` is the smallest accepted
+// value (0 for non-negative params, 1 for strictly-positive ones). On error it
+// sets the 400 and returns false; on success it writes the parsed int.
+//
+static bool intParam(const char* name, const char* value, int* outP, int minVal)
+{
+  char* end = NULL;
+  errno = 0;
+  long  v   = (value != NULL) ? strtol(value, &end, 10) : 0;
+
+  if ((value == NULL) || (end == value) || (*end != 0) || (errno == ERANGE) || (v < minVal) || (v > INT_MAX))
+  {
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid request",
+            "'%s' must be a %s integer (got '%s')", name,
+            (minVal <= 0) ? "non-negative" : "positive", value != NULL ? value : "");
+    return false;
+  }
+
+  *outP = (int) v;
+  return true;
 }
 
 
@@ -280,85 +311,25 @@ void ldParamHook(const char* name, const char* value)
   }
   else if (strcmp(name, "limit") == 0)
   {
-    swNgsild.limit = atoi(value);
-    if (swNgsild.limit < 0)
-    {
-      // § 6.3.10: limit, when present, MUST be a non-negative integer.
-      // limit=0 is valid only in combination with count=true (handled by
-      // ldParamsValidate); negative values are always invalid.
-      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid request",
-              "'limit' must be a positive integer (got '%s')", value);
-      return;
-    }
-    // If `page` was already seen, complete the translation now.
-    if (swNgsild.page > 0 && swNgsild.offset == 0)
-      swNgsild.offset = (swNgsild.page - 1) * (swNgsild.limit > 0 ? swNgsild.limit : 20);
+    // § 6.3.10: non-negative. limit=0 is valid only with count=true — that
+    // cross-param dependency is checked in ldParamsValidate.
+    if (!intParam("limit", value, &swNgsild.limit, 0)) return;
   }
   else if (strcmp(name, "lastN") == 0)
   {
-    swNgsild.lastN = atoi(value);
-    if (swNgsild.lastN <= 0)
-    {
-      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Bad Request",
-              "lastN must be a positive integer (got '%s')", value);
-      return;
-    }
+    if (!intParam("lastN", value, &swNgsild.lastN, 1)) return;
   }
   else if (strcmp(name, "firstN") == 0)
   {
-    swNgsild.firstN = atoi(value);
-    if (swNgsild.firstN <= 0)
-    {
-      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Bad Request",
-              "firstN must be a positive integer (got '%s')", value);
-      return;
-    }
+    if (!intParam("firstN", value, &swNgsild.firstN, 1)) return;
   }
   else if (strcmp(name, "offsetN") == 0)
   {
-    // § 6.4.7.3: only values >= 0. atoi("abc") == 0 is accepted as 0 —
-    // same leniency the other integer params get.
-    swNgsild.offsetN = atoi(value);
-    if (swNgsild.offsetN < 0)
-    {
-      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Bad Request",
-              "offsetN must be a non-negative integer (got '%s')", value);
-      return;
-    }
+    if (!intParam("offsetN", value, &swNgsild.offsetN, 0)) return;
   }
   else if (strcmp(name, "offset") == 0)
   {
-    if (swNgsild.page != 0)
-    {
-      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid request",
-              "'page' and 'offset' cannot be used together");
-      return;
-    }
-    swNgsild.offset = atoi(value);
-  }
-  else if (strcmp(name, "page") == 0)
-  {
-    // § 5.5.9 defines pagination via `limit` + `offset`. `page` is
-    // NOT a NGSI-LD spec parameter — accepted here as a compatibility
-    // shim (ETSI tests + some legacy clients use it) and translated
-    // to `offset = (page - 1) * limit` as soon as both values are
-    // known (regardless of URL param order).
-    swNgsild.page = atoi(value);
-    if (swNgsild.page <= 0)
-    {
-      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid request",
-              "'page' must be a positive integer (got '%s')", value);
-      return;
-    }
-    if (swNgsild.offset != 0)
-    {
-      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid request",
-              "'page' and 'offset' cannot be used together");
-      return;
-    }
-    // If `limit` was already seen, complete the translation now.
-    if (swNgsild.page > 0 && swNgsild.limit >= 0)
-      swNgsild.offset = (swNgsild.page - 1) * (swNgsild.limit > 0 ? swNgsild.limit : 20);
+    if (!intParam("offset", value, &swNgsild.offset, 0)) return;
   }
   else if (strcmp(name, "format") == 0)
   {

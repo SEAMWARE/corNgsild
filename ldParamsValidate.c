@@ -13,6 +13,7 @@
 #include "swRest/SwRestService.h"                        // SwRestService.ldOp
 #include "swNgsild/SwNgsild.h"                           // swNgsild
 #include "swNgsild/LdOp.h"                               // LdOpQueryEntities, LdOpQueryTemporal, LdOpBatchQuery
+#include "swNgsild/ldParams.h"                           // LD_PARAM_GEOREL, LD_PARAM_GEOMETRY, ...
 #include "swNgsild/LdProblem.h"                          // LD_ERROR_*
 #include "swNgsild/ldError.h"                            // ldError
 #include "swNgsild/ldCheckGeo.h"                         // ldCheckGeoQuery
@@ -143,15 +144,17 @@ bool ldParamsValidate(void)
   // the messages stay identical across routes.
   //
   // Skipped when the URL-param parser already raised an error: a rejected
-  // value (georel= empty, geometry=Piont, …) leaves its parsed pointer
-  // NULL, and the generic "incomplete" message must not clobber the
-  // specific one.
+  // value (georel= empty, geometry=Piont, …) sets a 400, and the generic
+  // "incomplete" message must not clobber the specific one. Presence is the
+  // received-params bitmask (was it given?), not the parsed pointer — so a
+  // given-but-rejected param still counts as present (and the 400 gate above
+  // keeps its specific message).
   if (swRest.out.httpStatusCode < 400)
   {
-    bool hasGeorel      = (swNgsild.georel      != NULL);
-    bool hasGeometry    = (swNgsild.geometry    != NULL);
-    bool hasCoordinates = (swNgsild.coordinates != NULL);
-    bool hasGeoproperty = (swNgsild.geoproperty != NULL);
+    bool hasGeorel      = (swRest.in.uriParamMask & LD_PARAM_GEOREL)      != 0;
+    bool hasGeometry    = (swRest.in.uriParamMask & LD_PARAM_GEOMETRY)    != 0;
+    bool hasCoordinates = (swRest.in.uriParamMask & LD_PARAM_COORDINATES) != 0;
+    bool hasGeoproperty = (swRest.in.uriParamMask & LD_PARAM_GEOPROPERTY) != 0;
 
     if (hasGeorel || hasGeometry || hasCoordinates)
     {
