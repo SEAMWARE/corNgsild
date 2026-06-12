@@ -17,6 +17,7 @@
 #include "kjson/kjBuilder.h"                           // kjObject, kjString, kjChildAdd
 #include "kjson/kjLookup.h"                            // kjLookup
 #include "kjson/kjClone.h"                             // kjClone
+#include "kjson/kjParse.h"                             // kjParse
 
 #include "kalloc/kaAlloc.h"                            // kaAlloc
 #include "swRest/SwRestState.h"                        // swRest
@@ -643,6 +644,34 @@ static const char* responseContextLink(SwRestKeyValue* headerV, int headerCount)
 
 // -----------------------------------------------------------------------------
 //
+// distOpBodyParse - parse a forwarded response body once, at reception
+//
+// The parsed tree is cached on the result so no consumer re-parses it (kjParse
+// tokenizes the buffer in place — a second parse would hit a mutated buffer).
+// A 2xx response whose non-empty body will not parse is an unusable upstream
+// reply: downgrade the leg to 502 Bad Gateway with a diagnostic, so every
+// consumer's existing non-2xx handling treats it as a failed forward and the
+// registrationId of the offending endpoint is recorded in the error.
+// responseBody / responseBodyLen / statusCode must already be set on rP.
+//
+static void distOpBodyParse(LdDistOpBatchResult* rP)
+{
+  if ((rP->responseBody == NULL) || (rP->responseBodyLen == 0))
+    return;
+
+  rP->responseTree = kjParse(swRest.kjsonP, rP->responseBody);
+
+  if ((rP->responseTree == NULL) && (rP->statusCode >= 200) && (rP->statusCode < 300))
+  {
+    rP->statusCode  = 502;
+    rP->errorDetail = "malformed JSON in forwarded response body";
+  }
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldDistOpSendMulti -
 //
 // Fan out N CSR forwards concurrently over swRestClientMulti. The per-CSR
@@ -691,6 +720,7 @@ int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
   int addedCount = 0;
   int* addIndex = (int*) kaAlloc(&swRest.kalloc, itemCount * sizeof(int));
   for (int i = 0; i < itemCount; i++) addIndex[i] = -1;
+  memset(resultV, 0, itemCount * sizeof(LdDistOpBatchResult));
   SwRestKeyValue** selfHv = (SwRestKeyValue**) kaAlloc(&swRest.kalloc, itemCount * sizeof(SwRestKeyValue*));
   int*             selfHc = (int*) kaAlloc(&swRest.kalloc, itemCount * sizeof(int));
 
@@ -775,6 +805,7 @@ int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
       resultV[i].statusCode        = sc;
       resultV[i].responseBody      = respBody;
       resultV[i].responseBodyLen   = respBodyLen;
+      distOpBodyParse(&resultV[i]);
       resultV[i].responseContextUrl = responseContextLink(respHdrV, respHdrCount);
 
       if (sc >= 200 && sc < 300)
@@ -829,6 +860,8 @@ int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
     }
     else
       resultV[i].responseBody = NULL;
+
+    distOpBodyParse(&resultV[i]);
 
     // The context the response speaks (its json-ld#context Link), so the
     // caller can expand the body via its own vocabulary, not the request's.

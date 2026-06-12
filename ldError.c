@@ -11,6 +11,8 @@
 #include <stdio.h>                                // vsnprintf
 
 #include "kbase/kLibLog.h"                      // kLogFunction
+#include "kjson/KjNode.h"                       // KjNode
+#include "kjson/kjBuilder.h"                    // kjObject, kjString, kjChildAdd
 #include "swRest/swRest.h"                      // swRest
 
 #include "ldError.h"                              // Own interface
@@ -48,4 +50,35 @@ void ldErrorFunction
   //
   if (kLogFunction != NULL)
     kLogFunction(1, 0, fileName, lineNo, functionName, "%d %s: %s", status, title, swRest.out.problemDetail);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldErrorExtraString -
+//
+void ldErrorExtraString(const char* name, const char* value)
+{
+  if (value == NULL)
+    return;
+
+  if (swRest.out.problemExtras == NULL)
+    swRest.out.problemExtras = kjObject(swRest.kjsonP, NULL);
+
+  kjChildAdd(swRest.out.problemExtras, kjString(swRest.kjsonP, name, value));
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldErrorExtraInt -
+//
+void ldErrorExtraInt(const char* name, int value)
+{
+  if (swRest.out.problemExtras == NULL)
+    swRest.out.problemExtras = kjObject(swRest.kjsonP, NULL);
+
+  kjChildAdd(swRest.out.problemExtras, kjInteger(swRest.kjsonP, name, value));
 }

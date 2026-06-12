@@ -73,6 +73,7 @@ LIB_SOURCES   = swNgsild.c \
                 ldDistOp.c \
                 ldContextHost.c \
                 ldBatchErrors.c \
+                ldWriteResult.c \
                 ldDistSub.c \
                 ldProbeSourceIdentity.c \
                 ldForwarding.c \

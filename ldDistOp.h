@@ -186,8 +186,9 @@ typedef struct LdDistOpBatchItem
 typedef struct LdDistOpBatchResult
 {
   int          statusCode;        // 0 on transport failure
-  char*        responseBody;      // request-kalloc; NULL if empty
+  char*        responseBody;      // request-kalloc backing buffer; NULL if empty
   int          responseBodyLen;
+  KjNode*      responseTree;      // responseBody parsed once at reception; NULL if no/invalid body
   const char*  errorDetail;       // NULL on success; otherwise request-kalloc
   // The @context that travels WITH the response — the URL in the response's
   // json-ld#context Link header (application/json). NULL if the response

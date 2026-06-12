@@ -39,4 +39,25 @@ extern void ldErrorFunction
 #define ldError(status, type, title, ...)  \
   ldErrorFunction(status, type, title, __FILE__, __LINE__, __FUNCTION__, __VA_ARGS__)
 
+
+
+// -----------------------------------------------------------------------------
+//
+// ldErrorExtraString - attach an RFC 9457 extension member to the ProblemDetails
+//
+// Adds a { name: value } member to swRest.out.problemExtras (created on first
+// use), spliced into the error body alongside type/title/status/detail. Use for
+// machine-readable context — e.g. the registrationId of a failed forward — so
+// clients need not parse it out of the English 'detail'. No-op if value is NULL.
+//
+extern void ldErrorExtraString(const char* name, const char* value);
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldErrorExtraInt - attach an integer RFC 9457 extension member (e.g. an upstream statusCode)
+//
+extern void ldErrorExtraInt(const char* name, int value);
+
 #endif  // SWNGSILD_LDERROR_H_
