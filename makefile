@@ -36,6 +36,7 @@ LIB_SOURCES   = swNgsild.c \
                 ldApiEntityToDbModel.c \
                 ldEntityToApi.c \
                 ldEntityMerge.c \
+                ldRegSubMerge.c \
                 ldScopeExprParse.c \
                 ldScopeMatch.c \
                 ldTypeExprParse.c \
