@@ -950,6 +950,26 @@ static void ldRenderHook(void)
     }
   }
 
+  //
+  // § 6.3.18 loop-detection: a single-entity write that ended in 404
+  // ResourceNotFound only because a loop-blocked exclusive/redirect
+  // registration is the sole holder of the data is really 508 Loop Detected —
+  // the entity wasn't "not found", it's unreachable through the loop.
+  // ldDistOpLoopReap set swNgsild.loopBlocked508 when it dropped such a forward.
+  //
+  if (swNgsild.loopBlocked508 &&
+      (swRest.out.httpStatusCode == 404) &&
+      (swRest.out.problemType != NULL) &&
+      (strcmp(swRest.out.problemType, LD_ERROR_RESOURCE_NOT_FOUND) == 0))
+  {
+    swRest.out.httpStatusCode = 508;
+    swRest.out.problemType    = LD_ERROR_LOOP_DETECTED;
+    swRest.out.problemTitle   = "Loop Detected";
+    snprintf(swRest.out.problemDetail, sizeof(swRest.out.problemDetail), "%s",
+             "distributed operation loop detected: the data is held by an exclusive/redirect "
+             "registration that resolves back to this broker");
+  }
+
   // Bail out of body formatting on error — the response is a
   // ProblemDetails JSON object built by swRest from problemType /
   // problemTitle / problemDetail; nothing for us to compact.

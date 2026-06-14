@@ -1141,7 +1141,6 @@ int ldDistOpEntriesBuild(const LdDistOpGroup  groupV[],
       LdRegCacheItem* csr = grp->matchV[i];
 
       if (csr->endpoint == NULL) continue;
-      if (ldDistOpCsrWouldLoop(csr, ownAlias)) continue;
 
       if (!ldRegOpSupported(csr, op))
       {
@@ -1157,11 +1156,21 @@ int ldDistOpEntriesBuild(const LdDistOpGroup  groupV[],
         continue;
       }
 
+      // A forward to this CSR loops when our own alias is already in the
+      // inbound Via (§ 9.7: we are a previously-encountered source) or the CSR
+      // resolves back to us / a transited broker. We no longer silently skip
+      // such CSRs: the entry is built and marked so the caller can turn a
+      // loop-blocked exclusive/redirect forward into 508 (§ 6.3.18). Inclusive
+      // loops stay silent — the local copy serves them.
+      bool loop = ldDistOpLoopDetected(ownAlias) || ldDistOpCsrWouldLoop(csr, ownAlias);
+
       if (!perRi)
       {
-        entries[count].csr     = csr;
-        entries[count].riP     = NULL;
-        entries[count].modeIdx = g;
+        entries[count].csr       = csr;
+        entries[count].riP       = NULL;
+        entries[count].modeIdx   = g;
+        entries[count].wouldLoop = loop;
+        entries[count].errorMode = grp->opConflict;
         count++;
         continue;
       }
@@ -1171,9 +1180,11 @@ int ldDistOpEntriesBuild(const LdDistOpGroup  groupV[],
         if (riEntityIdCheck != NULL && !ldoEntityInfoCoversId(riP, riEntityIdCheck)) continue;
         if (riAttrIriCheck  != NULL && !ldoInfoCoversAttr(riP, riAttrIriCheck))     continue;
 
-        entries[count].csr     = csr;
-        entries[count].riP     = riP;
-        entries[count].modeIdx = g;
+        entries[count].csr       = csr;
+        entries[count].riP       = riP;
+        entries[count].modeIdx   = g;
+        entries[count].wouldLoop = loop;
+        entries[count].errorMode = grp->opConflict;
         count++;
       }
     }
@@ -1181,6 +1192,35 @@ int ldDistOpEntriesBuild(const LdDistOpGroup  groupV[],
 
   *entriesPP = entries;
   return count;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldDistOpLoopReap -
+//
+int ldDistOpLoopReap(LdDistOpEntry* entries, int count)
+{
+  int kept = 0;
+
+  for (int i = 0; i < count; i++)
+  {
+    if (entries[i].wouldLoop)
+    {
+      // exclusive/redirect (errorMode) loop-block means the data is held
+      // externally and is now unreachable. Flag it so ldRenderHook turns the
+      // caller's terminal 404 into 508 (§ 6.3.18). Inclusive loop-blocks are
+      // silent: the local copy still serves them.
+      if (entries[i].errorMode)
+        swNgsild.loopBlocked508 = true;
+      continue;   // loop-blocked — never forwarded
+    }
+
+    entries[kept++] = entries[i];
+  }
+
+  return kept;
 }
 
 

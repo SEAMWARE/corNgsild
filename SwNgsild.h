@@ -118,6 +118,13 @@ typedef struct SwNgsild
   bool    count;         // true if ?count=true
   bool    local;         // true if ?local=true
   bool    noForward;     // true if ?noForward=true  (discovery: local + CSR metadata, no forward)
+
+  // Set by ldDistOpLoopReap when a distributed write loop-blocked an
+  // exclusive/redirect forward (§ 6.3.18): the data is held externally and is
+  // now unreachable. ldRenderHook rewrites a terminal 404 ResourceNotFound into
+  // 508 Loop Detected when this is set (the entity was "not found" only because
+  // its sole holder resolves back to us through the loop).
+  bool    loopBlocked508;
   int     hops;          // ?hops=<N> — federation hop limit (default 8 when absent)
   bool    hopsSet;       // true if ?hops=... was explicitly supplied
   bool    details;       // true if ?details=true

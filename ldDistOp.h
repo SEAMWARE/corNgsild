@@ -285,6 +285,15 @@ typedef struct LdDistOpEntry
   LdRegInfo*        riP;          // matched info entry; NULL when not per-RI
   int               modeIdx;      // 0..groupCount-1 (caller maps to detach / opConf semantics)
 
+  // Loop accounting — Build fills these (§ 6.3.18 / § 9.7). wouldLoop is true
+  // when forwarding to this CSR would loop (our own alias already in the Via,
+  // or the CSR resolves back to us / a transited broker). errorMode mirrors the
+  // group's opConflict (exclusive/redirect surface errors; inclusive is silent),
+  // so a looped excl/redirect forward becomes 508 Loop Detected while a looped
+  // inclusive forward is simply dropped (the local copy serves it).
+  bool              wouldLoop;
+  bool              errorMode;
+
   // Caller fills these between Build and Perform:
   const char*       url;
   const char*       body;         // NULL for GET/DELETE
@@ -331,5 +340,26 @@ extern void ldDistOpEntriesPerform(
     int                  count,
     SwRestVerb           verb,
     const char*          ownAlias);
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldDistOpLoopReap - drop loop-blocked entries before Perform (§ 6.3.18)
+//
+// For entity-level / single-attribute callers whose built entries each map to a
+// precise target (the whole entity, or one attribute), this removes every entry
+// marked wouldLoop from the array (they must not be forwarded) and sets
+// *loopBlockedP = true if any of them was an exclusive/redirect entry (errorMode)
+// — meaning the data is held externally and is now unreachable via the loop.
+// Inclusive loop-blocks are silent (the local copy serves them) and do NOT set
+// the flag. Returns the compacted entry count; the caller Performs the survivors,
+// runs its local op, and at its terminal "nothing found / nothing succeeded"
+// branch returns 508 instead of 404 when loopBlocked is set.
+//
+// Multi-attribute callers (merge / replace / append / create) instead inspect
+// entry.wouldLoop at their own chop point, where attribute coverage is known.
+//
+extern int ldDistOpLoopReap(LdDistOpEntry* entries, int count);
 
 #endif  // SWNGSILD_LDDISTOP_H_

@@ -22,6 +22,9 @@
 #define LD_ERROR_OP_NOT_SUPPORTED   "https://uri.etsi.org/ngsi-ld/errors/OperationNotSupported"
 #define LD_ERROR_INVALID_REQUEST    "https://uri.etsi.org/ngsi-ld/errors/InvalidRequest"
 #define LD_ERROR_INTERNAL_ERROR     "https://uri.etsi.org/ngsi-ld/errors/InternalError"
+// TS 104-176 § 6.3.18 names only the HTTP status "508 Loop Detected"; no ProblemDetails
+// type is registered, so this descriptive URI fills the RFC 7807 'type' slot.
+#define LD_ERROR_LOOP_DETECTED      "https://uri.etsi.org/ngsi-ld/errors/LoopDetected"
 #define LD_ERROR_NONEXISTENT_TENANT      "https://uri.etsi.org/ngsi-ld/errors/NonexistentTenant"
 #define LD_ERROR_LD_CONTEXT_NOT_AVAILABLE "https://uri.etsi.org/ngsi-ld/errors/LdContextNotAvailable"
 
