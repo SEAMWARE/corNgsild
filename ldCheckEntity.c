@@ -24,7 +24,6 @@
 #include "swNgsild/ldError.h"                            // ldError
 #include "swNgsild/ldAttrTypeDetect.h"                   // ldAttrTypeDetect
 #include "swNgsild/ldCheckAttribute.h"                   // ldCheckAttribute
-#include "swNgsild/ldDatasetIdDedup.h"                    // ldDatasetIdDedup
 #include "swNgsild/ldIsEntityKeyword.h"                   // ldIsEntityKeyword
 #include "swNgsild/ldCheckEntity.h"                      // Own interface
 #include "swNgsild/ldTraceLevels.h"                      // LdTCheckEnt
@@ -334,12 +333,42 @@ bool ldCheckEntity(KjNode* entityP, LdOp op, KjNode* dbEntityP, KAlloc* faP)
         }
       }
 
-      // § 4.5.5.3 — dedup duplicate datasetIds (and dup default instances)
-      // in-place using the spec tiebreaker. Spec mandates resolution, not
-      // rejection.
-      ldDatasetIdDedup(childP, swRest.requestStartTime);
+      // § 5.2.5 / § 4.5.5 — a single submitted multi-instance attribute must
+      // have at most ONE default instance (no datasetId) and UNIQUE datasetIds.
+      // (The § 8.5.3 tiebreaker is for conflicting instances assembled from
+      // multiple Context Sources, not a single local write — so a conflicting
+      // single payload is rejected, not resolved.)
+      bool defaultFound = false;
+      for (KjNode* instP = childP->value.firstChildP; instP != NULL; instP = instP->next)
+      {
+        KjNode* dsP = kjLookup(instP, "datasetId");
 
-      // Validate each surviving instance.
+        if (dsP == NULL)
+        {
+          if (defaultFound == true)
+          {
+            ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Multi-Attribute", "Attribute '%s': more than one instance without a datasetId", childP->name);
+            return false;
+          }
+          defaultFound = true;
+        }
+        else if (dsP->type == KjString)
+        {
+          // Duplicate datasetId among earlier instances of the same attribute?
+          // (full datasetId URI validation is done by ldCheckAttribute below)
+          for (KjNode* otherP = childP->value.firstChildP; otherP != instP; otherP = otherP->next)
+          {
+            KjNode* otherDsP = kjLookup(otherP, "datasetId");
+            if ((otherDsP != NULL) && (otherDsP->type == KjString) && (strcmp(otherDsP->value.s, dsP->value.s) == 0))
+            {
+              ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Multi-Attribute", "Attribute '%s': duplicate datasetId '%s'", childP->name, dsP->value.s);
+              return false;
+            }
+          }
+        }
+      }
+
+      // Validate each instance.
       for (KjNode* instP = childP->value.firstChildP; instP != NULL; instP = instP->next)
       {
         instP->name = childP->name;
