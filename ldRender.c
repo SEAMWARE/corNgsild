@@ -199,25 +199,30 @@ static void attrToConcise(KjNode* attrP)
       attrToConcise(childP);
   }
 
-  // § 5.2.6.4 step 3: a value-only Property/ListProperty whose value is a JSON
-  // primitive collapses to the bare value (matching the simplified format).
-  // A plain JSON object or array is KEPT as { value: ... } so the
-  // concise->normalized round-trip stays lossless and unambiguous.
-  if ((attrType == LdAttrProperty) || (attrType == LdAttrListProperty))
+  // A Property or GeoProperty with no sub-attributes (sysAttrs are scalars
+  // dropped earlier) carries ONLY its value, so concise == simplified: emit the
+  // bare value — scalar, array, or (for GeoProperty) the GeoJSON object. Only
+  // these two types may collapse; every other type keeps its value-key so the
+  // concise form stays lossless (a bare array/object would be indistinguishable
+  // from a Property value). GeoProperty's "type" is not inferable from the
+  // "value" key (Property uses it too), so it is still present here — ignore it
+  // when checking value-only, then discard it by replacing the attr with value.
+  if ((attrType == LdAttrProperty) || (attrType == LdAttrGeoProperty))
   {
-    const char* vk        = (attrType == LdAttrProperty) ? LD_VOCAB_HAS_VALUE : LD_VOCAB_HAS_VALUE_LIST;
-    KjNode*     valueP    = NULL;
-    bool        valueOnly = true;
+    KjNode*  valueP    = NULL;
+    bool     valueOnly = true;
 
     for (KjNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
     {
-      if (strcmp(childP->name, vk) == 0)
+      if (strcmp(childP->name, "type") == 0)
+        continue;
+      else if (strcmp(childP->name, LD_VOCAB_HAS_VALUE) == 0)
         valueP = childP;
       else
-        valueOnly = false;   // "type" already removed above; any remaining member blocks reduction
+        valueOnly = false;
     }
 
-    if ((valueOnly == true) && (valueP != NULL) && (valueP->type != KjObject) && (valueP->type != KjArray))
+    if ((valueOnly == true) && (valueP != NULL))
     {
       attrP->type  = valueP->type;
       attrP->value = valueP->value;

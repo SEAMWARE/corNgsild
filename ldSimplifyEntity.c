@@ -276,21 +276,6 @@ void ldSimplifyEntity(KjNode* entityP)
 
 // -----------------------------------------------------------------------------
 //
-// conciseValueReducible - may a value-only Property collapse to its bare value?
-//
-// § 5.2.6.4 step 3: only a JSON primitive (or GeoJSON) collapses; a plain JSON
-// object or array is kept as { value: ... } so the concise->normalized
-// round-trip stays lossless and unambiguous.
-//
-static bool conciseValueReducible(const KjNode* valueP)
-{
-  return ((valueP->type != KjObject) && (valueP->type != KjArray));
-}
-
-
-
-// -----------------------------------------------------------------------------
-//
 // conciseAttr - concise-compact one attribute, recursing into sub-attributes
 //
 static void conciseAttr(KjNode* attrP)
@@ -303,12 +288,7 @@ static void conciseAttr(KjNode* attrP)
     return;
 
   const char* typeStr = typeP->value.s;
-
-  // GeoProperty stays normalized in concise (value is a JSON object with "type")
-  if (strcmp(typeStr, "GeoProperty") == 0)
-    return;
-
-  const char* valKey = primaryValueKey(typeStr);
+  const char* valKey  = primaryValueKey(typeStr);
 
   // Recurse into real sub-attributes — object children other than type/value-key.
   // (observedAt/unitCode/datasetId/createdAt/modifiedAt are scalars, not objects,
@@ -321,12 +301,17 @@ static void conciseAttr(KjNode* attrP)
       conciseAttr(childP);
   }
 
-  // value-only Property/ListProperty with a primitive value -> bare value
+  // A Property or GeoProperty with no sub-attributes (and no sysAttrs, which are
+  // scalars dropped earlier) carries ONLY its value, so concise == simplified:
+  // emit the bare value, regardless of whether it is a scalar, array or (for
+  // GeoProperty) a GeoJSON object. Only these two types may collapse — every
+  // other type must keep its value-key so the concise form stays lossless
+  // (a bare array/object would be indistinguishable from a Property value).
   if ((attrSubAttrCount(attrP, typeStr) == 0) &&
-      ((strcmp(typeStr, "Property") == 0) || (strcmp(typeStr, "ListProperty") == 0)))
+      ((strcmp(typeStr, "Property") == 0) || (strcmp(typeStr, "GeoProperty") == 0)))
   {
     KjNode* valueNode = (valKey != NULL) ? kjLookup(attrP, valKey) : NULL;
-    if ((valueNode != NULL) && conciseValueReducible(valueNode))
+    if (valueNode != NULL)
     {
       attrP->type  = valueNode->type;
       attrP->value = valueNode->value;
