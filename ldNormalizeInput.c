@@ -128,6 +128,40 @@ static bool isGeoJsonObject(KjNode* objP)
 
 // -----------------------------------------------------------------------------
 //
+// isSimplifiedGeoProperty - structural test for a simplified-format GeoProperty
+//
+// An attribute object whose ONLY members are exactly "type" (a string) and
+// "coordinates" is a simplified-format GeoProperty (a bare GeoJSON geometry).
+// Unlike isGeoJsonObject(), the "type" value need NOT be a valid GeoJSON
+// geometry name: an invalid one (e.g. "Poinxt") must still be recognized as a
+// GeoProperty *attempt* so it gets wrapped and ldCheckGeo rejects it as a bad
+// geometry — rather than the whole object being stored as a junk Property.
+//
+// Only reached from Case 3 (no explicit attr type, no value key), so a valid
+// NGSI-LD attribute type such as "Property" has already been handled as
+// normalized format by Case 1 ({"type":"Property","coordinates":[]} → "Missing
+// value", not a geometry).
+//
+static bool isSimplifiedGeoProperty(KjNode* objP)
+{
+  KjNode*  typeP   = NULL;
+  KjNode*  coordsP = NULL;
+  int      count   = 0;
+
+  for (KjNode* childP = objP->value.firstChildP; childP != NULL; childP = childP->next)
+  {
+    ++count;
+    if      (strcmp(childP->name, "type")              == 0)  typeP   = childP;
+    else if (strcmp(childP->name, LD_VOCAB_COORDINATES) == 0)  coordsP = childP;
+  }
+
+  return (count == 2 && typeP != NULL && typeP->type == KjString && coordsP != NULL);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // isGeoJsonValue - check if a value node (child of hasValue) is GeoJSON
 //
 static bool isGeoJsonValue(KjNode* valueP)
@@ -160,8 +194,14 @@ static bool hasExplicitAttrType(KjNode* objP)
       if (strcmp(v, "ListProperty")     == 0)  return true;
       if (strcmp(v, "ListRelationship") == 0)  return true;
       if (strcmp(v, "JsonProperty")     == 0)  return true;
-      // Also accept expanded IRIs
-      if (strncmp(v, "https://uri.etsi.org/ngsi-ld/", 29) == 0)  return true;
+      // The attribute-type keywords above are core-context terms and are NEVER
+      // JSON-LD-expanded — they always arrive in short form. A "type" value
+      // that DID expand (to https://uri.etsi.org/ngsi-ld/default-context/<term>
+      // via the core context's "@vocab") is by definition an unknown term, not
+      // an NGSI-LD attribute type, so it must fall through. (An earlier broad
+      // "starts with https://uri.etsi.org/ngsi-ld/" check wrongly accepted
+      // exactly those @vocab expansions — e.g. a "Poinxt" geometry — and stored
+      // them as junk instead of letting Case 3 detect + reject the geometry.)
     }
   }
   return false;
@@ -376,8 +416,11 @@ static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool m
   }
 
   // Case 3: Object with no value key, no attr type
-  // Check if it IS a GeoJSON geometry (simplified GeoProperty)
-  if (isGeoJsonObject(attrP))
+  // Check if it IS a GeoJSON geometry (simplified GeoProperty). A valid
+  // geometry (isGeoJsonObject) OR the structural type+coordinates shape
+  // (isSimplifiedGeoProperty) — the latter also catches an invalid geometry
+  // type so ldCheckGeo can reject it instead of it being stored as junk.
+  if (isGeoJsonObject(attrP) || isSimplifiedGeoProperty(attrP))
   {
     ldWrapAsGeoProperty(containerP, attrP, kaP);
     return;
