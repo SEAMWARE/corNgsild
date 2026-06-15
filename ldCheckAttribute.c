@@ -313,12 +313,26 @@ bool ldCheckAttribute(KjNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc*
   switch (attrType)
   {
   case LdAttrRelationship:
-    if (valueNodeP->type != KjString)
+    // 'object' is a URI string or, per spec clause 5 (String or String[]), an array of URI strings.
+    if (valueNodeP->type == KjString)
+      URI_CHECK(valueNodeP->value.s);
+    else if (valueNodeP->type == KjArray)
     {
-      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Relationship", "Relationship '%s': 'object' must be a URI string", attrP->name);
+      for (KjNode* itemP = valueNodeP->value.firstChildP; itemP != NULL; itemP = itemP->next)
+      {
+        if (itemP->type != KjString)
+        {
+          ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Relationship", "Relationship '%s': 'object' array items must be URI strings", attrP->name);
+          return false;
+        }
+        URI_CHECK(itemP->value.s);
+      }
+    }
+    else
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Relationship", "Relationship '%s': 'object' must be a URI string or an array of URI strings", attrP->name);
       return false;
     }
-    URI_CHECK(valueNodeP->value.s);
     break;
 
   case LdAttrGeoProperty:
