@@ -162,6 +162,31 @@ static bool isSimplifiedGeoProperty(KjNode* objP)
 
 // -----------------------------------------------------------------------------
 //
+// isJsonLiteral - is this object a JSON literal { "@type":"@json", "@value":... } ?
+//
+// Per TS 104-175 clause 5, a JSON (null) literal {"@type":"@json","@value":X} is a
+// permitted Attribute value — it is "not to be expanded in JSON-LD" and survives
+// expansion. In simplified form the whole object IS the (Property) value: it is a
+// single opaque value, NOT a fragment of sub-attributes and NOT a null to drop. So
+// it must be wrapped as a Property value in BOTH create and merge modes — in merge
+// mode that makes it REPLACE the target value, instead of its "@type"/"@value"
+// members being merged in as sub-attributes (which corrupted the attribute — the
+// json-literal-null merge splice).
+//
+static bool isJsonLiteral(KjNode* objP)
+{
+  for (KjNode* childP = objP->value.firstChildP; childP != NULL; childP = childP->next)
+  {
+    if ((strcmp(childP->name, "@type") == 0) && (childP->type == KjString) && (strcmp(childP->value.s, "@json") == 0))
+      return true;
+  }
+  return false;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // isGeoJsonValue - check if a value node (child of hasValue) is GeoJSON
 //
 static bool isGeoJsonValue(KjNode* valueP)
@@ -361,6 +386,15 @@ static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool m
   // ---  Object children  ---
   if (attrP->type != KjObject)
     return;
+
+  // A JSON literal {"@type":"@json","@value":X} is a single opaque value (clause 5),
+  // not a fragment of sub-attributes: wrap it as a Property value in BOTH create and
+  // merge modes, so a merge replaces the target value instead of splicing @type/@value.
+  if (isJsonLiteral(attrP))
+  {
+    wrapAsProperty(containerP, attrP, kaP);
+    return;
+  }
 
   // Case 1: Has explicit attr type (Property/Relationship/etc.) → already normalized or concise with type
   if (hasExplicitAttrType(attrP))
