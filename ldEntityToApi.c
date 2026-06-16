@@ -105,7 +105,7 @@ static void timestampsToIsoStrings(KjNode* objP, KAlloc* allocP)
 // based on the attribute's "type" field, so JSON-LD compaction produces the
 // right short names.
 //
-static void restoreValueKey(KjNode* instP)
+static void restoreValueKey(KjNode* instP, bool collapseSingletonArrays)
 {
   if (instP->type != KjObject)
     return;
@@ -126,6 +126,30 @@ static void restoreValueKey(KjNode* instP)
 
     if (correctKey != NULL)
       valueP->name = (char*) correctKey;
+
+    //
+    // JSON-LD compaction: a single-element array value of a term with no
+    // @set/@list container compacts to the bare value. hasValue (Property)
+    // and hasObject (Relationship) are such terms, so ["x"] -> "x". hasJSON
+    // (@type:@json, an opaque literal), hasValueList / hasObjectList
+    // (@container:@list) and hasLanguageMap (@container:@language) are NOT
+    // collapsed - their arrays are significant and kept as-is.
+    //
+    // Skipped on the temporal path (collapseSingletonArrays == false): the
+    // raw instance values feed ldToAggregatedValues / ldToTemporalValues,
+    // where an array's cardinality is significant (e.g. array-length avg).
+    //
+    if (collapseSingletonArrays &&
+        (aType == LdAttrProperty || aType == LdAttrRelationship) &&
+        valueP->type == KjArray &&
+        valueP->value.firstChildP != NULL &&
+        valueP->value.firstChildP->next == NULL)
+    {
+      KjNode* onlyP     = valueP->value.firstChildP;
+      valueP->type      = onlyP->type;
+      valueP->value     = onlyP->value;
+      valueP->lastChild = onlyP->lastChild;
+    }
   }
 
   // Recurse into sub-attributes (objects that have a "type" field with a known attr type)
@@ -139,7 +163,7 @@ static void restoreValueKey(KjNode* instP)
     {
       if (strcmp(gcP->name, "type") == 0 && gcP->type == KjString && ldAttrTypeFromString(gcP->value.s) != LdAttrNone)
       {
-        restoreValueKey(childP);
+        restoreValueKey(childP, collapseSingletonArrays);
         break;
       }
     }
@@ -203,7 +227,7 @@ void ldEntityToApi(KjNode* entityP, KAlloc* faP)
     if (childP->type == KjArray)
     {
       for (KjNode* instP = childP->value.firstChildP; instP != NULL; instP = instP->next)
-        restoreValueKey(instP);
+        restoreValueKey(instP, false);  // temporal: keep raw array values for aggregation
       childP = nextP;
       continue;
     }
@@ -229,7 +253,7 @@ void ldEntityToApi(KjNode* entityP, KAlloc* faP)
       }
 
       // Restore normalized "value" key to correct expanded IRI
-      restoreValueKey(instP);
+      restoreValueKey(instP, true);
 
       // If the key is not "@none", add datasetId back to the instance
       if (instP->name != NULL && strcmp(instP->name, "@none") != 0)
@@ -257,7 +281,7 @@ void ldEntityToApi(KjNode* entityP, KAlloc* faP)
         KjNode* instNextP = instP->next;
 
         // Restore normalized "value" key to correct expanded IRI
-        restoreValueKey(instP);
+        restoreValueKey(instP, true);
 
         // Add datasetId back for named instances (not @none)
         if (instP->type == KjObject && instP->name != NULL && strcmp(instP->name, "@none") != 0)
