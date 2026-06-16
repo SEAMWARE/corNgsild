@@ -785,10 +785,16 @@ static void ldParseHook(void)
 
   if (isEntityPayload && !isAttrFragmentUrl)
   {
-    // PATCH /entities/{id} is Merge Entity (§ 5.6.17): a plain-object attribute
-    // fragment without type/value is a partial update carrying sub-attributes,
-    // not a simplified Property whose value happens to be an object.
-    bool mergeMode = (swRest.in.verb == SwVerbPatch);
+    // Merge mode (surgical, RFC 7396) applies ONLY to the true Merge Entity op
+    // (PATCH /entities/{id}, LdOpMergeEntity): a plain-object attribute fragment
+    // without type/value is a partial update carrying sub-attributes, and a
+    // simplified scalar is left RAW for ldEntityMerge to resolve against the
+    // existing attribute's type. Update Attributes (PATCH /entities/{id}/attrs,
+    // LdOpUpdateAttrs) is "ignore or overwrite", NOT a merge — each named
+    // attribute is overwritten wholesale — so simplified input must be fully
+    // normalized (scalars/objects wrapped as Properties); leaving a scalar raw
+    // made ldApiEntityToDbModel silently drop it. Hence mergeMode only for merge.
+    bool mergeMode = (swRest.serviceP != NULL) && (swRest.serviceP->ldOp == LdOpMergeEntity);
     ldNormalizeInput(swRest.in.requestTree, &swRest.kalloc, mergeMode);
   }
 }
