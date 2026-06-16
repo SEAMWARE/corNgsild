@@ -250,19 +250,6 @@ extern bool ldLocalOnly;
 
 
 
-// -----------------------------------------------------------------------------
-//
-// ldTestConformance - global flag set by --testConformance CLI arg
-//
-// When true, the broker prefers shapes/behaviours the ETSI NGSI-LD test
-// suite expects, even where they differ from the spec's "should" wording or
-// the broker's preferred default. Examples (extend as new cases land):
-//   * GET /csourceRegistrations response keeps every information[] entry of
-//     the matched CSR rather than stripping the non-matching ones (§ 5.10.2.5
-//     is "should", ETSI fixtures expect "all"; see spec-doubts § 26).
-//
-extern bool ldTestConformance;
-
 
 
 // -----------------------------------------------------------------------------

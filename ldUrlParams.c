@@ -39,7 +39,6 @@
 //
 bool        ldLocalOnly          = false;
 bool        ldSplitEntities      = true;
-bool        ldTestConformance    = false;
 char*       ldDefaultContextUrl  = NULL;
 uint64_t ldDefaultCooldownNs = 30000000000ULL;   // --cooldownMillis (default 30s; 0 disables the default)
 const char* ldCsourceAliasBase   = NULL;
