@@ -1150,6 +1150,12 @@ static void ldRenderHook(void)
   if (treeP == NULL)
     return;
 
+  // A 201 Created body is either empty or an array of created entity ids
+  // (entityOperations) — never compacted terms — so there is no response
+  // @context to advertise, neither inline nor via a Link header.
+  if (swRest.out.httpStatusCode == 201)
+    return;
+
   SwldContext* ctxP   = respCtxP;
   const char*  ctxUrl = (ctxP != NULL) ? ctxP->url : NULL;
   bool         acceptLdJson = (acceptType == LdAcceptLdJson);
