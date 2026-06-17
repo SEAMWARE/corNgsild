@@ -68,6 +68,7 @@ LIB_SOURCES   = swNgsild.c \
                 ldPeriodicLoop.c \
                 ldEntityMap.c \
                 ldQueryBody.c \
+                ldPCheckQuery.c \
                 ldRegCache.c \
                 ldEntityFragment.c \
                 ldDistOp.c \

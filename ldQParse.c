@@ -531,6 +531,15 @@ static LdQNode* parseTerm(const char** pp, KAlloc* kaP)
   //
   skipWs(&p);
 
+  // An operator (==, !=, >, ...) with no value — "A==" — is an unfinished
+  // statement, not "attr equals the number 0". A deliberately empty value must
+  // be a quoted empty string (A=="").
+  if (*p == 0 || *p == ';' || *p == '|' || *p == ')' || *p == '}')
+  {
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid q parameter", "unfinished statement (operator with no value) in q expression");
+    return NULL;
+  }
+
   if (*p == '"')
   {
     // Quoted string
