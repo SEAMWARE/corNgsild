@@ -23,6 +23,7 @@
 #include "swNgsild/ldCheckDateTime.h"                    // ldCheckDateTime, ldIsoToNanoseconds
 #include "swNgsild/ldTypes.h"                            // ldFormatFromString
 #include "swNgsild/ldQueryParams.h"                      // ldParamSplit, ldParamExpandV
+#include "swNgsild/ldCheckUri.h"                         // ldCheckUri
 #include "swNgsild/ldQParse.h"                           // ldQParse
 #include "swNgsild/LdProblem.h"                          // LD_ERROR_BAD_REQUEST_DATA
 #include "swNgsild/ldError.h"                            // ldError
@@ -249,6 +250,18 @@ void ldParamHook(const char* name, const char* value)
   {
     swNgsild.datasetId  = (char*) value;
     swNgsild.datasetIdV = ldParamSplit((char*) value, faP);
+
+    // § 4.5.5: a datasetId is a URI. The param may be a comma-list — every
+    // value must be a valid URI (ldCheckUri raises the 400 on the first bad one).
+    // The reserved keyword '@none' selects instances that have no datasetId
+    // (§ 6.18.3.2 / § 6.19.3.1) and is exempt from the URI check.
+    for (int ix = 0; swNgsild.datasetIdV != NULL && swNgsild.datasetIdV[ix] != NULL; ix++)
+    {
+      if (strcmp(swNgsild.datasetIdV[ix], "@none") == 0)
+        continue;
+      if (ldCheckUri(swNgsild.datasetIdV[ix]) == false)
+        return;
+    }
   }
   else if (strcmp(name, "pick") == 0)
   {
