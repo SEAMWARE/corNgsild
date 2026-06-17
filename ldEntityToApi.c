@@ -92,6 +92,26 @@ static void timestampsToIsoStrings(KjNode* objP, KAlloc* allocP)
       }
     }
   }
+
+  // Recurse into sub-attributes so their createdAt/modifiedAt/... convert too.
+  // A sub-attribute is a KjObject child carrying a "type" of a known NGSI-LD
+  // attribute type — not a geometry value (type "Point") or an opaque value
+  // object — so this matches restoreValueKey's sub-attribute detection.
+  for (KjNode* childP = objP->value.firstChildP; childP != NULL; childP = childP->next)
+  {
+    if (childP->type != KjObject)
+      continue;
+
+    for (KjNode* gcP = childP->value.firstChildP; gcP != NULL; gcP = gcP->next)
+    {
+      if (gcP->name != NULL && strcmp(gcP->name, "type") == 0 && gcP->type == KjString &&
+          ldAttrTypeFromString(gcP->value.s) != LdAttrNone)
+      {
+        timestampsToIsoStrings(childP, allocP);
+        break;
+      }
+    }
+  }
 }
 
 
