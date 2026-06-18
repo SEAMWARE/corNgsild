@@ -190,6 +190,23 @@ bool ldParamsValidate(void)
       return true;
   }
 
+  // 'within' maps to MongoDB $geoWithin, which requires an areal reference
+  // geometry (Polygon / MultiPolygon). A Point or LineString reference is
+  // meaningless for "within" and must be rejected here as 400 — otherwise it
+  // surfaces as a 500 leaking the raw $geoWithin error from the DB layer.
+  // Gated on no prior error so a bad geometry/coordinates value (rejected
+  // earlier in ldUrlParams) keeps its own, more specific message.
+  if (swRest.out.httpStatusCode < 400 &&
+      swNgsild.geoRel != NULL && swNgsild.geoRel->rel == LdGeoWithin && swNgsild.geometry != NULL)
+  {
+    if (strcmp(swNgsild.geometry, "Polygon") != 0 && strcmp(swNgsild.geometry, "MultiPolygon") != 0)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid geo-query",
+              "georel 'within' requires a Polygon or MultiPolygon reference geometry (got '%s')", swNgsild.geometry);
+      return true;
+    }
+  }
+
   // § 5.7.2.4 — Query Entities requires AT LEAST ONE of: type / attrs / q /
   // geoquery (georel+geometry+coordinates) / scopeQ. Filtering by `id` or
   // `idPattern` alone is "too wide query" and shall be 400 BadRequestData.
