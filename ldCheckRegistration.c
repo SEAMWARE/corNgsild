@@ -20,6 +20,7 @@
 #include "kalloc/KAlloc.h"                             // KAlloc
 #include "kjson/KjNode.h"                               // KjNode
 #include "kjson/kjLookup.h"                             // kjLookup
+#include "kjson/kjBuilder.h"                            // kjChildAdd, kjChildRemove
 
 #include "swRest/SwRestState.h"                          // swRest (requestStartTime)
 
@@ -110,7 +111,7 @@ static bool checkStringArrayNonEmpty(KjNode* arrP, const char* fieldName)
     return false;
   }
 
-  EMPTY_ARRAY_CHECK(arrP, "'information[].propertyNames' / 'relationshipNames' must not be empty");
+  EMPTY_ARRAY_CHECK(arrP, "'information[].attributeNames' must not be empty");
 
   for (KjNode* sP = arrP->value.firstChildP; sP != NULL; sP = sP->next)
   {
@@ -135,20 +136,19 @@ static bool checkStringArrayNonEmpty(KjNode* arrP, const char* fieldName)
 //   - have entities[], every entry carrying a specific `id` (no idPattern,
 //     no type-only entries — those describe groups, which the spec
 //     explicitly says are "not supported for exclusive registrations").
-//   - have at least one of propertyNames / relationshipNames non-empty
-//     (no entity-wide claim).
+//   - have a non-empty attributeNames (no entity-wide claim).
 //
-// Caller has already run checkInformationArray, so the array shape is
-// known good and `entities` (if present) is a non-empty array of objects
-// with at least `type` (idPattern optionally present).
+// Caller has already run checkInformationArray AND regInfoMergeAttributeNames,
+// so the array shape is known good, the deprecated propertyNames /
+// relationshipNames have been folded into attributeNames, and `entities` (if
+// present) is a non-empty array of objects with at least `type`.
 //
 static bool checkExclusiveStructure(KjNode* infoArrayP)
 {
   for (KjNode* infoP = infoArrayP->value.firstChildP; infoP != NULL; infoP = infoP->next)
   {
     KjNode* entitiesP = kjLookup(infoP, LD_VOCAB_ENTITIES);
-    KjNode* propsP    = kjLookup(infoP, "propertyNames");
-    KjNode* relsP     = kjLookup(infoP, "relationshipNames");
+    KjNode* attrNamesP = kjLookup(infoP, "attributeNames");
 
     if (entitiesP == NULL)
     {
@@ -172,12 +172,11 @@ static bool checkExclusiveStructure(KjNode* infoArrayP)
       }
     }
 
-    if (propsP == NULL && relsP == NULL)
+    if (attrNamesP == NULL)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
-              "exclusive Registration 'information[]' element must declare at least one of "
-              "'propertyNames' or 'relationshipNames' — entity-wide exclusive claims are not "
-              "supported (§ 9.3.3)");
+              "exclusive Registration 'information[]' element must declare 'attributeNames' — "
+              "entity-wide exclusive claims are not supported (§ 9.3.3)");
       return false;
     }
   }
@@ -191,8 +190,11 @@ static bool checkExclusiveStructure(KjNode* infoArrayP)
 //
 // checkInformationArray - validate the "information" array (§ 5.2.10)
 //
-// Each element must have at least one of: entities, propertyNames,
-// relationshipNames. Empty sub-arrays are not allowed.
+// Each element must have at least one of: entities, attributeNames. The
+// deprecated propertyNames / relationshipNames are still accepted (and later
+// folded into attributeNames by regInfoMergeAttributeNames), but mixing them
+// with attributeNames in the same element is an error. Empty sub-arrays are
+// not allowed.
 //
 static bool checkInformationArray(KjNode* infoArrayP)
 {
@@ -203,21 +205,31 @@ static bool checkInformationArray(KjNode* infoArrayP)
   {
     OBJECT_CHECK(infoP, "Invalid Registration", "'information' items must be JSON objects");
 
-    KjNode* entitiesP = NULL;
-    KjNode* propsP    = NULL;
-    KjNode* relsP     = NULL;
+    KjNode* entitiesP  = NULL;
+    KjNode* attrNamesP = NULL;
+    KjNode* propsP     = NULL;
+    KjNode* relsP      = NULL;
 
     for (KjNode* fP = infoP->value.firstChildP; fP != NULL; fP = fP->next)
     {
-      if      (strcmp(fP->name, LD_VOCAB_ENTITIES)   == 0)  entitiesP = fP;
-      else if (strcmp(fP->name, "propertyNames")     == 0)  propsP    = fP;
-      else if (strcmp(fP->name, "relationshipNames") == 0)  relsP     = fP;
+      if      (strcmp(fP->name, LD_VOCAB_ENTITIES)   == 0)  entitiesP  = fP;
+      else if (strcmp(fP->name, "attributeNames")    == 0)  attrNamesP = fP;
+      else if (strcmp(fP->name, "propertyNames")     == 0)  propsP     = fP;
+      else if (strcmp(fP->name, "relationshipNames") == 0)  relsP      = fP;
     }
 
-    if (entitiesP == NULL && propsP == NULL && relsP == NULL)
+    if (attrNamesP != NULL && (propsP != NULL || relsP != NULL))
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
-              "'information' element must have at least one of 'entities', 'propertyNames', 'relationshipNames'");
+              "'information' element must use 'attributeNames' OR the deprecated "
+              "'propertyNames'/'relationshipNames' pair, not both");
+      return false;
+    }
+
+    if (entitiesP == NULL && attrNamesP == NULL && propsP == NULL && relsP == NULL)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
+              "'information' element must have at least one of 'entities', 'attributeNames'");
       return false;
     }
 
@@ -233,11 +245,58 @@ static bool checkInformationArray(KjNode* infoArrayP)
       }
     }
 
-    if (propsP != NULL && checkStringArrayNonEmpty(propsP, "propertyNames")     == false)  return false;
-    if (relsP  != NULL && checkStringArrayNonEmpty(relsP,  "relationshipNames") == false)  return false;
+    if (attrNamesP != NULL && checkStringArrayNonEmpty(attrNamesP, "attributeNames")    == false)  return false;
+    if (propsP     != NULL && checkStringArrayNonEmpty(propsP,     "propertyNames")     == false)  return false;
+    if (relsP      != NULL && checkStringArrayNonEmpty(relsP,      "relationshipNames") == false)  return false;
   }
 
   return true;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// regInfoMergeAttributeNames - fold the deprecated propertyNames /
+// relationshipNames into a single attributeNames per information[] element
+//
+// The property/relationship partition carries no information the broker uses
+// (matching + forwarding treat the two identically), so on input the old pair
+// is merged into one attributeNames array — the field the broker stores and
+// renders. checkInformationArray has already rejected mixing the two forms and
+// validated each as a non-empty string array, so at most one form is present
+// here and both are well-formed.
+//
+static void regInfoMergeAttributeNames(KjNode* infoArrayP)
+{
+  for (KjNode* infoP = infoArrayP->value.firstChildP; infoP != NULL; infoP = infoP->next)
+  {
+    if (infoP->type != KjObject)
+      continue;
+
+    KjNode* propsP = kjLookup(infoP, "propertyNames");
+    KjNode* relsP  = kjLookup(infoP, "relationshipNames");
+
+    if (propsP == NULL && relsP == NULL)
+      continue;   // already 'attributeNames' (or no attribute restriction at all)
+
+    KjNode* mergedP = (propsP != NULL) ? propsP : relsP;
+    mergedP->name = (char*) "attributeNames";
+
+    // both forms present — append every relationshipNames item to attributeNames
+    if (propsP != NULL && relsP != NULL)
+    {
+      KjNode* itemP = relsP->value.firstChildP;
+      while (itemP != NULL)
+      {
+        KjNode* nextP = itemP->next;
+        kjChildRemove(relsP, itemP);
+        kjChildAdd(mergedP, itemP);
+        itemP = nextP;
+      }
+      kjChildRemove(infoP, relsP);
+    }
+  }
 }
 
 
@@ -757,6 +816,12 @@ bool ldCheckRegistration(KjNode* regP, LdOp op, KAlloc* faP)
 
   if (infoP != NULL && checkInformationArray(infoP) == false)
     return false;
+
+  // Fold the deprecated propertyNames / relationshipNames into a single
+  // attributeNames BEFORE storage, cache build and the exclusive-mode check —
+  // so the DB doc, the reg cache and GET all see one type-agnostic list.
+  if (infoP != NULL)
+    regInfoMergeAttributeNames(infoP);
 
   // endpoint — required for create, must be a URI when present
   if (op == LdOpCreateRegistration)

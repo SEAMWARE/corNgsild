@@ -276,8 +276,7 @@ static LdRegInfo* infoListExtract(KjNode* infoArrayP, KAlloc* allocP)
     LdRegInfo* riP = (LdRegInfo*) calloc(1, sizeof(LdRegInfo));
 
     KjNode* entitiesP   = kjLookup(infoP, LD_VOCAB_ENTITIES);
-    KjNode* propsP      = kjLookup(infoP, "propertyNames");
-    KjNode* relsP       = kjLookup(infoP, "relationshipNames");
+    KjNode* attrNamesP  = kjLookup(infoP, "attributeNames");
 
     if (entitiesP != NULL && entitiesP->type == KjArray)
     {
@@ -301,8 +300,7 @@ static LdRegInfo* infoListExtract(KjNode* infoArrayP, KAlloc* allocP)
       riP->entityInfoV = eHead;
     }
 
-    riP->propertyNamesV     = attrIRIArrayExtract(propsP, allocP);
-    riP->relationshipNamesV = attrIRIArrayExtract(relsP,  allocP);
+    riP->attributeNamesV = attrIRIArrayExtract(attrNamesP, allocP);
 
     if (tail == NULL)
       head = riP;
@@ -369,8 +367,7 @@ static void infoListFree(LdRegInfo* head)
 
     entityInfoListFree(head->entityInfoV);
 
-    if (head->propertyNamesV     != NULL)  free(head->propertyNamesV);
-    if (head->relationshipNamesV != NULL)  free(head->relationshipNamesV);
+    if (head->attributeNamesV != NULL)  free(head->attributeNamesV);
 
     free(head);
     head = next;
@@ -1156,7 +1153,7 @@ const char* ldRegCacheLocalWriteConflict(LdRegCache* cacheP,
         continue;
 
       // Whole-entity claim — every write to the entity conflicts
-      if (riP->propertyNamesV == NULL && riP->relationshipNamesV == NULL)
+      if (riP->attributeNamesV == NULL)
       { ldRegCacheUnlock(cacheP); return itemP->regId; }
 
       if (attrIriV == NULL)
@@ -1164,21 +1161,10 @@ const char* ldRegCacheLocalWriteConflict(LdRegCache* cacheP,
 
       for (int ix = 0; attrIriV[ix] != NULL; ix++)
       {
-        if (riP->propertyNamesV != NULL)
+        for (int ax = 0; riP->attributeNamesV[ax] != NULL; ax++)
         {
-          for (int px = 0; riP->propertyNamesV[px] != NULL; px++)
-          {
-            if (strcmp(attrIriV[ix], riP->propertyNamesV[px]) == 0)
-            { ldRegCacheUnlock(cacheP); return itemP->regId; }
-          }
-        }
-        if (riP->relationshipNamesV != NULL)
-        {
-          for (int rx = 0; riP->relationshipNamesV[rx] != NULL; rx++)
-          {
-            if (strcmp(attrIriV[ix], riP->relationshipNamesV[rx]) == 0)
-            { ldRegCacheUnlock(cacheP); return itemP->regId; }
-          }
+          if (strcmp(attrIriV[ix], riP->attributeNamesV[ax]) == 0)
+          { ldRegCacheUnlock(cacheP); return itemP->regId; }
         }
       }
     }
@@ -1290,29 +1276,19 @@ const char* ldRegCacheLocalWriteConflictTree(LdRegCache* cacheP,
 
 // -----------------------------------------------------------------------------
 //
-// attrInfoMatches - match attrsV against RegistrationInfo's
-// propertyNames + relationshipNames (§ 5.12). Spec: if no Properties
-// or Relationships are specified in the RegistrationInfo, the Attribute
-// names are considered matching.
+// attrInfoMatches - match attrsV against RegistrationInfo's attributeNames
+// (§ 5.12). Spec: if no attribute names are specified in the RegistrationInfo,
+// the Attribute names are considered matching.
 //
 static bool attrInfoMatches(LdRegInfo* riP, char** attrsV)
 {
-  if (attrsV == NULL)                                          return true;
-  if (riP->propertyNamesV == NULL && riP->relationshipNamesV == NULL)
-    return true;
+  if (attrsV == NULL)                  return true;
+  if (riP->attributeNamesV == NULL)    return true;
 
   for (int j = 0; attrsV[j] != NULL; j++)
   {
-    if (riP->propertyNamesV != NULL)
-    {
-      for (int i = 0; riP->propertyNamesV[i] != NULL; i++)
-        if (strcmp(riP->propertyNamesV[i], attrsV[j]) == 0) return true;
-    }
-    if (riP->relationshipNamesV != NULL)
-    {
-      for (int i = 0; riP->relationshipNamesV[i] != NULL; i++)
-        if (strcmp(riP->relationshipNamesV[i], attrsV[j]) == 0) return true;
-    }
+    for (int i = 0; riP->attributeNamesV[i] != NULL; i++)
+      if (strcmp(riP->attributeNamesV[i], attrsV[j]) == 0) return true;
   }
   return false;
 }

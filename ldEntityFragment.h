@@ -30,10 +30,10 @@
 //
 // Returns an object containing id, type, @context (if present in entityP) and
 // every top-level attribute that matches riP. Attribute matching:
-//   - riP has neither propertyNamesV nor relationshipNamesV → wildcard,
-//     every non-keyword attribute is claimed.
-//   - Otherwise an attribute is claimed if its name matches one of
-//     riP->propertyNamesV or riP->relationshipNamesV (already expanded).
+//   - riP has no attributeNamesV → wildcard: every attribute of the entity
+//     is claimed (only the id / type / @context keywords are skipped).
+//   - Otherwise an entity attribute is claimed iff its name is in
+//     riP->attributeNamesV (already expanded).
 //
 // If no attrs match, returns NULL — nothing to forward.
 //

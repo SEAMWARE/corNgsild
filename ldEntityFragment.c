@@ -63,7 +63,7 @@ KjNode* ldEntityFragmentForInfo(KjNode*     entityP,
   if (entityP == NULL || riP == NULL || kjP == NULL)
     return NULL;
 
-  bool wildcard = (riP->propertyNamesV == NULL && riP->relationshipNamesV == NULL);
+  bool wildcard = (riP->attributeNamesV == NULL);
 
   //
   // First pass — count claimed attrs. Avoid building an empty fragment.
@@ -75,8 +75,7 @@ KjNode* ldEntityFragmentForInfo(KjNode*     entityP,
       continue;
 
     if (wildcard ||
-        nameInList(curP->name, riP->propertyNamesV) ||
-        nameInList(curP->name, riP->relationshipNamesV))
+        nameInList(curP->name, riP->attributeNamesV))
       matched++;
   }
 
@@ -112,8 +111,7 @@ KjNode* ldEntityFragmentForInfo(KjNode*     entityP,
     }
 
     if (!wildcard &&
-        !nameInList(curP->name, riP->propertyNamesV) &&
-        !nameInList(curP->name, riP->relationshipNamesV))
+        !nameInList(curP->name, riP->attributeNamesV))
     {
       curP = nextP;
       continue;

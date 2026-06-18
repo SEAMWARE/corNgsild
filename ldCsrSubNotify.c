@@ -160,7 +160,7 @@ static bool subAttrSideMatchesInfo(LdSubCacheItem* subItemP, LdRegInfo* info)
   if (!subHasWatched && !subHasNotif)
     return true;
 
-  bool regHasAttrs = (info->propertyNamesV != NULL || info->relationshipNamesV != NULL);
+  bool regHasAttrs = (info->attributeNamesV != NULL);
   if (!regHasAttrs)
     return true;
 
@@ -171,8 +171,7 @@ static bool subAttrSideMatchesInfo(LdSubCacheItem* subItemP, LdRegInfo* info)
     if (v == NULL) continue;
     for (int i = 0; v[i] != NULL; i++)
     {
-      if (strvContains(info->propertyNamesV,     v[i])) return true;
-      if (strvContains(info->relationshipNamesV, v[i])) return true;
+      if (strvContains(info->attributeNamesV, v[i])) return true;
     }
   }
 

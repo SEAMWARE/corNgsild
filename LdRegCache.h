@@ -88,14 +88,17 @@ typedef struct LdRegEntityInfo
 // LdRegInfo - pre-parsed RegistrationInfo (§ 5.2.10)
 //
 // One LdRegInfo per element of the registration's information[] array.
-// At least one of entityInfoV / propertyNamesV / relationshipNamesV
-// is required by spec.
+// At least one of entityInfoV / attributeNamesV is required by spec.
+//
+// attributeNamesV is the single, type-agnostic attribute-name list of the new
+// API (the deprecated propertyNames / relationshipNames split is merged into it
+// on input — the property/relationship partition carried no information the
+// broker uses for matching or forwarding).
 //
 typedef struct LdRegInfo
 {
   LdRegEntityInfo*       entityInfoV;        // linked list of EntityInfo entries
-  char**                 propertyNamesV;     // NULL-term expanded IRIs (NULL = none)
-  char**                 relationshipNamesV; // NULL-term expanded IRIs (NULL = none)
+  char**                 attributeNamesV;    // NULL-term expanded IRIs (NULL = none / wildcard)
   struct LdRegInfo*      next;
 } LdRegInfo;
 

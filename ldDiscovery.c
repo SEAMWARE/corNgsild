@@ -143,22 +143,16 @@ void ldDiscoveryRegAugmentTypes(KjNode* agg, LdRegCache* cacheP, bool details)
         KjNode* te = typeEntryEnsure(agg, ei->type, details);
 
         KjNode* attrs = kjLookup(te, "attrs");
-        if (ri->propertyNamesV != NULL)
+        // A registration's attributeNames carry no Property/Relationship
+        // distinction (the split is deprecated), so discovery defaults the
+        // reported attribute type to "Property".
+        if (ri->attributeNamesV != NULL)
         {
-          for (int i = 0; ri->propertyNamesV[i] != NULL; i++)
+          for (int i = 0; ri->attributeNamesV[i] != NULL; i++)
           {
-            stringArrayAddUnique(attrs, ri->propertyNamesV[i]);
+            stringArrayAddUnique(attrs, ri->attributeNamesV[i]);
             if (details)
-              addAttrType(te, ri->propertyNamesV[i], "Property");
-          }
-        }
-        if (ri->relationshipNamesV != NULL)
-        {
-          for (int i = 0; ri->relationshipNamesV[i] != NULL; i++)
-          {
-            stringArrayAddUnique(attrs, ri->relationshipNamesV[i]);
-            if (details)
-              addAttrType(te, ri->relationshipNamesV[i], "Relationship");
+              addAttrType(te, ri->attributeNamesV[i], "Property");
           }
         }
       }
@@ -185,21 +179,14 @@ void ldDiscoveryRegAugmentAttrs(KjNode* agg, LdRegCache* cacheP, bool details)
       const char* attrKinds[256];
       int         attrN = 0;
 
-      if (ri->propertyNamesV != NULL)
+      // attributeNames carry no Property/Relationship distinction (deprecated
+      // split) — discovery defaults the reported attribute type to "Property".
+      if (ri->attributeNamesV != NULL)
       {
-        for (int i = 0; ri->propertyNamesV[i] != NULL && attrN < 256; i++)
+        for (int i = 0; ri->attributeNamesV[i] != NULL && attrN < 256; i++)
         {
-          attrIris[attrN]  = ri->propertyNamesV[i];
+          attrIris[attrN]  = ri->attributeNamesV[i];
           attrKinds[attrN] = "Property";
-          attrN++;
-        }
-      }
-      if (ri->relationshipNamesV != NULL)
-      {
-        for (int i = 0; ri->relationshipNamesV[i] != NULL && attrN < 256; i++)
-        {
-          attrIris[attrN]  = ri->relationshipNamesV[i];
-          attrKinds[attrN] = "Relationship";
           attrN++;
         }
       }
