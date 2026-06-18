@@ -148,6 +148,7 @@ bool ldCheckEntity(KjNode* entityP, LdOp op, KjNode* dbEntityP, KAlloc* faP)
     {
       DUPLICATE_FLAG_CHECK(hasId, hasAtId, "Duplicate Id", "Duplicate 'id' / '@id' in entity");
       hasAtId = true;
+      childP->name = (char*) "id";    // normalize the JSON-LD keyword to the short NGSI-LD form
       idNodeP = childP;
     }
     else if (strcmp(childP->name, "type") == 0)
@@ -160,6 +161,7 @@ bool ldCheckEntity(KjNode* entityP, LdOp op, KjNode* dbEntityP, KAlloc* faP)
     {
       DUPLICATE_FLAG_CHECK(hasType, hasAtType, "Duplicate Type", "Duplicate 'type' / '@type' in entity");
       hasAtType  = true;
+      childP->name = (char*) "type";  // normalize the JSON-LD keyword to the short NGSI-LD form
       typeNodeP  = childP;
     }
   }

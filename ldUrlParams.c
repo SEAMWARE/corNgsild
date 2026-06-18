@@ -275,7 +275,7 @@ void ldParamHook(const char* name, const char* value)
     swNgsild.pickTree = ldProjectionParse(valCopy, faP, &errMsg);
     if (errMsg != NULL)
     {
-      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Bad Request Data",
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Projection",
               "?pick=: %s", errMsg);
       return;
     }
@@ -296,7 +296,7 @@ void ldParamHook(const char* name, const char* value)
     swNgsild.omitTree = ldProjectionParse(valCopy, faP, &errMsg);
     if (errMsg != NULL)
     {
-      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Bad Request Data",
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Projection",
               "?omit=: %s", errMsg);
       return;
     }

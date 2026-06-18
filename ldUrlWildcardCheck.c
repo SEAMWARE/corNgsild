@@ -119,7 +119,7 @@ bool ldUrlWildcardCheck(void)
   if ((opts & LD_WC_URI_AT_0) && swRest.in.wildcard[0] != NULL
       && !isUri(swRest.in.wildcard[0]))
   {
-    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Bad Request Data",
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid URI",
             "'%s' is not a valid URI", swRest.in.wildcard[0]);
     return false;
   }
@@ -135,7 +135,7 @@ bool ldUrlWildcardCheck(void)
   if ((opts & LD_WC_URI_AT_2) && swRest.in.wildcard[2] != NULL
       && !isUri(swRest.in.wildcard[2]))
   {
-    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Bad Request Data",
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid URI",
             "instanceId '%s' is not a valid URI", swRest.in.wildcard[2]);
     return false;
   }
