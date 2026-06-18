@@ -80,8 +80,8 @@ static const char* valueKeyForType(LdAttrType attrType)
 //
 // ldIsCoreAttrTerm - check if a name is a known NGSI-LD core context attribute-level term
 //
-// Replaces the FT_AUX_CORE_CONTEXT flag check from fwNgsild. Since KjNode has no aux
-// field, we detect core context membership by matching against known expanded IRIs.
+// Since KjNode carries no per-node aux flag, core-context membership is detected
+// by matching the name against the known expanded core-context IRIs.
 //
 static bool ldIsCoreAttrTerm(const char* name)
 {
@@ -97,6 +97,7 @@ static bool ldIsCoreAttrTerm(const char* name)
   if (strcmp(name, LD_VOCAB_UNIT_CODE)        == 0)  return true;
   if (strcmp(name, LD_VOCAB_DATASET_ID)       == 0)  return true;
   if (strcmp(name, "valueType")               == 0)  return true;
+  if (strcmp(name, "objectType")              == 0)  return true;
 
   return false;
 }
@@ -112,13 +113,17 @@ static bool isAllowedCoreAttrTerm(const char* name, const char* valueKey)
   if (strcmp(name, "type")              == 0)  return true;
   if (strcmp(name, valueKey)            == 0)  return true;
   if (strcmp(name, LD_VOCAB_OBSERVED_AT) == 0)  return true;
-  if (strcmp(name, LD_VOCAB_UNIT_CODE)  == 0)  return true;
   if (strcmp(name, LD_VOCAB_DATASET_ID) == 0)  return true;
 
-  // valueType is valid for the Property family only (§ 5.2.x) — not for a
-  // Relationship / ListRelationship (object / objectList).
-  if (strcmp(name, "valueType") == 0)
+  // valueType and unitCode qualify a value — they belong to the Property family
+  // only (§ 4.5.2 / § 5.2.x), not to a Relationship / ListRelationship
+  // (object / objectList).
+  if ((strcmp(name, "valueType") == 0) || (strcmp(name, LD_VOCAB_UNIT_CODE) == 0))
     return ((strcmp(valueKey, LD_VOCAB_HAS_OBJECT) != 0) && (strcmp(valueKey, LD_VOCAB_HAS_OBJECT_LIST) != 0));
+
+  // objectType qualifies a relationship's target — only for object / objectList.
+  if (strcmp(name, "objectType") == 0)
+    return ((strcmp(valueKey, LD_VOCAB_HAS_OBJECT) == 0) || (strcmp(valueKey, LD_VOCAB_HAS_OBJECT_LIST) == 0));
 
   return false;
 }
@@ -158,10 +163,42 @@ static bool checkLanguageMap(KjNode* lmP)
 
   for (KjNode* childP = lmP->value.firstChildP; childP != NULL; childP = childP->next)
   {
+    // § 5.2.6.4.6 — a languageMap key is a non-empty BCP47 language tag.
+    if (childP->name == NULL || childP->name[0] == 0)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid LanguageProperty", "'languageMap' has an empty language key");
+      return false;
+    }
+
     if (childP->type != KjString && childP->type != KjArray)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid LanguageProperty", "languageMap values must be strings or arrays of strings (key '%s')", childP->name);
       return false;
+    }
+
+    // A scalar value must be a non-empty string.
+    if (childP->type == KjString && childP->value.s[0] == 0)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid LanguageProperty", "languageMap value for '%s' is an empty string", childP->name);
+      return false;
+    }
+
+    // An array value must be non-empty and hold only non-empty strings.
+    if (childP->type == KjArray)
+    {
+      if (childP->value.firstChildP == NULL)
+      {
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid LanguageProperty", "languageMap value for '%s' is an empty array", childP->name);
+        return false;
+      }
+      for (KjNode* elemP = childP->value.firstChildP; elemP != NULL; elemP = elemP->next)
+      {
+        if (elemP->type != KjString || elemP->value.s[0] == 0)
+        {
+          ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid LanguageProperty", "languageMap value for '%s' must be a non-empty string", childP->name);
+          return false;
+        }
+      }
     }
 
     // § 5.2.6.4.6 — an array of ONE string collapses to a scalar on storage,
