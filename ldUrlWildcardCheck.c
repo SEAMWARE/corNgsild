@@ -127,7 +127,7 @@ bool ldUrlWildcardCheck(void)
   if ((opts & LD_WC_NAME_AT_1) && swRest.in.wildcard[1] != NULL
       && !ldIsValidName(swRest.in.wildcard[1]))
   {
-    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Bad Request",
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Attribute Name",
             "invalid attribute name '%s' (§ 4.6.2)", swRest.in.wildcard[1]);
     return false;
   }

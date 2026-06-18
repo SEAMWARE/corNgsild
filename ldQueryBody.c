@@ -186,7 +186,7 @@ bool ldQueryBodyToParams(KjNode* bodyP)
 {
   if (bodyP == NULL || bodyP->type != KjObject)
   {
-    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Bad Request",
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Not a JSON Object",
             "Query body must be a JSON object");
     return false;
   }
@@ -194,7 +194,7 @@ bool ldQueryBodyToParams(KjNode* bodyP)
   KjNode* typeP = kjLookup(bodyP, "type");
   if (typeP == NULL)
   {
-    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Bad Request",
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Mandatory Field Missing",
             "Query body must carry \"type\": \"Query\"");
     return false;
   }
@@ -209,7 +209,7 @@ bool ldQueryBodyToParams(KjNode* bodyP)
       (strcmp(typeP->value.s, "Query") != 0 &&
        strcmp(typeP->value.s, expandedQuery) != 0))
   {
-    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Bad Request",
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Mandatory Field Missing",
             "Query body must carry \"type\": \"Query\"");
     return false;
   }

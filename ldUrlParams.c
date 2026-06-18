@@ -203,7 +203,7 @@ void ldParamHook(const char* name, const char* value)
         }
         if (!ok)
         {
-          ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Bad Request",
+          ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid URI",
                   "'%s' is not a valid URI", s);
           return;
         }
@@ -221,7 +221,7 @@ void ldParamHook(const char* name, const char* value)
     {
       char errBuf[128];
       regerror(rc, &re, errBuf, sizeof(errBuf));
-      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Bad Request",
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid idPattern",
               "'idPattern' is not a valid regex: %s", errBuf);
       return;
     }
