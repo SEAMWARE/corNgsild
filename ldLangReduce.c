@@ -52,7 +52,7 @@ static bool isAttrKeyword(const char* name)
 // attrLangReduce - reduce a single LanguageProperty attribute to Property
 //
 // 1. Find the "languageMap" child
-// 2. Look up matching key: exact match > @none > first key
+// 2. Look up matching key: exact match > @none > "en" > first key
 // 3. Change "type" from "LanguageProperty" to "Property"
 // 4. Replace "languageMap" with "value" (the matched string)
 // 5. Add a "lang" sub-property with the chosen language tag
@@ -77,9 +77,13 @@ static void attrLangReduce(KjNode* attrP, const char* lang, KAlloc* faP)
 
   if (langMapP != NULL && langMapP->type == KjObject)
   {
-    // Find the best matching language key
+    // Find the best matching language key. Fallback order when the requested
+    // language is absent (clause 10): @none if present (spec), then "en" as our
+    // implementation-defined default for the "up to the implementation" choice,
+    // then the first key.
     KjNode* matchP = NULL;
     KjNode* noneP  = NULL;
+    KjNode* enP    = NULL;
     KjNode* firstP = langMapP->value.firstChildP;
 
     for (KjNode* keyP = langMapP->value.firstChildP; keyP != NULL; keyP = keyP->next)
@@ -89,12 +93,12 @@ static void attrLangReduce(KjNode* attrP, const char* lang, KAlloc* faP)
         matchP = keyP;
         break;
       }
-      if (strcmp(keyP->name, "@none") == 0)
-        noneP = keyP;
+      if      (strcmp(keyP->name, "@none") == 0)  noneP = keyP;
+      else if (strcmp(keyP->name, "en")    == 0)  enP   = keyP;
     }
 
     if (matchP == NULL)
-      matchP = (noneP != NULL) ? noneP : firstP;
+      matchP = (noneP != NULL) ? noneP : (enP != NULL) ? enP : firstP;
 
     if (matchP != NULL)
     {

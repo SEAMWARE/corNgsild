@@ -139,11 +139,15 @@ static bool isAllowedCoreAttrTerm(const char* name, const char* valueKey)
   if (strcmp(name, LD_VOCAB_OBSERVED_AT) == 0)  return true;
   if (strcmp(name, LD_VOCAB_DATASET_ID) == 0)  return true;
 
-  // valueType and unitCode qualify a value — they belong to the Property family
-  // only (§ 4.5.2 / § 5.2.x), not to a Relationship / ListRelationship
-  // (object / objectList).
-  if ((strcmp(name, "valueType") == 0) || (strcmp(name, LD_VOCAB_UNIT_CODE) == 0))
+  // valueType qualifies a value for the whole Property family (§ 5.2.6) — every
+  // attribute type except a Relationship / ListRelationship (object/objectList).
+  if (strcmp(name, "valueType") == 0)
     return ((strcmp(valueKey, LD_VOCAB_HAS_OBJECT) != 0) && (strcmp(valueKey, LD_VOCAB_HAS_OBJECT_LIST) != 0));
+
+  // unitCode is a unit for a numeric/plain value — only Property and ListProperty
+  // (§ 5.2.6), not GeoProperty / LanguageProperty / VocabProperty / JsonProperty.
+  if (strcmp(name, LD_VOCAB_UNIT_CODE) == 0)
+    return ((strcmp(valueKey, LD_VOCAB_HAS_VALUE) == 0) || (strcmp(valueKey, LD_VOCAB_HAS_VALUE_LIST) == 0));
 
   // objectType qualifies a relationship's target — only for object / objectList.
   if (strcmp(name, "objectType") == 0)
