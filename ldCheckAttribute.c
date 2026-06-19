@@ -12,6 +12,8 @@
 #include "kbase/kLibLog.h"                             // KLOG_T
 #include "kalloc/KAlloc.h"                             // KAlloc
 #include "kjson/KjNode.h"                               // KjNode
+#include "kjson/kjLookup.h"                             // kjLookup
+#include "swJsonld/swldExpand.h"                        // swldValueObjectIs, swldValueObjectCheck
 
 #include "swNgsild/LdAttrType.h"                         // LdAttrType
 #include "swNgsild/LdOp.h"                               // LdOp
@@ -56,6 +58,28 @@ static bool isWellKnownGeoName(const char* name)
 
 // -----------------------------------------------------------------------------
 //
+// isSubAttrOnlyName - match core terms that are structural sub-attributes only
+//
+// `observedAt` (§ 5.2.4 TemporalProperty) and `unitCode` (§ 5.2.6) are defined
+// by the core context exclusively as sub-attributes of an Attribute — they have
+// no meaning as a top-level Attribute name. Core-context terms are not expanded,
+// so they reach the validator in their short form.
+//
+static bool isSubAttrOnlyName(const char* name)
+{
+  if (name == NULL)
+    return false;
+
+  if (strcmp(name, LD_VOCAB_OBSERVED_AT) == 0)  return true;
+  if (strcmp(name, LD_VOCAB_UNIT_CODE)   == 0)  return true;
+
+  return false;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // valueKeyForType - return the expected value key for an attribute type
 //
 static const char* valueKeyForType(LdAttrType attrType)
@@ -80,8 +104,8 @@ static const char* valueKeyForType(LdAttrType attrType)
 //
 // ldIsCoreAttrTerm - check if a name is a known NGSI-LD core context attribute-level term
 //
-// Since KjNode carries no per-node aux flag, core-context membership is detected
-// by matching the name against the known expanded core-context IRIs.
+// Core-context terms are never expanded, so they reach the validator in their
+// short form — membership is detected by matching against those short names.
 //
 static bool ldIsCoreAttrTerm(const char* name)
 {
@@ -278,6 +302,16 @@ bool ldCheckAttribute(KjNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc*
     return false;
   }
 
+  // `observedAt` / `unitCode` are core structural sub-attributes (§ 5.2.4 /
+  // § 5.2.6) — they have no meaning as a top-level Attribute name.
+  if (isSubAttrOnlyName(attrP->name))
+  {
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Reserved Attribute Name",
+            "'%s' is a structural sub-attribute and cannot be used as an Attribute name",
+            attrP->name);
+    return false;
+  }
+
   // Step 2: Check for attribute type change
   if (attrTypeFromDb != LdAttrNone && attrType != LdAttrNone && attrType != attrTypeFromDb)
   {
@@ -424,6 +458,33 @@ bool ldCheckAttribute(KjNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc*
   case LdAttrListRelationship:
     if (checkObjectList(valueNodeP) == false)
       return false;
+    break;
+
+  case LdAttrProperty:
+    // A Property value may be a JSON-LD typed value { "@type":…, "@value":… }.
+    // swJsonld owns its structural rules; NGSI-LD owns the datatype semantics
+    // (e.g. @type:DateTime ⇒ @value must be a valid ISO 8601 DateTime).
+    if ((valueNodeP->type == KjObject) && swldValueObjectIs(valueNodeP))
+    {
+      char* detail = NULL;
+      if (swldValueObjectCheck(valueNodeP, &detail) == false)
+      {
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Value Object", "Attribute '%s': %s", attrP->name, detail);
+        return false;
+      }
+
+      KjNode* atTypeP  = kjLookup(valueNodeP, "@type");
+      KjNode* atValueP = kjLookup(valueNodeP, "@value");
+      if ((atTypeP != NULL) && (atTypeP->type == KjString) && (strcmp(atTypeP->value.s, "DateTime") == 0))
+      {
+        if ((atValueP->type != KjString) || (ldCheckDateTime(atValueP->value.s) < 0))
+        {
+          ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid DateTime Value",
+                  "Attribute '%s': '@value' is not a valid ISO 8601 DateTime for '@type':'DateTime'", attrP->name);
+          return false;
+        }
+      }
+    }
     break;
 
   default:

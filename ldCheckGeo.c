@@ -349,21 +349,14 @@ bool ldCheckGeo(KjNode* geoValueP)
 
   KjNode*  typeP       = NULL;
   KjNode*  coordsP     = NULL;
-  int      typeCount   = 0;
-  int      coordsCount = 0;
 
+  // Duplicate keys inside the geometry object are rejected uniformly by the
+  // duplicate-member check in ldParseHook, before this validation runs.
   for (KjNode* childP = geoValueP->value.firstChildP; childP != NULL; childP = childP->next)
   {
-    if      (strcmp(childP->name, "type") == 0)               { typeP   = childP; typeCount++;   }
-    else if (strcmp(childP->name, LD_VOCAB_COORDINATES) == 0) { coordsP = childP; coordsCount++; }
+    if      (strcmp(childP->name, "type") == 0)               typeP   = childP;
+    else if (strcmp(childP->name, LD_VOCAB_COORDINATES) == 0) coordsP = childP;
   }
-
-  // A duplicate key inside the geometry object (JSON last-wins) must be rejected,
-  // just like a duplicate attribute or coordinates — not silently accepted.
-  if (typeCount > 1)
-    return geoError("GeoJSON geometry has a duplicate 'type' field");
-  if (coordsCount > 1)
-    return geoError("GeoJSON geometry has a duplicate 'coordinates' field");
 
   if (typeP == NULL || typeP->type != KjString)
     return geoError("GeoJSON must have a 'type' string field");

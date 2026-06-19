@@ -20,7 +20,8 @@
 // ldCheckDateTime - validate and parse an ISO 8601 datetime string
 //
 // Returns epoch seconds on success, -1.0 on failure.
-// Accepts: YYYY-MM-DDThh:mm:ss[.sss]Z  or  YYYY-MM-DDThh:mm:ss[.sss]+/-hh:mm
+// Accepts: YYYY-MM-DDThh:mm:ss[.sss][Z | +/-hh:mm].
+// A missing timezone defaults to UTC (ISO 8601 / § 4.6.x).
 //
 double ldCheckDateTime(const char* dateTimeStr)
 {
@@ -29,8 +30,8 @@ double ldCheckDateTime(const char* dateTimeStr)
 
   int len = strlen(dateTimeStr);
 
-  // Minimum: "YYYY-MM-DDThh:mm:ssZ" = 20 chars
-  if (len < 20)
+  // Minimum: "YYYY-MM-DDThh:mm:ss" = 19 chars (timezone optional)
+  if (len < 19)
     return -1.0;
 
   // Check format: YYYY-MM-DDThh:mm:ss
@@ -77,7 +78,11 @@ double ldCheckDateTime(const char* dateTimeStr)
       tz++;
   }
 
-  if (*tz == 'Z' && *(tz + 1) == 0)
+  if (*tz == 0)
+  {
+    // No timezone — defaults to UTC (ISO 8601). timegm() below treats tm as UTC.
+  }
+  else if (*tz == 'Z' && *(tz + 1) == 0)
   {
     // UTC
   }

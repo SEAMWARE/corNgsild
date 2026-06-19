@@ -176,6 +176,54 @@ static KjNode* ldFindEmbeddedAtContext(KjNode* nodeP)
 
 // -----------------------------------------------------------------------------
 //
+// checkNoDuplicateMembers - reject duplicate member names (NGSI-LD cardinality)
+//
+// JSON (RFC 8259 § 4) only says member names SHOULD be unique; NGSI-LD makes it
+// a MUST via the 0..1 / 1..1 cardinalities of its data-type definitions (§ 5.2.6),
+// enforced through § 8.2.3. Runs on the raw tree (literal duplicate keys, before
+// term expansion). Does not descend into a JsonProperty's `json` value (opaque
+// raw JSON — JSON semantics apply there) nor into a `@context` (JSON-LD).
+//
+static bool checkNoDuplicateMembers(KjNode* nodeP)
+{
+  if (nodeP->type == KjObject)
+  {
+    for (KjNode* aP = nodeP->value.firstChildP; aP != NULL; aP = aP->next)
+    {
+      for (KjNode* bP = aP->next; bP != NULL; bP = bP->next)
+      {
+        if ((aP->name != NULL) && (bP->name != NULL) && (strcmp(aP->name, bP->name) == 0))
+        {
+          ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Duplicate Member",
+                  "Duplicate member '%s' in a JSON object", aP->name);
+          return false;
+        }
+      }
+    }
+
+    for (KjNode* cP = nodeP->value.firstChildP; cP != NULL; cP = cP->next)
+    {
+      if ((cP->name != NULL) && ((strcmp(cP->name, LD_VOCAB_HAS_JSON) == 0) || (strcmp(cP->name, "@context") == 0)))
+        continue;  // opaque JSON literal / JSON-LD context — not NGSI-LD structure
+
+      if (checkNoDuplicateMembers(cP) == false)
+        return false;
+    }
+  }
+  else if (nodeP->type == KjArray)
+  {
+    for (KjNode* cP = nodeP->value.firstChildP; cP != NULL; cP = cP->next)
+      if (checkNoDuplicateMembers(cP) == false)
+        return false;
+  }
+
+  return true;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldParseHook - validate @context and expand incoming JSON-LD payload
 //
 static void ldParseHook(void)
@@ -659,6 +707,11 @@ static void ldParseHook(void)
   // base context; an in-body @context overrides it for the body subtree
   // and becomes the new effective context (returned and chained back
   // into swNgsild.contextP).
+  // Reject duplicate JSON members on the raw tree, before any term expansion
+  // collapses distinct short names onto the same IRI (§ 8.2.3 / cardinality).
+  if ((swRest.in.requestTree != NULL) && (checkNoDuplicateMembers(swRest.in.requestTree) == false))
+    return;
+
   swNgsild.contextP = swldExpandTree(swRest.in.requestTree, swNgsild.contextP, &swRest.kalloc);
 
   // Reattach the decoupled type-selection expressions at their

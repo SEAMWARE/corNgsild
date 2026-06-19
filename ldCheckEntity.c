@@ -84,23 +84,6 @@ static LdAttrType findAttrTypeInDb(KjNode* dbEntityP, const char* attrName)
 
 // -----------------------------------------------------------------------------
 //
-// hasDuplicateSibling - check if a node has a sibling with the same name (before it)
-//
-static bool hasDuplicateSibling(KjNode* container, KjNode* nodeP)
-{
-  for (KjNode* p = container->value.firstChildP; p != nodeP; p = p->next)
-  {
-    if (strcmp(p->name, nodeP->name) == 0)
-      return true;
-  }
-
-  return false;
-}
-
-
-
-// -----------------------------------------------------------------------------
-//
 // ldCheckEntity -
 //
 bool ldCheckEntity(KjNode* entityP, LdOp op, KjNode* dbEntityP, KAlloc* faP)
@@ -307,12 +290,8 @@ bool ldCheckEntity(KjNode* entityP, LdOp op, KjNode* dbEntityP, KAlloc* faP)
     if (ldIsEntityKeyword(childP->name) == true)
       continue;
 
-    // Duplicate attribute detection
-    if (hasDuplicateSibling(entityP, childP))
-    {
-      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Duplicate Field", "Duplicated field in entity: '%s'", childP->name);
-      return false;
-    }
+    // Duplicate attributes are rejected uniformly by the duplicate-member check
+    // in ldParseHook, before this validation runs.
 
     LdAttrType dbAttrType = findAttrTypeInDb(dbEntityP, childP->name);
 

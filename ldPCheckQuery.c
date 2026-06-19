@@ -105,11 +105,8 @@ static bool ldFieldsExtract(KjNode* objP, LdField* fieldV, int fields, bool erro
       continue;
     }
 
-    if (fP->nodeP != NULL)
-    {
-      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Duplicated field", "%s", nodeP->name);
-      return false;
-    }
+    // Duplicate fields are rejected uniformly by the duplicate-member check in
+    // ldParseHook, before this validation runs.
     if (((1 << nodeP->type) & fP->typeMask) == 0)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, typeTitle(fP->typeMask), "%s", nodeP->name);
