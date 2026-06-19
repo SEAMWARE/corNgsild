@@ -24,11 +24,34 @@
 
 // -----------------------------------------------------------------------------
 //
-// urlEncode - URL-encode a string (allocates with kaAlloc or malloc)
+// isQGrammarChar - true for characters that are structural in the q grammar
 //
-// Encodes all characters except unreserved: A-Z a-z 0-9 - _ . ~
+// These would be mis-parsed if they appeared raw inside an attribute name or a
+// value-path member: the term/expression delimiters, the sub-attribute path '.',
+// the value-path '[' ']', the operators and the string delimiter.
 //
-static char* urlEncode(const char* s, KAlloc* allocP)
+static bool isQGrammarChar(unsigned char c)
+{
+  return (c == '.' || c == '[' || c == ']' || c == '(' || c == ')' ||
+          c == '{' || c == '}' || c == ';' || c == '|' || c == ',' ||
+          c == '=' || c == '!' || c == '<' || c == '>' || c == '~' ||
+          c == '"' || c == ' ');
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// urlEncode - percent-encode a string (allocates via kaAlloc)
+//
+// qGrammarOnly = false: full encoding — everything except the RFC 3986 unreserved
+//   set (A-Z a-z 0-9 - _ ~). Used when the q is rendered into a URL (forwarding).
+// qGrammarOnly = true: encode ONLY the q-grammar-significant characters, leaving
+//   URL-reserved chars (':' '/' '#' …) raw. Used when the q is rendered into a
+//   response BODY, where there is no URL-transport reason to encode but the
+//   q-grammar ambiguity (a dot meaning sub-attribute path) still must be removed.
+//
+static char* urlEncode(const char* s, KAlloc* allocP, bool qGrammarOnly)
 {
   // Worst case: every char becomes %XX (3x expansion)
   int   len    = strlen(s);
@@ -40,17 +63,17 @@ static char* urlEncode(const char* s, KAlloc* allocP)
   {
     unsigned char c = (unsigned char) s[i];
 
-    // In q-filter context, dots and brackets have special meaning (sub-attribute
-    // access), so they must be encoded too — not just the RFC 3986 reserved set.
-    if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')
-        || c == '-' || c == '_' || c == '~')
-    {
-      *p++ = c;
-    }
+    bool encode;
+    if (qGrammarOnly)
+      encode = isQGrammarChar(c);
     else
-    {
+      encode = !((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')
+                 || c == '-' || c == '_' || c == '~');
+
+    if (encode)
       p += sprintf(p, "%%%02X", c);
-    }
+    else
+      *p++ = c;
   }
 
   *p = 0;
@@ -63,7 +86,7 @@ static char* urlEncode(const char* s, KAlloc* allocP)
 //
 // ldCompactOrEncode - compact an IRI against the @context, URL-encode if uncompactable
 //
-const char* ldCompactOrEncode(const char* iri, SwldContext* contextP, KAlloc* allocP)
+const char* ldCompactOrEncode(const char* iri, SwldContext* contextP, KAlloc* allocP, bool qGrammarOnly)
 {
   // No context — internal storage mode: return the raw IRI unchanged.
   // URL-encoding is only needed for API responses where the consumer
@@ -80,8 +103,9 @@ const char* ldCompactOrEncode(const char* iri, SwldContext* contextP, KAlloc* al
   if (compacted != NULL && compacted != iri && swldAlreadyExpanded(compacted) == false)
     return compacted;
 
-  // Can't compact — URL-encode the full IRI
-  return urlEncode(iri, allocP);
+  // Can't compact — percent-encode the IRI. In a response body only the
+  // q-grammar chars are encoded; for a forward URL the whole IRI is encoded.
+  return urlEncode(iri, allocP, qGrammarOnly);
 }
 
 
@@ -111,7 +135,7 @@ static const char* opToString(LdQOperator op)
 
 
 // Forward declaration
-static int renderNode(LdQNode* nodeP, SwldContext* contextP, KAlloc* allocP, char* buf, int bufSize);
+static int renderNode(LdQNode* nodeP, SwldContext* contextP, KAlloc* allocP, char* buf, int bufSize, bool qGrammarOnly);
 
 
 
@@ -119,9 +143,9 @@ static int renderNode(LdQNode* nodeP, SwldContext* contextP, KAlloc* allocP, cha
 //
 // renderTerm - render a single term
 //
-static int renderTerm(LdQTerm* term, SwldContext* contextP, KAlloc* allocP, char* buf, int bufSize)
+static int renderTerm(LdQTerm* term, SwldContext* contextP, KAlloc* allocP, char* buf, int bufSize, bool qGrammarOnly)
 {
-  const char* attr = ldCompactOrEncode(term->attr, contextP, allocP);
+  const char* attr = ldCompactOrEncode(term->attr, contextP, allocP, qGrammarOnly);
   const char* op   = opToString(term->op);
   int n = 0;
 
@@ -136,7 +160,7 @@ static int renderTerm(LdQTerm* term, SwldContext* contextP, KAlloc* allocP, char
     const char** segV = (const char**) kaAlloc(allocP, term->subPathN * sizeof(char*));
     for (int i = 0; i < term->subPathN; i++)
     {
-      segV[i] = ldCompactOrEncode(term->subPathV[i], contextP, allocP);
+      segV[i] = ldCompactOrEncode(term->subPathV[i], contextP, allocP, qGrammarOnly);
       total  += strlen(segV[i]) + 1;
     }
 
@@ -161,7 +185,7 @@ static int renderTerm(LdQTerm* term, SwldContext* contextP, KAlloc* allocP, char
     const char** vsegV = (const char**) kaAlloc(allocP, term->valuePathN * sizeof(char*));
     for (int i = 0; i < term->valuePathN; i++)
     {
-      vsegV[i] = urlEncode(term->valuePathV[i], allocP);
+      vsegV[i] = urlEncode(term->valuePathV[i], allocP, qGrammarOnly);
       total   += strlen(vsegV[i]) + 1;
     }
 
@@ -239,18 +263,18 @@ static int renderTerm(LdQTerm* term, SwldContext* contextP, KAlloc* allocP, char
 //
 // renderNode - recursively render a node
 //
-static int renderNode(LdQNode* nodeP, SwldContext* contextP, KAlloc* allocP, char* buf, int bufSize)
+static int renderNode(LdQNode* nodeP, SwldContext* contextP, KAlloc* allocP, char* buf, int bufSize, bool qGrammarOnly)
 {
   if (nodeP == NULL)
     return 0;
 
   if (nodeP->type == LdQTermNode)
-    return renderTerm(&nodeP->term, contextP, allocP, buf, bufSize);
+    return renderTerm(&nodeP->term, contextP, allocP, buf, bufSize, qGrammarOnly);
 
   if (nodeP->type == LdQLinkedNode)
   {
     // § 4.9 LinkedEntityRelation: attrName "{" sub-q "}"
-    const char* attr = ldCompactOrEncode(nodeP->linked.relName, contextP, allocP);
+    const char* attr = ldCompactOrEncode(nodeP->linked.relName, contextP, allocP, qGrammarOnly);
     int n = 0;
 
     int alen = strlen(attr);
@@ -260,7 +284,7 @@ static int renderNode(LdQNode* nodeP, SwldContext* contextP, KAlloc* allocP, cha
     if (n >= bufSize) return n;
     buf[n++] = '{';
 
-    n += renderNode(nodeP->linked.subQ, contextP, allocP, buf + n, bufSize - n);
+    n += renderNode(nodeP->linked.subQ, contextP, allocP, buf + n, bufSize - n, qGrammarOnly);
 
     if (n >= bufSize) return n;
     buf[n++] = '}';
@@ -285,7 +309,7 @@ static int renderNode(LdQNode* nodeP, SwldContext* contextP, KAlloc* allocP, cha
     if (needParens && n < bufSize)
       buf[n++] = '(';
 
-    n += renderNode(nodeP->group.childV[i], contextP, allocP, buf + n, bufSize - n);
+    n += renderNode(nodeP->group.childV[i], contextP, allocP, buf + n, bufSize - n, qGrammarOnly);
 
     if (needParens && n < bufSize)
       buf[n++] = ')';
@@ -303,7 +327,7 @@ static int renderNode(LdQNode* nodeP, SwldContext* contextP, KAlloc* allocP, cha
 //
 // ldQRender -
 //
-char* ldQRender(LdQNode* nodeP, SwldContext* contextP, KAlloc* allocP)
+char* ldQRender(LdQNode* nodeP, SwldContext* contextP, KAlloc* allocP, bool qGrammarOnly)
 {
   if (nodeP == NULL)
     return NULL;
@@ -312,7 +336,7 @@ char* ldQRender(LdQNode* nodeP, SwldContext* contextP, KAlloc* allocP)
   int   bufSize = 4096;
   char* buf     = (char*) kaAlloc(allocP, bufSize);
 
-  int n = renderNode(nodeP, contextP, allocP, buf, bufSize);
+  int n = renderNode(nodeP, contextP, allocP, buf, bufSize, qGrammarOnly);
   buf[n] = 0;
 
   return buf;

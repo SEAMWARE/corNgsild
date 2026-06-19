@@ -31,7 +31,7 @@ void ldSubscriptionCompactQ(KjNode* subP, LdQNode* qExpr, SwldContext* contextP,
     return;
 
   // Render the pre-parsed tree with compaction against the response @context
-  char* compactedQ = ldQRender(qExpr, contextP, allocP);
+  char* compactedQ = ldQRender(qExpr, contextP, allocP, true);
   if (compactedQ != NULL)
     qP->value.s = compactedQ;
 }
