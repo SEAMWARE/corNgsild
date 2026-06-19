@@ -374,6 +374,19 @@ static LdQNode* parseTerm(const char** pp, KAlloc* kaP)
   skipWs(&p);
 
   //
+  // Leading '!' — unary not-exists prefix (q=!attr). Distinct from the infix
+  // '!=' / '!~=' operators, which follow an attribute name. A '!' here, before
+  // any attribute name, negates an existence check.
+  //
+  bool notExists = false;
+  if (*p == '!')
+  {
+    notExists = true;
+    p++;
+    skipWs(&p);
+  }
+
+  //
   // Scan attribute name — ends at operator char or delimiter
   // Attribute names can contain: letters, digits, '_', ':', '/', '.', '-', '#', '~' (for URIs)
   //
@@ -473,11 +486,18 @@ static LdQNode* parseTerm(const char** pp, KAlloc* kaP)
   //
   if (*p == 0 || *p == ';' || *p == '|' || *p == ')' || *p == '}')
   {
-    // No operator — existence check (also matches end-of-sub-q '}')
-    nodeP->term.op        = LdQExists;
+    // No operator — existence check (also matches end-of-sub-q '}'). A leading
+    // '!' negates it.
+    nodeP->term.op        = notExists ? LdQNotExists : LdQExists;
     nodeP->term.valueType = LdQNoValue;
     *pp = p;
     return nodeP;
+  }
+
+  if (notExists)
+  {
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid q parameter", "the '!' not-exists operator cannot be combined with a comparison");
+    return NULL;
   }
 
   if (p[0] == '=' && p[1] == '=')

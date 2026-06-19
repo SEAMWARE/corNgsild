@@ -23,6 +23,7 @@
 typedef enum LdQOperator
 {
   LdQExists,      // no operator (attribute existence check)
+  LdQNotExists,   // !attr (attribute non-existence check)
   LdQEqual,       // ==
   LdQUnequal,     // !=
   LdQGreater,     // >

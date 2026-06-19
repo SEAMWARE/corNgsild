@@ -103,6 +103,7 @@ static const char* opToString(LdQOperator op)
   case LdQPattern:    return "~=";
   case LdQNotPattern: return "!~=";
   case LdQExists:     return "";
+  case LdQNotExists:  return "";  // rendered as a '!' prefix on the attribute, not an infix op
   }
   return "";
 }
@@ -179,6 +180,12 @@ static int renderTerm(LdQTerm* term, SwldContext* contextP, KAlloc* allocP, char
   if (term->op == LdQExists)
   {
     n = snprintf(buf, bufSize, "%s", attr);
+    return n;
+  }
+
+  if (term->op == LdQNotExists)
+  {
+    n = snprintf(buf, bufSize, "!%s", attr);
     return n;
   }
 

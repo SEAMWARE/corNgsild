@@ -231,15 +231,18 @@ static bool matchTerm(KjNode* entityP, LdQTerm* term)
     leafName   = term->subPathV[term->subPathN - 1];
   }
 
-  if (term->op == LdQExists && term->valuePathN == 0)
+  if ((term->op == LdQExists || term->op == LdQNotExists) && term->valuePathN == 0)
   {
     KjNode* wrapperP = kjLookup(containerP, leafName);
-    return (wrapperP != NULL);
+    bool    present  = (wrapperP != NULL);
+    return (term->op == LdQExists) ? present : !present;
   }
 
+  // A missing attribute / value-path segment makes a not-exists term TRUE and
+  // every other term (existence and the comparisons) FALSE.
   KjNode* valueP = getAttrValue(containerP, leafName);
   if (valueP == NULL)
-    return false;
+    return (term->op == LdQNotExists);
 
   //
   // § 4.9 "[...]" — descend INTO the value through opaque member names.
@@ -247,14 +250,16 @@ static bool matchTerm(KjNode* entityP, LdQTerm* term)
   for (int i = 0; i < term->valuePathN; i++)
   {
     if (valueP->type != KjObject)
-      return false;
+      return (term->op == LdQNotExists);
     valueP = kjLookup(valueP, term->valuePathV[i]);
     if (valueP == NULL)
-      return false;
+      return (term->op == LdQNotExists);
   }
 
   if (term->op == LdQExists)
     return true;
+  if (term->op == LdQNotExists)
+    return false;  // the attribute/path resolved, so not-exists is false
 
   double entityNum = 0;
   bool   isNum     = false;
