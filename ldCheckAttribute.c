@@ -290,9 +290,10 @@ bool ldCheckAttribute(KjNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc*
     return true;
 
   // Step 3: Check required value field and validate it
-  const char*  expectedKey  = valueKeyForType(attrType);
-  KjNode*      valueNodeP   = NULL;
-  int          valueKeyCount = 0;
+  const char*  expectedKey    = valueKeyForType(attrType);
+  KjNode*      valueNodeP     = NULL;
+  KjNode*      wrongValueKeyP = NULL;
+  int          valueKeyCount  = 0;
 
   for (KjNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
   {
@@ -308,6 +309,8 @@ bool ldCheckAttribute(KjNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc*
       ++valueKeyCount;
       if (strcmp(childP->name, expectedKey) == 0)
         valueNodeP = childP;
+      else if (wrongValueKeyP == NULL)
+        wrongValueKeyP = childP;  // a value-key of the wrong kind for this type (e.g. "value" on a Relationship)
     }
   }
 
@@ -319,7 +322,16 @@ bool ldCheckAttribute(KjNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc*
 
   if (valueNodeP == NULL)
   {
-    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Missing Value", "Attribute '%s' of type %s must have '%s'", attrP->name, ldAttrTypeToString(attrType), expectedKey);
+    if (wrongValueKeyP != NULL)
+      // The user gave a value-key that belongs to a different attribute type — e.g. "value" on a
+      // Relationship, whose value (its target) goes in "object". Name both so the fix is obvious.
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Wrong Value Field",
+              "Attribute '%s' of type %s carries its value in '%s', not '%s'",
+              attrP->name, ldAttrTypeToString(attrType), expectedKey, wrongValueKeyP->name);
+    else
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Missing Value",
+              "Attribute '%s' of type %s must have '%s'",
+              attrP->name, ldAttrTypeToString(attrType), expectedKey);
     return false;
   }
 
