@@ -207,6 +207,34 @@ static KjNode* attrInstanceOf(KjNode* containerP, const char* attrName)
 static bool matchTerm(KjNode* entityP, LdQTerm* term)
 {
   //
+  // System temporal attributes (createdAt / modifiedAt) are stored as top-level
+  // integer (nanosecond) fields on the entity, not under attr.@none.value.
+  // Resolve and compare them directly. Entity-level only (no sub-path).
+  //
+  if ((term->subPathN == 0) && (term->valuePathN == 0) &&
+      ((strcmp(term->attr, "createdAt") == 0) || (strcmp(term->attr, "modifiedAt") == 0)))
+  {
+    KjNode* tsP = kjLookup(entityP, term->attr);
+    if (term->op == LdQExists)    return (tsP != NULL);
+    if (term->op == LdQNotExists) return (tsP == NULL);
+    if (tsP == NULL || tsP->type != KjInt || term->valueType != LdQDateTime)
+      return false;
+
+    long long e = tsP->value.i;
+    long long q = term->value.ns;
+    switch (term->op)
+    {
+    case LdQEqual:     return e == q;
+    case LdQUnequal:   return e != q;
+    case LdQGreater:   return e >  q;
+    case LdQLess:      return e <  q;
+    case LdQGreaterEq: return e >= q;
+    case LdQLessEq:    return e <= q;
+    default:           return false;
+    }
+  }
+
+  //
   // § 4.9 attrPath — descend through the sub-attribute segments: the
   // value (or existence) under test is the LAST segment's, looked up
   // inside the previous segment's instance object.
