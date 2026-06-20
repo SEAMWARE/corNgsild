@@ -176,16 +176,54 @@ static KjNode* ldFindEmbeddedAtContext(KjNode* nodeP)
 
 // -----------------------------------------------------------------------------
 //
-// checkNoDuplicateMembers - reject duplicate member names (NGSI-LD cardinality)
+// checkRawInputTree - raw-tree (pre-expansion) NGSI-LD structural checks
 //
-// JSON (RFC 8259 § 4) only says member names SHOULD be unique; NGSI-LD makes it
-// a MUST via the 0..1 / 1..1 cardinalities of its data-type definitions (§ 5.2.6),
-// enforced through § 8.2.3. Runs on the raw tree (literal duplicate keys, before
-// term expansion). Does not descend into a JsonProperty's `json` value (opaque
-// raw JSON — JSON semantics apply there) nor into a `@context` (JSON-LD).
+// Runs on the raw request tree BEFORE term expansion, because JSON-LD expansion
+// silently DROPS empty objects and null-valued members (just as it drops them
+// like JSON null) — so an empty {} / [] is invisible afterwards and cannot be
+// reported. Two rules, both § 8.2.3 (NGSI-LD strictness on top of JSON-LD):
 //
-static bool checkNoDuplicateMembers(KjNode* nodeP)
+//  - Duplicate member names. JSON (RFC 8259 § 4) only says names SHOULD be
+//    unique; NGSI-LD makes it a MUST via the 0..1 / 1..1 cardinalities of its
+//    data-type definitions (§ 5.2.6).
+//  - Empty object {} or empty array []. Valid JSON, but no NGSI-LD input shape
+//    is an empty structure — an entity needs id/type, a batch needs ≥1 entry, a
+//    value carries content. (The spec enumerates "Empty array not allowed"
+//    per field; this is the single underlying rule.)
+//
+// Does not descend into a JsonProperty's `json` value (opaque raw JSON — JSON
+// semantics apply, an empty {} / [] there is legitimate) nor into a `@context`.
+//
+// checkEmpty gates the empty-{}/[] rule: it applies to data-bearing write bodies
+// (entities, fragments, batch arrays, subscriptions, registrations, temporal),
+// not to action endpoints (snapshot create/clone) whose options body may be {}.
+// An object counts as empty when it has no member OTHER than the JSON-LD
+// scaffolding (@context / @graph) — i.e. empty "after removing @context and
+// @graph" — so this runs on the raw tree before the batch @context element
+// pruning (an all-missing-@context batch must still yield a 207, not a false
+// "empty array"). The duplicate-member check always applies.
+//
+static bool checkRawInputTree(KjNode* nodeP, bool checkEmpty)
 {
+  if (checkEmpty && (nodeP->type == KjObject || nodeP->type == KjArray))
+  {
+    bool empty = true;
+    for (KjNode* cP = nodeP->value.firstChildP; cP != NULL; cP = cP->next)
+    {
+      if ((nodeP->type == KjObject) && (cP->name != NULL) &&
+          ((strcmp(cP->name, "@context") == 0) || (strcmp(cP->name, "@graph") == 0)))
+        continue;  // JSON-LD scaffolding, not content
+      empty = false;
+      break;
+    }
+    if (empty)
+    {
+      const char* what = (nodeP->type == KjArray) ? "array" : "object";
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Empty Structure", "an empty %s is not valid NGSI-LD input", what);
+      return false;
+    }
+  }
+
   if (nodeP->type == KjObject)
   {
     for (KjNode* aP = nodeP->value.firstChildP; aP != NULL; aP = aP->next)
@@ -206,14 +244,14 @@ static bool checkNoDuplicateMembers(KjNode* nodeP)
       if ((cP->name != NULL) && ((strcmp(cP->name, LD_VOCAB_HAS_JSON) == 0) || (strcmp(cP->name, "@context") == 0)))
         continue;  // opaque JSON literal / JSON-LD context — not NGSI-LD structure
 
-      if (checkNoDuplicateMembers(cP) == false)
+      if (checkRawInputTree(cP, checkEmpty) == false)
         return false;
     }
   }
   else if (nodeP->type == KjArray)
   {
     for (KjNode* cP = nodeP->value.firstChildP; cP != NULL; cP = cP->next)
-      if (checkNoDuplicateMembers(cP) == false)
+      if (checkRawInputTree(cP, checkEmpty) == false)
         return false;
   }
 
@@ -261,6 +299,39 @@ static void ldParseHook(void)
   //                them into its errors[] (§ 6.14.3.1 multi-status response)
   uint64_t ldOp = (swRest.serviceP != NULL) ? swRest.serviceP->ldOp : 0;
   bool     isBatchOp = (ldOp & LD_OP_GROUP_BATCH) != 0;
+
+  // @graph: a JSON-LD keyword we do not act on — remove it (no error) so it does
+  // not linger in the stored entity. Top-level and per batch-array element.
+  if (swRest.in.requestTree->type == KjObject)
+  {
+    KjNode* g = kjLookup(swRest.in.requestTree, "@graph");
+    if (g != NULL)
+      kjChildRemove(swRest.in.requestTree, g);
+  }
+  else if (isArrayBody)
+  {
+    for (KjNode* elemP = swRest.in.requestTree->value.firstChildP; elemP != NULL; elemP = elemP->next)
+    {
+      if (elemP->type != KjObject)
+        continue;
+      KjNode* g = kjLookup(elemP, "@graph");
+      if (g != NULL)
+        kjChildRemove(elemP, g);
+    }
+  }
+
+  // Raw-tree structural checks (duplicate members; empty {} / []) on the original
+  // client tree — BEFORE the batch @context element pruning below, so an
+  // all-missing-@context batch still yields 207 rather than a false "empty array".
+  // The empty-{}/[] rule is gated to data-bearing bodies: snapshot action
+  // endpoints (create / clone) may legitimately carry an empty options object.
+  {
+    uint64_t snapshotOps = LdOpCreateSnapshot | LdOpCloneSnapshot | LdOpUpdateSnapshot |
+                           LdOpRetrieveSnapshot | LdOpDeleteSnapshot | LdOpPurgeSnapshots;
+    bool     checkEmpty  = ((ldOp & snapshotOps) == 0);
+    if (checkRawInputTree(swRest.in.requestTree, checkEmpty) == false)
+      return;
+  }
 
   if (isLdJson && isArrayBody && !isBatchOp)
   {
@@ -707,11 +778,6 @@ static void ldParseHook(void)
   // base context; an in-body @context overrides it for the body subtree
   // and becomes the new effective context (returned and chained back
   // into swNgsild.contextP).
-  // Reject duplicate JSON members on the raw tree, before any term expansion
-  // collapses distinct short names onto the same IRI (§ 8.2.3 / cardinality).
-  if ((swRest.in.requestTree != NULL) && (checkNoDuplicateMembers(swRest.in.requestTree) == false))
-    return;
-
   swNgsild.contextP = swldExpandTree(swRest.in.requestTree, swNgsild.contextP, &swRest.kalloc);
 
   // Reattach the decoupled type-selection expressions at their
