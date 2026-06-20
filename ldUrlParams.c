@@ -40,6 +40,17 @@
 //
 bool        ldLocalOnly          = false;
 bool        ldSplitEntities      = true;
+
+//
+// ldNotifyValueChangeOnly - --notifyValueChangeOnly CLI flag (default false).
+//
+// Default (false) is NGSI-LD compliant: every update operation fires a
+// notification (the trigger is operation-based — § 5.2.6 notificationTrigger —
+// and modifiedAt always changes). When true, a notification is suppressed for an
+// update that leaves the attribute *value* unchanged, even if sub-attributes or
+// timestamps changed. Non-spec optimization, off by default.
+//
+bool        ldNotifyValueChangeOnly = false;
 char*       ldDefaultContextUrl  = NULL;
 uint64_t ldDefaultCooldownNs = 30000000000ULL;   // --cooldownMillis (default 30s; 0 disables the default)
 const char* ldCsourceAliasBase   = NULL;

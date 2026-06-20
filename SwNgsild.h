@@ -248,6 +248,11 @@ static inline SwNgsild* swNgsildBind(void)
 //
 extern bool ldLocalOnly;
 
+// ldNotifyValueChangeOnly - --notifyValueChangeOnly CLI flag: suppress a
+// notification for an update that leaves the attribute value unchanged (default
+// false = NGSI-LD compliant, always notify).
+extern bool ldNotifyValueChangeOnly;
+
 
 
 
