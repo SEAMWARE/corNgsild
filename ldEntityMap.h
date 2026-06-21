@@ -19,6 +19,12 @@ extern LdEntityMapStore* ldEntityMapStoreCreate(void);
 // ldEntityMapCreate - create a new entity map with a generated ID and expiry
 extern LdEntityMap* ldEntityMapCreate(LdEntityMapStore* storeP, uint64_t lifetimeNs, void* tenantP);
 
+// ldEntityMapSetFilters - record the query's filter URL params (§ 9 same-parameters
+// binding). Each non-NULL value is duplicated onto the map; NULL = not present.
+extern void ldEntityMapSetFilters(LdEntityMap* mapP, const char* type, const char* q,
+                                  const char* scopeQ, const char* georel, const char* geometry,
+                                  const char* coordinates, const char* geoproperty);
+
 // ldEntityMapAddEntry - add an entity ID → sources mapping
 extern void ldEntityMapAddEntry(LdEntityMap* mapP, const char* entityId,
                                  const char** sourceIdV, int sourceCount);

@@ -66,6 +66,19 @@ typedef struct LdEntityMap
   LdEntityMapLink*     linkedHead;     // linked-maps list (CSR → remote map)
   LdEntityMapLink*     linkedTail;
   void*                tenantP;        // owning tenant (opaque)
+
+  // Bound query filters (§ 9 "shall use the same parameters") — the filter
+  // URL params present on the request that created the map. On reuse a bound
+  // filter may be re-sent with the SAME value or omitted (then re-applied),
+  // but not modified or newly introduced (→ 400). malloc'd, or NULL if absent.
+  char*                boundType;
+  char*                boundQ;
+  char*                boundScopeQ;
+  char*                boundGeorel;
+  char*                boundGeometry;
+  char*                boundCoordinates;
+  char*                boundGeoproperty;
+
   struct LdEntityMap*  next;           // linked list in store
 } LdEntityMap;
 

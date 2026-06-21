@@ -89,6 +89,25 @@ LdEntityMap* ldEntityMapCreate(LdEntityMapStore* storeP, uint64_t lifetimeNs, vo
 
 
 
+// ldEntityMapSetFilters
+void ldEntityMapSetFilters(LdEntityMap* mapP, const char* type, const char* q,
+                           const char* scopeQ, const char* georel, const char* geometry,
+                           const char* coordinates, const char* geoproperty)
+{
+  if (mapP == NULL)
+    return;
+
+  if (type        != NULL) mapP->boundType        = strdup(type);
+  if (q           != NULL) mapP->boundQ           = strdup(q);
+  if (scopeQ      != NULL) mapP->boundScopeQ      = strdup(scopeQ);
+  if (georel      != NULL) mapP->boundGeorel      = strdup(georel);
+  if (geometry    != NULL) mapP->boundGeometry    = strdup(geometry);
+  if (coordinates != NULL) mapP->boundCoordinates = strdup(coordinates);
+  if (geoproperty != NULL) mapP->boundGeoproperty = strdup(geoproperty);
+}
+
+
+
 // ldEntityMapAddEntry
 void ldEntityMapAddEntry(LdEntityMap* mapP, const char* entityId,
                           const char** sourceIdV, int sourceCount)
@@ -216,6 +235,13 @@ static void mapFree(LdEntityMap* mapP)
     free(lp);
     lp = next;
   }
+  if (mapP->boundType        != NULL) free(mapP->boundType);
+  if (mapP->boundQ           != NULL) free(mapP->boundQ);
+  if (mapP->boundScopeQ      != NULL) free(mapP->boundScopeQ);
+  if (mapP->boundGeorel      != NULL) free(mapP->boundGeorel);
+  if (mapP->boundGeometry    != NULL) free(mapP->boundGeometry);
+  if (mapP->boundCoordinates != NULL) free(mapP->boundCoordinates);
+  if (mapP->boundGeoproperty != NULL) free(mapP->boundGeoproperty);
   free(mapP);
 }
 
