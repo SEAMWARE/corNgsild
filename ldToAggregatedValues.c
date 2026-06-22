@@ -31,6 +31,7 @@
 #include "kjson/kjRenderSize.h"                         // kjFastRenderSize
 
 #include "swNgsild/ldIsEntityKeyword.h"                  // ldIsEntityKeyword
+#include "swNgsild/ldCheckDateTime.h"                    // ldIsoToNanoseconds
 #include "swNgsild/ldToAggregatedValues.h"               // Own interface
 
 
@@ -92,37 +93,10 @@ uint64_t ldIso8601DurationToNs(const char* iso)
 
 // -----------------------------------------------------------------------------
 //
-// isoToNs - parse an ISO 8601 datetime into epoch ns (best-effort).
-//
-static uint64_t isoToNs(const char* iso)
-{
-  if (iso == NULL)
-    return 0;
-
-  struct tm tm;
-  memset(&tm, 0, sizeof(tm));
-  const char* rest = strptime(iso, "%Y-%m-%dT%H:%M:%S", &tm);
-  if (rest == NULL)
-    return 0;
-
-  uint64_t ns = (uint64_t) timegm(&tm) * 1000000000ULL;
-
-  if (*rest == '.')
-  {
-    rest++;
-    long frac = 0; int digits = 0;
-    while (*rest >= '0' && *rest <= '9' && digits < 9)
-    {
-      frac = frac * 10 + (*rest - '0');
-      rest++;
-      digits++;
-    }
-    while (digits < 9) { frac *= 10; digits++; }
-    ns += (uint64_t) frac;
-  }
-
-  return ns;
-}
+// isoToNs is provided by ldCheckDateTime (ldIsoToNanoseconds) — the single
+// ISO 8601 → epoch-nanoseconds converter (handles fractional seconds and the
+// timezone offset). See ldCheckDateTime.h.
+#define isoToNs(iso) ldIsoToNanoseconds(iso)
 
 
 

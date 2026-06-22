@@ -9,7 +9,6 @@
 #define _GNU_SOURCE
 #include <stdbool.h>                                     // bool
 #include <string.h>                                      // strcmp, memset
-#include <time.h>                                        // strptime, timegm
 
 #include "kalloc/KAlloc.h"                             // KAlloc
 #include "kjson/KjNode.h"                               // KjNode
@@ -23,6 +22,7 @@
 #include "swNgsild/LdAttrType.h"                         // LdAttrType, LdAttrGeoProperty
 #include "swNgsild/ldAttrTypeDetect.h"                   // ldAttrTypeDetect
 #include "swNgsild/ldIsEntityKeyword.h"                   // ldIsEntityKeyword
+#include "swNgsild/ldCheckDateTime.h"                    // ldIsoToNanoseconds
 #include "swNgsild/ldApiEntityToDbModel.h"               // Own interface
 
 
@@ -91,32 +91,10 @@ static const char* expandedValueKeys[] =
 
 
 // -----------------------------------------------------------------------------
-//
-// isoToNanoseconds - convert ISO 8601 date-time string to nanoseconds since epoch
-//
-static long long isoToNanoseconds(const char* iso)
-{
-  struct tm tm;
-  memset(&tm, 0, sizeof(tm));
-  const char* rest = strptime(iso, "%Y-%m-%dT%H:%M:%S", &tm);
-  long long ns = (long long) timegm(&tm) * 1000000000LL;
-  if (rest != NULL && *rest == '.')
-  {
-    rest++;
-    long long frac = 0;
-    int digits = 0;
-    while (*rest >= '0' && *rest <= '9' && digits < 9)
-    {
-      frac = frac * 10 + (*rest - '0');
-      rest++;
-      digits++;
-    }
-    // Pad to 9 digits
-    while (digits < 9) { frac *= 10; digits++; }
-    ns += frac;
-  }
-  return ns;
-}
+// isoToNanoseconds is provided by ldCheckDateTime (ldIsoToNanoseconds) — the
+// single ISO 8601 → epoch-nanoseconds converter (handles fractional seconds and
+// the timezone offset). See ldCheckDateTime.h.
+#define isoToNanoseconds(iso) ((long long) ldIsoToNanoseconds(iso))
 
 
 

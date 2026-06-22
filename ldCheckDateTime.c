@@ -95,9 +95,9 @@ double ldCheckDateTime(const char* dateTimeStr)
     return -1.0;
   }
 
-  time_t epoch = timegm(&tm);
-
-  return (double) epoch;
+  // Lexically valid — return the epoch (seconds) via the single converter so the
+  // timezone offset is applied consistently (callers such as expiresAt use it).
+  return (double) ldIsoToNanoseconds(dateTimeStr) / 1000000000.0;
 }
 
 
@@ -137,6 +137,31 @@ uint64_t ldIsoToNanoseconds(const char* iso)
       digits++;
     }
     ns += frac;
+  }
+
+  //
+  // Trailing timezone designator: 'Z' (or none) is UTC; '+hh:mm' / '-hh:mm' is
+  // an offset. strptime+timegm above computed the wall-clock as if it were UTC,
+  // so for an explicit offset convert to true UTC: UTC = local - offset.
+  //
+  if ((*rest == '+') || (*rest == '-'))
+  {
+    int sign = (*rest == '+') ? 1 : -1;
+    rest++;
+
+    int oh = 0, om = 0;
+    if ((rest[0] >= '0' && rest[0] <= '9') && (rest[1] >= '0' && rest[1] <= '9'))
+    {
+      oh = (rest[0] - '0') * 10 + (rest[1] - '0');
+      rest += 2;
+      if (*rest == ':')
+        rest++;
+      if ((rest[0] >= '0' && rest[0] <= '9') && (rest[1] >= '0' && rest[1] <= '9'))
+        om = (rest[0] - '0') * 10 + (rest[1] - '0');
+    }
+
+    long long offsetNs = (long long) (oh * 3600 + om * 60) * 1000000000LL * sign;
+    ns = (uint64_t) ((long long) ns - offsetNs);
   }
 
   return ns;
