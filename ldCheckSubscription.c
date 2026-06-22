@@ -340,12 +340,23 @@ static bool checkEntitiesArray(KjNode* entitiesP)
         }
         hasType = true;
 
-        // Parse the §4.17 expression up front. NULL allocator → malloc;
-        // tree outlives this request and is handed off to the sub cache.
-        LdTypeExpr* expr = ldTypeExprParse(fieldP->value.s, NULL);
-        if (expr == NULL)
-          return false;  // ldError already set inside the parser
-        swNgsild.subEntityTypeExprsV[entIx] = expr;
+        // § 4.17 — a bare "*" is the match-any wildcard: it imposes no type
+        // constraint. Represent it as a NULL typeExpr (the sub-cache selector
+        // then matches any entity type, like a selector with no type at all).
+        // The raw "*" stays in the subscription tree for round-trip on GET.
+        if (strcmp(fieldP->value.s, "*") == 0)
+        {
+          swNgsild.subEntityTypeExprsV[entIx] = NULL;
+        }
+        else
+        {
+          // Parse the §4.17 expression up front. NULL allocator → malloc;
+          // tree outlives this request and is handed off to the sub cache.
+          LdTypeExpr* expr = ldTypeExprParse(fieldP->value.s, NULL);
+          if (expr == NULL)
+            return false;  // ldError already set inside the parser
+          swNgsild.subEntityTypeExprsV[entIx] = expr;
+        }
       }
       else if (strcmp(fieldP->name, "id") == 0)
       {

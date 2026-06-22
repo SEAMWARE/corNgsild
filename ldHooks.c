@@ -760,7 +760,10 @@ static void ldParseHook(void)
           prev = c;
         }
         if (tP == NULL || tP->type != KjString || tP->value.s == NULL) continue;
-        bool hasOp = false;
+        // A bare "*" (§ 4.17 match-any wildcard) and any value carrying a
+        // type-selection operator must be shielded from JSON-LD @vocab
+        // expansion, which would otherwise rewrite them to a polluted IRI.
+        bool hasOp = (strcmp(tP->value.s, "*") == 0);
         for (const char* p = tP->value.s; *p != 0 && !hasOp; p++)
           if (*p == '(' || *p == ')' || *p == '|' || *p == '&' || *p == ',') hasOp = true;
         if (!hasOp) continue;
