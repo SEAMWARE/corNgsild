@@ -13,9 +13,15 @@
 
 #include "kbase/kLibLog.h"                             // KLOG_T
 #include "kalloc/KAlloc.h"                             // KAlloc
+#include "kalloc/kaAlloc.h"                            // kaAlloc
+#include "kalloc/kaStrdup.h"                           // kaStrdup
 #include "kjson/KjNode.h"                               // KjNode
 #include "kjson/kjLookup.h"                            // kjLookup
 #include "kjson/kjBuilder.h"                           // kjChildRemove
+#include "kjson/kjParse.h"                             // kjParse
+#include "kjson/kjBufferCreate.h"                      // kjBufferCreate
+#include "kjson/kjRender.h"                            // kjFastRender
+#include "kjson/kjRenderSize.h"                        // kjFastRenderSize
 
 #include "swNgsild/LdOp.h"                               // LdOp
 #include "swNgsild/SwNgsild.h"                           // swNgsild
@@ -23,6 +29,7 @@
 #include "swNgsild/LdCheck.h"                            // OBJECT_CHECK, STRING_CHECK, ...
 #include "swNgsild/LdVocab.h"                            // LD_VOCAB_*
 #include "swNgsild/ldQParse.h"                           // ldQParse
+#include "swNgsild/ldCheckGeo.h"                          // ldCheckGeoQuery
 #include "swNgsild/ldTypes.h"                            // ldOpToString
 #include "swNgsild/ldError.h"                            // ldError
 #include "swNgsild/ldCheckSubscription.h"                // Own interface
@@ -380,7 +387,7 @@ static bool checkEntitiesArray(KjNode* entitiesP)
 //
 // checkGeoQ - validate the "geoQ" object
 //
-static bool checkGeoQ(KjNode* geoQP)
+static bool checkGeoQ(KjNode* geoQP, KAlloc* kaP)
 {
   OBJECT_CHECK(geoQP, "Invalid Subscription", "'geoQ' must be a JSON object");
 
@@ -439,6 +446,64 @@ static bool checkGeoQ(KjNode* geoQP)
     ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
             "'geoQ' requires 'geometry', 'coordinates', and 'georel' — missing '%s'", missing);
     return false;
+  }
+
+  //
+  // geometry and coordinates must be structurally consistent. Without this a
+  // Polygon geometry paired with Point-shaped coordinates (or a malformed ring)
+  // is stored as an unusable geoQ that silently matches nothing — leaving the
+  // subscription in an inconsistent state. § 5.2.13: coordinates is "a JSON
+  // Array coherent with the geometry type" (and MAY be string-encoded for
+  // JSON-LD compatibility). Reuse the full structural validator (range, ring
+  // closure, ...), which wants the coordinates as a JSON string.
+  //
+  const char* coordsStr = NULL;
+
+  if (coordinatesP->type == KjString)
+    coordsStr = coordinatesP->value.s;
+  else  // KjArray (the primary form) — render to the JSON string the validator parses
+  {
+    // kjFastRender omits the top-level node's name, so this emits the bare array
+    // (not "coordinates":[...]) — a top-level JSON array kjParse can re-parse.
+    int   len = kjFastRenderSize(coordinatesP) + 1;
+    char* buf = (char*) kaAlloc(kaP, len);
+    if (buf != NULL)
+    {
+      kjFastRender(coordinatesP, buf);
+      coordsStr = buf;
+    }
+  }
+
+  if (coordsStr == NULL)
+    return true;  // could not materialize coordinates; nothing further to check
+
+  if (ldCheckGeoQuery(geometryP->value.s, coordsStr) == false)
+    return false;  // ldError already set by ldCheckGeoQuery
+
+  //
+  // Normalize the string-encoded form to the GeoJSON array (§ 5.2.13 primary
+  // form) IN THE STORED TREE, so the persisted subscription is canonical
+  // regardless of which form the client sent — and so a cache rebuild after a
+  // restart reads the same array. Parse into kaP (request lifetime, same as the
+  // subscription tree); the parsed array's children replace the string node in
+  // place (name + sibling links preserved).
+  //
+  if (coordinatesP->type == KjString)
+  {
+    char* dup = kaStrdup(kaP, coordsStr);  // kjParse mutates its input
+    if (dup != NULL)
+    {
+      Kjson   kjson;
+      Kjson*  kjsonP = kjBufferCreate(&kjson, kaP);
+      KjNode* arrP   = kjParse(kjsonP, dup);
+
+      if (arrP != NULL && arrP->type == KjArray)
+      {
+        coordinatesP->type              = KjArray;
+        coordinatesP->value.firstChildP = arrP->value.firstChildP;
+        coordinatesP->lastChild         = arrP->lastChild;
+      }
+    }
   }
 
   return true;
@@ -782,7 +847,7 @@ bool ldCheckSubscription(KjNode* subP, LdOp op, KAlloc* kaP)
   //
   if (geoQP != NULL)
   {
-    if (checkGeoQ(geoQP) == false)
+    if (checkGeoQ(geoQP, kaP) == false)
       return false;
   }
 

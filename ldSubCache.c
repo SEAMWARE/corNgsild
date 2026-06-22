@@ -12,11 +12,14 @@
 #include <string.h>                                    // strcmp, strdup
 
 #include "kalloc/kaBufferInit.h"                       // kaBufferInit
+#include "kalloc/kaAlloc.h"                            // kaAlloc
 #include "kjson/KjNode.h"                              // KjNode
 #include "kjson/kjClone.h"                             // kjClone
 #include "kjson/kjFree.h"                              // kjFree
 #include "kjson/kjLookup.h"                            // kjLookup
 #include "kjson/kjBuilder.h"                           // kjChildRemove
+#include "kjson/kjRender.h"                            // kjFastRender
+#include "kjson/kjRenderSize.h"                        // kjFastRenderSize
 
 #include "swNgsild/ldTypes.h"                          // ldFormatFromString
 #include "swNgsild/ldAcceptParse.h"                    // ldAcceptParse
@@ -376,6 +379,19 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
 
     if (coordsP != NULL && coordsP->type == KjString)
       itemP->geoCoordinates = coordsP->value.s;  // borrowed pointer
+    else if (coordsP != NULL && coordsP->type == KjArray)
+    {
+      // coordinates given as a native JSON array (GeoJSON form, e.g.
+      // [[[lon,lat],...]]) — render it to the JSON-array string that
+      // geoMatchFunc/geojsonToGeos expects. Stored in the cache alloc.
+      int   len = kjFastRenderSize(coordsP) + 1;
+      char* buf = (char*) kaAlloc(&cacheP->alloc, len);
+      if (buf != NULL)
+      {
+        kjFastRender(coordsP, buf);
+        itemP->geoCoordinates = buf;
+      }
+    }
 
     if (geopropP != NULL && geopropP->type == KjString)
     {
