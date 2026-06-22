@@ -38,4 +38,14 @@ extern bool ldToConcise(KjNode* entityP, KAlloc* faP);
 //
 extern bool ldToSimplified(KjNode* entityP, KAlloc* faP);
 
+
+
+// -----------------------------------------------------------------------------
+//
+// ldAttrValueNode - the value-holding member of a normalized/concise attribute
+//                   (value / object / languageMap / vocab / valueList /
+//                   objectList / json); NULL if none.
+//
+extern KjNode* ldAttrValueNode(KjNode* attrP);
+
 #endif  // SWNGSILD_LDRENDER_H_

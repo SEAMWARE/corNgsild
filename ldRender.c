@@ -263,9 +263,13 @@ bool ldToConcise(KjNode* entityP, KAlloc* faP)
 
 // -----------------------------------------------------------------------------
 //
-// getValueNode - find the value node for a normalized/concise attribute
+// ldAttrValueNode - find the value-holding node of a normalized/concise attribute
 //
-static KjNode* getValueNode(KjNode* attrP)
+// Returns the member that carries the attribute's value, whichever it is for the
+// attribute type: value / object / languageMap / vocab / valueList / objectList /
+// json. NULL if none present.
+//
+KjNode* ldAttrValueNode(KjNode* attrP)
 {
   if (attrP->type != KjObject)
     return NULL;
@@ -317,7 +321,7 @@ bool ldToSimplified(KjNode* entityP, KAlloc* faP)
         continue;
       }
 
-      KjNode* valueP = getValueNode(childP);
+      KjNode* valueP = ldAttrValueNode(childP);
 
       if (valueP != NULL)
       {

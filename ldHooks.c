@@ -278,6 +278,21 @@ static void ldParseHook(void)
     return;
   }
 
+  //
+  // value-only sub-resource (TS 104-176 § 7.6): the PUT body is a "value only"
+  // Attribute Fragment — the bare value itself, NOT a JSON-LD document. It must
+  // not be @context-expanded (a primitive like 45 or true has nowhere to carry
+  // a context). The {attrId} url segment is still expanded via the Link-header
+  // context, which ldUrlParams set before this hook. Identified by the route's
+  // trailing "/value" literal suffix.
+  //
+  if ((swRest.serviceP != NULL) &&
+      (swRest.serviceP->matchAfterLastWildcardLen > 0) &&
+      (strcmp(swRest.serviceP->matchAfterLastWildcard, "/value") == 0))
+  {
+    return;
+  }
+
   KjNode* atCtx    = kjLookup(swRest.in.requestTree, "@context");
   char*   ct       = swRest.in.contentType;
   bool    isLdJson = (ct != NULL && strncasecmp(ct, "application/ld+json", 19) == 0);
