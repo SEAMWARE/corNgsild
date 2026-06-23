@@ -648,7 +648,11 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
         tail = node;
       }
     }
+    // kjChildRemove only unlinks; subTree is a malloc clone, so free the
+    // stripped subordinate-list subtree or it is orphaned (definite-lost on
+    // every add/reload of a sub that carried persisted subordinate data).
     kjChildRemove(itemP->subTree, subListP);
+    kjFree(subListP);
   }
 
   KjNode* runNoP = kjLookup(itemP->subTree, "_subordinateRunNo");
@@ -657,6 +661,7 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
     if (runNoP->type == KjInt)
       itemP->subordinateRunNo = (int) runNoP->value.i;
     kjChildRemove(itemP->subTree, runNoP);
+    kjFree(runNoP);
   }
 
   //
