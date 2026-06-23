@@ -235,10 +235,31 @@ static SwRestKeyValue* buildHeaders(SwRestVerb     verb,
     hc++;
   }
 
-  if (csrTenant != NULL && csrTenant[0] != 0)
+  //
+  // NGSILD-Tenant on the forward. The registration's own tenant (csrTenant) is a
+  // tenant REWRITE — a mapping to a different tenant at the context source. When
+  // the registration carries no such rewrite, the ORIGINAL request's tenant is
+  // forwarded so the context source resolves it in the same tenant the consumer
+  // addressed. (The inbound NGSILD-Tenant is otherwise banned from pass-through
+  // below, so it is picked up explicitly here.)
+  //
+  const char* fwdTenant = (csrTenant != NULL && csrTenant[0] != 0) ? csrTenant : NULL;
+
+  if (fwdTenant == NULL)
+  {
+    for (int i = 0; i < swRest.in.httpHeaderCount; i++)
+      if ((swRest.in.httpHeaderV[i].key != NULL) &&
+          (strcasecmp(swRest.in.httpHeaderV[i].key, "NGSILD-Tenant") == 0))
+      {
+        fwdTenant = swRest.in.httpHeaderV[i].value;
+        break;
+      }
+  }
+
+  if (fwdTenant != NULL && fwdTenant[0] != 0)
   {
     hv[hc].key   = (char*) "NGSILD-Tenant";
-    hv[hc].value = (char*) csrTenant;
+    hv[hc].value = (char*) fwdTenant;
     hc++;
   }
 
