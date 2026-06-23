@@ -23,4 +23,14 @@
 //
 extern bool ldCheckSubscription(KjNode* subP, LdOp op, KAlloc* faP);
 
+
+
+// -----------------------------------------------------------------------------
+//
+// ldSubEntityTypeExprsRelease - free the per-request entity-type-expr scratch
+// (per-thread swNgsild side-channel). Called from the broker's post-response
+// hook so the buffer is released per request rather than leaked at thread exit.
+//
+extern void ldSubEntityTypeExprsRelease(void);
+
 #endif  // SWNGSILD_LDCHECKSUBSCRIPTION_H_

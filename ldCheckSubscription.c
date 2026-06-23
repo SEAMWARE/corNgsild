@@ -288,6 +288,33 @@ static bool checkNotification(KjNode* notifP)
 
 // -----------------------------------------------------------------------------
 //
+// ldSubEntityTypeExprsRelease - free the per-request entity-type-expr scratch
+//
+// checkEntitiesArray parses one LdTypeExpr per "entities" entry into the
+// per-thread swNgsild.subEntityTypeExprsV side-channel; ldSubCacheItemAdd then
+// TRANSFERS each to its cache item (zeroing the slot). Whatever is left (the
+// container array, plus any untransferred expr) must be released. Previously
+// this happened only on the NEXT checkEntitiesArray call, so the last buffer
+// per worker thread leaked at exit. The broker now calls this from the
+// post-response hook so the scratch is freed per request. Idempotent.
+//
+void ldSubEntityTypeExprsRelease(void)
+{
+  if (swNgsild.subEntityTypeExprsV == NULL)
+    return;
+
+  for (int i = 0; i < swNgsild.subEntityTypeExprsN; i++)
+    ldTypeExprFree(swNgsild.subEntityTypeExprsV[i]);
+
+  free(swNgsild.subEntityTypeExprsV);
+  swNgsild.subEntityTypeExprsV = NULL;
+  swNgsild.subEntityTypeExprsN = 0;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // checkEntitiesArray - validate the "entities" array
 //
 static bool checkEntitiesArray(KjNode* entitiesP)
@@ -305,14 +332,7 @@ static bool checkEntitiesArray(KjNode* entitiesP)
   for (KjNode* p = entitiesP->value.firstChildP; p != NULL; p = p->next)
     entCount++;
 
-  if (swNgsild.subEntityTypeExprsV != NULL)
-  {
-    for (int i = 0; i < swNgsild.subEntityTypeExprsN; i++)
-      ldTypeExprFree(swNgsild.subEntityTypeExprsV[i]);
-    free(swNgsild.subEntityTypeExprsV);
-    swNgsild.subEntityTypeExprsV = NULL;
-    swNgsild.subEntityTypeExprsN = 0;
-  }
+  ldSubEntityTypeExprsRelease();   // drop any leftover from a prior request on this thread
   if (entCount > 0)
   {
     swNgsild.subEntityTypeExprsV = (LdTypeExpr**) calloc(entCount, sizeof(LdTypeExpr*));
