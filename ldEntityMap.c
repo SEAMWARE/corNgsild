@@ -13,6 +13,7 @@
 #include "kjson/KjNode.h"                              // KjNode
 #include "kjson/kjBuilder.h"                           // kjObject, kjString, kjArray, kjChildAdd
 
+#include "swRest/SwRestState.h"                        // swRest (kjsonP — per-request render arena)
 #include "swNgsild/LdEntityMap.h"                      // LdEntityMap, LdEntityMapStore
 #include "swNgsild/ldEntityMap.h"                      // Own interface
 
@@ -275,33 +276,33 @@ KjNode* ldEntityMapToTree(LdEntityMap* mapP)
 {
   if (mapP == NULL) return NULL;
 
-  KjNode* treeP = kjObject(NULL, NULL);
+  KjNode* treeP = kjObject(swRest.kjsonP, NULL);
 
-  kjChildAdd(treeP, kjString(NULL, "id", mapP->mapId));
-  kjChildAdd(treeP, kjString(NULL, "type", "EntityMap"));
+  kjChildAdd(treeP, kjString(swRest.kjsonP, "id", mapP->mapId));
+  kjChildAdd(treeP, kjString(swRest.kjsonP, "type", "EntityMap"));
 
   char isoBuf[64];
   isoFromNanos(mapP->expiresAt, isoBuf, sizeof(isoBuf));
-  kjChildAdd(treeP, kjString(NULL, "expiresAt", isoBuf));
+  kjChildAdd(treeP, kjString(swRest.kjsonP, "expiresAt", isoBuf));
 
   // entityMap: { "urn:e1": ["@none", "urn:CSR:1"], "urn:e2": ["urn:CSR:2"], ... }
-  KjNode* emObj = kjObject(NULL, "entityMap");
+  KjNode* emObj = kjObject(swRest.kjsonP, "entityMap");
   for (LdEntityMapEntry* entryP = mapP->head; entryP != NULL; entryP = entryP->next)
   {
-    KjNode* sourcesArr = kjArray(NULL, entryP->entityId);
+    KjNode* sourcesArr = kjArray(swRest.kjsonP, entryP->entityId);
     for (int i = 0; i < entryP->sourceCount; i++)
-      kjChildAdd(sourcesArr, kjString(NULL, NULL, entryP->sourceIdV[i]));
+      kjChildAdd(sourcesArr, kjString(swRest.kjsonP, NULL, entryP->sourceIdV[i]));
     kjChildAdd(emObj, sourcesArr);
   }
   kjChildAdd(treeP, emObj);
 
   // linkedMaps: { "<csrId>": "<remoteMapId>", ... }  (§ 5.14.4.4)
-  KjNode* linkedObj = kjObject(NULL, "linkedMaps");
+  KjNode* linkedObj = kjObject(swRest.kjsonP, "linkedMaps");
   for (LdEntityMapLink* linkP = mapP->linkedHead; linkP != NULL; linkP = linkP->next)
   {
     if (linkP->csrId == NULL || linkP->remoteMapId == NULL)
       continue;
-    kjChildAdd(linkedObj, kjString(NULL, linkP->csrId, linkP->remoteMapId));
+    kjChildAdd(linkedObj, kjString(swRest.kjsonP, linkP->csrId, linkP->remoteMapId));
   }
   kjChildAdd(treeP, linkedObj);
 
