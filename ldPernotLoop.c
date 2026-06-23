@@ -18,6 +18,7 @@
 #include "kjson/kjRenderSize.h"                        // kjFastRenderSize
 #include "kjson/kjRender.h"                            // kjFastRender
 #include "kjson/kjClone.h"                             // kjClone
+#include "kjson/kjBufferCreate.h"                      // kjBufferCreate (+ Kjson type)
 #include "kjson/kjLookup.h"                            // kjLookup
 
 #include "swRest/SwRestState.h"                        // swRest (for thread-local init)
@@ -84,8 +85,14 @@ static bool pernotSendNotification(LdPernotItem* itemP, KjNode* entityArray, KAl
   if (itemP->endpointUri == NULL)
     return false;
 
+  // Build the notification tree in the per-tick engine arena (kaP) — this runs
+  // on the periodic-dispatch thread where swRest.kjsonP is not our arena. kaP is
+  // reset by the engine after the tick, freeing the whole tree.
+  Kjson   kjBuf;
+  Kjson*  kjP = kjBufferCreate(&kjBuf, kaP);
+
   // Build notification tree
-  KjNode* notification = kjObject(NULL, NULL);
+  KjNode* notification = kjObject(kjP, NULL);
 
   char notifId[80];
   snprintf(notifId, sizeof(notifId), "urn:ngsi-ld:Notification:%08x:%04x",
@@ -94,16 +101,16 @@ static bool pernotSendNotification(LdPernotItem* itemP, KjNode* entityArray, KAl
   char isoTimeBuf[64];
   isoFromNanos(nowNanos(), isoTimeBuf, sizeof(isoTimeBuf));
 
-  kjChildAdd(notification, kjString(NULL, "id", notifId));
-  kjChildAdd(notification, kjString(NULL, "type", "Notification"));
-  kjChildAdd(notification, kjString(NULL, "subscriptionId", itemP->subId));
-  kjChildAdd(notification, kjString(NULL, "notifiedAt", isoTimeBuf));
+  kjChildAdd(notification, kjString(kjP, "id", notifId));
+  kjChildAdd(notification, kjString(kjP, "type", "Notification"));
+  kjChildAdd(notification, kjString(kjP, "subscriptionId", itemP->subId));
+  kjChildAdd(notification, kjString(kjP, "notifiedAt", isoTimeBuf));
 
   // Convert entities from storage to API format
-  KjNode* dataArray = kjArray(NULL, "data");
+  KjNode* dataArray = kjArray(kjP, "data");
   for (KjNode* entityP = entityArray->value.firstChildP; entityP != NULL; entityP = entityP->next)
   {
-    KjNode* entityClone = kjClone(NULL, entityP);
+    KjNode* entityClone = kjClone(kjP, entityP);
     ldEntityToApi(entityClone, kaP);
     ldStripSysAttrs(entityClone);
     kjChildAdd(dataArray, entityClone);
@@ -176,6 +183,7 @@ static bool pernotSendNotification(LdPernotItem* itemP, KjNode* entityArray, KAl
   swRestClientRequestTimeout(&req, 5000, reqTmoMs);
 
   int rc = swRestClientSend(&req, &resp);
+  swRestClientResponseCleanup(&resp);
 
   if (rc == 0 && resp.statusCode >= 200 && resp.statusCode < 300)
     return true;

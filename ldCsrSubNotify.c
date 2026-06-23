@@ -250,14 +250,14 @@ static KjNode* csourceNotificationBuild(LdSubCacheItem* subItemP,
   char isoTimeBuf[64];
   isoNow(isoTimeBuf, sizeof(isoTimeBuf));
 
-  KjNode* notification = kjObject(NULL, NULL);
-  kjChildAdd(notification, kjString(NULL, "id",             (char*) notifIdGenerate()));
-  kjChildAdd(notification, kjString(NULL, "type",           "ContextSourceNotification"));
-  kjChildAdd(notification, kjString(NULL, "subscriptionId", subItemP->subId));
-  kjChildAdd(notification, kjString(NULL, "notifiedAt",     isoTimeBuf));
-  kjChildAdd(notification, kjString(NULL, "triggerReason",  (char*) triggerReason));
+  KjNode* notification = kjObject(swRest.kjsonP, NULL);
+  kjChildAdd(notification, kjString(swRest.kjsonP, "id",             (char*) notifIdGenerate()));
+  kjChildAdd(notification, kjString(swRest.kjsonP, "type",           "ContextSourceNotification"));
+  kjChildAdd(notification, kjString(swRest.kjsonP, "subscriptionId", subItemP->subId));
+  kjChildAdd(notification, kjString(swRest.kjsonP, "notifiedAt",     isoTimeBuf));
+  kjChildAdd(notification, kjString(swRest.kjsonP, "triggerReason",  (char*) triggerReason));
 
-  KjNode* dataArray = kjArray(NULL, "data");
+  KjNode* dataArray = kjArray(swRest.kjsonP, "data");
   for (int i = 0; i < matchN; i++)
   {
     if (matchV[i]->regTree == NULL) continue;
@@ -391,6 +391,7 @@ static void csourceNotificationPost(LdSubCacheItem* subItemP, KjNode* notificati
     subItemP->status = LdSubStatusFailed;
   }
 
+  swRestClientResponseCleanup(&resp);
   ldNotifyStatsHookInvoke(true /*csrSub*/, ok);
 }
 
