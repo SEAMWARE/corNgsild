@@ -603,11 +603,14 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
     itemP->lastFlushedSent   = itemP->timesSent;
     itemP->lastFlushedFailed = itemP->timesFailed;
 
-    if (tsP != NULL) kjChildRemove(notifP, tsP);
-    if (tfP != NULL) kjChildRemove(notifP, tfP);
-    if (lnP != NULL) kjChildRemove(notifP, lnP);
-    if (lsP != NULL) kjChildRemove(notifP, lsP);
-    if (lfP != NULL) kjChildRemove(notifP, lfP);
+    // kjChildRemove only unlinks; subTree is a malloc clone (kjClone), so free
+    // each stripped stat node or it leaks (definite-lost on reload of a sub that
+    // had persisted stats — i.e. was flushed before a restart).
+    if (tsP != NULL) { kjChildRemove(notifP, tsP); kjFree(tsP); }
+    if (tfP != NULL) { kjChildRemove(notifP, tfP); kjFree(tfP); }
+    if (lnP != NULL) { kjChildRemove(notifP, lnP); kjFree(lnP); }
+    if (lsP != NULL) { kjChildRemove(notifP, lsP); kjFree(lsP); }
+    if (lfP != NULL) { kjChildRemove(notifP, lfP); kjFree(lfP); }
   }
 
   //

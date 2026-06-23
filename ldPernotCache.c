@@ -265,11 +265,13 @@ LdPernotItem* ldPernotCacheItemAdd(LdPernotCache* cacheP, KjNode* subTree,
     itemP->lastFlushedSent   = itemP->timesSent;
     itemP->lastFlushedFailed = itemP->timesFailed;
 
-    if (tsP != NULL) kjChildRemove(notifP, tsP);
-    if (tfP != NULL) kjChildRemove(notifP, tfP);
-    if (lnP != NULL) kjChildRemove(notifP, lnP);
-    if (lsP != NULL) kjChildRemove(notifP, lsP);
-    if (lfP != NULL) kjChildRemove(notifP, lfP);
+    // kjChildRemove only unlinks; subTree is a malloc clone, so free each
+    // stripped stat node or it leaks on reload of a flushed (persisted-stats) sub.
+    if (tsP != NULL) { kjChildRemove(notifP, tsP); kjFree(tsP); }
+    if (tfP != NULL) { kjChildRemove(notifP, tfP); kjFree(tfP); }
+    if (lnP != NULL) { kjChildRemove(notifP, lnP); kjFree(lnP); }
+    if (lsP != NULL) { kjChildRemove(notifP, lsP); kjFree(lsP); }
+    if (lfP != NULL) { kjChildRemove(notifP, lfP); kjFree(lfP); }
   }
 
   // Append
