@@ -38,6 +38,9 @@
 extern int  ldMqttInit(void);
 extern void ldMqttCleanup(void);
 
+// Accept a self-signed cert on mqtts:// endpoints (set under --insecureNotif).
+extern void ldMqttTlsInsecureSet(bool onoff);
+
 
 
 // -----------------------------------------------------------------------------

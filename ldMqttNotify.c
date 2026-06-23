@@ -35,6 +35,24 @@ static bool mqttInitDone = false;
 
 // -----------------------------------------------------------------------------
 //
+// ldMqttTlsInsecure - accept a self-signed cert on mqtts:// (default off)
+//
+// Off by default: an mqtts endpoint's certificate is verified against the system
+// CA store. When the broker is started with --insecureNotif this is turned on,
+// so an mqtts endpoint inside a trusted/firewalled network with a self-signed
+// certificate is accepted (mirrors the HTTP-notification insecure mode).
+//
+static bool mqttTlsInsecure = false;
+
+void ldMqttTlsInsecureSet(bool onoff)
+{
+  mqttTlsInsecure = onoff;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldMqttInit -
 //
 int ldMqttInit(void)
@@ -309,6 +327,13 @@ bool ldMqttNotify(const char* uri,
       // Default TLS settings — verify peer, system CAs.
       if (mosquitto_tls_set(mosq, NULL, "/etc/ssl/certs", NULL, NULL, NULL) != MOSQ_ERR_SUCCESS)
         break;
+
+      // --insecureNotif: accept a self-signed endpoint cert (no peer/host check).
+      if (mqttTlsInsecure)
+      {
+        mosquitto_tls_opts_set(mosq, 0 /* SSL_VERIFY_NONE */, NULL, NULL);
+        mosquitto_tls_insecure_set(mosq, true);
+      }
     }
 
     int rc = mosquitto_connect(mosq, parsed.host, parsed.port, 30 /* keepalive */);
@@ -318,22 +343,33 @@ bool ldMqttNotify(const char* uri,
                            payloadLen, payload, qos, false /* retain */);
     if (rc != MOSQ_ERR_SUCCESS) break;
 
-    // Pump the loop until the publish is acked (or timed out).
-    // For QoS 0 the publish returns immediately; for QoS 1/2 we need
-    // mosquitto_loop to drive the ack roundtrip.
-    int loopMs = 5000;
+    // Pump the loop until the outgoing data is fully written (and, for QoS 1/2,
+    // the publish is acked) or we time out. mosquitto_want_write() going false
+    // means the CONNECT + PUBLISH bytes have left the socket — important over
+    // TLS, where the handshake spans several loop cycles, so we must NOT
+    // disconnect after a single 100 ms cycle (that would drop the publish).
+    int loopMs    = 5000;
+    int postFlush = 0;
     while (loopMs > 0)
     {
       rc = mosquitto_loop(mosq, 100, 1);
       if (rc != MOSQ_ERR_SUCCESS) break;
       loopMs -= 100;
-      // QoS 0: nothing to wait for after publish.
-      if (qos == 0) { ok = true; break; }
-      // For QoS 1/2 the ack arrives via internal queue. A short loop is
-      // good enough for our notify-and-forget usage.
-      if (loopMs <= 4500) { ok = (rc == MOSQ_ERR_SUCCESS); break; }
+      if (qos == 0)
+      {
+        // Once the PUBLISH bytes have left the socket (want_write false), pump a
+        // couple more cycles before disconnecting so the receiving broker has
+        // time to route the QoS-0 message to subscribers. A single cycle is
+        // enough over plain TCP but not over TLS, where the connection teardown
+        // would otherwise race the broker's routing and drop the notification.
+        if (!mosquitto_want_write(mosq) && (++postFlush >= 3)) { ok = true; break; }
+      }
+      else if (loopMs <= 4500)
+      {
+        ok = (rc == MOSQ_ERR_SUCCESS);
+        break;
+      }
     }
-    if (qos == 0 && rc == MOSQ_ERR_SUCCESS) ok = true;
 
     mosquitto_disconnect(mosq);
   } while (0);
