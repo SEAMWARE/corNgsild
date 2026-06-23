@@ -309,19 +309,19 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
   //
   if (op == LdNotifyEntityDelete)
   {
-    KjNode* out = kjObject(NULL, NULL);
+    KjNode* out = kjObject(swRest.kjsonP, NULL);
 
     KjNode* srcId   = kjLookup(entityP, "id");
     KjNode* srcType = kjLookup(entityP, "type");
-    if (srcId   != NULL) kjChildAdd(out, kjClone(NULL, srcId));
-    if (srcType != NULL) kjChildAdd(out, kjClone(NULL, srcType));
+    if (srcId   != NULL) kjChildAdd(out, kjClone(swRest.kjsonP, srcId));
+    if (srcType != NULL) kjChildAdd(out, kjClone(swRest.kjsonP, srcType));
 
     char     deletedIso[48];
     deletedIso[0] = 0;
     if (deletedAtNs != 0)
     {
       nsToIsoLocal(deletedAtNs, deletedIso, sizeof(deletedIso));
-      kjChildAdd(out, kjString(NULL, "deletedAt", deletedIso));
+      kjChildAdd(out, kjString(swRest.kjsonP, "deletedAt", deletedIso));
     }
 
     if (itemP->sysAttrs)
@@ -336,18 +336,18 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
       {
         char iso[48];
         nsToIsoLocal((uint64_t) srcCreated->value.i, iso, sizeof(iso));
-        kjChildAdd(out, kjString(NULL, LD_VOCAB_CREATED_AT, iso));
+        kjChildAdd(out, kjString(swRest.kjsonP, LD_VOCAB_CREATED_AT, iso));
       }
       else if (srcCreated != NULL)
-        kjChildAdd(out, kjClone(NULL, srcCreated));
+        kjChildAdd(out, kjClone(swRest.kjsonP, srcCreated));
       if (srcModified != NULL && srcModified->type == KjInt)
       {
         char iso[48];
         nsToIsoLocal((uint64_t) srcModified->value.i, iso, sizeof(iso));
-        kjChildAdd(out, kjString(NULL, LD_VOCAB_MODIFIED_AT, iso));
+        kjChildAdd(out, kjString(swRest.kjsonP, LD_VOCAB_MODIFIED_AT, iso));
       }
       else if (srcModified != NULL)
-        kjChildAdd(out, kjClone(NULL, srcModified));
+        kjChildAdd(out, kjClone(swRest.kjsonP, srcModified));
     }
 
     int triggerMask = (itemP->triggerMask != 0) ? itemP->triggerMask : LD_TRIGGER_DEFAULT;
@@ -383,8 +383,8 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
             typeStr = tNodeP->value.s;
         }
 
-        KjNode* nullAttr = kjObject(NULL, attrP->name);
-        kjChildAdd(nullAttr, kjString(NULL, "type", typeStr));
+        KjNode* nullAttr = kjObject(swRest.kjsonP, attrP->name);
+        kjChildAdd(nullAttr, kjString(swRest.kjsonP, "type", typeStr));
         // Entity-delete fixtures (ETSI 046_37) want the bare null marker
         // even for LanguageProperty (`"languageMap": "urn:ngsi-ld:null"`),
         // matching § 5.8.6's bare form. The attribute-delete branch above
@@ -405,7 +405,7 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
           else if (typeStr[4] == 'R') primaryKey = "objectList";   // ListRelationship
           break;
         }
-        kjChildAdd(nullAttr, kjString(NULL, primaryKey, LD_VOCAB_NGSILD_NULL));
+        kjChildAdd(nullAttr, kjString(swRest.kjsonP, primaryKey, LD_VOCAB_NGSILD_NULL));
 
         if (itemP->sysAttrs && anyInstP != NULL && anyInstP->type == KjObject)
         {
@@ -420,20 +420,20 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
           {
             char iso[48];
             nsToIsoLocal((uint64_t) aCreated->value.i, iso, sizeof(iso));
-            kjChildAdd(nullAttr, kjString(NULL, LD_VOCAB_CREATED_AT, iso));
+            kjChildAdd(nullAttr, kjString(swRest.kjsonP, LD_VOCAB_CREATED_AT, iso));
           }
           else if (aCreated != NULL)
-            kjChildAdd(nullAttr, kjClone(NULL, aCreated));
+            kjChildAdd(nullAttr, kjClone(swRest.kjsonP, aCreated));
           if (aModified != NULL && aModified->type == KjInt)
           {
             char iso[48];
             nsToIsoLocal((uint64_t) aModified->value.i, iso, sizeof(iso));
-            kjChildAdd(nullAttr, kjString(NULL, LD_VOCAB_MODIFIED_AT, iso));
+            kjChildAdd(nullAttr, kjString(swRest.kjsonP, LD_VOCAB_MODIFIED_AT, iso));
           }
           else if (aModified != NULL)
-            kjChildAdd(nullAttr, kjClone(NULL, aModified));
+            kjChildAdd(nullAttr, kjClone(swRest.kjsonP, aModified));
           if (deletedIso[0] != 0)
-            kjChildAdd(nullAttr, kjString(NULL, "deletedAt", deletedIso));
+            kjChildAdd(nullAttr, kjString(swRest.kjsonP, "deletedAt", deletedIso));
         }
 
         // showChanges (§ 5.8.6 / § 5.2.14.1): on entity-delete, every
@@ -458,7 +458,7 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
               else if (typeStr[4] == 'R') prevKey = "previousObjectList";   // ListRelationship
               break;
             }
-            KjNode* prev = kjClone(NULL, preVal);
+            KjNode* prev = kjClone(swRest.kjsonP, preVal);
             prev->name = (char*) prevKey;
             kjChildAdd(nullAttr, prev);
           }
@@ -471,7 +471,7 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
     return out;
   }
 
-  KjNode* entityClone = kjClone(NULL, entityP);
+  KjNode* entityClone = kjClone(swRest.kjsonP, entityP);
 
   //
   // Attribute-delete markers (§ 5.8.6): for every attributeDeleted change
@@ -537,23 +537,23 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
       }
 
       // Build the deleted-instance node: { type, value/lmap=null, [deletedAt] }.
-      KjNode* inst = kjObject(NULL, NULL);
-      kjChildAdd(inst, kjString(NULL, "type", typeStr));
+      KjNode* inst = kjObject(swRest.kjsonP, NULL);
+      kjChildAdd(inst, kjString(swRest.kjsonP, "type", typeStr));
       // Per § 5.8.6, LanguageProperty deletion uses `languageMap:
       // {"@none": "urn:ngsi-ld:null"}`, not the bare null marker. All
       // other types put the null marker directly as the value.
       if (strcmp(typeStr, "LanguageProperty") == 0)
       {
-        KjNode* lmap = kjObject(NULL, "value");
-        kjChildAdd(lmap, kjString(NULL, "@none", LD_VOCAB_NGSILD_NULL));
+        KjNode* lmap = kjObject(swRest.kjsonP, "value");
+        kjChildAdd(lmap, kjString(swRest.kjsonP, "@none", LD_VOCAB_NGSILD_NULL));
         kjChildAdd(inst, lmap);
       }
       else
       {
-        kjChildAdd(inst, kjString(NULL, "value", LD_VOCAB_NGSILD_NULL));
+        kjChildAdd(inst, kjString(swRest.kjsonP, "value", LD_VOCAB_NGSILD_NULL));
       }
       if (itemP->sysAttrs == true && deletedNs != 0)
-        kjChildAdd(inst, kjInteger(NULL, LD_VOCAB_DELETED_AT, deletedNs));
+        kjChildAdd(inst, kjInteger(swRest.kjsonP, LD_VOCAB_DELETED_AT, deletedNs));
 
       if (existingAttr != NULL && deletedDs != NULL)
       {
@@ -569,7 +569,7 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
         // Whole-attribute deletion: inject a new wrapper with a single
         // @none instance carrying the null marker.
         inst->name = (char*) "@none";
-        KjNode* wrapper = kjObject(NULL, attrP->value.s);
+        KjNode* wrapper = kjObject(swRest.kjsonP, attrP->value.s);
         kjChildAdd(wrapper, inst);
         kjChildAdd(entityClone, wrapper);
       }
@@ -681,13 +681,13 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
       {
         // attribute was deleted from entity — add a minimal wrapper
         // carrying only the previousX marker so showChanges sees it.
-        attrOutP = kjObject(NULL, attrNameP->value.s);
+        attrOutP = kjObject(swRest.kjsonP, attrNameP->value.s);
         kjChildAdd(entityClone, attrOutP);
-        if (preType != NULL) kjChildAdd(attrOutP, kjClone(NULL, preType));
+        if (preType != NULL) kjChildAdd(attrOutP, kjClone(swRest.kjsonP, preType));
       }
       if (attrOutP->type != KjObject) continue;
 
-      KjNode* c = kjClone(NULL, preVal);
+      KjNode* c = kjClone(swRest.kjsonP, preVal);
       c->name = (char*) prevKey;
       kjChildAdd(attrOutP, c);
     }
@@ -765,13 +765,13 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   char isoTimeBuf[64];
   isoNow(isoTimeBuf, sizeof(isoTimeBuf));
 
-  KjNode* notification = kjObject(NULL, NULL);
-  kjChildAdd(notification, kjString(NULL, "id",             notifIdGenerate()));
-  kjChildAdd(notification, kjString(NULL, "type",           "Notification"));
-  kjChildAdd(notification, kjString(NULL, "subscriptionId", itemP->subId));
-  kjChildAdd(notification, kjString(NULL, "notifiedAt",     isoTimeBuf));
+  KjNode* notification = kjObject(swRest.kjsonP, NULL);
+  kjChildAdd(notification, kjString(swRest.kjsonP, "id",             notifIdGenerate()));
+  kjChildAdd(notification, kjString(swRest.kjsonP, "type",           "Notification"));
+  kjChildAdd(notification, kjString(swRest.kjsonP, "subscriptionId", itemP->subId));
+  kjChildAdd(notification, kjString(swRest.kjsonP, "notifiedAt",     isoTimeBuf));
 
-  KjNode* dataArray = kjArray(NULL, "data");
+  KjNode* dataArray = kjArray(swRest.kjsonP, "data");
   for (int i = 0; i < n; i++)
     kjChildAdd(dataArray, buildNotifDataEntry(itemP, entries[i]));
   kjChildAdd(notification, dataArray);
@@ -845,7 +845,7 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
       for (KjNode* ep = dataP->value.firstChildP; ep != NULL; ep = ep->next)
       {
         if (ep->type == KjObject && kjLookup(ep, "@context") == NULL)
-          kjChildAdd(ep, kjString(NULL, "@context", itemP->contextUrl));
+          kjChildAdd(ep, kjString(swRest.kjsonP, "@context", itemP->contextUrl));
       }
     }
   }
@@ -988,6 +988,7 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
     itemP->lastFailure  = swRest.requestStartTime;
   }
 
+  swRestClientResponseCleanup(&resp);
   ldNotifyStatsHookInvoke(false /*csrSub*/, ok);
 }
 
