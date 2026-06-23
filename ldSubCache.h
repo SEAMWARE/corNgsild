@@ -74,4 +74,12 @@ extern bool ldSubCacheItemRemove(LdSubCache* cacheP, const char* subId);
 //
 extern void ldSubCacheRelease(LdSubCache* cacheP);
 
+
+
+// -----------------------------------------------------------------------------
+//
+// ldSubCacheSubordinatesFree - free a derived-sub (subordinate) mapping list
+//
+extern void ldSubCacheSubordinatesFree(LdSubSubordinate* head);
+
 #endif  // SWNGSILD_LDSUBCACHE_OPS_H_

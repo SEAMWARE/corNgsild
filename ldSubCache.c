@@ -150,9 +150,9 @@ static char** watchedAttrsExtract(KjNode* watchedP)
 
 // -----------------------------------------------------------------------------
 //
-// subordinatesFree - free the linked list of derived-sub mappings
+// ldSubCacheSubordinatesFree - free the linked list of derived-sub mappings
 //
-static void subordinatesFree(LdSubSubordinate* head)
+void ldSubCacheSubordinatesFree(LdSubSubordinate* head)
 {
   while (head != NULL)
   {
@@ -716,7 +716,7 @@ static void cacheItemFree(LdSubCacheItem* itemP)
   if (itemP->datasetIdV != NULL)
     free(itemP->datasetIdV);     // array only — strings are borrowed
 
-  subordinatesFree(itemP->subordinateP);
+  ldSubCacheSubordinatesFree(itemP->subordinateP);
 
   // qExpr, scopeExpr, geoRel were malloc'd by parsers — need recursive free
   // For now, accept the leak; these are small and the cache lives for the
