@@ -43,7 +43,7 @@
 // `nowNs` is the broker's request-start time in epoch-nanoseconds, used
 // for expiresAt comparison.
 //
-extern bool ldDistInstanceShouldReplace(KjNode* destInstP, KjNode* srcInstP, uint64_t nowNs);
+extern bool ldDistInstanceShouldReplace(KjNode* destInstP, KjNode* srcInstP, int64_t nowNs);
 
 
 
@@ -52,6 +52,6 @@ extern bool ldDistInstanceShouldReplace(KjNode* destInstP, KjNode* srcInstP, uin
 // ldDistInstanceIsExpired - exposed for callers that want to drop an
 // instance entirely when it's the only candidate and it's expired.
 //
-extern bool ldDistInstanceIsExpired(KjNode* instP, uint64_t nowNs);
+extern bool ldDistInstanceIsExpired(KjNode* instP, int64_t nowNs);
 
 #endif  // SWNGSILD_LDDISTMERGE_H_

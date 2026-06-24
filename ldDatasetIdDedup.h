@@ -41,6 +41,6 @@
 // arrayP must be a KjArray of attribute-instance objects (API shape).
 // nowNs is used for the expiresAt check.
 //
-extern void ldDatasetIdDedup(KjNode* arrayP, uint64_t nowNs);
+extern void ldDatasetIdDedup(KjNode* arrayP, int64_t nowNs);
 
 #endif  // SWNGSILD_LDDATASETIDDEDUP_H_

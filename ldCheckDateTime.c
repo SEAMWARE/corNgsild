@@ -9,6 +9,7 @@
 #include <ctype.h>                                       // isdigit
 #include <stdlib.h>                                      // mktime
 #include <string.h>                                      // strlen, memset
+#include <stdint.h>                                      // int64_t
 #include <time.h>                                        // struct tm, timegm, strptime
 
 #include "swNgsild/ldCheckDateTime.h"                    // Own interface
@@ -17,22 +18,26 @@
 
 // -----------------------------------------------------------------------------
 //
-// ldCheckDateTime - validate and parse an ISO 8601 datetime string
+// ldCheckDateTime - validate (and optionally parse) an ISO 8601 datetime string
 //
-// Returns epoch seconds on success, -1.0 on failure.
-// Accepts: YYYY-MM-DDThh:mm:ss[.sss][Z | +/-hh:mm].
-// A missing timezone defaults to UTC (ISO 8601 / § 4.6.x).
+// Returns true if the string is a valid, representable DateTime. When secondsP
+// is non-NULL it receives the epoch seconds. Accepts:
+//   YYYY-MM-DDThh:mm:ss[.sss][Z | +/-hh:mm]; a missing timezone is UTC.
 //
-double ldCheckDateTime(const char* dateTimeStr)
+// A bool result (not a sentinel) is deliberate: epoch-ns is signed, so -1.0s
+// (1969-12-31T23:59:59Z) is a perfectly valid instant and could never have been
+// distinguished from an old "-1.0 == error" return.
+//
+bool ldCheckDateTime(const char* dateTimeStr, double* secondsP)
 {
   if (dateTimeStr == NULL)
-    return -1.0;
+    return false;
 
   int len = strlen(dateTimeStr);
 
   // Minimum: "YYYY-MM-DDThh:mm:ss" = 19 chars (timezone optional)
   if (len < 19)
-    return -1.0;
+    return false;
 
   // Check format: YYYY-MM-DDThh:mm:ss
   if (!isdigit(dateTimeStr[0])  || !isdigit(dateTimeStr[1])  || !isdigit(dateTimeStr[2])  || !isdigit(dateTimeStr[3])  ||
@@ -47,7 +52,7 @@ double ldCheckDateTime(const char* dateTimeStr)
       dateTimeStr[16] != ':'    ||
       !isdigit(dateTimeStr[17]) || !isdigit(dateTimeStr[18]))
   {
-    return -1.0;
+    return false;
   }
 
   struct tm tm;
@@ -61,11 +66,23 @@ double ldCheckDateTime(const char* dateTimeStr)
   tm.tm_sec  = (dateTimeStr[17] - '0') * 10 + (dateTimeStr[18] - '0');
 
   // Basic range checks
-  if (tm.tm_mon < 0 || tm.tm_mon > 11)   return -1.0;
-  if (tm.tm_mday < 1 || tm.tm_mday > 31) return -1.0;
-  if (tm.tm_hour > 23)                    return -1.0;
-  if (tm.tm_min > 59)                     return -1.0;
-  if (tm.tm_sec > 60)                     return -1.0;  // 60 for leap second
+  if (tm.tm_mon < 0 || tm.tm_mon > 11)   return false;
+  if (tm.tm_mday < 1 || tm.tm_mday > 31) return false;
+  if (tm.tm_hour > 23)                    return false;
+  if (tm.tm_min > 59)                     return false;
+  if (tm.tm_sec > 60)                     return false;  // 60 for leap second
+
+  // Epoch-nanoseconds is a signed int64, representable only from
+  // 1677-09-21T00:12:44Z to 2262-04-11T23:47:16Z. A DateTime outside that
+  // window overflows the seconds→nanoseconds multiply and wraps to a garbage
+  // instant, so reject it (→ 400). The two boundary years straddle the limit,
+  // so the safe whole-year window is [1678, 2261] — conservatively reject the
+  // boundary years rather than allow their out-of-range parts.
+  {
+    int year = tm.tm_year + 1900;
+    if (year < 1678 || year > 2261)
+      return false;
+  }
 
   // Check timezone: must end with 'Z' or '+/-hh:mm'
   const char* tz = dateTimeStr + 19;
@@ -92,12 +109,15 @@ double ldCheckDateTime(const char* dateTimeStr)
   }
   else
   {
-    return -1.0;
+    return false;
   }
 
-  // Lexically valid — return the epoch (seconds) via the single converter so the
-  // timezone offset is applied consistently (callers such as expiresAt use it).
-  return (double) ldIsoToNanoseconds(dateTimeStr) / 1000000000.0;
+  // Valid and representable — hand back the epoch (seconds) via the single
+  // converter so the timezone offset is applied consistently.
+  if (secondsP != NULL)
+    *secondsP = (double) ldIsoToNanoseconds(dateTimeStr) / 1000000000.0;
+
+  return true;
 }
 
 
@@ -106,7 +126,7 @@ double ldCheckDateTime(const char* dateTimeStr)
 //
 // ldIsoToNanoseconds - convert ISO 8601 date-time string to epoch nanoseconds
 //
-uint64_t ldIsoToNanoseconds(const char* iso)
+int64_t ldIsoToNanoseconds(const char* iso)
 {
   if (iso == NULL)
     return 0;
@@ -118,13 +138,15 @@ uint64_t ldIsoToNanoseconds(const char* iso)
   if (rest == NULL)
     return 0;
 
-  uint64_t ns = (uint64_t) timegm(&tm) * 1000000000ULL;
+  // Signed: timegm is negative for pre-1970 instants, and epoch-ns is stored and
+  // compared as signed int64 (range ~1677..2262) so negatives order correctly.
+  int64_t ns = (int64_t) timegm(&tm) * 1000000000LL;
 
   if (*rest == '.')
   {
     rest++;
-    uint64_t frac   = 0;
-    int      digits = 0;
+    int64_t frac   = 0;
+    int     digits = 0;
     while (*rest >= '0' && *rest <= '9' && digits < 9)
     {
       frac = frac * 10 + (*rest - '0');
@@ -160,8 +182,8 @@ uint64_t ldIsoToNanoseconds(const char* iso)
         om = (rest[0] - '0') * 10 + (rest[1] - '0');
     }
 
-    long long offsetNs = (long long) (oh * 3600 + om * 60) * 1000000000LL * sign;
-    ns = (uint64_t) ((long long) ns - offsetNs);
+    int64_t offsetNs = (int64_t) (oh * 3600 + om * 60) * 1000000000LL * sign;
+    ns -= offsetNs;
   }
 
   return ns;

@@ -168,7 +168,7 @@ static bool ldValueCheck(const char* term, const char* datatype, KjNode* valueP)
 
   if (datatypeMatches(datatype, "dateTime") || datatypeMatches(datatype, "dateTimeStamp"))
   {
-    if (valueP->type != KjString || ldCheckDateTime(valueP->value.s) < 0)
+    if (valueP->type != KjString || !ldCheckDateTime(valueP->value.s, NULL))
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Value",
               "'%s' is bound to @type:%s but value is not a valid ISO 8601 dateTime",

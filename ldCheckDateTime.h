@@ -9,7 +9,8 @@
 // Copyright 2026 Seamware
 //
 //
-#include <stdint.h>                                   // uint64_t
+#include <stdint.h>                                   // int64_t
+#include <stdbool.h>                                  // bool
 
 
 
@@ -17,9 +18,11 @@
 //
 // ldCheckDateTime -
 //
-// Returns epoch seconds on success, -1.0 on failure.
+// Returns true if the string is a valid, representable ISO 8601 DateTime
+// (epoch-ns fits a signed int64: ~1677-09-21 .. 2262-04-11). When secondsP is
+// non-NULL it receives the epoch seconds.
 //
-extern double ldCheckDateTime(const char* dateTimeStr);
+extern bool ldCheckDateTime(const char* dateTimeStr, double* secondsP);
 
 
 
@@ -33,6 +36,6 @@ extern double ldCheckDateTime(const char* dateTimeStr);
 // Returns 0 for NULL input. Does no validation beyond what strptime tolerates —
 // pair with ldCheckDateTime() when the string is coming from untrusted input.
 //
-extern uint64_t ldIsoToNanoseconds(const char* iso);
+extern int64_t  ldIsoToNanoseconds(const char* iso);
 
 #endif  // SWNGSILD_LDCHECKDATETIME_H_

@@ -8,7 +8,7 @@
 // § 4.5.5.3 dedup for a single local-write payload — see header.
 //
 #include <stdbool.h>                                     // bool
-#include <stdint.h>                                      // uint64_t
+#include <stdint.h>                                      // int64_t
 #include <string.h>                                      // strcmp
 
 #include "kjson/KjNode.h"                                // KjNode
@@ -25,10 +25,10 @@
 //
 // nodeNs - extract a nanosecond timestamp from a KjNode (KjInt or KjString)
 //
-static uint64_t nodeNs(KjNode* nodeP)
+static int64_t nodeNs(KjNode* nodeP)
 {
   if (nodeP == NULL)             return 0;
-  if (nodeP->type == KjInt)      return (uint64_t) nodeP->value.i;
+  if (nodeP->type == KjInt)      return (int64_t) nodeP->value.i;
   if (nodeP->type == KjString)   return ldIsoToNanoseconds(nodeP->value.s);
   return 0;
 }
@@ -39,9 +39,9 @@ static uint64_t nodeNs(KjNode* nodeP)
 //
 // instanceIsExpired - true if the instance has an expiresAt in the past
 //
-static bool instanceIsExpired(KjNode* instP, uint64_t nowNs)
+static bool instanceIsExpired(KjNode* instP, int64_t nowNs)
 {
-  uint64_t exp = nodeNs(kjLookup(instP, LD_VOCAB_EXPIRES_AT));
+  int64_t exp = nodeNs(kjLookup(instP, LD_VOCAB_EXPIRES_AT));
   if (exp == 0) return false;
   return exp <= nowNs;
 }
@@ -53,15 +53,15 @@ static bool instanceIsExpired(KjNode* instP, uint64_t nowNs)
 // laterWins - pairwise comparator. Returns true when bP should oust aP per
 // § 4.5.5.3. "later in array order" is the indeterminate-tiebreak choice.
 //
-static bool laterWins(KjNode* aP, KjNode* bP, uint64_t nowNs)
+static bool laterWins(KjNode* aP, KjNode* bP, int64_t nowNs)
 {
   bool aExp = instanceIsExpired(aP, nowNs);
   bool bExp = instanceIsExpired(bP, nowNs);
   if (bExp && !aExp) return false;
   if (!bExp && aExp) return true;
 
-  uint64_t aObs = nodeNs(kjLookup(aP, LD_VOCAB_OBSERVED_AT));
-  uint64_t bObs = nodeNs(kjLookup(bP, LD_VOCAB_OBSERVED_AT));
+  int64_t aObs = nodeNs(kjLookup(aP, LD_VOCAB_OBSERVED_AT));
+  int64_t bObs = nodeNs(kjLookup(bP, LD_VOCAB_OBSERVED_AT));
 
   if (aObs > 0 || bObs > 0)
   {
@@ -99,7 +99,7 @@ static bool sameDataset(KjNode* aP, KjNode* bP)
 //
 // ldDatasetIdDedup -
 //
-void ldDatasetIdDedup(KjNode* arrayP, uint64_t nowNs)
+void ldDatasetIdDedup(KjNode* arrayP, int64_t nowNs)
 {
   if (arrayP == NULL || arrayP->type != KjArray) return;
 

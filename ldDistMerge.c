@@ -9,7 +9,7 @@
 // merge. See header for the algorithm.
 //
 #include <stdbool.h>                                     // bool
-#include <stdint.h>                                      // uint64_t
+#include <stdint.h>                                      // int64_t
 #include <string.h>                                      // strcmp
 
 #include "kjson/KjNode.h"                                // KjNode
@@ -30,13 +30,13 @@
 // payloads that haven't passed through normalization yet.
 // Returns 0 when nodeP is NULL or unparsable.
 //
-static uint64_t nodeNs(KjNode* nodeP)
+static int64_t nodeNs(KjNode* nodeP)
 {
   if (nodeP == NULL)
     return 0;
 
   if (nodeP->type == KjInt)
-    return (uint64_t) nodeP->value.i;
+    return (int64_t) nodeP->value.i;
 
   if (nodeP->type == KjString)
     return ldIsoToNanoseconds(nodeP->value.s);
@@ -50,12 +50,12 @@ static uint64_t nodeNs(KjNode* nodeP)
 //
 // ldDistInstanceIsExpired -
 //
-bool ldDistInstanceIsExpired(KjNode* instP, uint64_t nowNs)
+bool ldDistInstanceIsExpired(KjNode* instP, int64_t nowNs)
 {
   if (instP == NULL)
     return false;
 
-  uint64_t exp = nodeNs(kjLookup(instP, LD_VOCAB_EXPIRES_AT));
+  int64_t exp = nodeNs(kjLookup(instP, LD_VOCAB_EXPIRES_AT));
   if (exp == 0)
     return false;  // no expiresAt → never expires
 
@@ -68,7 +68,7 @@ bool ldDistInstanceIsExpired(KjNode* instP, uint64_t nowNs)
 //
 // ldDistInstanceShouldReplace -
 //
-bool ldDistInstanceShouldReplace(KjNode* destInstP, KjNode* srcInstP, uint64_t nowNs)
+bool ldDistInstanceShouldReplace(KjNode* destInstP, KjNode* srcInstP, int64_t nowNs)
 {
   if (srcInstP == NULL)  return false;
   if (destInstP == NULL) return true;
@@ -84,8 +84,8 @@ bool ldDistInstanceShouldReplace(KjNode* destInstP, KjNode* srcInstP, uint64_t n
   // Step 2 — observedAt. If at least one candidate has it, only those
   // candidates compete; instances without observedAt are eliminated when
   // any other has it (per spec "if present" reading).
-  uint64_t destObs = nodeNs(kjLookup(destInstP, LD_VOCAB_OBSERVED_AT));
-  uint64_t srcObs  = nodeNs(kjLookup(srcInstP,  LD_VOCAB_OBSERVED_AT));
+  int64_t destObs = nodeNs(kjLookup(destInstP, LD_VOCAB_OBSERVED_AT));
+  int64_t srcObs  = nodeNs(kjLookup(srcInstP,  LD_VOCAB_OBSERVED_AT));
 
   if (destObs > 0 || srcObs > 0)
   {
@@ -95,8 +95,8 @@ bool ldDistInstanceShouldReplace(KjNode* destInstP, KjNode* srcInstP, uint64_t n
   }
 
   // Step 3 — fall back to modifiedAt.
-  uint64_t destMod = nodeNs(kjLookup(destInstP, LD_VOCAB_MODIFIED_AT));
-  uint64_t srcMod  = nodeNs(kjLookup(srcInstP,  LD_VOCAB_MODIFIED_AT));
+  int64_t destMod = nodeNs(kjLookup(destInstP, LD_VOCAB_MODIFIED_AT));
+  int64_t srcMod  = nodeNs(kjLookup(srcInstP,  LD_VOCAB_MODIFIED_AT));
 
   if (srcMod > destMod) return true;
 

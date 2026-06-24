@@ -452,7 +452,7 @@ static bool checkTimeInterval(KjNode* tiP, const char* fieldName)
             "'%s.startAt' must be a DateTime string", fieldName);
     return false;
   }
-  if (ldCheckDateTime(startP->value.s) < 0)
+  if (!ldCheckDateTime(startP->value.s, NULL))
   {
     ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
             "'%s.startAt' is not a valid ISO 8601 DateTime", fieldName);
@@ -467,7 +467,7 @@ static bool checkTimeInterval(KjNode* tiP, const char* fieldName)
               "'%s.endAt' must be a DateTime string", fieldName);
       return false;
     }
-    if (ldCheckDateTime(endP->value.s) < 0)
+    if (!ldCheckDateTime(endP->value.s, NULL))
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
               "'%s.endAt' is not a valid ISO 8601 DateTime", fieldName);

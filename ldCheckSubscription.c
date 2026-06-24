@@ -827,8 +827,8 @@ bool ldCheckSubscription(KjNode* subP, LdOp op, KAlloc* kaP)
   if (expiresAtP != NULL)
   {
     STRING_CHECK(expiresAtP, "Invalid DateTime", "'expiresAt' must be a DateTime string");
-    double expiresAtSec = ldCheckDateTime(expiresAtP->value.s);
-    if (expiresAtSec < 0)
+    double expiresAtSec;
+    if (!ldCheckDateTime(expiresAtP->value.s, &expiresAtSec))
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid DateTime",
               "'expiresAt' is not a valid ISO 8601 DateTime");

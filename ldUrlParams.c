@@ -632,7 +632,7 @@ void ldParamHook(const char* name, const char* value)
   }
   else if (strcmp(name, "timeAt") == 0)
   {
-    if (ldCheckDateTime(value) < 0)
+    if (!ldCheckDateTime(value, NULL))
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid temporal query",
               "timeAt is not a valid ISO 8601 DateTime: '%s'", value);
@@ -643,7 +643,7 @@ void ldParamHook(const char* name, const char* value)
   }
   else if (strcmp(name, "endTimeAt") == 0)
   {
-    if (ldCheckDateTime(value) < 0)
+    if (!ldCheckDateTime(value, NULL))
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid temporal query",
               "endTimeAt is not a valid ISO 8601 DateTime: '%s'", value);
@@ -678,7 +678,7 @@ void ldParamHook(const char* name, const char* value)
   }
   else if (strcmp(name, "observedAt") == 0)
   {
-    if (ldCheckDateTime(value) < 0)
+    if (!ldCheckDateTime(value, NULL))
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid observedAt",
               "observedAt query parameter is not a valid ISO 8601 DateTime: '%s'", value);

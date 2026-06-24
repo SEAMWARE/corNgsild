@@ -481,7 +481,7 @@ bool ldCheckAttribute(KjNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc*
       KjNode* atValueP = kjLookup(valueNodeP, "@value");
       if ((atTypeP != NULL) && (atTypeP->type == KjString) && (strcmp(atTypeP->value.s, "DateTime") == 0))
       {
-        if ((atValueP->type != KjString) || (ldCheckDateTime(atValueP->value.s) < 0))
+        if ((atValueP->type != KjString) || (!ldCheckDateTime(atValueP->value.s, NULL)))
         {
           ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid DateTime Value",
                   "Attribute '%s': '@value' is not a valid ISO 8601 DateTime for '@type':'DateTime'", attrP->name);
@@ -514,7 +514,7 @@ bool ldCheckAttribute(KjNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc*
           ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid observedAt", "Attribute '%s': 'observedAt' must be a string", attrP->name);
           return false;
         }
-        if (ldCheckDateTime(childP->value.s) < 0)
+        if (!ldCheckDateTime(childP->value.s, NULL))
         {
           ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid observedAt", "Attribute '%s': 'observedAt' is not a valid ISO 8601 DateTime: '%s'", attrP->name, childP->value.s);
           return false;

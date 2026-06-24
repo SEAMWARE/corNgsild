@@ -7,7 +7,7 @@
 //
 #include <stdbool.h>                                     // bool
 #include <stddef.h>                                      // NULL
-#include <stdint.h>                                      // uint64_t
+#include <stdint.h>                                      // int64_t
 #include <string.h>                                      // strcmp
 
 #include "kjson/KjNode.h"                                // KjNode
@@ -49,7 +49,7 @@ static bool isAttributeContainer(KjNode* nodeP)
 // Set or shorten the per-instance expiresAt to entityIso when entityIso is
 // earlier than what's already there.
 //
-static void applyToInstance(KjNode* instP, const char* entityIso, uint64_t entityNs, Kjson* kjsonP)
+static void applyToInstance(KjNode* instP, const char* entityIso, int64_t entityNs, Kjson* kjsonP)
 {
   KjNode* attrExpP = kjLookup(instP, LD_VOCAB_EXPIRES_AT);
 
@@ -74,7 +74,7 @@ static void applyToInstance(KjNode* instP, const char* entityIso, uint64_t entit
   if (dateP == NULL)
     return;
 
-  uint64_t attrNs = ldIsoToNanoseconds(dateP->value.s);
+  int64_t  attrNs = ldIsoToNanoseconds(dateP->value.s);
   if (attrNs == 0)
     return;
 
@@ -97,7 +97,7 @@ void ldExpiresAtPropagate(KjNode* entityP, Kjson* kjsonP)
   if (entityExpP == NULL || entityExpP->type != KjString)
     return;
 
-  uint64_t entityNs = ldIsoToNanoseconds(entityExpP->value.s);
+  int64_t  entityNs = ldIsoToNanoseconds(entityExpP->value.s);
   if (entityNs == 0)
     return;
 

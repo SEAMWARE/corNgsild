@@ -189,7 +189,7 @@ do                                                                              
 #define DATETIME_CHECK(str, detail)                                                                                \
 do                                                                                                                 \
 {                                                                                                                  \
-  if (ldCheckDateTime(str) < 0)                                                                                    \
+  if (!ldCheckDateTime(str, NULL))                                                                                    \
   {                                                                                                                \
     ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid DateTime", "%s", detail);                                     \
     return false;                                                                                                  \
