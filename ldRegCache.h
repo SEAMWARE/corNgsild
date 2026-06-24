@@ -70,7 +70,15 @@ extern void ldRegCacheItemUnpin(LdRegCacheItem* itemP);
 // regTree is kjClone'd internally (malloc allocator) — caller keeps ownership
 // of the original.
 //
-extern LdRegCacheItem* ldRegCacheItemAdd(LdRegCache* cacheP, KjNode* regTree);
+// kaP is a TRANSIENT arena used only to resolve a CSR's forwarding @context
+// (contextSourceInfo.jsonldContext): the downloaded context is parsed into kaP
+// while the lasting SwldContext is cloned into the process-lifetime context
+// cache. The caller's arena is reset right after (per-request arena at runtime,
+// the startup buffer during cache reload), so the parse tree is freed then.
+// May be NULL (no transient arena → the parse tree falls back to malloc and
+// leaks — every real caller passes &swRest.kalloc).
+//
+extern LdRegCacheItem* ldRegCacheItemAdd(LdRegCache* cacheP, KjNode* regTree, KAlloc* kaP);
 
 
 

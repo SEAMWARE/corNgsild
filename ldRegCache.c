@@ -69,13 +69,29 @@ void ldRegCacheProbePending(void)
 {
   for (int i = 0; i < swNgsild.probePendingN; i++)
   {
-    LdRegCacheItem* itemP = ldRegCacheItemLookup(swNgsild.probePendingV[i].cacheP, swNgsild.probePendingV[i].regId);
+    LdRegCache* cacheP = swNgsild.probePendingV[i].cacheP;
+
+    // Pin the item under the rdlock so a concurrent CSR remove (which frees
+    // under the wrlock) can't free it out from under the probe + field writes
+    // below. Without the pin this was a use-after-free: the post-response probe
+    // looked up and wrote the item lock-free while a PATCH/DELETE freed it
+    // (cacheItemRetireOrFree). Pinned, the remove only RETIRES it (reaped later
+    // once refCount hits 0), so it stays valid here. The slow source-identity
+    // probe runs OUTSIDE the lock (pin, not lock, guards the item).
+    ldRegCacheRdLock(cacheP);
+    LdRegCacheItem* itemP = ldRegCacheItemLookup(cacheP, swNgsild.probePendingV[i].regId);
+    if (itemP != NULL)
+      ldRegCacheItemPin(itemP);
+    ldRegCacheUnlock(cacheP);
 
     if (itemP != NULL && itemP->endpoint != NULL && itemP->csourceAlias == NULL)
     {
       itemP->probedAlias  = ldProbeSourceIdentity(itemP->endpoint, itemP->tenant, 0);
       itemP->csourceAlias = itemP->probedAlias;   // may be NULL on failure
     }
+
+    if (itemP != NULL)
+      ldRegCacheItemUnpin(itemP);
 
     free(swNgsild.probePendingV[i].regId);
   }
@@ -496,7 +512,7 @@ static void cacheItemRetireOrFree(LdRegCache* cacheP, LdRegCacheItem* itemP)
 //
 // ldRegCacheItemAdd -
 //
-LdRegCacheItem* ldRegCacheItemAdd(LdRegCache* cacheP, KjNode* regTree)
+LdRegCacheItem* ldRegCacheItemAdd(LdRegCache* cacheP, KjNode* regTree, KAlloc* kaP)
 {
   if (cacheP == NULL || regTree == NULL)
     return NULL;
@@ -677,7 +693,7 @@ LdRegCacheItem* ldRegCacheItemAdd(LdRegCache* cacheP, KjNode* regTree)
     {
       if (strcasecmp(itemP->contextSourceInfoKV[i], "jsonldContext") == 0)
       {
-        itemP->forwardCtxP = swldContextFromUrl(itemP->contextSourceInfoKV[i + 1], NULL);
+        itemP->forwardCtxP = swldContextFromUrl(itemP->contextSourceInfoKV[i + 1], kaP);
         break;
       }
     }
