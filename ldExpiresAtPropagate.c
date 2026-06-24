@@ -88,7 +88,7 @@ static void applyToInstance(KjNode* instP, const char* entityIso, uint64_t entit
 //
 // ldExpiresAtPropagate -
 //
-void ldExpiresAtPropagate(KjNode* entityP)
+void ldExpiresAtPropagate(KjNode* entityP, Kjson* kjsonP)
 {
   if (entityP == NULL || entityP->type != KjObject)
     return;
@@ -101,8 +101,6 @@ void ldExpiresAtPropagate(KjNode* entityP)
   if (entityNs == 0)
     return;
 
-  Kjson* kjsonP = NULL;  // child-add helpers tolerate NULL when the source
-                         // string already lives in the right arena
   for (KjNode* attrP = entityP->value.firstChildP; attrP != NULL; attrP = attrP->next)
   {
     if (!isAttributeContainer(attrP))

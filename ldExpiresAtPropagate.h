@@ -21,6 +21,7 @@
 //
 #include "kjson/KjNode.h"                                 // KjNode
 
-extern void ldExpiresAtPropagate(KjNode* entityP);
+struct Kjson;
+extern void ldExpiresAtPropagate(KjNode* entityP, struct Kjson* kjsonP);
 
 #endif
