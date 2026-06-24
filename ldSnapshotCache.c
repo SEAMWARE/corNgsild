@@ -12,21 +12,15 @@
 #include <stdlib.h>                                      // calloc, free
 #include <string.h>                                      // strcmp, strdup
 
-#include "kalloc/kaAlloc.h"                              // kaAlloc
-#include "kalloc/kaBufferInit.h"                         // kaBufferInit
 #include "kjson/KjNode.h"                                // KjNode
 #include "kjson/kjLookup.h"                              // kjLookup
 #include "kjson/kjClone.h"                               // kjClone
+#include "kjson/kjFree.h"                                // kjFree
 #include "kjson/kjBuilder.h"                             // kjString, kjChildAdd
-#include "kjson/kjBufferCreate.h"                        // kjBufferCreate
 
 #include "swRest/swRest.h"                               // swRest
 #include "swNgsild/LdVocab.h"                            // LD_VOCAB_*
 #include "swNgsild/LdSnapshotCache.h"                    // Own interface
-
-
-static Kjson cacheKj;
-static bool  cacheKjReady = false;
 
 
 
@@ -55,18 +49,10 @@ const char* ldSnapshotStatusToString(LdSnapshotStatus s)
 //
 LdSnapshotCache* ldSnapshotCacheCreate(void)
 {
-  LdSnapshotCache* cacheP = (LdSnapshotCache*) calloc(1, sizeof(LdSnapshotCache));
-  if (cacheP == NULL) return NULL;
-
-  kaBufferInit(&cacheP->alloc, cacheP->allocBuf, sizeof(cacheP->allocBuf),
-               64 * 1024, NULL, "snapshotCache");
-
-  if (!cacheKjReady)
-  {
-    kjBufferCreate(&cacheKj, &cacheP->alloc);
-    cacheKjReady = true;
-  }
-  return cacheP;
+  // Cache items are individually malloc'd (calloc) and their snapshot trees
+  // are malloc clones, so deleting a snapshot truly reclaims its memory
+  // (ldSnapshotCacheItemDelete). No per-cache arena is needed.
+  return (LdSnapshotCache*) calloc(1, sizeof(LdSnapshotCache));
 }
 
 
@@ -100,12 +86,15 @@ LdSnapshotCacheItem* ldSnapshotCacheItemAdd(LdSnapshotCache* cacheP, KjNode* sna
   if (ldSnapshotCacheItemLookup(cacheP, idP->value.s) != NULL)
     return NULL;  // already exists
 
-  LdSnapshotCacheItem* itemP = (LdSnapshotCacheItem*) kaAlloc(&cacheP->alloc,
-                                                              sizeof(LdSnapshotCacheItem));
+  LdSnapshotCacheItem* itemP = (LdSnapshotCacheItem*) calloc(1, sizeof(LdSnapshotCacheItem));
   if (itemP == NULL) return NULL;
-  memset(itemP, 0, sizeof(*itemP));
 
-  itemP->tree   = kjClone(&cacheKj, snapshotTree);
+  // Clone the snapshot doc with the malloc allocator (NULL) so it survives the
+  // request/worker that created it; freed in ldSnapshotCacheItemDelete via
+  // kjFree. Any later grafts (postSnapshot _snapSeq, ldSnapshotExecQueries
+  // details, patchSnapshot fragments) must likewise use NULL=malloc to keep
+  // the tree a single clean all-malloc tree that kjFree can release whole.
+  itemP->tree   = kjClone(NULL, snapshotTree);
   itemP->id     = (kjLookup(itemP->tree, "id") != NULL)
                     ? kjLookup(itemP->tree, "id")->value.s
                     : (char*) idP->value.s;
@@ -168,9 +157,13 @@ bool ldSnapshotCacheItemDelete(LdSnapshotCache* cacheP, const char* id)
       if (prev == NULL) cacheP->head = p->next;
       else              prev->next   = p->next;
       cacheP->count--;
-      // We don't reclaim p's memory — kalloc is reset on broker restart.
-      // For long-lived correctness, a future phase will rebuild the
-      // cache periodically.
+      // p->id points into p->tree, so kjFree reclaims it too. The snap-tenant
+      // (p->snapTenantP) is owned and freed by the caller (deleteSnapshot /
+      // purgeSnapshots, via snapshotTenantDestroy) — it must be captured
+      // before this call, as p is freed here.
+      if (p->tree != NULL)
+        kjFree(p->tree);
+      free(p);
       return true;
     }
     prev = p;

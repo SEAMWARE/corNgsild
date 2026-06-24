@@ -23,7 +23,6 @@
 #include <stdbool.h>                                     // bool
 #include <stdint.h>                                      // uint64_t
 
-#include "kalloc/KAlloc.h"                               // KAlloc
 #include "kjson/KjNode.h"                                // KjNode
 
 
@@ -54,7 +53,7 @@ extern const char* ldSnapshotStatusToString(LdSnapshotStatus s);
 typedef struct LdSnapshotCacheItem
 {
   char*                         id;             // URI; either client-supplied or auto-generated
-  KjNode*                       tree;           // canonical Snapshot doc (clone owned by cache alloc)
+  KjNode*                       tree;           // canonical Snapshot doc (all-malloc clone; freed on delete)
   void*                         snapTenantP;    // Tenant* — the snapshot's own DB tenant (entity store)
   int                           snapSeq;        // monotonic per-tenant sequence; suffixes the snap-tenant name
   LdSnapshotStatus              status;
@@ -77,8 +76,6 @@ typedef struct LdSnapshotCache
   LdSnapshotCacheItem*  head;
   int                   count;
   int                   nextSnapSeq;     // assigned to itemP->snapSeq on add; bumped at boot reload to max+1
-  KAlloc                alloc;
-  char                  allocBuf[16 * 1024];
 } LdSnapshotCache;
 
 
