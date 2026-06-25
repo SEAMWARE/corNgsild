@@ -375,7 +375,7 @@ static void reportAdd(LdMergeReport* reportP, const char* attrName, const char* 
 // patchP is not mutated; nodes that need to be inserted into targetP are
 // cloned with targetAllocP.
 //
-static bool rfc7396Merge(KjNode* targetP, KjNode* patchP, uint64_t ts, Kjson* targetAllocP)
+static bool rfc7396Merge(KjNode* targetP, KjNode* patchP, uint64_t ts, Kjson* targetAllocP, bool deepValueMerge)
 {
   bool mutated = false;
 
@@ -398,16 +398,18 @@ static bool rfc7396Merge(KjNode* targetP, KjNode* patchP, uint64_t ts, Kjson* ta
 
     KjNode* tChild = kjLookup(targetP, pChild->name);
 
-    // Per ldApiEntityToDbModel, the primary-value member of every
-    // attribute type (Property.value, Relationship.object,
-    // LanguageProperty.languageMap, JsonProperty.json, VocabProperty.vocab,
-    // ListProperty.valueList, ListRelationship.objectList) is normalised
-    // to the key "value". § 4.5.21 treats that primary value as opaque —
-    // a merge replaces it wholesale and does not deep-merge into it.
-    // Without this special case, a fragment's languageMap or json sub-
-    // object would deep-merge with the target's, leaving stale entries
-    // behind (012_04_01, 012_08_01).
-    bool replaceWhole = (pChild->name != NULL && strcmp(pChild->name, "value") == 0);
+    // The primary-value member of every attribute type (Property.value,
+    // Relationship.object, LanguageProperty.languageMap, JsonProperty.json, ...)
+    // is normalised by ldApiEntityToDbModel to the key "value".
+    //
+    // Two opposite semantics, selected by the caller:
+    //   - replace/append (Update/Partial-Attribute Update, Append, Replace):
+    //     the primary value is replaced WHOLESALE, never deep-merged. This is
+    //     what PartialAttributeUpdate asserts (ETSI 012_04_01, 012_08_01).
+    //   - true Merge Entity (RFC 7396, § 10.2.9): the value is a normal JSON
+    //     value and a merge surgically deep-merges object values (keeping
+    //     unspecified siblings; null deletes), per RFC 7396.
+    bool replaceWhole = (deepValueMerge == false) && (pChild->name != NULL && strcmp(pChild->name, "value") == 0);
 
     if (isNgsildNull(pChild))
     {
@@ -424,7 +426,7 @@ static bool rfc7396Merge(KjNode* targetP, KjNode* patchP, uint64_t ts, Kjson* ta
     }
     else if (!replaceWhole && tChild->type == KjObject && pChild->type == KjObject)
     {
-      if (rfc7396Merge(tChild, pChild, ts, targetAllocP))
+      if (rfc7396Merge(tChild, pChild, ts, targetAllocP, deepValueMerge))
       {
         mutated = true;
         if (hasModifiedAt(tChild))
@@ -577,7 +579,7 @@ static bool scopeReplace(KjNode* target, KjNode* fragScope, Kjson* targetAllocP)
 //
 // Returns true if anything inside the wrapper was mutated.
 //
-static bool mergeAttrWrapper(KjNode* target, KjNode* fragment, uint64_t ts, Kjson* targetAllocP)
+static bool mergeAttrWrapper(KjNode* target, KjNode* fragment, uint64_t ts, Kjson* targetAllocP, bool deepValueMerge)
 {
   bool mutated = false;
 
@@ -602,7 +604,7 @@ static bool mergeAttrWrapper(KjNode* target, KjNode* fragment, uint64_t ts, Kjso
     }
     else
     {
-      if (rfc7396Merge(tChild, pChild, ts, targetAllocP))
+      if (rfc7396Merge(tChild, pChild, ts, targetAllocP, deepValueMerge))
       {
         bumpModifiedAt(tChild, ts, targetAllocP);
         mutated = true;
@@ -645,13 +647,17 @@ static bool mergeAttrWrapper(KjNode* target, KjNode* fragment, uint64_t ts, Kjso
 
 // -----------------------------------------------------------------------------
 //
-// ldEntityMerge -
+// mergeApply - shared core for both fragment-apply (replace/append) and the
+// true RFC 7396 Merge Entity. deepValueMerge selects the value-leaf semantics:
+//   false → replace the primary value wholesale (Update/Partial/Append/Replace)
+//   true  → surgically deep-merge object values (Merge Entity, § 10.2.9)
 //
-bool ldEntityMerge(KjNode*        target,
-                   KjNode*        fragment,
-                   LdMergeReport* reportP,
-                   uint64_t       ts,
-                   Kjson*         targetAllocP)
+static bool mergeApply(KjNode*        target,
+                       KjNode*        fragment,
+                       LdMergeReport* reportP,
+                       uint64_t       ts,
+                       Kjson*         targetAllocP,
+                       bool           deepValueMerge)
 {
   if (target == NULL || target->type != KjObject || fragment == NULL || fragment->type != KjObject)
     return false;
@@ -768,7 +774,7 @@ bool ldEntityMerge(KjNode*        target,
         return false;
 
       KjNode* preClone = kjClone(swRest.kjsonP, tAttr);
-      if (mergeAttrWrapper(tAttr, fragWrapper, ts, targetAllocP))
+      if (mergeAttrWrapper(tAttr, fragWrapper, ts, targetAllocP, deepValueMerge))
       {
         // mergeAttrWrapper may have stripped instances whose primary value
         // member was set to "urn:ngsi-ld:null" (§ 4.5.21). When all instances
@@ -795,4 +801,34 @@ bool ldEntityMerge(KjNode*        target,
     bumpModifiedAt(target, ts, targetAllocP);
 
   return true;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldEntityFragmentApply - apply an Entity Fragment with REPLACE/append semantics
+//
+// Used by Update Attributes (§ 10.2.3), Partial Attribute Update (§ 10.2.5),
+// Append Attributes (§ 10.2.4) and Replace Attribute: each supplied attribute
+// instance replaces the matching stored one (or is appended / null-deleted);
+// the primary value is replaced wholesale, never deep-merged.
+//
+bool ldEntityFragmentApply(KjNode* target, KjNode* fragment, LdMergeReport* reportP, uint64_t ts, Kjson* targetAllocP)
+{
+  return mergeApply(target, fragment, reportP, ts, targetAllocP, false);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldEntityMerge - apply Merge Entity (§ 10.2.9) with true RFC 7396 semantics
+//
+// Surgically deep-merges object values (keeping unspecified siblings; null
+// deletes a member), per IETF RFC 7396 (JSON Merge Patch).
+//
+bool ldEntityMerge(KjNode* target, KjNode* fragment, LdMergeReport* reportP, uint64_t ts, Kjson* targetAllocP)
+{
+  return mergeApply(target, fragment, reportP, ts, targetAllocP, true);
 }

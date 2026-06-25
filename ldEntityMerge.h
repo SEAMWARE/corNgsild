@@ -101,4 +101,19 @@ extern bool ldEntityMerge(KjNode*         target,
                           uint64_t        ts,
                           struct Kjson*   targetAllocP);
 
+
+
+// -----------------------------------------------------------------------------
+//
+// ldEntityFragmentApply - apply an Entity Fragment with REPLACE/append semantics
+// (Update Attributes, Partial Attribute Update, Append Attributes, Replace
+// Attribute). Same plumbing as ldEntityMerge but the primary value is replaced
+// wholesale instead of being deep-merged. See ldEntityMerge.c.
+//
+extern bool ldEntityFragmentApply(KjNode*         target,
+                                  KjNode*         fragment,
+                                  LdMergeReport*  reportP,
+                                  uint64_t        ts,
+                                  struct Kjson*   targetAllocP);
+
 #endif  // SWNGSILD_LDENTITYMERGE_H_
