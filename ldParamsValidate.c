@@ -17,6 +17,7 @@
 #include "swNgsild/LdProblem.h"                          // LD_ERROR_*
 #include "swNgsild/ldError.h"                            // ldError
 #include "swNgsild/ldCheckGeo.h"                         // ldCheckGeoQuery
+#include "swNgsild/ldAcceptParse.h"                      // ldAcceptParse, LdAcceptGeoJson
 
 #include "swNgsild/ldParamsValidate.h"                   // Own interface
 
@@ -205,6 +206,19 @@ bool ldParamsValidate(void)
               "georel 'within' requires a Polygon or MultiPolygon reference geometry (got '%s')", swNgsild.geometry);
       return true;
     }
+  }
+
+  // § 10.4.2.4 / § 10.4.3.4 — the geometryProperty parameter names the
+  // GeoProperty whose value becomes the GeoJSON "geometry" field, so it is
+  // only meaningful when the response is GeoJSON. If it is supplied with any
+  // other Accept it shall be rejected as 400 BadRequestData.
+  if (swRest.out.httpStatusCode < 400 &&
+      swNgsild.geometryProperty != NULL &&
+      ldAcceptParse(swRest.in.accept) != LdAcceptGeoJson)
+  {
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid request",
+            "geometryProperty is only valid with Accept: application/geo+json");
+    return true;
   }
 
   // § 5.7.2.4 — Query Entities requires AT LEAST ONE of: type / attrs / q /
