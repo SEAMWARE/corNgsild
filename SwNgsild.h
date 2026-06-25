@@ -82,6 +82,8 @@ typedef struct SwNgsild
   char**  jsonKeysV;     // split + JSON-LD expanded — attribute names whose values are opaque (no expansion)
 
   char*   geometryProperty;  // GeoProperty for GeoJSON geometry field (short name from URL param)
+  char*   geometryPropertyExpanded;  // expanded IRI of the geom property (default "location"), set for geo+json — protected from pick/omit/attrs so the geometry survives projection (§ 5.3.3.2)
+  bool    geoJsonGeomForced;         // true when the geom property is kept ONLY for the geometry field (user projection would have dropped it) → ldToGeoJson removes it from "properties"
 
   // URL parameters — geo-query
   char*      georel;       // raw georel string (e.g. "near;maxDistance==1000")

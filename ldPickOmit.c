@@ -14,7 +14,24 @@
 #include "kjson/kjBuilder.h"                    // kjChildRemove
 
 #include "swNgsild/ldIsEntityKeyword.h"          // ldIsEntityKeyword
+#include "swNgsild/SwNgsild.h"                   // swNgsild (geometryPropertyExpanded)
 #include "swNgsild/ldPickOmit.h"                     // Own interface
+
+
+
+// -----------------------------------------------------------------------------
+//
+// isGeoJsonProtected - the selected GeoJSON geometry GeoProperty must survive
+// a pick/omit/attrs projection so ldToGeoJson can still build the "geometry"
+// field from it (§ 5.3.3.2 — geometry is selected from the stored entity, not
+// from the projected member set). Only set for a geo+json response; the
+// attribute is later pruned from "properties" if the user did not request it.
+//
+static bool isGeoJsonProtected(const char* name)
+{
+  return (swNgsild.geometryPropertyExpanded != NULL && name != NULL &&
+          strcmp(name, swNgsild.geometryPropertyExpanded) == 0);
+}
 
 
 
@@ -77,7 +94,7 @@ static void pickOmitImpl(KjNode* entityP, char** pickV, char** omitV)
       else if (omitV != NULL && inStringV(childP->name, omitV))
         remove = true;
 
-      if (remove)
+      if (remove && !isGeoJsonProtected(childP->name))
         kjChildRemove(entityP, childP);
     }
 
@@ -134,7 +151,7 @@ void ldAttrsFilter(KjNode* entityP, char** attrsV)
 
     if (childP->name != NULL && !ldIsEntityKeyword(childP->name))
     {
-      if (!inStringV(childP->name, attrsV))
+      if (!inStringV(childP->name, attrsV) && !isGeoJsonProtected(childP->name))
         kjChildRemove(entityP, childP);
     }
 

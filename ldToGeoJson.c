@@ -13,6 +13,7 @@
 #include "kjson/kjLookup.h"                              // kjLookup
 #include "kjson/kjClone.h"                               // kjClone
 
+#include "swNgsild/SwNgsild.h"                           // swNgsild (geoJsonGeomForced)
 #include "swNgsild/ldToGeoJson.h"                        // Own interface
 
 
@@ -100,6 +101,17 @@ static KjNode* entityToFeature(KjNode* entityP, const char* geoPropName, Kjson* 
   KjNode* propsId = kjLookup(properties, "id");
   if (propsId != NULL)
     kjChildRemove(properties, propsId);
+
+  // The geometry GeoProperty was protected from the pick/omit/attrs projection
+  // so the "geometry" field above could be built (§ 5.3.3.2). If the user's
+  // projection would actually have dropped it, it must not leak into
+  // "properties" (§ 5.3.3.3.1: properties honour the projection rules).
+  if (swNgsild.geoJsonGeomForced)
+  {
+    KjNode* geoProp = kjLookup(properties, geoPropName);
+    if (geoProp != NULL)
+      kjChildRemove(properties, geoProp);
+  }
 
   kjChildAdd(feature, properties);
 
