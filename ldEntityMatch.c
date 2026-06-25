@@ -396,6 +396,23 @@ static bool matchTerm(KjNode* entityP, LdQTerm* term)
     }
 
   case LdQBool:
+    // Array value (e.g. a ListProperty valueList of booleans): "any element
+    // matches" for ==, "no element matches" for !=. Mirrors the LdQString /
+    // LdQNumber array paths.
+    if (valueP->type == KjArray)
+    {
+      bool hit = false;
+      for (KjNode* elemP = valueP->value.firstChildP; elemP != NULL; elemP = elemP->next)
+      {
+        if (elemP->type == KjBoolean && elemP->value.b == term->value.b) { hit = true; break; }
+      }
+      switch (term->op)
+      {
+      case LdQEqual:   return hit;
+      case LdQUnequal: return !hit;
+      default:         return false;
+      }
+    }
     if (valueP->type != KjBoolean) return false;
     {
       bool entityBool = valueP->value.b;
