@@ -298,6 +298,27 @@ static bool matchTerm(KjNode* entityP, LdQTerm* term)
   switch (term->valueType)
   {
   case LdQNumber:
+    // Array value (e.g. a ListProperty valueList of numbers): "any element
+    // matches" for ==, "no element matches" for != — the array-containment
+    // semantics the mongoc plugin gets natively. Mirrors the LdQString path.
+    if (valueP->type == KjArray)
+    {
+      bool hit = false;
+      for (KjNode* elemP = valueP->value.firstChildP; elemP != NULL; elemP = elemP->next)
+      {
+        double elemNum;
+        if      (elemP->type == KjInt)   elemNum = (double) elemP->value.i;
+        else if (elemP->type == KjFloat) elemNum = elemP->value.f;
+        else continue;
+        if (elemNum == term->value.n) { hit = true; break; }
+      }
+      switch (term->op)
+      {
+      case LdQEqual:   return hit;
+      case LdQUnequal: return !hit;
+      default:         return false;   // ordering on an array has no sensible semantic
+      }
+    }
     if (!isNum) return false;
     switch (term->op)
     {
