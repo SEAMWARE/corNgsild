@@ -12,10 +12,28 @@
 #include "kjson/kjBuilder.h"                          // kjObject, kjString, kjInteger, kjChildAdd, kjChildRemove
 #include "kjson/kjLookup.h"                           // kjLookup
 #include "kjson/kjClone.h"                            // kjClone
+#include "kjson/kjFree.h"                             // kjFree
 #include "swRest/swRest.h"                            // swRest (request-scoped allocator for the report)
 
 #include "swNgsild/LdVocab.h"                         // LD_VOCAB_*
 #include "swNgsild/ldEntityAttrsSet.h"                // Own interface
+
+
+
+// -----------------------------------------------------------------------------
+//
+// removeChild - unlink a node from its container and, when the target lives on
+// the malloc heap (allocP == NULL, e.g. the in-memory store), free it. On a
+// request arena (allocP != NULL, e.g. mongoc) the arena reclaims it, so freeing
+// would be wrong. The node must not be referenced elsewhere — every call site
+// here replaces it wholesale (report entries hold separate clones).
+//
+static void removeChild(KjNode* container, KjNode* node, Kjson* allocP)
+{
+  kjChildRemove(container, node);
+  if (allocP == NULL)
+    kjFree(node);
+}
 
 
 
@@ -218,7 +236,7 @@ static void applyType(KjNode* target, KjNode* fragType, Kjson* allocP)
   }
 
   // Replace target.type
-  kjChildRemove(target, tType);
+  removeChild(target, tType, allocP);
 
   // Count elements in arrayP
   int n = 0;
@@ -251,7 +269,7 @@ static void applyScope(KjNode* target, KjNode* fragScope, bool overwrite, Kjson*
   if (overwrite || tScope == NULL)
   {
     if (tScope != NULL)
-      kjChildRemove(target, tScope);
+      removeChild(target, tScope, allocP);
 
     KjNode* clone = kjClone(allocP, fragScope);
     clone->name = (char*) LD_VOCAB_SCOPE;
@@ -288,7 +306,7 @@ static void applyScope(KjNode* target, KjNode* fragScope, bool overwrite, Kjson*
       kjChildAdd(arrayP, kjString(allocP, NULL, toAdd[i]));
   }
 
-  kjChildRemove(target, tScope);
+  removeChild(target, tScope, allocP);
   kjChildAdd(target, arrayP);
 }
 
@@ -353,7 +371,7 @@ void ldEntityAttrsSet(KjNode* target, KjNode* fragment,
       if (tAttrP != NULL)
       {
         KjNode* preClone = (reportP != NULL) ? kjClone(swRest.kjsonP, tAttrP) : NULL;
-        kjChildRemove(target, tAttrP);
+        removeChild(target, tAttrP, targetAllocP);
         addReportEntry(reportP, fAttrP->name, "attributeDeleted", preClone);
         anyChange = true;
       }
@@ -420,7 +438,7 @@ void ldEntityAttrsSet(KjNode* target, KjNode* fragment,
       if (instanceValueIsNull(fInstP))
       {
         if (tInstP != NULL)
-          kjChildRemove(tAttrP, tInstP);
+          removeChild(tAttrP, tInstP, targetAllocP);
         fInstP = nextInst;
         continue;
       }
@@ -456,7 +474,7 @@ void ldEntityAttrsSet(KjNode* target, KjNode* fragment,
         bumpModifiedAt(newInst, ts, targetAllocP);
 
         // Swap: remove old, add new (keeps the name key)
-        kjChildRemove(tAttrP, tInstP);
+        removeChild(tAttrP, tInstP, targetAllocP);
         kjChildAdd(tAttrP, newInst);
       }
 
@@ -469,7 +487,7 @@ void ldEntityAttrsSet(KjNode* target, KjNode* fragment,
     // the empty wrapper from the target and report attributeDeleted.
     if (tAttrP->value.firstChildP == NULL)
     {
-      kjChildRemove(target, tAttrP);
+      removeChild(target, tAttrP, targetAllocP);
       addReportEntry(reportP, fAttrP->name, "attributeDeleted", preClone);
     }
     else
