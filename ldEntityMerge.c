@@ -37,6 +37,7 @@
 #include "swNgsild/ldError.h"                         // ldError
 #include "swNgsild/LdProblem.h"                       // LD_ERROR_*
 #include "swNgsild/SwNgsild.h"                        // swNgsild (lang, observedAtNs)
+#include "swNgsild/ldIsEntityKeyword.h"               // ldIsEntityKeyword
 #include "swNgsild/ldEntityMerge.h"                   // Own interface
 
 
@@ -359,6 +360,50 @@ static void reportAdd(LdMergeReport* reportP, const char* attrName, const char* 
   }
 
   kjChildAdd(reportP->changes, rec);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldEntityReplaceReport - change-report by diffing the old vs the new entity
+//
+// For Replace (PUT /entities/{id}): relative to the stored entity, an attribute
+// present only in the NEW body is attributeCreated, present only in the OLD is
+// attributeDeleted, present in BOTH is attributeModified. Both entities are in
+// DB-model form (expanded-IRI attribute names). A clone of the old attribute
+// subtree is attached as preValue for modified/deleted, so the value-change-only
+// filter and the attribute-delete markers can use it. Without this report a
+// Replace would only notify entityUpdated subscriptions — never the default set
+// or the attribute-level (created/updated/deleted) triggers.
+//
+void ldEntityReplaceReport(KjNode* oldEntityP, KjNode* newEntityP, LdMergeReport* reportP)
+{
+  if ((oldEntityP == NULL) || (newEntityP == NULL) || (reportP == NULL))
+    return;
+
+  // new vs old → attributeCreated (new-only) / attributeModified (in both)
+  for (KjNode* nAttrP = newEntityP->value.firstChildP; nAttrP != NULL; nAttrP = nAttrP->next)
+  {
+    if ((nAttrP->name == NULL) || ldIsEntityKeyword(nAttrP->name) || (strcmp(nAttrP->name, "_id") == 0))
+      continue;
+
+    KjNode* oAttrP = kjLookup(oldEntityP, nAttrP->name);
+    if (oAttrP == NULL)
+      reportAdd(reportP, nAttrP->name, "attributeCreated", NULL);
+    else
+      reportAdd(reportP, nAttrP->name, "attributeModified", kjClone(swRest.kjsonP, oAttrP));
+  }
+
+  // old not in new → attributeDeleted
+  for (KjNode* oAttrP = oldEntityP->value.firstChildP; oAttrP != NULL; oAttrP = oAttrP->next)
+  {
+    if ((oAttrP->name == NULL) || ldIsEntityKeyword(oAttrP->name) || (strcmp(oAttrP->name, "_id") == 0))
+      continue;
+
+    if (kjLookup(newEntityP, oAttrP->name) == NULL)
+      reportAdd(reportP, oAttrP->name, "attributeDeleted", kjClone(swRest.kjsonP, oAttrP));
+  }
 }
 
 

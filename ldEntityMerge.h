@@ -116,4 +116,13 @@ extern bool ldEntityFragmentApply(KjNode*         target,
                                   uint64_t        ts,
                                   struct Kjson*   targetAllocP);
 
+
+
+// -----------------------------------------------------------------------------
+//
+// ldEntityReplaceReport - change-report by diffing the old vs the new entity
+//                         (Replace / PUT): created / modified / deleted attrs.
+//
+extern void ldEntityReplaceReport(KjNode* oldEntityP, KjNode* newEntityP, LdMergeReport* reportP);
+
 #endif  // SWNGSILD_LDENTITYMERGE_H_
