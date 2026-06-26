@@ -60,6 +60,30 @@ bool ldPaginationTrim(KjNode* arrayP, int limit)
 
 // -----------------------------------------------------------------------------
 //
+// ldPaginationMediaType - the Link "type" Target Attribute for pagination links
+//
+// § 6.4.7.2 (TS 104-176): the "type" attribute shall be exactly the media type
+// of the ORIGINAL request (its Accept header), carried through the whole
+// pagination iteration. Per RFC 8288 § 3.4.1 it is only a non-binding hint —
+// it does not override the Content-Type a client gets by following the link —
+// but the spec still mandates it mirror the request, not a fixed value. The
+// render hook sets swRest.out.contentType after the service routine runs, so
+// evaluate Accept here the same way the render hook will.
+//
+const char* ldPaginationMediaType(void)
+{
+  switch (ldAcceptParse(swRest.in.accept))
+  {
+  case LdAcceptGeoJson: return "application/geo+json";
+  case LdAcceptLdJson:  return "application/ld+json";
+  default:              return "application/json";
+  }
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldPaginationLinkHeader - add Link header with next/prev pagination links
 //
 // Builds a Link header (RFC 8288) with rel="next" and/or rel="prev" based on
@@ -96,15 +120,7 @@ void ldPaginationLinkHeader(bool hasMore)
   char* buf = (char*) kaAlloc(&swRest.kalloc, bufSize);
   int  bLen = 0;
 
-  // The Link "type" attribute advertises the media type of the
-  // referenced resource — not the current response's Content-Type.
-  // NGSI-LD resources are intrinsically JSON-LD (the application/
-  // json variant is just the same payload with @context stripped
-  // out of the body and into a Link header). So pagination Links
-  // always advertise application/ld+json — the canonical shape —
-  // matching the conformance suite's expectation regardless of
-  // which Accept variant the client requested.
-  const char* mediaType = "application/ld+json";
+  const char* mediaType = ldPaginationMediaType();
 
   // prev link only (rel=first / rel=last are permitted by § 6.3.10
   // but redundant for offset/limit clients and the ETSI conformance
@@ -186,11 +202,7 @@ void ldTemporalPaginationLinkHeader(bool hasMore, int pageLimit)
     pLen += snprintf(params + pLen, sizeof(params) - pLen, "%s=%s&", name, swRest.in.uriParamV[i].value);
   }
 
-  // § 6.4.7.2/3: the Link "type" attribute shall be exactly the media
-  // type resulting from the original request. The render hook (which
-  // sets swRest.out.contentType) runs after the service routine, so
-  // evaluate the Accept header the same way it will.
-  const char* mediaType = (ldAcceptParse(swRest.in.accept) == LdAcceptLdJson) ? "application/ld+json" : "application/json";
+  const char* mediaType = ldPaginationMediaType();
 
   // § 6.4.7.3 names the relations by TIME, not by iteration:
   // "intervalafter" points at the page with LATER Attribute timestamps,

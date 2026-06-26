@@ -25,6 +25,15 @@ extern bool ldPaginationTrim(KjNode* arrayP, int limit);
 
 // -----------------------------------------------------------------------------
 //
+// ldPaginationMediaType - the Link "type" attribute for pagination links
+//                         (§ 6.4.7.2: the original request's media type)
+//
+extern const char* ldPaginationMediaType(void);
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldPaginationLinkHeader - add Link header with next/prev pagination links
 //
 extern void ldPaginationLinkHeader(bool hasMore);
