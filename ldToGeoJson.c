@@ -35,7 +35,32 @@ static KjNode* extractGeometry(KjNode* entityP, const char* geoPropName, Kjson* 
 {
   KjNode* attrP = kjLookup(entityP, geoPropName);
 
-  if (attrP == NULL || attrP->type != KjObject)
+  if (attrP == NULL)
+    return NULL;
+
+  // Multi-instance GeoProperty (§ 5.3.3.2): with no datasetId in the request the
+  // attribute arrives here as an array of instances. Select the DEFAULT instance
+  // (the one without a datasetId); if there is no default, the geometry is
+  // undefined. A request datasetId has already collapsed the array to one object.
+  if (attrP->type == KjArray)
+  {
+    KjNode* defaultInstanceP = NULL;
+    for (KjNode* instanceP = attrP->value.firstChildP; instanceP != NULL; instanceP = instanceP->next)
+    {
+      if (instanceP->type == KjObject && kjLookup(instanceP, "datasetId") == NULL)
+      {
+        defaultInstanceP = instanceP;
+        break;
+      }
+    }
+
+    if (defaultInstanceP == NULL)
+      return NULL;
+
+    attrP = defaultInstanceP;
+  }
+
+  if (attrP->type != KjObject)
     return NULL;
 
   KjNode* valueP = kjLookup(attrP, "value");
