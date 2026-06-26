@@ -837,7 +837,33 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   // carry @context inline. Plain application/json puts @context in the Link
   // header only; we emit that further down regardless of body shape.
   // ETSI 046_19, 046_20.
-  if ((acceptLdJson || acceptGeoJson) && itemP->contextUrl != NULL)
+  // § 6.5.2: a receiverInfo Prefer "body=json" moves the geo+json @context from
+  // the body to the Link header (validated geo+json-only in ldCheckSubscription).
+  bool notifPreferBodyJson = false;
+  if (acceptGeoJson && itemP->receiverInfo != NULL && itemP->receiverInfo->type == KjArray)
+  {
+    for (KjNode* kvP = itemP->receiverInfo->value.firstChildP; kvP != NULL; kvP = kvP->next)
+    {
+      if (kvP->type != KjObject) continue;
+      KjNode* kP = kjLookup(kvP, "key");
+      KjNode* vP = kjLookup(kvP, "value");
+      if (kP != NULL && kP->type == KjString && vP != NULL && vP->type == KjString && strcasecmp(kP->value.s, "Prefer") == 0)
+      {
+        const char* p = strstr(vP->value.s, "body=");
+        if (p != NULL && strncmp(p + 5, "json", 4) == 0 && (p[9] == 0 || p[9] == ';' || p[9] == ' ' || p[9] == ','))
+          notifPreferBodyJson = true;
+        break;
+      }
+    }
+  }
+
+  // @context placement: in the body for ld+json (inline per entity) and for
+  // geo+json unless Prefer body=json; otherwise via the Link header only (plain
+  // json, or geo+json with Prefer body=json).
+  bool ctxInBody = acceptLdJson || (acceptGeoJson && !notifPreferBodyJson);
+
+  // ld+json: @context inline on each entity in data[] (§ 5.8.6 / § 6.3.5).
+  if (acceptLdJson && itemP->contextUrl != NULL)
   {
     KjNode* dataP = kjLookup(notification, "data");
     if (dataP != NULL && dataP->type == KjArray)
@@ -862,6 +888,12 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
         newDataP->name = (char*) "data";
         kjChildReplace(notification, oldDataP, newDataP);
       }
+      // § 5.2.6.11.2: ONE @context as a top-level FeatureCollection member
+      // (an RFC 7946 § 6.1 foreign member) when @context belongs in the body —
+      // not copied into each Feature, and no Link header (see below).
+      if (ctxInBody && itemP->contextUrl != NULL && newDataP != NULL &&
+          newDataP->type == KjObject && kjLookup(newDataP, "@context") == NULL)
+        kjChildAdd(newDataP, kjString(swRest.kjsonP, "@context", itemP->contextUrl));
     }
   }
 
@@ -944,9 +976,11 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   if (itemP->format != LdFormatNone && itemP->format != LdFormatNormalized)
     swRestClientRequestHeader(&req, "Ngsild-Attribute-Format", ldFormatToString(itemP->format));
 
-  // § 5.8.6 / § 6.3.5 — ld+json carries @context inline; Link would be a
-  // duplicate (and 046_14_01 asserts its absence). geo+json keeps Link.
-  if (linkBuf[0] != 0 && !acceptLdJson)
+  // The Link header carries @context ONLY when it is not already in the body
+  // (§ 5.8.6 / § 6.3.5): plain json, or geo+json with Prefer body=json. For
+  // ld+json and default geo+json the @context is inline, so a Link would be a
+  // duplicate (046_14_01 asserts its absence).
+  if (linkBuf[0] != 0 && !ctxInBody)
     swRestClientRequestHeader(&req, "Link", linkBuf);
 
   // § 5.2.15 endpoint.receiverInfo — emit each {key,value} as a request header
@@ -960,10 +994,14 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
       if (kP != NULL && kP->type == KjString && vP != NULL && vP->type == KjString)
       {
         // Content-Type and an @context Link are absorbed into endpointAccept /
-        // contextUrl (ldSubCache) and emitted once by the broker above — skip
-        // them here so the notification carries exactly one of each (the others,
-        // e.g. Authorization, pass through).
+        // contextUrl (ldSubCache) and emitted once by the broker above. Prefer
+        // is a broker-side rendering directive (geo+json @context placement),
+        // not receiver information — skip all three so the notification carries
+        // exactly one Content-Type / Link and no stray Prefer (the rest, e.g.
+        // Authorization, pass through). (Prefer-in-receiverInfo per § 6.5.2 — but
+        // we do not leak it to the receiver; see spec-doubt #101.)
         if ((strcasecmp(kP->value.s, "Content-Type") == 0) ||
+            (strcasecmp(kP->value.s, "Prefer") == 0) ||
             ((strcasecmp(kP->value.s, "Link") == 0) && (strstr(vP->value.s, "json-ld#context") != NULL)))
           continue;
 

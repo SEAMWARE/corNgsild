@@ -221,6 +221,15 @@ static bool checkReceiverInfo(KjNode* riP, KjNode* acceptP)
         return false;
       }
     }
+
+    // Prefer — § 6.5.2 uses it ONLY to steer the geo+json @context placement
+    // (body=json vs body=ld+json); it is meaningless for json / ld+json.
+    if ((strcasecmp(key, "Prefer") == 0) && (effectiveType != LdAcceptGeoJson))
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
+              "'notification.endpoint.receiverInfo' Prefer is only valid with application/geo+json");
+      return false;
+    }
   }
 
   return true;
