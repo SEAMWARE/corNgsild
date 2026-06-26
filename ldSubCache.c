@@ -290,6 +290,32 @@ static void cacheItemRetireOrFree(LdSubCache* cacheP, LdSubCacheItem* itemP)
 
 // -----------------------------------------------------------------------------
 //
+// riHeaderValue - literal value of a receiverInfo header by case-insensitive name
+//
+// Returns NULL if absent or set to the urn:ngsi-ld:request substitution sentinel
+// (a per-notification value, not usable as a static notification parameter).
+//
+static const char* riHeaderValue(KjNode* riP, const char* name)
+{
+  if (riP == NULL || riP->type != KjArray)
+    return NULL;
+
+  for (KjNode* kvP = riP->value.firstChildP; kvP != NULL; kvP = kvP->next)
+  {
+    if (kvP->type != KjObject) continue;
+    KjNode* kP = kjLookup(kvP, "key");
+    KjNode* vP = kjLookup(kvP, "value");
+    if (kP == NULL || kP->type != KjString || vP == NULL || vP->type != KjString) continue;
+    if (strcasecmp(kP->value.s, name) == 0)
+      return (strcmp(vP->value.s, "urn:ngsi-ld:request") == 0) ? NULL : vP->value.s;
+  }
+  return NULL;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldSubCacheItemAdd -
 //
 LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* qExpr)
@@ -444,6 +470,16 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
   }
   itemP->endpointAccept = ldAcceptParse((acceptP != NULL && acceptP->type == KjString) ? acceptP->value.s : NULL);
 
+  // A receiverInfo Content-Type acts as endpoint.accept when accept is absent
+  // (validated consistent in ldCheckSubscription). It is then NOT re-emitted as
+  // a receiverInfo header — the broker emits this single Content-Type.
+  if (acceptP == NULL && endpointP != NULL)
+  {
+    const char* riCt = riHeaderValue(kjLookup(endpointP, "receiverInfo"), "Content-Type");
+    if (riCt != NULL)
+      itemP->endpointAccept = ldAcceptParse(riCt);
+  }
+
   // § 5.2.12 / § 4.3.6.8 ngsildConformance — back-compat target version
   KjNode* ncP = kjLookup(itemP->subTree, "ngsildConformance");
   itemP->conformanceMajor = 0;
@@ -550,13 +586,39 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
     itemP->showChanges = (showP != NULL && showP->type == KjBoolean && showP->value.b == true);
   }
 
-  // User-provided `jsonldContext` (the spec-visible field) wins; otherwise
+  // User-provided `jsonldContext` (the spec-visible field) wins; otherwise a
+  // receiverInfo @context Link supplies the notification @context; otherwise
   // fall back to `_jcResolved`, the broker-filled internal URL written by
-  // postSubscriptions when the user didn't supply one.
-  KjNode* jcP = kjLookup(itemP->subTree, "jsonldContext");
-  if (jcP == NULL || jcP->type != KjString)
+  // postSubscriptions when the user didn't supply one. (Precedence:
+  // jsonldContext > receiverInfo Link > _jcResolved.)
+  KjNode* jcP        = kjLookup(itemP->subTree, "jsonldContext");
+  bool    explicitJc = (jcP != NULL && jcP->type == KjString);
+  if (!explicitJc)
     jcP = kjLookup(itemP->subTree, "_jcResolved");
   itemP->contextUrl = (jcP != NULL && jcP->type == KjString) ? jcP->value.s : NULL;
+
+  if (!explicitJc)
+  {
+    const char* riLink = riHeaderValue(itemP->receiverInfo, "Link");
+    if (riLink != NULL && strstr(riLink, "json-ld#context") != NULL)
+    {
+      // Extract the URL between '<' and '>'. The receiverInfo Link is then NOT
+      // re-emitted as a header — the broker emits this single @context Link.
+      const char* lt = strchr(riLink, '<');
+      const char* gt = (lt != NULL) ? strchr(lt, '>') : NULL;
+      if (lt != NULL && gt != NULL && gt > lt + 1)
+      {
+        int   len = (int) (gt - (lt + 1));
+        char* url = (char*) kaAlloc(&cacheP->alloc, len + 1);
+        if (url != NULL)
+        {
+          memcpy(url, lt + 1, len);
+          url[len] = 0;
+          itemP->contextUrl = url;
+        }
+      }
+    }
+  }
 
   KjNode* throttlingP = kjLookup(itemP->subTree, LD_VOCAB_THROTTLING);
   if (throttlingP != NULL)

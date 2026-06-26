@@ -959,6 +959,14 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
       KjNode* vP = kjLookup(kvP, "value");
       if (kP != NULL && kP->type == KjString && vP != NULL && vP->type == KjString)
       {
+        // Content-Type and an @context Link are absorbed into endpointAccept /
+        // contextUrl (ldSubCache) and emitted once by the broker above — skip
+        // them here so the notification carries exactly one of each (the others,
+        // e.g. Authorization, pass through).
+        if ((strcasecmp(kP->value.s, "Content-Type") == 0) ||
+            ((strcasecmp(kP->value.s, "Link") == 0) && (strstr(vP->value.s, "json-ld#context") != NULL)))
+          continue;
+
         const char* hv = ldRequestSubstitute(kP->value.s, vP->value.s);
         if (hv != NULL)
           swRestClientRequestHeader(&req, kP->value.s, hv);

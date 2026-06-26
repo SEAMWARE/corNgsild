@@ -32,6 +32,7 @@
 #include "swNgsild/ldCheckGeo.h"                          // ldCheckGeoQuery
 #include "swNgsild/ldTypes.h"                            // ldOpToString
 #include "swNgsild/ldError.h"                            // ldError
+#include "swNgsild/ldAcceptParse.h"                      // ldAcceptParse, LdAcceptType
 #include "swNgsild/ldCheckSubscription.h"                // Own interface
 #include "swNgsild/ldConformanceDowngrade.h"             // ldConformanceParse
 #include "swNgsild/ldTraceLevels.h"                      // LdTCheckSub
@@ -99,6 +100,136 @@ static bool checkNotifierInfo(KjNode* niP)
 
 // -----------------------------------------------------------------------------
 //
+// checkReceiverInfo - validate notification.endpoint.receiverInfo (§ 5.2.6.6.1)
+//
+// Each {key,value} becomes an outbound HTTP header on the notification
+// (TS 104-176 § 6.5.2: a "custom" header that shall adhere to RFC 7230).
+// receiverInfo must not carry headers the broker itself manages — doing so
+// yields a duplicate/conflicting header and an RFC-7230-invalid notification.
+// The spec is silent on the remedy; swBroker rejects with 400 (spec-doubt #100):
+//   - Content-Length / Date / Transfer-Encoding / Host        → 400 (always)
+//   - Content-Type that isn't a notif media type, or conflicts
+//     with endpoint.accept                                     → 400
+//   - an @context Link when the body already carries @context
+//     (effective media type application/ld+json)               → 400
+// A Content-Type (when endpoint.accept is absent) and an @context Link (json
+// case) are otherwise accepted and absorbed by ldSubCache into endpointAccept /
+// contextUrl, so exactly one Content-Type and one Link reach the receiver.
+// Rules key off the header NAME, so the urn:ngsi-ld:request substitution
+// sentinel cannot smuggle a reserved header through; the sentinel is rejected
+// for the two framing headers we absorb (Content-Type, Link).
+//
+static bool checkReceiverInfo(KjNode* riP, KjNode* acceptP)
+{
+  ARRAY_CHECK(riP, "Invalid Subscription", "'notification.endpoint.receiverInfo' must be an array");
+
+  bool         acceptPresent = (acceptP != NULL && acceptP->type == KjString);
+  LdAcceptType acceptType    = acceptPresent ? ldAcceptParse(acceptP->value.s) : LdAcceptJson;
+
+  // Effective media type for the notification body: endpoint.accept if present,
+  // else a (literal, valid) receiverInfo Content-Type, else application/json.
+  LdAcceptType effectiveType = acceptType;
+  if (!acceptPresent)
+  {
+    for (KjNode* kvP = riP->value.firstChildP; kvP != NULL; kvP = kvP->next)
+    {
+      if (kvP->type != KjObject) continue;
+      KjNode* kP = kjLookup(kvP, "key");
+      KjNode* vP = kjLookup(kvP, "value");
+      if (kP == NULL || kP->type != KjString || vP == NULL || vP->type != KjString) continue;
+      if ((strcasecmp(kP->value.s, "Content-Type") == 0) && (strcmp(vP->value.s, "urn:ngsi-ld:request") != 0))
+      {
+        LdAcceptType ct = ldAcceptParse(vP->value.s);
+        if (ct != LdAcceptNone)
+          effectiveType = ct;
+        break;
+      }
+    }
+  }
+
+  for (KjNode* kvP = riP->value.firstChildP; kvP != NULL; kvP = kvP->next)
+  {
+    if (kvP->type != KjObject)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
+              "'notification.endpoint.receiverInfo' items must be objects");
+      return false;
+    }
+
+    KjNode* kP = kjLookup(kvP, "key");
+    KjNode* vP = kjLookup(kvP, "value");
+
+    if (kP == NULL || kP->type != KjString || vP == NULL || vP->type != KjString)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
+              "'notification.endpoint.receiverInfo' items must be {key:string, value:string}");
+      return false;
+    }
+
+    const char* key      = kP->value.s;
+    const char* val      = vP->value.s;
+    bool        sentinel = (strcmp(val, "urn:ngsi-ld:request") == 0);
+
+    // Broker-managed framing/metadata — never user-settable (any value).
+    if ((strcasecmp(key, "Content-Length")    == 0) ||
+        (strcasecmp(key, "Date")              == 0) ||
+        (strcasecmp(key, "Transfer-Encoding") == 0) ||
+        (strcasecmp(key, "Host")              == 0))
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
+              "'notification.endpoint.receiverInfo' must not set the broker-managed header '%s'", key);
+      return false;
+    }
+
+    // Content-Type — drives the notification media type (acts as endpoint.accept).
+    if (strcasecmp(key, "Content-Type") == 0)
+    {
+      if (sentinel)
+      {
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
+                "'notification.endpoint.receiverInfo' Content-Type cannot use 'urn:ngsi-ld:request'");
+        return false;
+      }
+      if (ldAcceptParse(val) == LdAcceptNone)
+      {
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
+                "'notification.endpoint.receiverInfo' Content-Type must be application/json, application/ld+json or application/geo+json");
+        return false;
+      }
+      if (acceptPresent && (ldAcceptParse(val) != acceptType))
+      {
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
+                "'notification.endpoint.receiverInfo' Content-Type conflicts with 'notification.endpoint.accept'");
+        return false;
+      }
+    }
+
+    // Link — an @context Link supplies the notification @context (json case);
+    // it contradicts an in-body @context (application/ld+json).
+    if (strcasecmp(key, "Link") == 0)
+    {
+      if (sentinel)
+      {
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
+                "'notification.endpoint.receiverInfo' Link cannot use 'urn:ngsi-ld:request'");
+        return false;
+      }
+      if ((strstr(val, "json-ld#context") != NULL) && (effectiveType == LdAcceptLdJson))
+      {
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
+                "'notification.endpoint.receiverInfo' @context Link conflicts with application/ld+json (the @context is carried in the body)");
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // checkEndpoint - validate the "notification.endpoint" object
 //
 static bool checkEndpoint(KjNode* endpointP)
@@ -106,8 +237,9 @@ static bool checkEndpoint(KjNode* endpointP)
   OBJECT_CHECK(endpointP, "Invalid Subscription", "'notification.endpoint' must be a JSON object");
   EMPTY_OBJECT_CHECK(endpointP, "'notification.endpoint' must not be empty");
 
-  KjNode* uriP    = NULL;
-  KjNode* acceptP = NULL;
+  KjNode* uriP          = NULL;
+  KjNode* acceptP       = NULL;
+  KjNode* receiverInfoP = NULL;
 
   for (KjNode* childP = endpointP->value.firstChildP; childP != NULL; childP = childP->next)
   {
@@ -131,10 +263,16 @@ static bool checkEndpoint(KjNode* endpointP)
     {
       if (!checkNotifierInfo(childP)) return false;
     }
-    // receiverInfo — forwarded as outbound headers, validated downstream.
+    else if (strcmp(childP->name, "receiverInfo") == 0)
+    {
+      receiverInfoP = childP;  // validated after the loop, once acceptP is known (member order-independent)
+    }
   }
 
   MANDATORY_CHECK(uriP, "Invalid Subscription", "'notification.endpoint.uri' is mandatory");
+
+  if (receiverInfoP != NULL && !checkReceiverInfo(receiverInfoP, acceptP))
+    return false;
 
   return true;
 }
