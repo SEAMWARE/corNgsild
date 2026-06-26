@@ -1311,17 +1311,26 @@ static void ldRenderHook(void)
       ctxUrl = hostedP->url;
   }
 
-  // application/ld+json: @context lives in the body. Content-Type set to
-  // application/ld+json.
-  //
-  // application/geo+json: per § 5.7.1.4 / § 6.3.7, when the Prefer header
-  // is omitted or set to body=ld+json (the default), the Feature(Collection)
-  // shall ALSO carry @context in the body in addition to the Link header.
-  // We follow the default; an explicit Prefer body=json would suppress the
-  // body @context (not yet wired — TODO).
-  //
-  // application/json: @context only via Link header (§ 6.3.5).
-  bool injectCtxIntoBody = (acceptLdJson || acceptGeoJson);
+  // Where the @context goes, per TS 104-176 § 6.3:
+  //   - application/ld+json: in the body (Content-Type set to ld+json below).
+  //   - application/json: via the Link header only.
+  //   - application/geo+json: the Prefer header steers it. Omitted or
+  //     "body=ld+json" → in the body (mirrors ld+json, no Link); "body=json"
+  //     → omitted from the body and served via the Link header (mirrors json).
+  bool preferBodyJson = false;
+  for (int hi = 0; hi < swRest.in.httpHeaderCount; hi++)
+  {
+    if (strcasecmp(swRest.in.httpHeaderV[hi].key, "Prefer") == 0)
+    {
+      const char* p = strstr(swRest.in.httpHeaderV[hi].value, "body=");
+      if (p != NULL && strncmp(p + 5, "json", 4) == 0 &&
+          (p[9] == 0 || p[9] == ';' || p[9] == ' ' || p[9] == ','))
+        preferBodyJson = true;
+      break;
+    }
+  }
+
+  bool injectCtxIntoBody = acceptLdJson || (acceptGeoJson && !preferBodyJson);
 
   if (injectCtxIntoBody && ctxUrl != NULL)
   {
@@ -1347,14 +1356,14 @@ static void ldRenderHook(void)
     // (geo+json content-type was already set above when ldToGeoJson ran)
   }
 
-  if (ctxUrl != NULL && !acceptLdJson)
+  if (ctxUrl != NULL && !injectCtxIntoBody)
   {
-    // Advertise the context via Link header for application/json
-    // responses. § 6.3.5: with application/ld+json the @context is
-    // already inline in the body — adding a Link header in that case
-    // is duplicative and trips conformance tests that split the Link
-    // header by comma to count pagination relations (031_02_*,
-    // 041_03_*, 046_14_01).
+    // Advertise the context via Link header whenever it is NOT in the body
+    // (application/json, and application/geo+json with Prefer: body=json).
+    // § 6.3.5: when the @context is already inline in the body (ld+json, or
+    // the default geo+json) a Link header is duplicative and trips
+    // conformance tests that split the Link header by comma to count
+    // pagination relations (031_02_*, 041_03_*, 046_14_01).
     static const char suffix[] = ">; rel=\"http://www.w3.org/ns/json-ld#context\"; type=\"application/ld+json\"";
     int               linkLen  = 1 + strlen(ctxUrl) + (sizeof(suffix) - 1) + 1;
     char*             linkBuf  = kaAlloc(&swRest.kalloc, linkLen);
