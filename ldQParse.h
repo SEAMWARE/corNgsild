@@ -22,4 +22,17 @@
 //
 extern LdQNode* ldQParse(const char* q, KAlloc* kaP);
 
+
+
+// -----------------------------------------------------------------------------
+//
+// ldQStripLinked - the DB-evaluable "layer 0" of a q expression
+//
+// Returns a pruned copy of the tree with the § 4.9 linked sub-queries removed
+// (treated as "true"/no-constraint), so the storage layer returns an inclusive
+// candidate set and the broker's post-filter resolves the linked layers. NULL
+// means "no DB-evaluable constraint" (query without q). The input is not mutated.
+//
+extern LdQNode* ldQStripLinked(LdQNode* node, KAlloc* kaP);
+
 #endif  // SWNGSILD_LDQPARSE_H_

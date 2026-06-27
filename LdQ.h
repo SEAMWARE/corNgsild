@@ -143,6 +143,10 @@ typedef struct LdQNode
     LdQLinked linked;                                                     // LdQLinkedNode
     struct { struct LdQNode** childV; int count; int allocated; } group;  // LdQAndNode / LdQOrNode
   };
+  // Deepest chain of nested LdQLinkedNodes at/under this node — set by ldQParse
+  // as a side effect. The ROOT's value is the q's relationship-follow depth,
+  // bounded by joinLevel (see the q-vs-joinLevel 400 check in getEntities).
+  int linkedDepth;
 } LdQNode;
 
 #endif  // SWNGSILD_LDQ_H_

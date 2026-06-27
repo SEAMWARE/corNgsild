@@ -844,6 +844,32 @@ static LdQNode* parseOr(const char** pp, KAlloc* kaP)
 
 // -----------------------------------------------------------------------------
 //
+// linkedDepth - deepest chain of nested LdQLinkedNodes (relationship follows)
+// at/under a node. Computed once by ldQParse and cached on the root, so the
+// q-vs-joinLevel check need not re-walk the tree.
+//
+static int linkedDepth(LdQNode* nodeP)
+{
+  if (nodeP == NULL)
+    return 0;
+  if (nodeP->type == LdQLinkedNode)
+    return 1 + linkedDepth(nodeP->linked.subQ);
+  if (nodeP->type == LdQAndNode || nodeP->type == LdQOrNode)
+  {
+    int maxD = 0;
+    for (int i = 0; i < nodeP->group.count; i++)
+    {
+      int d = linkedDepth(nodeP->group.childV[i]);
+      if (d > maxD)
+        maxD = d;
+    }
+    return maxD;
+  }
+  return 0;
+}
+
+
+
 // ldQParse - parse a ?q= expression into an expression tree
 //
 LdQNode* ldQParse(const char* q, KAlloc* kaP)
@@ -866,5 +892,75 @@ LdQNode* ldQParse(const char* q, KAlloc* kaP)
     return NULL;
   }
 
+  // Bieffekt: cache the relationship-follow depth on the root for the
+  // q-vs-joinLevel check (§ 4.5.23), so consumers need not re-walk the tree.
+  root->linkedDepth = linkedDepth(root);
+
   return root;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldQStripLinked - the DB-evaluable "layer 0" of a q expression
+//
+// A § 4.9 LinkedEntityRelation sub-query (q=rel{...}) cannot be evaluated by
+// the storage layer — following the link to its (possibly distributed) target
+// needs the broker. So the DB query must return an INCLUSIVE candidate set,
+// with every linked sub-query deferred to the broker's post-filter
+// (applyLinkedQPostFilter, which carries a fetcher). This returns a pruned
+// copy of the tree with the linked layers removed, preserving boolean
+// semantics — i.e. each linked node is treated as "true" (no DB constraint):
+//
+//   * term             → kept as-is (shared; the DB query only reads it)
+//   * linked           → NULL          (no constraint — true)
+//   * AND group        → AND of the non-NULL stripped children; all-NULL → NULL
+//   * OR group         → if ANY branch strips to NULL (unconstrained), the whole
+//                        OR matches everything → NULL; else OR of the children
+//
+// Returns NULL when the whole expression is unconstrained at the DB layer (the
+// caller then queries with no q at all). The original tree is never mutated;
+// the full q (with the linked layers) stays in swNgsild.qExpr for the
+// post-filter.
+//
+LdQNode* ldQStripLinked(LdQNode* node, KAlloc* kaP)
+{
+  if (node == NULL)
+    return NULL;
+
+  if (node->type == LdQTermNode)
+    return node;
+
+  if (node->type == LdQLinkedNode)
+    return NULL;
+
+  // AND / OR group
+  LdQNode** keep = (LdQNode**) kaAlloc(kaP, node->group.count * sizeof(LdQNode*));
+  int       n    = 0;
+
+  for (int i = 0; i < node->group.count; i++)
+  {
+    LdQNode* child = ldQStripLinked(node->group.childV[i], kaP);
+
+    if (node->type == LdQOrNode && child == NULL)
+      return NULL;                       // one OR branch is unconstrained → match all
+
+    if (child != NULL)
+      keep[n++] = child;                 // AND drops "true" (NULL) branches
+  }
+
+  if (n == 0)
+    return NULL;
+  if (n == 1)
+    return keep[0];
+
+  LdQNode* groupP = (LdQNode*) kaAlloc(kaP, sizeof(LdQNode));
+  groupP->type             = node->type;
+  groupP->group.childV     = keep;
+  groupP->group.count      = n;
+  groupP->group.allocated  = node->group.count;
+  groupP->linkedDepth      = 0;
+
+  return groupP;
 }
