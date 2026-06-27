@@ -37,7 +37,7 @@
 #include "swNgsild/ldStripSysAttrs.h"                    // ldStripSysAttrs
 #include "swNgsild/ldLangReduce.h"                       // ldLangReduce
 #include "swNgsild/ldCsrSubNotify.h"                  // ldCsrSubPendingDiscard
-#include "swNgsild/ldAcceptParse.h"                      // ldAcceptParse, LdAcceptType
+#include "swNgsild/ldAcceptParse.h"                      // ldAcceptParse, SwMimeType
 #include "swNgsild/ldRender.h"                           // ldToSimplified, ldToConcise
 #include "swNgsild/LdNormalizeInput.h"                    // ldNormalizeInput
 #include "swNgsild/ldHooks.h"                            // Own interface
@@ -1016,12 +1016,12 @@ static void ldRenderHook(void)
   // check sits in the renderHook (called even on error paths) and
   // overrides whatever problemType the service routine set.
   {
-    LdAcceptType acceptType    = ldAcceptParse(swRest.in.accept);
+    SwMimeType acceptType    = ldAcceptParse(swRest.in.accept);
     uint64_t     ldOp          = (swRest.serviceP != NULL) ? swRest.serviceP->ldOp : 0;
     bool         entityReadOp  = (ldOp & (LdOpRetrieveEntity | LdOpQueryEntities | LdOpBatchQuery)) != 0;
 
-    if (acceptType == LdAcceptNone ||
-        (acceptType == LdAcceptGeoJson && !entityReadOp))
+    if (acceptType == SwMimeNone ||
+        (acceptType == SwMimeGeoJson && !entityReadOp))
     {
       ldError(406, LD_ERROR_INVALID_REQUEST, "Not Acceptable",
               "supported response media types: application/json, application/ld+json%s",
@@ -1210,8 +1210,8 @@ static void ldRenderHook(void)
   // § 6.3.4 Accept negotiation already ran at the top of this hook —
   // here we only need the GeoJSON branch decision for the format
   // path (the unacceptable-Accept case has already returned).
-  LdAcceptType acceptType    = ldAcceptParse(swRest.in.accept);
-  bool         acceptGeoJson = (acceptType == LdAcceptGeoJson);
+  SwMimeType acceptType    = ldAcceptParse(swRest.in.accept);
+  bool         acceptGeoJson = (acceptType == SwMimeGeoJson);
   if (acceptGeoJson && treeP != NULL)
   {
     ldToGeoJson(&swRest.out.responseTree, swNgsild.geometryProperty, swRest.kjsonP);
@@ -1295,7 +1295,7 @@ static void ldRenderHook(void)
 
   SwldContext* ctxP   = respCtxP;
   const char*  ctxUrl = (ctxP != NULL) ? ctxP->url : NULL;
-  bool         acceptLdJson = (acceptType == LdAcceptLdJson);
+  bool         acceptLdJson = (acceptType == SwMimeLdJson);
 
   // The response is compacted in the request's vocabulary (above), so the
   // @context it speaks must be referenceable — but a Link header carries a

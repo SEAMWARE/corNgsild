@@ -84,10 +84,10 @@ static double extractQ(const char* params, const char* entryEnd)
 //
 // ldAcceptParse -
 //
-LdAcceptType ldAcceptParse(const char* acceptHeader)
+SwMimeType ldAcceptParse(const char* acceptHeader)
 {
   if (acceptHeader == NULL || *acceptHeader == 0)
-    return LdAcceptJson;
+    return SwMimeJson;
 
   // Track best-q-so-far per type. -1.0 means "not seen / excluded".
   double qJson    = -1.0;
@@ -117,24 +117,24 @@ LdAcceptType ldAcceptParse(const char* acceptHeader)
 
     double q = extractQ(nameEnd, entryEnd);
 
-    LdAcceptType t  = (LdAcceptType) -1;
+    SwMimeType t  = (SwMimeType) -1;
     bool        wildcardJson = false;
 
-    if      (nameMatches(p, nameEnd, "application/geo+json")) t = LdAcceptGeoJson;
-    else if (nameMatches(p, nameEnd, "application/ld+json"))  t = LdAcceptLdJson;
-    else if (nameMatches(p, nameEnd, "application/json"))     t = LdAcceptJson;
+    if      (nameMatches(p, nameEnd, "application/geo+json")) t = SwMimeGeoJson;
+    else if (nameMatches(p, nameEnd, "application/ld+json"))  t = SwMimeLdJson;
+    else if (nameMatches(p, nameEnd, "application/json"))     t = SwMimeJson;
     else if (nameMatches(p, nameEnd, "application/*") ||
              nameMatches(p, nameEnd, "*/*"))                  wildcardJson = true;
 
-    if (t == LdAcceptGeoJson)
+    if (t == SwMimeGeoJson)
     {
       if (q > qGeoJson) { qGeoJson = q; orderGeoJson = entry; }
     }
-    else if (t == LdAcceptLdJson)
+    else if (t == SwMimeLdJson)
     {
       if (q > qLdJson)  { qLdJson  = q; orderLdJson  = entry; }
     }
-    else if (t == LdAcceptJson || wildcardJson)
+    else if (t == SwMimeJson || wildcardJson)
     {
       if (q > qJson)    { qJson    = q; orderJson    = entry; }
     }
@@ -152,22 +152,22 @@ LdAcceptType ldAcceptParse(const char* acceptHeader)
   // No acceptable type — § 6.3.4 mandates HTTP 406. The route layer
   // makes that decision; we just signal "none acceptable".
   if (qJson < 0 && qLdJson < 0 && qGeoJson < 0)
-    return LdAcceptNone;
+    return SwMimeNone;
 
   // Pick the highest q. Equal q → smallest first-appearance order wins.
   // Initialise with json as the spec-default to bias ties towards it
   // when nothing was sent (which extractQ would have given q=1.0).
-  LdAcceptType best  = LdAcceptJson;
+  SwMimeType best  = SwMimeJson;
   double       bestQ = qJson;
   int          bestO = orderJson;
 
   if (qLdJson > bestQ || (qLdJson == bestQ && qLdJson >= 0 && (bestO < 0 || orderLdJson < bestO)))
   {
-    best = LdAcceptLdJson; bestQ = qLdJson; bestO = orderLdJson;
+    best = SwMimeLdJson; bestQ = qLdJson; bestO = orderLdJson;
   }
   if (qGeoJson > bestQ || (qGeoJson == bestQ && qGeoJson >= 0 && (bestO < 0 || orderGeoJson < bestO)))
   {
-    best = LdAcceptGeoJson;
+    best = SwMimeGeoJson;
   }
 
   return best;

@@ -26,7 +26,7 @@
 #include "kjson/KjNode.h"                              // KjNode
 
 #include "swNgsild/LdFormat.h"                     // LdFormat
-#include "swNgsild/ldAcceptParse.h"                  // LdAcceptType
+#include "swNgsild/ldAcceptParse.h"                  // SwMimeType
 #include "swNgsild/LdSubStatus.h"                  // LdSubStatus
 #include "swNgsild/LdQ.h"                              // LdQNode
 #include "swNgsild/LdScopeExpr.h"                      // LdScopeExpr
@@ -118,7 +118,7 @@ typedef struct LdSubCacheItem
   // Subscription state (borrowed pointers into subTree)
   LdSubStatus               status;         // § 5.2.12 lifecycle (enum — wire form converted at parse/render)
   char*                     endpointUri;    // notification.endpoint.uri
-  LdAcceptType              endpointAccept; // notification.endpoint.accept (§ 5.2.15) — LdAcceptJson default
+  SwMimeType              endpointAccept; // notification.endpoint.accept (§ 5.2.15) — SwMimeJson default
   char*                     contextUrl;     // jsonldContext URL for notification compaction
   // ngsildConformance (§ 5.2.12 / § 4.3.6.8) — request notifications conformant
   // to an older NGSI-LD spec version. 0/0 = absent (no downgrade).

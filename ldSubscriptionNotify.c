@@ -829,8 +829,8 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   // `data` array with a FeatureCollection. Each entity becomes a Feature
   // with id at the top level, geometry from the GeoProperty, and the rest
   // of the entity as `properties`.
-  bool acceptGeoJson = (itemP->endpointAccept == LdAcceptGeoJson);
-  bool acceptLdJson  = (itemP->endpointAccept == LdAcceptLdJson);
+  bool acceptGeoJson = (itemP->endpointAccept == SwMimeGeoJson);
+  bool acceptLdJson  = (itemP->endpointAccept == SwMimeLdJson);
 
   // ld+json notification body: per § 5.8.6 + § 6.3.5, each entity in data[]
   // (and the FeatureCollection / each Feature for geo+json — § 6.3.7) shall

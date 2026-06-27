@@ -14,7 +14,7 @@
 #include "swRest/swRest.h"                             // swRest
 #include "swNgsild/SwNgsild.h"                           // swNgsild
 #include "swNgsild/ldParams.h"                           // LD_PARAM_LIMIT, LD_PARAM_OFFSET
-#include "swNgsild/ldAcceptParse.h"                      // ldAcceptParse, LdAcceptType
+#include "swNgsild/ldAcceptParse.h"                      // ldAcceptParse, SwMimeType
 
 #include "swNgsild/ldPagination.h"                       // Own interface
 
@@ -74,8 +74,8 @@ const char* ldPaginationMediaType(void)
 {
   switch (ldAcceptParse(swRest.in.accept))
   {
-  case LdAcceptGeoJson: return "application/geo+json";
-  case LdAcceptLdJson:  return "application/ld+json";
+  case SwMimeGeoJson: return "application/geo+json";
+  case SwMimeLdJson:  return "application/ld+json";
   default:              return "application/json";
   }
 }

@@ -32,7 +32,7 @@
 #include "swNgsild/ldCheckGeo.h"                          // ldCheckGeoQuery
 #include "swNgsild/ldTypes.h"                            // ldOpToString
 #include "swNgsild/ldError.h"                            // ldError
-#include "swNgsild/ldAcceptParse.h"                      // ldAcceptParse, LdAcceptType
+#include "swNgsild/ldAcceptParse.h"                      // ldAcceptParse, SwMimeType
 #include "swNgsild/ldCheckSubscription.h"                // Own interface
 #include "swNgsild/ldConformanceDowngrade.h"             // ldConformanceParse
 #include "swNgsild/ldTraceLevels.h"                      // LdTCheckSub
@@ -124,11 +124,11 @@ static bool checkReceiverInfo(KjNode* riP, KjNode* acceptP)
   ARRAY_CHECK(riP, "Invalid Subscription", "'notification.endpoint.receiverInfo' must be an array");
 
   bool         acceptPresent = (acceptP != NULL && acceptP->type == KjString);
-  LdAcceptType acceptType    = acceptPresent ? ldAcceptParse(acceptP->value.s) : LdAcceptJson;
+  SwMimeType acceptType    = acceptPresent ? ldAcceptParse(acceptP->value.s) : SwMimeJson;
 
   // Effective media type for the notification body: endpoint.accept if present,
   // else a (literal, valid) receiverInfo Content-Type, else application/json.
-  LdAcceptType effectiveType = acceptType;
+  SwMimeType effectiveType = acceptType;
   if (!acceptPresent)
   {
     for (KjNode* kvP = riP->value.firstChildP; kvP != NULL; kvP = kvP->next)
@@ -139,8 +139,8 @@ static bool checkReceiverInfo(KjNode* riP, KjNode* acceptP)
       if (kP == NULL || kP->type != KjString || vP == NULL || vP->type != KjString) continue;
       if ((strcasecmp(kP->value.s, "Content-Type") == 0) && (strcmp(vP->value.s, "urn:ngsi-ld:request") != 0))
       {
-        LdAcceptType ct = ldAcceptParse(vP->value.s);
-        if (ct != LdAcceptNone)
+        SwMimeType ct = ldAcceptParse(vP->value.s);
+        if (ct != SwMimeNone)
           effectiveType = ct;
         break;
       }
@@ -190,7 +190,7 @@ static bool checkReceiverInfo(KjNode* riP, KjNode* acceptP)
                 "'notification.endpoint.receiverInfo' Content-Type cannot use 'urn:ngsi-ld:request'");
         return false;
       }
-      if (ldAcceptParse(val) == LdAcceptNone)
+      if (ldAcceptParse(val) == SwMimeNone)
       {
         ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
                 "'notification.endpoint.receiverInfo' Content-Type must be application/json, application/ld+json or application/geo+json");
@@ -214,7 +214,7 @@ static bool checkReceiverInfo(KjNode* riP, KjNode* acceptP)
                 "'notification.endpoint.receiverInfo' Link cannot use 'urn:ngsi-ld:request'");
         return false;
       }
-      if ((strstr(val, "json-ld#context") != NULL) && (effectiveType == LdAcceptLdJson))
+      if ((strstr(val, "json-ld#context") != NULL) && (effectiveType == SwMimeLdJson))
       {
         ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
                 "'notification.endpoint.receiverInfo' @context Link conflicts with application/ld+json (the @context is carried in the body)");
@@ -224,7 +224,7 @@ static bool checkReceiverInfo(KjNode* riP, KjNode* acceptP)
 
     // Prefer — § 6.5.2 uses it ONLY to steer the geo+json @context placement
     // (body=json vs body=ld+json); it is meaningless for json / ld+json.
-    if ((strcasecmp(key, "Prefer") == 0) && (effectiveType != LdAcceptGeoJson))
+    if ((strcasecmp(key, "Prefer") == 0) && (effectiveType != SwMimeGeoJson))
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
               "'notification.endpoint.receiverInfo' Prefer is only valid with application/geo+json");
