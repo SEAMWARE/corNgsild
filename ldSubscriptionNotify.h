@@ -130,4 +130,25 @@ extern void ldSubscriptionNotifyBatch(LdSubCache*           cacheP,
                                       LdNotifyPendingEntry* pendingV,
                                       int                   pendingN);
 
+
+
+// -----------------------------------------------------------------------------
+//
+// LdThrottleRetrieveFunc - broker hook: retrieve one entity (storage shape) by
+// id for the throttle flush. The lib has no DB access; the broker supplies this
+// (db.entityRetrieve on tenant0). allocP is the flush scratch allocator.
+// Returns NULL if the entity is gone.
+//
+typedef KjNode* (*LdThrottleRetrieveFunc)(const char* entityId, void* allocP);
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldThrottleFlushStart - register the § 5.2.x throttling coalesce-to-latest
+// flush with the periodic loop. cacheP is the (tenant0) subscription cache;
+// retrieveFn re-queries an entity's latest state at flush time.
+//
+extern void ldThrottleFlushStart(LdSubCache* cacheP, LdThrottleRetrieveFunc retrieveFn);
+
 #endif  // SWNGSILD_LDSUBSCRIPTIONNOTIFY_H_

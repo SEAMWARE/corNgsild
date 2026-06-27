@@ -92,6 +92,27 @@ typedef struct LdSubSubordinate
 
 // -----------------------------------------------------------------------------
 //
+// LdThrottleEntry - one buffered (coalesced) entity in a throttled sub's
+// dirty set. § 5.2.x throttling: a match landing INSIDE the window is buffered
+// here (deduped by entity id) instead of dropped; the periodic flush re-queries
+// the latest state and sends one coalesced notification when the window elapses.
+// Storing the id (not a value clone) keeps the hot buffer path O(1) per update;
+// the state is materialized once per window at flush. A DELETE can't be
+// re-queried (the entity is gone), so its final state is captured here.
+//
+typedef struct LdThrottleEntry
+{
+  char*    entityId;     // expanded entity id (malloc'd copy)
+  int      reasonsMask;  // OR of LD_TRIGGER_* across the buffered changes
+  int      op;           // latest LdNotifyOp (delete wins over update)
+  uint64_t deletedAtNs;  // epoch-ns when op is a delete; 0 otherwise
+  KjNode*  deleteState;  // malloc clone of the entity at delete time (delete op only), else NULL
+} LdThrottleEntry;
+
+
+
+// -----------------------------------------------------------------------------
+//
 // LdSubCacheItem - single cached subscription
 //
 typedef struct LdSubCacheItem
@@ -150,6 +171,18 @@ typedef struct LdSubCacheItem
   char*                     notifJoin;        // notification.join (§ 5.2.14) — "flat" / "inline" / "@none" / NULL = absent
   bool                      notifJoinActive;  // precomputed: notifJoin set and != "@none"
   int                       notifJoinLevel;   // notification.joinLevel (§ 5.2.14) — depth; 0 = absent (use spec default 1)
+
+  // § 5.2.x throttling — coalesce-to-latest dirty set. A match landing inside
+  // the per-SUBSCRIPTION window is buffered here (deduped by id) instead of
+  // dropped; the periodic flush (sole sender for a throttled sub) re-queries +
+  // sends one coalesced notification when the window elapses, so a burst's
+  // final state is never lost (the old drop tail-lost it). Guarded by dirtyLock:
+  // the cache rwlock is only a RDLOCK during notify, so concurrent request
+  // threads buffering into the same sub need their own mutex.
+  LdThrottleEntry*          dirtyV;
+  int                       dirtyN;
+  int                       dirtyAlloc;
+  pthread_mutex_t           dirtyLock;
 
   // Distributed-subscription mapping (§ 5.8.1.4) — list of derived subs
   // this local sub has on remote Context Sources. NULL when nothing

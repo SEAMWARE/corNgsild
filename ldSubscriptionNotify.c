@@ -56,6 +56,8 @@
 #include "swNgsild/ldRequestSubstitute.h"              // ldRequestSubstitute
 #include "swNgsild/ldLinkedEntitiesHook.h"             // ldLinkedEntitiesHookInvoke
 #include "swNgsild/ldMqttNotify.h"                     // ldIsMqttUri, ldMqttNotify
+#include "swNgsild/ldThrottleDirty.h"                  // ldThrottleDirtyUpsert/Drain/EntriesFree
+#include "swNgsild/ldPeriodicLoop.h"                   // ldPeriodicLoopRegister
 #include "swNgsild/ldSubscriptionNotify.h"             // Own interface
 
 
@@ -1104,12 +1106,12 @@ void ldSubscriptionNotifyBatch(LdSubCache*           cacheP,
       continue;
     }
 
-    if (itemP->throttling > 0 && itemP->lastNotification > 0)
-    {
-      uint64_t throttlingNs = (uint64_t) (itemP->throttling * 1e9);
-      if ((swRest.requestStartTime - itemP->lastNotification) < throttlingNs)
-        continue;
-    }
+    // § 5.2.x throttling — a throttled sub does NOT send from this (synchronous,
+    // change-driven) path. Each match is BUFFERED into the coalesce-to-latest
+    // dirty set; the periodic flush is the sole sender, so a burst's final state
+    // is never dropped (the old behaviour did `continue` here = tail-loss) and
+    // there is no sync-send vs flush race on the same item.
+    bool throttled = (itemP->throttling > 0);
 
     //
     // Per-pending match pass
@@ -1158,7 +1160,10 @@ void ldSubscriptionNotifyBatch(LdSubCache*           cacheP,
           continue;
       }
 
-      matched[matchedN++] = p;
+      if (throttled)
+        ldThrottleDirtyUpsert(itemP, entityId, p->reasonsMask, p->op, p->deletedAtNs, p->entityP);
+      else
+        matched[matchedN++] = p;
     }
 
     if (matchedN > 0 && sendV != NULL)
@@ -1180,4 +1185,138 @@ void ldSubscriptionNotifyBatch(LdSubCache*           cacheP,
     notificationSendMany(sendV[s].itemP, sendV[s].matched, sendV[s].matchedN);
     ldSubCacheItemUnpin(sendV[s].itemP);
   }
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// § 5.2.x throttling — coalesce-to-latest flush
+//
+// A throttled subscription never sends from the synchronous change-driven path
+// (ldSubscriptionNotifyBatch buffers its matches into the dirty set). This
+// periodic flush is its SOLE sender: once per second it walks the sub cache and,
+// for every throttled sub whose window has elapsed and whose dirty set is
+// non-empty, sends ONE coalesced notification carrying the LATEST state of each
+// buffered entity. Updates are re-queried at flush (so the body is current and
+// the buffer stays O(1)/update); a buffered DELETE carries the state captured at
+// delete time (a gone entity can't be re-queried).
+//
+static LdThrottleRetrieveFunc throttleRetrieveFn = NULL;
+
+
+
+//
+// throttleFlushTick - registered with the periodic-dispatch engine (1 Hz).
+//
+static void throttleFlushTick(void* ctx, uint64_t now, KAlloc* kaP)
+{
+  (void) kaP;
+  LdSubCache* cacheP = (LdSubCache*) ctx;
+  if (cacheP == NULL)
+    return;
+
+  // Phase 1 — under the rdlock, pin every throttled sub that is due to flush.
+  // (dirtyN is read without dirtyLock: a benign gate — a missed/extra item is
+  // caught next tick or drains to 0 below.)
+  ldSubCacheRdLock(cacheP);
+
+  int subCount = 0;
+  for (LdSubCacheItem* c = cacheP->itemList; c != NULL; c = c->next)
+    subCount++;
+
+  LdSubCacheItem** dueV = (subCount > 0) ? (LdSubCacheItem**) kaAlloc(&swRest.kalloc, subCount * sizeof(LdSubCacheItem*)) : NULL;
+  int              dueN = 0;
+
+  for (LdSubCacheItem* itemP = cacheP->itemList; itemP != NULL && dueV != NULL; itemP = itemP->next)
+  {
+    if (itemP->throttling <= 0 || itemP->dirtyN == 0)
+      continue;
+    if (itemP->status == LdSubStatusPaused || itemP->status == LdSubStatusExpired)
+      continue;
+
+    uint64_t throttlingNs = (uint64_t) (itemP->throttling * 1e9);
+    if (itemP->lastNotification + throttlingNs > now)
+      continue;
+
+    ldSubCacheItemPin(itemP);
+    dueV[dueN++] = itemP;
+  }
+
+  ldSubCacheUnlock(cacheP);
+
+  // Phase 2 — lock-free (items pinned): drain each due sub and send one
+  // coalesced notification with the latest state of every buffered entity.
+  for (int d = 0; d < dueN; d++)
+  {
+    LdSubCacheItem*  itemP    = dueV[d];
+    LdThrottleEntry* entriesV = NULL;
+    int              entriesN = 0;
+
+    ldThrottleDirtyDrain(itemP, &entriesV, &entriesN);
+
+    if (entriesN == 0)   // raced empty since the Phase-1 gate
+    {
+      ldThrottleDirtyEntriesFree(entriesV, entriesN);
+      ldSubCacheItemUnpin(itemP);
+      continue;
+    }
+
+    LdNotifyPendingEntry*  peArr  = (LdNotifyPendingEntry*)  kaAlloc(&swRest.kalloc, entriesN * sizeof(LdNotifyPendingEntry));
+    LdNotifyPendingEntry** pePtrs = (LdNotifyPendingEntry**) kaAlloc(&swRest.kalloc, entriesN * sizeof(LdNotifyPendingEntry*));
+    int                    peN    = 0;
+
+    for (int i = 0; i < entriesN; i++)
+    {
+      LdThrottleEntry* e     = &entriesV[i];
+      KjNode*          state = NULL;
+      LdNotifyOp       op    = LdNotifyEntityUpdate;
+      uint64_t         delNs = 0;
+
+      if (e->op == LdNotifyEntityDelete)
+      {
+        state = e->deleteState;        // captured at delete time (can't re-query a gone entity)
+        op    = LdNotifyEntityDelete;
+        delNs = e->deletedAtNs;
+      }
+      else
+      {
+        state = (throttleRetrieveFn != NULL) ? throttleRetrieveFn(e->entityId, &swRest.kalloc) : NULL;
+        if (state == NULL)             // vanished without a delete record — skip
+          continue;
+      }
+
+      peArr[peN].entityP     = state;
+      peArr[peN].op          = op;
+      peArr[peN].hasReport   = false;
+      memset(&peArr[peN].report, 0, sizeof(peArr[peN].report));
+      peArr[peN].reasonsMask = e->reasonsMask;
+      peArr[peN].deletedAtNs = delNs;
+      pePtrs[peN] = &peArr[peN];
+      peN++;
+    }
+
+    if (peN > 0)
+    {
+      notificationSendMany(itemP, pePtrs, peN);
+      itemP->lastNotification = now;
+    }
+
+    ldThrottleDirtyEntriesFree(entriesV, entriesN);
+    ldSubCacheItemUnpin(itemP);
+  }
+}
+
+
+
+//
+// ldThrottleFlushStart - register the coalesce-to-latest flush with the
+// periodic loop. retrieveFn is the broker's "retrieve one entity by id" hook
+// (the lib has no DB access). Single-tenant (tenant0) for now, like the other
+// periodic ticks.
+//
+void ldThrottleFlushStart(LdSubCache* cacheP, LdThrottleRetrieveFunc retrieveFn)
+{
+  throttleRetrieveFn = retrieveFn;
+  ldPeriodicLoopRegister(throttleFlushTick, cacheP);
 }

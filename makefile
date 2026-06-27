@@ -56,6 +56,7 @@ LIB_SOURCES   = swNgsild.c \
                 ldEntityMatch.c \
                 ldEntityAttrsSet.c \
                 ldSubscriptionNotify.c \
+                ldThrottleDirty.c \
                 ldCsrSubNotify.c \
                 ldNotifyStatsHook.c \
                 ldNotifyDefer.c \

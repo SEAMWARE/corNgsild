@@ -26,6 +26,7 @@
 #include "swNgsild/SwNgsild.h"                         // swNgsild (contextP)
 #include "swNgsild/LdVocab.h"                          // LD_VOCAB_*
 #include "swNgsild/LdSubCache.h"                       // LdSubCache, LdSubCacheItem
+#include "swNgsild/ldThrottleDirty.h"                  // ldThrottleDirtyFree
 #include "swNgsild/LdScopeExpr.h"                      // ldScopeExprParse
 #include "swNgsild/LdGeoRel.h"                         // ldGeoRelParse
 #include "swNgsild/LdTypeExpr.h"                       // ldTypeExprParse
@@ -326,6 +327,10 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
   cacheReapRetired(cacheP);   // caller holds the wrlock (or single-threaded at load)
 
   LdSubCacheItem* itemP = (LdSubCacheItem*) calloc(1, sizeof(LdSubCacheItem));
+
+  // § 5.2.x throttling — guards the coalesce-to-latest dirty set (buffered into
+  // by request threads under the cache RDLOCK, drained by the periodic flush).
+  pthread_mutex_init(&itemP->dirtyLock, NULL);
 
   //
   // Clone the subscription tree (malloc allocator — persists across requests)
@@ -784,6 +789,10 @@ static void cacheItemFree(LdSubCacheItem* itemP)
     free(itemP->datasetIdV);     // array only — strings are borrowed
 
   ldSubCacheSubordinatesFree(itemP->subordinateP);
+
+  // § 5.2.x throttling — drop any still-buffered (un-flushed) dirty entries.
+  ldThrottleDirtyFree(itemP);
+  pthread_mutex_destroy(&itemP->dirtyLock);
 
   // qExpr, scopeExpr, geoRel were malloc'd by parsers — need recursive free
   // For now, accept the leak; these are small and the cache lives for the
