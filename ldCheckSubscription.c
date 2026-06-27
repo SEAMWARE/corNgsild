@@ -297,11 +297,12 @@ static bool checkNotification(KjNode* notifP)
   OBJECT_CHECK(notifP, "Invalid Subscription", "'notification' must be a JSON object");
   EMPTY_OBJECT_CHECK(notifP, "'notification' must not be empty");
 
-  KjNode* endpointP   = NULL;
-  KjNode* formatP     = NULL;
-  KjNode* attributesP = NULL;
-  KjNode* pickP       = NULL;
-  KjNode* omitP       = NULL;
+  KjNode* endpointP    = NULL;
+  KjNode* formatP      = NULL;
+  KjNode* attributesP  = NULL;
+  KjNode* pickP        = NULL;
+  KjNode* omitP        = NULL;
+  KjNode* showChangesP = NULL;
 
   for (KjNode* childP = notifP->value.firstChildP; childP != NULL; childP = childP->next)
   {
@@ -376,6 +377,16 @@ static bool checkNotification(KjNode* notifP)
         }
       }
     }
+    else if (strcmp(childP->name, "showChanges") == 0)
+    {
+      DUPLICATE_CHECK(showChangesP, "notification.showChanges", childP);
+      if (childP->type != KjBoolean)
+      {
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
+                "'notification.showChanges' must be a boolean");
+        return false;
+      }
+    }
     else if (strcmp(childP->name, "status") == 0 ||
              strcmp(childP->name, "timesSent") == 0 ||
              strcmp(childP->name, "timesFailed") == 0 ||
@@ -421,6 +432,19 @@ static bool checkNotification(KjNode* notifP)
         }
       }
     }
+  }
+
+  // § 5.2.6 — showChanges cannot be true with the keyValues/simplified format
+  // (keyValues is the backward-compat synonym for simplified). showChanges adds
+  // previousValue / previousLanguageMap sub-attributes, which the simplified
+  // representation strips, so the combination is contradictory.
+  if (showChangesP != NULL && showChangesP->type == KjBoolean && showChangesP->value.b == true &&
+      formatP != NULL && formatP->type == KjString &&
+      (strcmp(formatP->value.s, "keyValues") == 0 || strcmp(formatP->value.s, "simplified") == 0))
+  {
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
+            "'notification.showChanges' cannot be true with the keyValues/simplified format");
+    return false;
   }
 
   MANDATORY_CHECK(endpointP, "Invalid Subscription", "'notification.endpoint' is mandatory");
