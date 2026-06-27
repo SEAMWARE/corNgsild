@@ -1195,15 +1195,16 @@ static void ldRenderHook(void)
     // § 4.5.20: aggregated temporal representation. Numeric Property only
     // for now. Same renderHook position as temporalValues — runs after
     // ldEntityToApi so the bucketed-object attrs aren't re-mangled.
-    if (swNgsild.format == LdFormatAggregatedValues &&
-        swNgsild.aggrMethodsV != NULL && swNgsild.aggrPeriodDuration != NULL)
+    if (swNgsild.format == LdFormatAggregatedValues && swNgsild.aggrMethodsV != NULL)
     {
-      uint64_t periodNs = ldIso8601DurationToNs(swNgsild.aggrPeriodDuration);
+      // § 5.3.2.7: aggrPeriodDuration absent, or PT0S/P0D (→ 0 ns), means a
+      // single bucket over the whole [timeAt, endTimeAt) window. Pass periodNs=0
+      // through — ldToAggregatedValues treats 0 as the whole-window bucket.
+      uint64_t periodNs = (swNgsild.aggrPeriodDuration != NULL) ? ldIso8601DurationToNs(swNgsild.aggrPeriodDuration) : 0;
       uint64_t startNs  = swNgsild.timeAtNs;       // 0 → ldToAggregatedValues uses earliest sample seen
       uint64_t endNs    = swNgsild.endTimeAtNs;    // 0 → ldToAggregatedValues uses latest sample seen
-      if (periodNs > 0)
-        ldToAggregatedValues(treeP, swNgsild.aggrMethodsV, periodNs, startNs, endNs,
-                             swNgsild.timeproperty, swRest.kjsonP, &swRest.kalloc);
+      ldToAggregatedValues(treeP, swNgsild.aggrMethodsV, periodNs, startNs, endNs,
+                           swNgsild.timeproperty, swRest.kjsonP, &swRest.kalloc);
     }
   }
 

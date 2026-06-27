@@ -474,15 +474,21 @@ static void aggregateAttr(KjNode*      attrP,
     if (winEnd   == 0) winEnd   = latest + 1;
     if (winStart == 0) winStart = earliest == UINT64_MAX ? 0 : earliest;
   }
-  if (winEnd <= winStart || periodNs == 0)
+  if (winEnd <= winStart)
     return;
 
-  int bucketCount = (int) ((winEnd - winStart + periodNs - 1) / periodNs);
+  // § 5.3.2.7: aggrPeriodDuration of 0 (PT0S / P0D) — or absent — means ONE
+  // bucket spanning the whole [winStart, winEnd) window. Use that width as the
+  // bucket period so the rest of the bucketing math (index, "to" timestamp) is
+  // uniform; without this a 0 period bailed out and the attr stayed normalized.
+  uint64_t bucketWidth = (periodNs == 0) ? (winEnd - winStart) : periodNs;
+
+  int bucketCount = (int) ((winEnd - winStart + bucketWidth - 1) / bucketWidth);
   if (bucketCount <= 0) bucketCount = 1;
 
   Bucket* buckets = (Bucket*) kaAlloc(faP, sizeof(Bucket) * bucketCount);
   for (int i = 0; i < bucketCount; i++)
-    bucketInit(&buckets[i], winStart + (uint64_t) i * periodNs);
+    bucketInit(&buckets[i], winStart + (uint64_t) i * bucketWidth);
 
   // Bucket the instances. Per § 4.5.19.1:
   //   Property:     Number / Boolean / String / Array / Object — different
@@ -499,7 +505,7 @@ static void aggregateAttr(KjNode*      attrP,
     uint64_t ts = isoToNs(tsP->value.s);
     if (ts < winStart || ts >= winEnd) continue;
 
-    int idx = (int) ((ts - winStart) / periodNs);
+    int idx = (int) ((ts - winStart) / bucketWidth);
     if (idx < 0 || idx >= bucketCount) continue;
     Bucket* b = &buckets[idx];
 
@@ -530,7 +536,7 @@ static void aggregateAttr(KjNode*      attrP,
   for (int m = 0; methodsV != NULL && methodsV[m] != NULL; m++)
   {
     KjNode* methodArr = emitValueArray(methodsV[m], buckets, bucketCount,
-                                       periodNs, attrType, kjsonP, faP);
+                                       bucketWidth, attrType, kjsonP, faP);
     kjChildAdd(attrP, methodArr);
   }
 }
