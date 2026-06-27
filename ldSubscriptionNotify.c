@@ -969,6 +969,21 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   swRestClientRequestInit(&req, SwVerbPost, itemP->endpointUri, NULL);
   swRestClientRequestHeader(&req, "Content-Type", contentType);
 
+  // § 6.4.8 — a notification resulting from a subscription matched under a
+  // non-default tenant carries the NGSILD-Tenant header (the same tenant the
+  // consumer addressed); without it the entity ids in the body are ambiguous.
+  // Taken from the triggering request (the change happened in the sub's tenant).
+  for (int i = 0; i < swRest.in.httpHeaderCount; i++)
+  {
+    if ((swRest.in.httpHeaderV[i].key != NULL) &&
+        (strcasecmp(swRest.in.httpHeaderV[i].key, "NGSILD-Tenant") == 0) &&
+        (swRest.in.httpHeaderV[i].value != NULL) && (swRest.in.httpHeaderV[i].value[0] != 0))
+    {
+      swRestClientRequestHeader(&req, "NGSILD-Tenant", swRest.in.httpHeaderV[i].value);
+      break;
+    }
+  }
+
   // Ngsild-Attribute-Format — non-default representation format of the
   // notification data, as the lowercase NGSI-LD format value (concise /
   // simplified). The default (normalized) carries no header, and the v2 synonym
@@ -1001,8 +1016,11 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
         // exactly one Content-Type / Link and no stray Prefer (the rest, e.g.
         // Authorization, pass through). (Prefer-in-receiverInfo per § 6.5.2 — but
         // we do not leak it to the receiver; see spec-doubt #101.)
+        // NGSILD-Tenant is broker-managed (§ 6.4.8 / § 6.5.2: "cannot be
+        // overridden") — the broker emits it above from the triggering request.
         if ((strcasecmp(kP->value.s, "Content-Type") == 0) ||
             (strcasecmp(kP->value.s, "Prefer") == 0) ||
+            (strcasecmp(kP->value.s, "NGSILD-Tenant") == 0) ||
             ((strcasecmp(kP->value.s, "Link") == 0) && (strstr(vP->value.s, "json-ld#context") != NULL)))
           continue;
 
