@@ -22,7 +22,7 @@
 #include "kjson/kjRenderSize.h"                        // kjFastRenderSize
 
 #include "swNgsild/ldTypes.h"                          // ldFormatFromString
-#include "swNgsild/ldAcceptParse.h"                    // ldAcceptParse
+#include "swRest/SwRestIn.h"                    // swAcceptParse
 #include "swNgsild/SwNgsild.h"                         // swNgsild (contextP)
 #include "swNgsild/LdVocab.h"                          // LD_VOCAB_*
 #include "swNgsild/LdSubCache.h"                       // LdSubCache, LdSubCacheItem
@@ -468,7 +468,7 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
     acceptP = kjLookup(endpointP, "https://uri.etsi.org/ngsi-ld/accept");
     if (acceptP == NULL) acceptP = kjLookup(endpointP, "accept");
   }
-  itemP->endpointAccept = ldAcceptParse((acceptP != NULL && acceptP->type == KjString) ? acceptP->value.s : NULL);
+  itemP->endpointAccept = swAcceptParse((acceptP != NULL && acceptP->type == KjString) ? acceptP->value.s : NULL);
 
   // A receiverInfo Content-Type acts as endpoint.accept when accept is absent
   // (validated consistent in ldCheckSubscription). It is then NOT re-emitted as
@@ -477,7 +477,7 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
   {
     const char* riCt = riHeaderValue(kjLookup(endpointP, "receiverInfo"), "Content-Type");
     if (riCt != NULL)
-      itemP->endpointAccept = ldAcceptParse(riCt);
+      itemP->endpointAccept = swAcceptParse(riCt);
   }
 
   // § 5.2.12 / § 4.3.6.8 ngsildConformance — back-compat target version

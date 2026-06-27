@@ -32,7 +32,7 @@
 #include "swNgsild/ldCheckGeo.h"                          // ldCheckGeoQuery
 #include "swNgsild/ldTypes.h"                            // ldOpToString
 #include "swNgsild/ldError.h"                            // ldError
-#include "swNgsild/ldAcceptParse.h"                      // ldAcceptParse, SwMimeType
+#include "swRest/SwRestIn.h"                      // swAcceptParse, SwMimeType
 #include "swNgsild/ldCheckSubscription.h"                // Own interface
 #include "swNgsild/ldConformanceDowngrade.h"             // ldConformanceParse
 #include "swNgsild/ldTraceLevels.h"                      // LdTCheckSub
@@ -124,7 +124,7 @@ static bool checkReceiverInfo(KjNode* riP, KjNode* acceptP)
   ARRAY_CHECK(riP, "Invalid Subscription", "'notification.endpoint.receiverInfo' must be an array");
 
   bool         acceptPresent = (acceptP != NULL && acceptP->type == KjString);
-  SwMimeType acceptType    = acceptPresent ? ldAcceptParse(acceptP->value.s) : SwMimeJson;
+  SwMimeType acceptType    = acceptPresent ? swAcceptParse(acceptP->value.s) : SwMimeJson;
 
   // Effective media type for the notification body: endpoint.accept if present,
   // else a (literal, valid) receiverInfo Content-Type, else application/json.
@@ -139,7 +139,7 @@ static bool checkReceiverInfo(KjNode* riP, KjNode* acceptP)
       if (kP == NULL || kP->type != KjString || vP == NULL || vP->type != KjString) continue;
       if ((strcasecmp(kP->value.s, "Content-Type") == 0) && (strcmp(vP->value.s, "urn:ngsi-ld:request") != 0))
       {
-        SwMimeType ct = ldAcceptParse(vP->value.s);
+        SwMimeType ct = swAcceptParse(vP->value.s);
         if (ct != SwMimeNone)
           effectiveType = ct;
         break;
@@ -190,13 +190,13 @@ static bool checkReceiverInfo(KjNode* riP, KjNode* acceptP)
                 "'notification.endpoint.receiverInfo' Content-Type cannot use 'urn:ngsi-ld:request'");
         return false;
       }
-      if (ldAcceptParse(val) == SwMimeNone)
+      if (swAcceptParse(val) == SwMimeNone)
       {
         ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
                 "'notification.endpoint.receiverInfo' Content-Type must be application/json, application/ld+json or application/geo+json");
         return false;
       }
-      if (acceptPresent && (ldAcceptParse(val) != acceptType))
+      if (acceptPresent && (swAcceptParse(val) != acceptType))
       {
         ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
                 "'notification.endpoint.receiverInfo' Content-Type conflicts with 'notification.endpoint.accept'");

@@ -14,7 +14,7 @@
 #include "swRest/swRest.h"                             // swRest
 #include "swNgsild/SwNgsild.h"                           // swNgsild
 #include "swNgsild/ldParams.h"                           // LD_PARAM_LIMIT, LD_PARAM_OFFSET
-#include "swNgsild/ldAcceptParse.h"                      // ldAcceptParse, SwMimeType
+#include "swRest/SwRestIn.h"                      // swAcceptParse, SwMimeType
 
 #include "swNgsild/ldPagination.h"                       // Own interface
 
@@ -72,7 +72,7 @@ bool ldPaginationTrim(KjNode* arrayP, int limit)
 //
 const char* ldPaginationMediaType(void)
 {
-  switch (ldAcceptParse(swRest.in.accept))
+  switch (swAcceptParse(swRest.in.accept))
   {
   case SwMimeGeoJson: return "application/geo+json";
   case SwMimeLdJson:  return "application/ld+json";

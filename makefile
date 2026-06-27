@@ -99,7 +99,6 @@ LIB_SOURCES   = swNgsild.c \
                 ldRequestSubstitute.c \
                 ldLinkedEntitiesHook.c \
                 ldExpiresAtPropagate.c \
-                ldAcceptParse.c \
                 ldConformanceDowngrade.c
 LIB_OBJS      = $(LIB_SOURCES:c=o)
 LIB_DEPS      = $(LIB_SOURCES:c=d)

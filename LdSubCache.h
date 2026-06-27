@@ -26,7 +26,7 @@
 #include "kjson/KjNode.h"                              // KjNode
 
 #include "swNgsild/LdFormat.h"                     // LdFormat
-#include "swNgsild/ldAcceptParse.h"                  // SwMimeType
+#include "swRest/SwRestIn.h"                  // SwMimeType
 #include "swNgsild/LdSubStatus.h"                  // LdSubStatus
 #include "swNgsild/LdQ.h"                              // LdQNode
 #include "swNgsild/LdScopeExpr.h"                      // LdScopeExpr

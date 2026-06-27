@@ -17,7 +17,7 @@
 #include "swNgsild/LdProblem.h"                          // LD_ERROR_*
 #include "swNgsild/ldError.h"                            // ldError
 #include "swNgsild/ldCheckGeo.h"                         // ldCheckGeoQuery
-#include "swNgsild/ldAcceptParse.h"                      // ldAcceptParse, SwMimeGeoJson
+#include "swRest/SwRestIn.h"                      // swAcceptParse, SwMimeGeoJson
 
 #include "swNgsild/ldParamsValidate.h"                   // Own interface
 
@@ -214,7 +214,7 @@ bool ldParamsValidate(void)
   // other Accept it shall be rejected as 400 BadRequestData.
   if (swRest.out.httpStatusCode < 400 &&
       swNgsild.geometryProperty != NULL &&
-      ldAcceptParse(swRest.in.accept) != SwMimeGeoJson)
+      swAcceptParse(swRest.in.accept) != SwMimeGeoJson)
   {
     ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid request",
             "geometryProperty is only valid with Accept: application/geo+json");

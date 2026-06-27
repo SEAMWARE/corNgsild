@@ -37,7 +37,7 @@
 #include "swNgsild/ldStripSysAttrs.h"                    // ldStripSysAttrs
 #include "swNgsild/ldLangReduce.h"                       // ldLangReduce
 #include "swNgsild/ldCsrSubNotify.h"                  // ldCsrSubPendingDiscard
-#include "swNgsild/ldAcceptParse.h"                      // ldAcceptParse, SwMimeType
+#include "swRest/SwRestIn.h"                      // swAcceptParse, SwMimeType
 #include "swNgsild/ldRender.h"                           // ldToSimplified, ldToConcise
 #include "swNgsild/LdNormalizeInput.h"                    // ldNormalizeInput
 #include "swNgsild/ldHooks.h"                            // Own interface
@@ -1016,7 +1016,7 @@ static void ldRenderHook(void)
   // check sits in the renderHook (called even on error paths) and
   // overrides whatever problemType the service routine set.
   {
-    SwMimeType acceptType    = ldAcceptParse(swRest.in.accept);
+    SwMimeType acceptType    = swAcceptParse(swRest.in.accept);
     uint64_t     ldOp          = (swRest.serviceP != NULL) ? swRest.serviceP->ldOp : 0;
     bool         entityReadOp  = (ldOp & (LdOpRetrieveEntity | LdOpQueryEntities | LdOpBatchQuery)) != 0;
 
@@ -1210,7 +1210,7 @@ static void ldRenderHook(void)
   // § 6.3.4 Accept negotiation already ran at the top of this hook —
   // here we only need the GeoJSON branch decision for the format
   // path (the unacceptable-Accept case has already returned).
-  SwMimeType acceptType    = ldAcceptParse(swRest.in.accept);
+  SwMimeType acceptType    = swAcceptParse(swRest.in.accept);
   bool         acceptGeoJson = (acceptType == SwMimeGeoJson);
   if (acceptGeoJson && treeP != NULL)
   {
