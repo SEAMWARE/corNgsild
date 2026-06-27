@@ -15,11 +15,13 @@
 
 // -----------------------------------------------------------------------------
 //
-// ldPickOmit - apply pick/omit attribute projection to an entity
+// ldPickOmit - apply pick/omit attribute projection to an entity (root form).
 //
-// If pickV is non-NULL, only attributes whose (expanded) name appears in pickV
-// are kept.  If omitV is non-NULL, attributes whose name appears in omitV are
-// removed.  The special fields "id", "type", and "@context" are never removed.
+// Per § 6.3.6 the entity is reduced to ONLY the listed members; id/type/scope
+// count as Entity members and are NOT protected — they are stripped when not
+// in pickV (or are removed when in omitV). Only `@context` (added at render
+// time, not part of the stored entity) survives. This is the key difference
+// vs. ldAttrsFilter (the deprecated `attrs`), which always keeps id/type/scope.
 //
 extern void ldPickOmit(KjNode* entityP, char** pickV, char** omitV);
 
@@ -27,12 +29,11 @@ extern void ldPickOmit(KjNode* entityP, char** pickV, char** omitV);
 
 // -----------------------------------------------------------------------------
 //
-// ldPickOmitNested - same as ldPickOmit but does NOT protect id/type/@context.
-//
-// Used on Linked Entities reached via § 4.5.23 — when a sub-projection
-// `attr{...}` lists exactly what to keep (or remove), id/type/@context have
-// no special status. The ETSI test suite (018_20, 018_21, 019_20, 019_21,
-// 019_22, 019_23) checks this directly.
+// ldPickOmitNested - identical semantics to ldPickOmit; a separate symbol so
+// call sites on Linked Entities reached via § 4.5.23 can document intent. A
+// sub-projection `attr{...}` lists exactly what to keep (or remove), and
+// id/type have no special status there either. The ETSI test suite (018_20,
+// 018_21, 019_20, 019_21, 019_22, 019_23) checks this directly.
 //
 extern void ldPickOmitNested(KjNode* entityP, char** pickV, char** omitV);
 
