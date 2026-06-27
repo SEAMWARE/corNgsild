@@ -1216,7 +1216,7 @@ static void ldRenderHook(void)
   {
     ldToGeoJson(&swRest.out.responseTree, swNgsild.geometryProperty, swRest.kjsonP);
     treeP = swRest.out.responseTree;
-    swRest.out.contentType = "application/geo+json";
+    swRest.out.contentType = (char*) swMimeString(SwMimeGeoJson);
   }
 
   // Resolve the response context. Honors (in order):
@@ -1352,7 +1352,7 @@ static void ldRenderHook(void)
     }
 
     if (acceptLdJson)
-      swRest.out.contentType = "application/ld+json";
+      swRest.out.contentType = (char*) swMimeString(SwMimeLdJson);
     // (geo+json content-type was already set above when ldToGeoJson ran)
   }
 
