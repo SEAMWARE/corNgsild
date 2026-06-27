@@ -926,14 +926,15 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   }
 
   //
-  // Content-Type negotiation (§ 5.2.14 endpoint.accept):
+  // Content-Type of the notification — the single resolved media type for this
+  // subscription (itemP->endpointAccept, decided once in ldSubCache from
+  // endpoint.accept or, absent that, the receiverInfo Content-Type), rendered
+  // via the enum→string table. No re-derivation from accept/receiverInfo here.
   //   application/ld+json  → JSON-LD (Link header omitted; @context inline if any)
   //   application/geo+json → GeoJSON FeatureCollection (already converted above)
   //   default              → application/json (Link header carries @context)
   //
-  const char* contentType = "application/json";
-  if (acceptGeoJson)      contentType = "application/geo+json";
-  else if (acceptLdJson)  contentType = "application/ld+json";
+  const char* contentType = swMimeString(itemP->endpointAccept);
 
   //
   // MQTT delivery path (§ 7) — when endpoint.uri is mqtt[s]://...
