@@ -348,70 +348,31 @@ static void ldParseHook(void)
       return;
   }
 
-  if (isLdJson && isArrayBody && !isBatchOp)
-  {
-    for (KjNode* elemP = swRest.in.requestTree->value.firstChildP; elemP != NULL; elemP = elemP->next)
-    {
-      if (elemP->type != KjObject)
-        continue;
-      if (kjLookup(elemP, "@context") == NULL)
-      {
-        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Missing @context",
-                "@context is mandatory on every element of an application/ld+json array body");
-        swNgsild.contextError = true;
-        return;
-      }
-    }
-  }
-  else if (isLdJson && isArrayBody && isBatchOp)
-  {
-    // Walk the array, mark elements missing @context as pre-rejected so the
-    // batch handler emits a per-entity BatchEntityError for them. Rejected
-    // elements are removed from the tree so expansion ignores them.
-    KjNode* prev = NULL;
-    KjNode* elemP = swRest.in.requestTree->value.firstChildP;
-    while (elemP != NULL)
-    {
-      KjNode* nextP = elemP->next;
-      if (elemP->type == KjObject && kjLookup(elemP, "@context") == NULL)
-      {
-        if (swNgsild.batchPreErrors == NULL)
-          swNgsild.batchPreErrors = kjArray(swRest.kjsonP, NULL);
-
-        const char* eid = "";
-        KjNode* idP = kjLookup(elemP, "id");
-        if (idP != NULL && idP->type == KjString) eid = idP->value.s;
-
-        KjNode* entry = kjObject(swRest.kjsonP, NULL);
-        kjChildAdd(entry, kjString(swRest.kjsonP, "entityId", eid));
-        KjNode* errObj = kjObject(swRest.kjsonP, "error");
-        kjChildAdd(errObj, kjString (swRest.kjsonP, "type",   LD_ERROR_BAD_REQUEST_DATA));
-        kjChildAdd(errObj, kjString (swRest.kjsonP, "title",  "Missing @context"));
-        kjChildAdd(errObj, kjInteger(swRest.kjsonP, "status", 400));
-        kjChildAdd(errObj, kjString (swRest.kjsonP, "detail", "@context is mandatory on every element of an application/ld+json array body"));
-        kjChildAdd(entry, errObj);
-        kjChildAdd(swNgsild.batchPreErrors, entry);
-
-        // Splice elemP out of the tree.
-        kjNodeDecouple(swRest.in.requestTree, elemP, prev);
-      }
-      else
-      {
-        prev = elemP;
-      }
-      elemP = nextP;
-    }
-  }
-  else if (isLdJson && atCtx == NULL && !isArrayBody)
-  {
-    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Missing @context",
-            "@context is mandatory for Content-Type application/ld+json");
-    swNgsild.contextError = true;
-    return;
-  }
+  // § 6.2.4 — @context vs Content-Type rules. These are request-level
+  // preconditions evaluated during @context RESOLUTION, before any entity is
+  // interpreted, so a violation is a single 400 — NOT a per-entity 207, which
+  // § 7.7/7.8/7.9/7.10 reserve for create/update failures discovered AFTER
+  // resolution succeeds. The error granularity matches the @context-resolution
+  // granularity (request-level Link header / per-request body).
+  //
+  //   application/ld+json : @context is carried in the body. A json-ld#context
+  //                         Link header contradicts that → 400. A single object
+  //                         must carry @context; an entity-array body must carry
+  //                         it on EVERY element.
+  //   application/json    : @context is carried in the Link header. @context in
+  //                         the body is forbidden — on a single object, or on
+  //                         ANY element of an entity-array body → 400.
+  //
+  // An "entity-array body" (batch create/upsert/update/merge) is flagged per
+  // service via options.features.entityArrayBody. Batch delete (id strings) and
+  // batch query (a Query object) are not entity arrays and so are exempt.
+  //
+  bool isEntityArrayOp = (swRest.serviceP != NULL &&
+                          swRest.serviceP->options.features.entityArrayBody);
 
   if (isLdJson)
   {
+    // A json-ld#context Link header is never allowed with application/ld+json.
     for (int i = 0; i < swRest.in.httpHeaderCount; i++)
     {
       if (strcasecmp(swRest.in.httpHeaderV[i].key, "Link") == 0 &&
@@ -423,51 +384,53 @@ static void ldParseHook(void)
         return;
       }
     }
-  }
 
-  if (!isLdJson && atCtx != NULL)
-  {
-    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Unexpected @context",
-            "@context in body not allowed for Content-Type application/json");
-    swNgsild.contextError = true;
-    return;
-  }
-
-  // § 6.3.5 — same rule on the batch path: an array element carrying
-  // an in-body @context with Content-Type application/json is per-
-  // entity bad request (003_06_01). Mirror the ld+json batch branch.
-  if (!isLdJson && isArrayBody && isBatchOp)
-  {
-    KjNode* prev = NULL;
-    KjNode* elemP = swRest.in.requestTree->value.firstChildP;
-    while (elemP != NULL)
+    if (isArrayBody && isEntityArrayOp)
     {
-      KjNode* nextP = elemP->next;
-      if (elemP->type == KjObject && kjLookup(elemP, "@context") != NULL)
+      for (KjNode* elemP = swRest.in.requestTree->value.firstChildP; elemP != NULL; elemP = elemP->next)
       {
-        if (swNgsild.batchPreErrors == NULL)
-          swNgsild.batchPreErrors = kjArray(swRest.kjsonP, NULL);
-
-        const char* eid = "";
-        KjNode* idP = kjLookup(elemP, "id");
-        if (idP != NULL && idP->type == KjString) eid = idP->value.s;
-
-        KjNode* entry = kjObject(swRest.kjsonP, NULL);
-        kjChildAdd(entry, kjString(swRest.kjsonP, "entityId", eid));
-        KjNode* errObj = kjObject(swRest.kjsonP, "error");
-        kjChildAdd(errObj, kjString(swRest.kjsonP, "type",   LD_ERROR_BAD_REQUEST_DATA));
-        kjChildAdd(errObj, kjString(swRest.kjsonP, "title",  "Unexpected @context"));
-        kjChildAdd(errObj, kjString(swRest.kjsonP, "detail", "@context in body not allowed for Content-Type application/json"));
-        kjChildAdd(entry, errObj);
-        kjChildAdd(swNgsild.batchPreErrors, entry);
-
-        kjNodeDecouple(swRest.in.requestTree, elemP, prev);
+        if (elemP->type != KjObject)
+          continue;
+        if (kjLookup(elemP, "@context") == NULL)
+        {
+          ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Missing @context",
+                  "every entity of an application/ld+json array body must carry an @context member");
+          swNgsild.contextError = true;
+          return;
+        }
       }
-      else
+    }
+    else if (!isArrayBody && atCtx == NULL)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Missing @context",
+              "@context is mandatory for Content-Type application/ld+json");
+      swNgsild.contextError = true;
+      return;
+    }
+  }
+  else  // application/json — @context must NOT appear in the body
+  {
+    if (isArrayBody && isEntityArrayOp)
+    {
+      for (KjNode* elemP = swRest.in.requestTree->value.firstChildP; elemP != NULL; elemP = elemP->next)
       {
-        prev = elemP;
+        if (elemP->type != KjObject)
+          continue;
+        if (kjLookup(elemP, "@context") != NULL)
+        {
+          ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Unexpected @context",
+                  "@context in body not allowed for Content-Type application/json");
+          swNgsild.contextError = true;
+          return;
+        }
       }
-      elemP = nextP;
+    }
+    else if (!isArrayBody && atCtx != NULL)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Unexpected @context",
+              "@context in body not allowed for Content-Type application/json");
+      swNgsild.contextError = true;
+      return;
     }
   }
 

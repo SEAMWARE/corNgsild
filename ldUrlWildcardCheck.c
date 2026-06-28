@@ -95,13 +95,13 @@ void ldUrlWildcardOptionsInit(SwRestService* service)
   if (service->wildcards <= 0)                         return;
 
   if (slot0NeedsUri(service->url))
-    service->options |= LD_WC_URI_AT_0;
+    service->options.wildcards.uriAt0 = 1;
 
   if (service->wildcards >= 2 && pathHasSegment(service->url, "attrs"))
-    service->options |= LD_WC_NAME_AT_1;
+    service->options.wildcards.nameAt1 = 1;
 
   if (service->wildcards >= 3)
-    service->options |= LD_WC_URI_AT_2;
+    service->options.wildcards.uriAt2 = 1;
 }
 
 
@@ -113,10 +113,9 @@ void ldUrlWildcardOptionsInit(SwRestService* service)
 bool ldUrlWildcardCheck(void)
 {
   if (swRest.serviceP == NULL)                 return true;
-  uint64_t opts = swRest.serviceP->options;
-  if (opts == 0)                               return true;
+  SwRestServiceOptions opts = swRest.serviceP->options;
 
-  if ((opts & LD_WC_URI_AT_0) && swRest.in.wildcard[0] != NULL
+  if (opts.wildcards.uriAt0 && swRest.in.wildcard[0] != NULL
       && !isUri(swRest.in.wildcard[0]))
   {
     ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid URI",
@@ -124,7 +123,7 @@ bool ldUrlWildcardCheck(void)
     return false;
   }
 
-  if ((opts & LD_WC_NAME_AT_1) && swRest.in.wildcard[1] != NULL
+  if (opts.wildcards.nameAt1 && swRest.in.wildcard[1] != NULL
       && !ldIsValidName(swRest.in.wildcard[1]))
   {
     ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Attribute Name",
@@ -132,7 +131,7 @@ bool ldUrlWildcardCheck(void)
     return false;
   }
 
-  if ((opts & LD_WC_URI_AT_2) && swRest.in.wildcard[2] != NULL
+  if (opts.wildcards.uriAt2 && swRest.in.wildcard[2] != NULL
       && !isUri(swRest.in.wildcard[2]))
   {
     ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid URI",
