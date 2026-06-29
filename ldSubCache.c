@@ -11,6 +11,7 @@
 #include <stdlib.h>                                    // malloc, calloc, free
 #include <string.h>                                    // strcmp, strdup
 
+#include "ktrace/kTrace.h"                             // KT_RE
 #include "kalloc/kaBufferInit.h"                       // kaBufferInit
 #include "kalloc/kaAlloc.h"                            // kaAlloc
 #include "kjson/KjNode.h"                              // KjNode
@@ -319,7 +320,7 @@ static const char* riHeaderValue(KjNode* riP, const char* name)
 //
 // ldSubCacheItemAdd -
 //
-LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* qExpr)
+LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* qExpr, LdFormat format)
 {
   if (cacheP == NULL || subTree == NULL)
     return NULL;
@@ -460,8 +461,15 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
   KjNode* statusP = kjLookup(itemP->subTree, LD_VOCAB_STATUS);
   itemP->status = ldSubStatusFromString((statusP != NULL && statusP->type == KjString) ? statusP->value.s : NULL);
 
-  KjNode* notifP    = kjLookup(itemP->subTree, LD_VOCAB_NOTIFICATION);
-  KjNode* endpointP = (notifP != NULL) ? kjLookup(notifP, LD_VOCAB_ENDPOINT) : NULL;
+  // 'notification' is mandatory (validated on every write). A subscription that
+  // reaches the cache without one means the stored document is corrupt — refuse
+  // to cache it rather than silently fabricate defaults for the missing members.
+  KjNode* notifP = kjLookup(itemP->subTree, LD_VOCAB_NOTIFICATION);
+  if (notifP == NULL)
+    KT_RE(NULL, "Corrupted DB: subscription '%s' has no 'notification' (a mandatory member) — refusing to cache it",
+          itemP->subId ? itemP->subId : "?");
+
+  KjNode* endpointP = kjLookup(notifP, LD_VOCAB_ENDPOINT);
   KjNode* uriP      = (endpointP != NULL) ? kjLookup(endpointP, LD_VOCAB_URI) : NULL;
   itemP->endpointUri = (uriP != NULL && uriP->type == KjString) ? uriP->value.s : NULL;
 
@@ -580,8 +588,23 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
   if (expiresP != NULL && expiresP->type == KjString)
     itemP->expiresAt = ldIsoToNanoseconds(expiresP->value.s);
 
-  KjNode* formatP = (notifP != NULL) ? kjLookup(notifP, LD_VOCAB_FORMAT) : NULL;
-  itemP->format = ldFormatFromString((formatP != NULL && formatP->type == KjString) ? formatP->value.s : NULL);
+  // The write paths pass the format already parsed (and value-checked) by
+  // ldCheckSubscription, so the string is matched only once. The cache-reload
+  // path passes LdFormatUnset and we derive it from the stored tree: an absent
+  // 'format' is the normalized default (ldFormatFromString(NULL) == LdFormatNone),
+  // but a 'format' that is present and not a string is a corrupt stored document.
+  if (format != LdFormatUnset)
+    itemP->format = format;
+  else
+  {
+    KjNode* formatP = kjLookup(notifP, LD_VOCAB_FORMAT);
+    if (formatP != NULL && formatP->type != KjString)
+      KT_RE(NULL, "Corrupted DB: subscription '%s' has a non-string 'notification.format' — refusing to cache it",
+            itemP->subId ? itemP->subId : "?");
+    // A subscription notification format is always an entity representation,
+    // never a temporal one — temporal=false.
+    itemP->format = ldFormatFromString((formatP != NULL) ? formatP->value.s : NULL, /*temporal*/false);
+  }
 
   if (notifP != NULL)
   {

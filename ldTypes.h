@@ -9,6 +9,8 @@
 // Copyright 2026 Seamware
 // 
 //
+#include <stdbool.h>                                     // bool
+
 #include "swNgsild/LdAttrType.h"                        // LdAttrType
 #include "swNgsild/LdOp.h"                              // LdOp
 #include "swNgsild/LdFormat.h"                           // LdFormat
@@ -59,6 +61,12 @@ extern const char* ldFormatToString(LdFormat format);
 //
 // ldFormatFromString -
 //
-extern LdFormat ldFormatFromString(const char* str);
+// 'temporal' selects which family of representations is valid: with it false
+// only the entity formats (normalized / concise / simplified, keyValues being
+// the synonym for simplified) are recognised; with it true the temporal-query
+// formats (temporalValues / aggregatedValues) are too. An unrecognised string
+// (for the selected family) returns LdFormatNone.
+//
+extern LdFormat ldFormatFromString(const char* str, bool temporal);
 
 #endif  // SWNGSILD_LDTYPES_H_

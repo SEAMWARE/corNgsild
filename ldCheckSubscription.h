@@ -14,6 +14,7 @@
 #include "kalloc/KAlloc.h"                             // KAlloc
 #include "kjson/KjNode.h"                               // KjNode
 #include "swNgsild/LdOp.h"                               // LdOp
+#include "swNgsild/LdFormat.h"                           // LdFormat
 
 
 
@@ -21,7 +22,14 @@
 //
 // ldCheckSubscription -
 //
-extern bool ldCheckSubscription(KjNode* subP, LdOp op, KAlloc* faP);
+// 'merged' true ⇒ validating the COMPLETE merged result of a PATCH (§ 5.8.3):
+// enforce the same mandatory/consistency rules as Create, but tolerate the
+// server-owned read-only fields (status, …) the stored document carries.
+//
+// notifFormatP (optional, may be NULL): on success, receives the parsed
+// notification.format so the caller can hand it to ldSubCacheItemAdd without
+// re-matching the string (LdFormatNone when no 'format' member is present).
+extern bool ldCheckSubscription(KjNode* subP, LdOp op, bool merged, LdFormat* notifFormatP, KAlloc* faP);
 
 
 

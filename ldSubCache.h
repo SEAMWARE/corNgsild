@@ -47,8 +47,11 @@ extern void ldSubCacheItemUnpin(LdSubCacheItem* itemP);
 // qExpr:  pre-parsed q-filter tree (NULL if no q). Ownership transferred to cache.
 //         If NULL and the subscription has a q field, it will NOT be re-parsed
 //         (the expanded IRI format is not parseable by ldQParse).
+// format: the notification format, already parsed by the caller (the write paths
+//         get it from ldCheckSubscription, so the string isn't matched twice).
+//         Pass LdFormatUnset to have it derived from the subTree (cache-reload path).
 //
-extern LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* qExpr);
+extern LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* qExpr, LdFormat format);
 
 
 

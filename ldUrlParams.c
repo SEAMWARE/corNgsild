@@ -359,7 +359,11 @@ void ldParamHook(const char* name, const char* value)
     // § 6.3.18: 'format' must be one of the spec-defined values; an
     // unknown value is InvalidRequest, not silently ignored (which would
     // bury the error behind a downstream "not supported" 422).
-    swNgsild.format = ldFormatFromString(value);
+    // temporal=true preserves today's behaviour: the URL ?format= here still
+    // accepts temporalValues/aggregatedValues. Tightening this per endpoint
+    // (reject them on non-temporal GETs) needs the service's options.features
+    // and is tracked separately.
+    swNgsild.format = ldFormatFromString(value, /*temporal*/true);
     if (swNgsild.format == LdFormatNone && value != NULL && value[0] != 0)
     {
       ldError(400, LD_ERROR_INVALID_REQUEST, "Invalid Request",

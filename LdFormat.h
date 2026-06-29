@@ -17,6 +17,7 @@
 //
 typedef enum LdFormat
 {
+  LdFormatUnset = -1,   // "not yet determined" — e.g. tell ldSubCacheItemAdd to derive it from the tree
   LdFormatNone = 0,
   LdFormatNormalized,
   LdFormatConcise,

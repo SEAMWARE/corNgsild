@@ -241,7 +241,7 @@ static bool checkReceiverInfo(KjNode* riP, KjNode* acceptP)
 //
 // checkEndpoint - validate the "notification.endpoint" object
 //
-static bool checkEndpoint(KjNode* endpointP)
+static bool checkEndpoint(KjNode* endpointP, bool complete)
 {
   OBJECT_CHECK(endpointP, "Invalid Subscription", "'notification.endpoint' must be a JSON object");
   EMPTY_OBJECT_CHECK(endpointP, "'notification.endpoint' must not be empty");
@@ -278,7 +278,12 @@ static bool checkEndpoint(KjNode* endpointP)
     }
   }
 
-  MANDATORY_CHECK(uriP, "Invalid Subscription", "'notification.endpoint.uri' is mandatory");
+  // 'uri' is mandatory only when validating a COMPLETE document (Create or the
+  // post-merge re-validation). On an update FRAGMENT the endpoint may be touched
+  // partially (e.g. only 'accept'), so its absence here is not an error — the
+  // merged result's re-validation enforces presence.
+  if (complete)
+    MANDATORY_CHECK(uriP, "Invalid Subscription", "'notification.endpoint.uri' is mandatory");
 
   if (receiverInfoP != NULL && !checkReceiverInfo(receiverInfoP, acceptP))
     return false;
@@ -292,7 +297,7 @@ static bool checkEndpoint(KjNode* endpointP)
 //
 // checkNotification - validate the "notification" object
 //
-static bool checkNotification(KjNode* notifP)
+static bool checkNotification(KjNode* notifP, bool complete, bool merged, LdFormat* notifFormatP)
 {
   OBJECT_CHECK(notifP, "Invalid Subscription", "'notification' must be a JSON object");
   EMPTY_OBJECT_CHECK(notifP, "'notification' must not be empty");
@@ -314,6 +319,27 @@ static bool checkNotification(KjNode* notifP)
     {
       DUPLICATE_CHECK(formatP, "notification.format", childP);
       STRING_CHECK(childP, "Invalid Subscription", "'notification.format' must be a string");
+
+      // § 5.2.6 — format is an enum. Validate its VALUE only on a COMPLETE
+      // document (create or the post-merge re-validation): a bad value in an
+      // update fragment lands in the merged result and is caught there, so the
+      // string is matched exactly once. A subscription notification carries an
+      // entity representation, never a temporal one (temporal=false), so
+      // anything outside normalized/concise/simplified (keyValues being the
+      // synonym for simplified) parses to LdFormatNone. The parsed value is
+      // handed to the caller via notifFormatP, so the cache add does not re-match it.
+      if (complete)
+      {
+        LdFormat fmt = ldFormatFromString(childP->value.s, /*temporal*/false);
+        if (fmt == LdFormatNone)
+        {
+          ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
+                  "'notification.format' must be one of normalized, concise, simplified, keyValues");
+          return false;
+        }
+        if (notifFormatP != NULL)
+          *notifFormatP = fmt;
+      }
     }
     else if (strcmp(childP->name, LD_VOCAB_ATTRIBUTES) == 0 || strcmp(childP->name, "attributes") == 0)
     {
@@ -394,9 +420,15 @@ static bool checkNotification(KjNode* notifP)
              strcmp(childP->name, "lastSuccess") == 0 ||
              strcmp(childP->name, "lastFailure") == 0)
     {
-      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Read-Only Field",
-              "'notification.%s' is read-only and cannot be set", childP->name);
-      return false;
+      // Server-owned read-only fields. Rejected when they arrive in a client
+      // payload, but tolerated when re-validating a stored/merged document
+      // ('merged'), which legitimately carries them.
+      if (!merged)
+      {
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Read-Only Field",
+                "'notification.%s' is read-only and cannot be set", childP->name);
+        return false;
+      }
     }
   }
 
@@ -447,9 +479,13 @@ static bool checkNotification(KjNode* notifP)
     return false;
   }
 
-  MANDATORY_CHECK(endpointP, "Invalid Subscription", "'notification.endpoint' is mandatory");
+  // 'endpoint' is mandatory only in a COMPLETE document (Create or post-merge
+  // re-validation). An update fragment may touch 'notification' partially
+  // (e.g. only 'format') without re-sending the endpoint.
+  if (complete)
+    MANDATORY_CHECK(endpointP, "Invalid Subscription", "'notification.endpoint' is mandatory");
 
-  if (checkEndpoint(endpointP) == false)
+  if (endpointP != NULL && checkEndpoint(endpointP, complete) == false)
     return false;
 
   return true;
@@ -717,11 +753,25 @@ static bool checkGeoQ(KjNode* geoQP, KAlloc* kaP)
 //
 // ldCheckSubscription -
 //
-bool ldCheckSubscription(KjNode* subP, LdOp op, KAlloc* kaP)
+bool ldCheckSubscription(KjNode* subP, LdOp op, bool merged, LdFormat* notifFormatP, KAlloc* kaP)
 {
   OBJECT_CHECK(subP, "Invalid Subscription", "Subscription payload must be a JSON object");
 
-  KLOG_T(LdTCheckSub, "Checking subscription payload for op %s", ldOpToString(op));
+  KLOG_T(LdTCheckSub, "Checking subscription payload for op %s%s", ldOpToString(op), merged ? " (merged)" : "");
+
+  // Default: no 'format' member ⇒ the normalized default. checkNotification
+  // overwrites this with the parsed value when a 'format' is present and valid.
+  if (notifFormatP != NULL)
+    *notifFormatP = LdFormatNone;
+
+  //
+  // A COMPLETE document — Create input, or the post-merge re-validation of a
+  // PATCH ('merged') — must carry every mandatory member. An update FRAGMENT
+  // need not: it touches a subset, and the merged result is re-validated
+  // separately. 'merged' additionally tolerates the server-owned read-only
+  // fields (status, …) a stored document legitimately carries.
+  //
+  const bool complete = (op == LdOpCreateSubscription || op == LdOpCreateCsourceSubscription || merged);
 
   // § 5.2 Subscription table: `notificationTrigger` "is not applicable and
   // shall be ignored if the Subscription data type is used for a Context
@@ -818,8 +868,13 @@ bool ldCheckSubscription(KjNode* subP, LdOp op, KAlloc* kaP)
       DUPLICATE_CHECK(descriptionP, "description", childP);
     else if (strcmp(name, LD_VOCAB_STATUS) == 0 || strcmp(name, "status") == 0)
     {
-      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Read-Only Field", "'status' is read-only and cannot be set");
-      return false;
+      // Server-owned read-only field — rejected from a client payload, tolerated
+      // when re-validating a stored/merged document ('merged').
+      if (!merged)
+      {
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Read-Only Field", "'status' is read-only and cannot be set");
+        return false;
+      }
     }
     else if (strcmp(name, LD_VOCAB_DATASET_ID) == 0)
     {
@@ -905,9 +960,11 @@ bool ldCheckSubscription(KjNode* subP, LdOp op, KAlloc* kaP)
   }
 
   //
-  // "entities" or "watchedAttributes" required for create
+  // "entities" or "watchedAttributes" required in a COMPLETE document — at
+  // Create, and when re-validating the merged result of a PATCH (a PATCH that
+  // deletes the whole selector must be rejected, § 5.2.12).
   //
-  if (op == LdOpCreateSubscription || op == LdOpCreateCsourceSubscription)
+  if (complete)
   {
     if (entitiesP == NULL && watchedAttrsP == NULL)
     {
@@ -972,14 +1029,15 @@ bool ldCheckSubscription(KjNode* subP, LdOp op, KAlloc* kaP)
   }
 
   //
-  // "notification" mandatory for create
+  // "notification" mandatory in a COMPLETE document (Create or post-merge
+  // re-validation) — a subscription with no notification has nothing to deliver.
   //
-  if (op == LdOpCreateSubscription || op == LdOpCreateCsourceSubscription)
-    MANDATORY_CHECK(notificationP, "Missing Notification", "Subscription 'notification' is mandatory for create");
+  if (complete)
+    MANDATORY_CHECK(notificationP, "Mandatory field missing", "Subscription::notification");
 
   if (notificationP != NULL)
   {
-    if (checkNotification(notificationP) == false)
+    if (checkNotification(notificationP, complete, merged, notifFormatP) == false)
       return false;
   }
 

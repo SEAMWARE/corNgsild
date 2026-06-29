@@ -270,6 +270,7 @@ const char* ldFormatToString(LdFormat format)
 {
   switch (format)
   {
+  case LdFormatUnset:            return "Unset";
   case LdFormatNone:             return "None";
   case LdFormatNormalized:       return "normalized";
   case LdFormatConcise:          return "concise";
@@ -287,7 +288,7 @@ const char* ldFormatToString(LdFormat format)
 //
 // ldFormatFromString -
 //
-LdFormat ldFormatFromString(const char* str)
+LdFormat ldFormatFromString(const char* str, bool temporal)
 {
   if (str == NULL)
     return LdFormatNone;
@@ -296,8 +297,13 @@ LdFormat ldFormatFromString(const char* str)
   if (strcmp(str, "concise")           == 0)  return LdFormatConcise;
   if (strcmp(str, "simplified")        == 0)  return LdFormatSimplified;
   if (strcmp(str, "keyValues")         == 0)  return LdFormatSimplified;
-  if (strcmp(str, "temporalValues")    == 0)  return LdFormatTemporalValues;
-  if (strcmp(str, "aggregatedValues")  == 0)  return LdFormatAggregatedValues;
+
+  // The temporal-query representations are valid only in a temporal context.
+  if (temporal)
+  {
+    if (strcmp(str, "temporalValues")    == 0)  return LdFormatTemporalValues;
+    if (strcmp(str, "aggregatedValues")  == 0)  return LdFormatAggregatedValues;
+  }
 
   return LdFormatNone;
 }
