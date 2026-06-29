@@ -463,7 +463,13 @@ static bool isIsoDuration(const char* s)
 //   { "startAt": <DateTime>, "endAt": <DateTime>? }
 // startAt is mandatory; endAt is optional. When both present, startAt < endAt.
 //
-static bool checkTimeInterval(KjNode* tiP, const char* fieldName)
+// 'complete' is false on an update FRAGMENT: a PATCH may touch endAt (or startAt)
+// alone, the other member being supplied by the stored value, so startAt-presence
+// and the ordering invariant are only enforced on a COMPLETE document (create or
+// the post-merge re-validation). The fragment stage just well-forms the members
+// actually provided.
+//
+static bool checkTimeInterval(KjNode* tiP, const char* fieldName, bool complete)
 {
   if (tiP->type != KjObject)
   {
@@ -480,23 +486,27 @@ static bool checkTimeInterval(KjNode* tiP, const char* fieldName)
     else if (strcmp(fP->name, "endAt")   == 0) endP   = fP;
   }
 
-  if (startP == NULL)
+  if (complete && startP == NULL)
   {
     ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
             "'%s.startAt' is mandatory", fieldName);
     return false;
   }
-  if (startP->type != KjString)
+
+  if (startP != NULL)
   {
-    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
-            "'%s.startAt' must be a DateTime string", fieldName);
-    return false;
-  }
-  if (!ldCheckDateTime(startP->value.s, NULL))
-  {
-    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
-            "'%s.startAt' is not a valid ISO 8601 DateTime", fieldName);
-    return false;
+    if (startP->type != KjString)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
+              "'%s.startAt' must be a DateTime string", fieldName);
+      return false;
+    }
+    if (!ldCheckDateTime(startP->value.s, NULL))
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
+              "'%s.startAt' is not a valid ISO 8601 DateTime", fieldName);
+      return false;
+    }
   }
 
   if (endP != NULL)
@@ -513,7 +523,7 @@ static bool checkTimeInterval(KjNode* tiP, const char* fieldName)
               "'%s.endAt' is not a valid ISO 8601 DateTime", fieldName);
       return false;
     }
-    if (ldIsoToNanoseconds(endP->value.s) <= ldIsoToNanoseconds(startP->value.s))
+    if (startP != NULL && ldIsoToNanoseconds(endP->value.s) <= ldIsoToNanoseconds(startP->value.s))
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
               "'%s.endAt' must be after '%s.startAt'", fieldName, fieldName);
@@ -988,9 +998,9 @@ bool ldCheckRegistration(KjNode* regP, LdOp op, bool merged, KAlloc* faP)
   }
 
   // observationInterval / managementInterval — TimeInterval objects (§ 5.2.11)
-  if (observationIntervalP != NULL && checkTimeInterval(observationIntervalP, "observationInterval") == false)
+  if (observationIntervalP != NULL && checkTimeInterval(observationIntervalP, "observationInterval", op == LdOpCreateRegistration) == false)
     return false;
-  if (managementIntervalP != NULL && checkTimeInterval(managementIntervalP, "managementInterval") == false)
+  if (managementIntervalP != NULL && checkTimeInterval(managementIntervalP, "managementInterval", op == LdOpCreateRegistration) == false)
     return false;
 
   // management — RegistrationManagementInfo (§ 5.2.34)
