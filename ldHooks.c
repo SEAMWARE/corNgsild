@@ -134,6 +134,84 @@ static bool preExpandCheckCsrEntityTypes(KjNode* bodyP)
 
 // -----------------------------------------------------------------------------
 //
+// preExpandCheckEntityType - reject an empty-string entity `type` on one entity
+// object BEFORE swldExpandTree runs.
+//
+// JSON-LD @vocab expansion turns "" into the bare vocab-prefix IRI, which is no
+// longer empty by the time the post-expansion validator (ldCheckEntity) runs —
+// so both the scalar "" and the array [""] forms slip past its empty-string
+// checks. Catching this on the raw tree (the same trick as the CSR guard above)
+// is the only reliable place. § 4.6.2: an entity type is an NGSI-LD Name, which
+// must begin with a Letter and so cannot be empty.
+//
+// Returns true (and raises ldError) if an empty type was found.
+//
+static bool preExpandCheckEntityType(KjNode* entP)
+{
+  if (entP == NULL || entP->type != KjObject)
+    return false;
+
+  KjNode* typeP = kjLookup(entP, "type");
+  if (typeP == NULL)
+    return false;
+
+  if (typeP->type == KjString)
+  {
+    if (typeP->value.s[0] == 0)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Entity Type", "Entity 'type' must not be an empty string");
+      return true;
+    }
+  }
+  else if (typeP->type == KjArray)
+  {
+    for (KjNode* elemP = typeP->value.firstChildP; elemP != NULL; elemP = elemP->next)
+    {
+      if (elemP->type == KjString && elemP->value.s[0] == 0)
+      {
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Entity Type", "Entity 'type' array elements must not be empty strings");
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// preExpandCheckEntityTypes - apply preExpandCheckEntityType to an entity body,
+// which is either a single entity object (POST/PUT/PATCH /entities) or an array
+// of entity objects (POST /entityOperations/{create,update,upsert,merge}). A
+// batch-delete body is an array of id strings — the non-object elements are
+// simply skipped.
+//
+static bool preExpandCheckEntityTypes(KjNode* bodyP)
+{
+  if (bodyP == NULL)
+    return false;
+
+  if (bodyP->type == KjObject)
+    return preExpandCheckEntityType(bodyP);
+
+  if (bodyP->type == KjArray)
+  {
+    for (KjNode* entP = bodyP->value.firstChildP; entP != NULL; entP = entP->next)
+    {
+      if (entP->type == KjObject && preExpandCheckEntityType(entP))
+        return true;
+    }
+  }
+
+  return false;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldFindEmbeddedAtContext - scan tree for any embedded @context child
 //
 // Called AFTER swldExpandTree has already stripped the @context from the
@@ -585,6 +663,14 @@ static void ldParseHook(void)
     if (isEntityPayloadPath || isEntityBatchPath)
     {
       if (!ldCheckNamesAndContent(swRest.in.requestTree))
+      {
+        swNgsild.contextError = true;
+        return;
+      }
+
+      // Empty-string entity type — must be caught pre-expansion (@vocab would
+      // otherwise launder "" into the bare-prefix IRI and slip past ldCheckEntity).
+      if (preExpandCheckEntityTypes(swRest.in.requestTree))
       {
         swNgsild.contextError = true;
         return;
