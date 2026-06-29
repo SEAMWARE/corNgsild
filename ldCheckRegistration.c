@@ -15,6 +15,7 @@
 #include <stdbool.h>                                     // bool
 #include <stdint.h>                                      // uint64_t
 #include <string.h>                                      // strcmp
+#include <regex.h>                                       // regcomp, regfree
 
 #include "kbase/kLibLog.h"                             // KLOG_T
 #include "kalloc/KAlloc.h"                             // KAlloc
@@ -57,6 +58,13 @@ static bool checkEntityInfo(KjNode* entP)
     if      (strcmp(fP->name, "type") == 0)                    typeP  = fP;
     else if (strcmp(fP->name, "id") == 0)                      idP    = fP;
     else if (strcmp(fP->name, LD_VOCAB_ID_PATTERN) == 0)       idPatP = fP;
+    else
+    {
+      // EntityInfo (§ 5.2.8) is a closed set: type, id, idPattern.
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
+              "'entities[]' item has unknown member '%s' (allowed: type, id, idPattern)", fP->name);
+      return false;
+    }
   }
 
   MANDATORY_CHECK(typeP, "Invalid Registration", "'entities[].type' is mandatory");
@@ -92,6 +100,23 @@ static bool checkEntityInfo(KjNode* entP)
   if (idPatP != NULL)
   {
     STRING_CHECK(idPatP, "Invalid Registration", "'entities[].idPattern' must be a regex string");
+
+    if (idPatP->value.s[0] == 0)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration", "'entities[].idPattern' must not be empty");
+      return false;
+    }
+
+    // § 5.2.8 — idPattern is a "Regular expression as per IEEE 1003.2". Reject a
+    // pattern that won't compile rather than store one that can never match.
+    regex_t re;
+    if (regcomp(&re, idPatP->value.s, REG_EXTENDED | REG_NOSUB) != 0)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
+              "'entities[].idPattern' is not a valid regular expression");
+      return false;
+    }
+    regfree(&re);
   }
 
   return true;
@@ -216,6 +241,14 @@ static bool checkInformationArray(KjNode* infoArrayP)
       else if (strcmp(fP->name, "attributeNames")    == 0)  attrNamesP = fP;
       else if (strcmp(fP->name, "propertyNames")     == 0)  propsP     = fP;
       else if (strcmp(fP->name, "relationshipNames") == 0)  relsP      = fP;
+      else
+      {
+        // RegistrationInfo (§ 5.2.10) is a closed set.
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
+                "'information[]' element has unknown member '%s' "
+                "(allowed: entities, attributeNames, propertyNames, relationshipNames)", fP->name);
+        return false;
+      }
     }
 
     if (attrNamesP != NULL && (propsP != NULL || relsP != NULL))
@@ -324,6 +357,13 @@ static bool checkContextSourceInfo(KjNode* arrP)
     {
       if      (strcmp(fP->name, "key")   == 0)  keyP   = fP;
       else if (strcmp(fP->name, "value") == 0)  valueP = fP;
+      else
+      {
+        // KeyValuePair (§ 5.2.22) is a closed set: key, value.
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
+                "'contextSourceInfo' item has unknown member '%s' (allowed: key, value)", fP->name);
+        return false;
+      }
     }
 
     MANDATORY_CHECK(keyP,   "Invalid Registration", "'contextSourceInfo' item missing 'key'");
@@ -560,10 +600,11 @@ static bool checkManagement(KjNode* mgmtP)
                 "'management.%s' must be a positive number", fP->name);
         return false;
       }
-      if (v < 0)
+      if (v <= 0)
       {
+        // § 5.2.6.6.6 — timeout / cooldown must be "Greater than 0".
         ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
-                "'management.%s' must be non-negative", fP->name);
+                "'management.%s' must be greater than 0", fP->name);
         return false;
       }
     }
@@ -576,7 +617,13 @@ static bool checkManagement(KjNode* mgmtP)
         return false;
       }
     }
-    // Unknown keys passed through silently (forward-compat for spec extensions).
+    else
+    {
+      // RegistrationManagementInfo (§ 5.2.34) is a closed set.
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
+              "'management' has unknown member '%s' (allowed: cacheDuration, timeout, cooldown, localOnly)", fP->name);
+      return false;
+    }
   }
 
   return true;
@@ -724,6 +771,22 @@ bool ldCheckRegistration(KjNode* regP, LdOp op, bool merged, KAlloc* faP)
   OBJECT_CHECK(regP, "Invalid Registration", "Registration payload must be a JSON object");
 
   KLOG_T(LdTCheckReg, "Checking registration payload for op %s", ldOpToString(op));
+
+  // § 5.2.6.5.3 — status, lastFailure, lastSuccess, timesFailed and timesSent are
+  // server-owned read-only members; a create "shall ignore" them. Strip them on
+  // the create path so a client-supplied value is neither persisted nor echoed
+  // (a round-tripped GET result re-POSTed is the typical source). The merged
+  // re-validation legitimately carries the stored values, so leave them there.
+  if (op == LdOpCreateRegistration && !merged)
+  {
+    static const char* readOnly[] = { "status", "lastFailure", "lastSuccess", "timesFailed", "timesSent", NULL };
+    for (int i = 0; readOnly[i] != NULL; i++)
+    {
+      KjNode* roP = kjLookup(regP, readOnly[i]);
+      if (roP != NULL)
+        kjChildRemove(regP, roP);
+    }
+  }
 
   KjNode* typeP                = NULL;
   KjNode* infoP                = NULL;
