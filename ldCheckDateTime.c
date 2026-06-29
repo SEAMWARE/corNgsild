@@ -67,7 +67,25 @@ bool ldCheckDateTime(const char* dateTimeStr, double* secondsP)
 
   // Basic range checks
   if (tm.tm_mon < 0 || tm.tm_mon > 11)   return false;
-  if (tm.tm_mday < 1 || tm.tm_mday > 31) return false;
+
+  // Day-of-month must be valid for the specific month and year — April has 30
+  // days, February 28 (29 in a leap year). A bare 1..31 range check lets
+  // 2023-02-31 / 2023-04-31 / 2023-02-29 through, and timegm() then silently
+  // normalizes them to a different instant which is stored as the timestamp.
+  {
+    static const int daysInMonth[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+    int  year   = tm.tm_year + 1900;
+    int  maxDay = daysInMonth[tm.tm_mon];
+    if (tm.tm_mon == 1)  // February
+    {
+      bool leap = ((year % 4 == 0) && (year % 100 != 0)) || (year % 400 == 0);
+      if (leap)
+        maxDay = 29;
+    }
+    if (tm.tm_mday < 1 || tm.tm_mday > maxDay)
+      return false;
+  }
+
   if (tm.tm_hour > 23)                    return false;
   if (tm.tm_min > 59)                     return false;
   if (tm.tm_sec > 60)                     return false;  // 60 for leap second

@@ -384,17 +384,36 @@ bool ldCheckAttribute(KjNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc*
   // validation — the type-specific checks below (ldCheckGeo for
   // GeoProperty, checkLanguageMap, etc.) would reject the bare string
   // as the wrong shape (ETSI 011_07_03 / 012_05_03 / 056_03_03 etc.).
+  const bool nullAllowed = (op == LdOpMergeEntity) || (op == LdOpBatchMerge) ||
+                           (op == LdOpUpdateEntity) || (op == LdOpUpdateAttrs);
+
+  // A scalar value/object/vocab carrying the sentinel. A JsonProperty's `json`
+  // is opaque (value-opaqueness) — there the sentinel is literal data, never a
+  // marker — so it is deliberately excluded.
   if (valueNodeP->type == KjString && strcmp(valueNodeP->value.s, "urn:ngsi-ld:null") == 0)
   {
-    bool nullAllowed = (op == LdOpMergeEntity) || (op == LdOpBatchMerge) ||
-                       (op == LdOpUpdateEntity) || (op == LdOpUpdateAttrs);
-    if (!nullAllowed && (attrType == LdAttrProperty || attrType == LdAttrRelationship))
+    if (!nullAllowed && (attrType == LdAttrProperty || attrType == LdAttrRelationship || attrType == LdAttrVocabProperty))
     {
-      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Value", "'urn:ngsi-ld:null' is not allowed as the value/object of attribute '%s'", attrP->name);
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Value", "'urn:ngsi-ld:null' is not allowed as the value of attribute '%s'", attrP->name);
       return false;
     }
     if (nullAllowed)
       return true;  // skip type-specific shape checks for the marker
+  }
+  // Inside a List value the sentinel can only be erroneous input: a single list
+  // element is not a delete position (the merge/update flows delete a whole
+  // attribute via a top-level sentinel). § 4.5.5: an NGSI-LD Null encountered
+  // anywhere it has no delete meaning is BadRequestData.
+  else if ((attrType == LdAttrListProperty || attrType == LdAttrListRelationship) && valueNodeP->type == KjArray)
+  {
+    for (KjNode* elemP = valueNodeP->value.firstChildP; elemP != NULL; elemP = elemP->next)
+    {
+      if (elemP->type == KjString && strcmp(elemP->value.s, "urn:ngsi-ld:null") == 0)
+      {
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Value", "'urn:ngsi-ld:null' is not allowed as a list element of attribute '%s'", attrP->name);
+        return false;
+      }
+    }
   }
 
   // Step 4: Type-specific value validation
