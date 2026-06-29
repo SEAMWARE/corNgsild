@@ -22,6 +22,7 @@
 #include "swNgsild/ldTypes.h"                            // ldAttrTypeToString
 #include "swNgsild/ldAttrTypeDetect.h"                   // ldAttrTypeDetect
 #include "swNgsild/ldError.h"                            // ldError
+#include "swNgsild/ldInit.h"                             // ldTypedValueCheck
 #include "swNgsild/ldCheckGeo.h"                         // ldCheckGeo
 #include "swNgsild/ldCheckAttribute.h"                   // Own interface
 #include "swNgsild/ldTraceLevels.h"                      // LdTCheckAttr
@@ -477,16 +478,20 @@ bool ldCheckAttribute(KjNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc*
         return false;
       }
 
+      // Validate @value against its @type with the SHARED typed-value checker
+      // (DateTime + every xsd datatype), so a value-object is validated the same
+      // here as in the JSON-LD expansion / free-property path — not DateTime
+      // only. NGSI-LD `DateTime` maps onto xsd:dateTime (the checker keys off
+      // xsd local names); attrContext=true phrases the error as an attribute one.
       KjNode* atTypeP  = kjLookup(valueNodeP, "@type");
       KjNode* atValueP = kjLookup(valueNodeP, "@value");
-      if ((atTypeP != NULL) && (atTypeP->type == KjString) && (strcmp(atTypeP->value.s, "DateTime") == 0))
+      if ((atTypeP != NULL) && (atTypeP->type == KjString) && (atValueP != NULL))
       {
-        if ((atValueP->type != KjString) || (!ldCheckDateTime(atValueP->value.s, NULL)))
-        {
-          ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid DateTime Value",
-                  "Attribute '%s': '@value' is not a valid ISO 8601 DateTime for '@type':'DateTime'", attrP->name);
+        const char* dt = atTypeP->value.s;
+        if ((strcmp(dt, "DateTime") == 0) || (strcmp(dt, "https://uri.etsi.org/ngsi-ld/DateTime") == 0))
+          dt = "xsd:dateTime";
+        if (ldTypedValueCheck(attrP->name, dt, atValueP, /*attrContext*/true) == false)
           return false;
-        }
       }
     }
     break;

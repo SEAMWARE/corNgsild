@@ -162,19 +162,38 @@ static bool isNumberString(const char* s)
   return sawDigit && *p == 0;
 }
 
-static bool ldValueCheck(const char* term, const char* datatype, KjNode* valueP)
+// valueError - emit the typed-value ProblemDetails, phrased for its context.
+//
+// attrContext true ⇒ the value-object sits in an entity attribute value
+// (ldCheckAttribute); false ⇒ it came from the JSON-LD expansion (a context-
+// coerced primitive or a free property), where the @type binding is named.
+// 'kind' completes "… is not <kind>" so each datatype keeps its exact wording.
+//
+static bool valueError(bool attrContext, const char* subject, const char* datatype, const char* kind)
 {
-  if (valueP == NULL || term == NULL || datatype == NULL) return true;
+  if (attrContext)
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Value Object",
+            "Attribute '%s': '@value' is not %s", subject, kind);
+  else
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Value",
+            "'%s' is bound to @type:%s but value is not %s", subject, datatype, kind);
+  return false;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldTypedValueCheck - see ldInit.h.
+//
+bool ldTypedValueCheck(const char* subject, const char* datatype, KjNode* valueP, bool attrContext)
+{
+  if (valueP == NULL || subject == NULL || datatype == NULL) return true;
 
   if (datatypeMatches(datatype, "dateTime") || datatypeMatches(datatype, "dateTimeStamp"))
   {
     if (valueP->type != KjString || !ldCheckDateTime(valueP->value.s, NULL))
-    {
-      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Value",
-              "'%s' is bound to @type:%s but value is not a valid ISO 8601 dateTime",
-              term, datatype);
-      return false;
-    }
+      return valueError(attrContext, subject, datatype, "a valid ISO 8601 dateTime");
     return true;
   }
 
@@ -182,12 +201,7 @@ static bool ldValueCheck(const char* term, const char* datatype, KjNode* valueP)
   {
     if (valueP->type != KjString || valueP->value.s == NULL || strlen(valueP->value.s) != 10
         || valueP->value.s[4] != '-' || valueP->value.s[7] != '-')
-    {
-      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Value",
-              "'%s' is bound to @type:%s but value is not a valid xsd:date (YYYY-MM-DD)",
-              term, datatype);
-      return false;
-    }
+      return valueError(attrContext, subject, datatype, "a valid xsd:date (YYYY-MM-DD)");
     return true;
   }
 
@@ -195,12 +209,7 @@ static bool ldValueCheck(const char* term, const char* datatype, KjNode* valueP)
   {
     if (valueP->type != KjString || valueP->value.s == NULL
         || strlen(valueP->value.s) < 8 || valueP->value.s[2] != ':' || valueP->value.s[5] != ':')
-    {
-      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Value",
-              "'%s' is bound to @type:%s but value is not a valid xsd:time (HH:MM:SS)",
-              term, datatype);
-      return false;
-    }
+      return valueError(attrContext, subject, datatype, "a valid xsd:time (HH:MM:SS)");
     return true;
   }
 
@@ -211,9 +220,7 @@ static bool ldValueCheck(const char* term, const char* datatype, KjNode* valueP)
   {
     if (valueP->type == KjInt) return true;
     if (valueP->type == KjString && isIntegerString(valueP->value.s)) return true;
-    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Value",
-            "'%s' is bound to @type:%s but value is not a valid integer", term, datatype);
-    return false;
+    return valueError(attrContext, subject, datatype, "a valid integer");
   }
 
   if (datatypeMatches(datatype, "double")  || datatypeMatches(datatype, "decimal") ||
@@ -221,9 +228,7 @@ static bool ldValueCheck(const char* term, const char* datatype, KjNode* valueP)
   {
     if (valueP->type == KjInt || valueP->type == KjFloat) return true;
     if (valueP->type == KjString && isNumberString(valueP->value.s)) return true;
-    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Value",
-            "'%s' is bound to @type:%s but value is not a valid number", term, datatype);
-    return false;
+    return valueError(attrContext, subject, datatype, "a valid number");
   }
 
   if (datatypeMatches(datatype, "boolean"))
@@ -232,24 +237,29 @@ static bool ldValueCheck(const char* term, const char* datatype, KjNode* valueP)
     if (valueP->type == KjString && valueP->value.s != NULL &&
         (strcmp(valueP->value.s, "true") == 0 || strcmp(valueP->value.s, "false") == 0))
       return true;
-    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Value",
-            "'%s' is bound to @type:%s but value is not 'true' or 'false'", term, datatype);
-    return false;
+    return valueError(attrContext, subject, datatype, "'true' or 'false'");
   }
 
   if (datatypeMatches(datatype, "anyURI"))
   {
     if (valueP->type != KjString || ldCheckUri(valueP->value.s) == false)
-    {
-      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Value",
-              "'%s' is bound to @type:%s but value is not a valid URI", term, datatype);
-      return false;
-    }
+      return valueError(attrContext, subject, datatype, "a valid URI");
     return true;
   }
 
   // Unknown / unsupported datatype — pass through silently.
   return true;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldValueCheck - the registered SwldValueCheck callback (JSON-LD expansion path).
+//
+static bool ldValueCheck(const char* term, const char* datatype, KjNode* valueP)
+{
+  return ldTypedValueCheck(term, datatype, valueP, /*attrContext*/false);
 }
 
 
