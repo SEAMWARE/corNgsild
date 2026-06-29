@@ -1064,9 +1064,13 @@ bool ldCheckSubscription(KjNode* subP, LdOp op, bool merged, LdFormat* notifForm
       return false;
     }
 
-    // § 5.2.12 — at create time, expiresAt must be in the future.
-    // Update is allowed to set a past timestamp (used to expire-immediately).
-    if (op == LdOpCreateSubscription || op == LdOpCreateCsourceSubscription)
+    // § 5.2.12 — at create time, expiresAt must be in the future. Update is
+    // allowed to set a past timestamp (used to expire-immediately). The
+    // post-merge re-validation ('merged') must NOT enforce this: a stored
+    // expiresAt that has since elapsed legitimately rides along in the merged
+    // document, and re-running the create rule on it would wrongly 400 every
+    // PATCH of an already-expired subscription.
+    if ((op == LdOpCreateSubscription || op == LdOpCreateCsourceSubscription) && !merged)
     {
       if (expiresAtSec <= (double) time(NULL))
       {

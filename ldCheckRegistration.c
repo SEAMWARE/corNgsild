@@ -717,7 +717,7 @@ static bool checkOperations(KjNode* opsP, const char* modeStr)
 //
 // ldCheckRegistration -
 //
-bool ldCheckRegistration(KjNode* regP, LdOp op, KAlloc* faP)
+bool ldCheckRegistration(KjNode* regP, LdOp op, bool merged, KAlloc* faP)
 {
   (void) faP;  // reserved for future use (e.g. allocating expanded names)
 
@@ -863,8 +863,13 @@ bool ldCheckRegistration(KjNode* regP, LdOp op, KAlloc* faP)
     STRING_CHECK(expiresAtP, "Invalid Registration", "'expiresAt' must be a DateTime string");
     DATETIME_CHECK(expiresAtP->value.s, "'expiresAt' is not a valid ISO 8601 DateTime");
 
+    // The future-check applies to a value being SET (create, or a fragment that
+    // sets expiresAt). On the post-merge re-validation ('merged') a stored
+    // expiresAt that has since elapsed rides along in the merged document and
+    // must NOT be re-rejected — a registration has no 'expired' status and is
+    // not auto-removed, so an unrelated PATCH of a TTL-elapsed reg must still go.
     uint64_t expiresNs = ldIsoToNanoseconds(expiresAtP->value.s);
-    if (expiresNs > 0 && expiresNs < swRest.requestStartTime)
+    if (!merged && expiresNs > 0 && expiresNs < swRest.requestStartTime)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
               "'expiresAt' must be a DateTime in the future");

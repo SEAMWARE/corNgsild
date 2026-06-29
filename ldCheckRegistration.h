@@ -21,6 +21,11 @@
 //
 // ldCheckRegistration -
 //
-extern bool ldCheckRegistration(KjNode* regP, LdOp op, KAlloc* faP);
+// 'merged' true ⇒ validating the COMPLETE merged result of a PATCH (§ 5.9.3):
+// enforce the same mandatory/consistency rules as Create, but tolerate a stored
+// expiresAt that has since elapsed (the create-only future-check is skipped) and
+// the server-owned read-only fields a stored document carries.
+//
+extern bool ldCheckRegistration(KjNode* regP, LdOp op, bool merged, KAlloc* faP);
 
 #endif  // SWNGSILD_LDCHECKREGISTRATION_H_
