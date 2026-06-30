@@ -131,6 +131,62 @@ static bool ldIsCoreAttrTerm(const char* name)
 
 // -----------------------------------------------------------------------------
 //
+// checkPartialSubAttrs - validate structural sub-attributes on a type-less fragment
+//
+// A partial update (Merge Entity / Partial Attribute Update) may carry a fragment
+// with no detectable attribute type — e.g. `{"observedAt": "..."}` that touches
+// only a structural sub-attribute of an existing instance. The main value/sub-
+// field validation (Step 5) is skipped for such a fragment because no attribute
+// type is known, so the structural core terms that have a FIXED shape regardless
+// of the attribute type must still be validated here. Otherwise an invalid value
+// (e.g. a non-DateTime observedAt) grafts unchecked onto the stored instance and
+// is silently coerced (a bad observedAt became 1970-01-01T00:00:00Z).
+//   § 5.2.4 observedAt is a DateTime · § 5.2.6 unitCode is a string ·
+//   datasetId is a URI string.
+//
+static bool checkPartialSubAttrs(KjNode* attrP)
+{
+  KjNode* observedAtP = kjLookup(attrP, LD_VOCAB_OBSERVED_AT);
+  KjNode* unitCodeP   = kjLookup(attrP, LD_VOCAB_UNIT_CODE);
+  KjNode* datasetIdP  = kjLookup(attrP, LD_VOCAB_DATASET_ID);
+
+  if (observedAtP != NULL)
+  {
+    if (observedAtP->type != KjString)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid observedAt", "Attribute '%s': 'observedAt' must be a string", attrP->name);
+      return false;
+    }
+    if (!ldCheckDateTime(observedAtP->value.s, NULL))
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid observedAt", "Attribute '%s': 'observedAt' is not a valid ISO 8601 DateTime: '%s'", attrP->name, observedAtP->value.s);
+      return false;
+    }
+  }
+
+  if ((unitCodeP != NULL) && (unitCodeP->type != KjString))
+  {
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid unitCode", "Attribute '%s': 'unitCode' must be a string", attrP->name);
+    return false;
+  }
+
+  if (datasetIdP != NULL)
+  {
+    if (datasetIdP->type != KjString)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid datasetId", "Attribute '%s': 'datasetId' must be a URI string", attrP->name);
+      return false;
+    }
+    URI_CHECK(datasetIdP->value.s);
+  }
+
+  return true;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // isAllowedCoreAttrTerm - check if a core context term is allowed in an attribute
 //
 static bool isAllowedCoreAttrTerm(const char* name, const char* valueKey)
@@ -324,9 +380,13 @@ bool ldCheckAttribute(KjNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc*
     return false;
   }
 
-  // If no type detected (might be a partial update), skip value checks
+  // If no type detected (might be a partial update), the type-specific value
+  // checks below don't apply — but a structural sub-attribute carried by the
+  // fragment (observedAt / unitCode / datasetId) still has a fixed shape and
+  // must be validated, or an invalid value grafts unchecked onto the stored
+  // instance.
   if (attrType == LdAttrNone)
-    return true;
+    return checkPartialSubAttrs(attrP);
 
   // Step 3: Check required value field and validate it
   const char*  expectedKey    = valueKeyForType(attrType);
