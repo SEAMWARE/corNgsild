@@ -1072,6 +1072,11 @@ static void ldRenderHook(void)
     if (acceptType == SwMimeNone ||
         (acceptType == SwMimeGeoJson && !entityReadOp))
     {
+      // A read op (Retrieve/Query Entity) has ALREADY built the resource into
+      // responseTree; drop it so the 406 carries the ProblemDetails (whose
+      // detail lists the available representations, § 6.2.2) instead of leaking
+      // the resource with a 406 status.
+      swRest.out.responseTree = NULL;
       ldError(406, LD_ERROR_INVALID_REQUEST, "Not Acceptable",
               "supported response media types: application/json, application/ld+json%s",
               entityReadOp ? ", application/geo+json" : "");
