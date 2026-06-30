@@ -270,6 +270,18 @@ static bool checkEndpoint(KjNode* endpointP, bool complete)
     {
       DUPLICATE_CHECK(acceptP, "notification.endpoint.accept", childP);
       STRING_CHECK(childP, "Invalid Subscription", "'notification.endpoint.accept' must be a string");
+
+      // § 5.2.15 Endpoint: 'accept' shall be one of application/json,
+      // application/ld+json or application/geo+json. An unsupported MIME type is
+      // invalid input — reject it here rather than silently absorbing a body
+      // format the notification machinery can't honour.
+      SwMimeType acceptType = swMimeTypeParse(childP->value.s);
+      if (acceptType != SwMimeJson && acceptType != SwMimeLdJson && acceptType != SwMimeGeoJson)
+      {
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
+                "'notification.endpoint.accept' must be one of 'application/json', 'application/ld+json' or 'application/geo+json'");
+        return false;
+      }
     }
     else if (strcmp(childP->name, "notifierInfo") == 0)
     {
@@ -555,8 +567,6 @@ static bool checkEntitiesArray(KjNode* entitiesP)
     OBJECT_CHECK(entP, "Invalid Subscription", "'entities' items must be JSON objects");
 
     bool  hasType      = false;
-    bool  hasId        = false;
-    bool  hasIdPattern = false;
 
     for (KjNode* fieldP = entP->value.firstChildP; fieldP != NULL; fieldP = fieldP->next)
     {
@@ -597,7 +607,6 @@ static bool checkEntitiesArray(KjNode* entitiesP)
           return false;
         }
         URI_CHECK(fieldP->value.s);
-        hasId = true;
       }
       else if (strcmp(fieldP->name, LD_VOCAB_ID_PATTERN) == 0)
       {
@@ -619,14 +628,16 @@ static bool checkEntitiesArray(KjNode* entitiesP)
           return false;
         }
         regfree(&re);
-        hasIdPattern = true;
       }
     }
 
-    if (hasType == false && hasId == false && hasIdPattern == false)
+    // § 5.2.6.6.3 EntitySelector — 'type' has cardinality 1 (mandatory). An
+    // entities item selecting only by 'id' and/or 'idPattern' (no 'type') is
+    // invalid input, even though id/idPattern are individually optional.
+    if (hasType == false)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
-              "'entities' item must have at least 'type', 'id', or 'idPattern'");
+              "'entities[].type' is mandatory");
       return false;
     }
   }
