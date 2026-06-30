@@ -640,7 +640,7 @@ static bool checkEntitiesArray(KjNode* entitiesP)
 //
 // checkGeoQ - validate the "geoQ" object
 //
-static bool checkGeoQ(KjNode* geoQP, KAlloc* kaP)
+static bool checkGeoQ(KjNode* geoQP, bool complete, KAlloc* kaP)
 {
   OBJECT_CHECK(geoQP, "Invalid Subscription", "'geoQ' must be a JSON object");
 
@@ -703,14 +703,23 @@ static bool checkGeoQ(KjNode* geoQP, KAlloc* kaP)
     }
   }
 
-  // All three are required together — if geoQ is present, all must be present
-  if (geometryP == NULL || coordinatesP == NULL || georelP == NULL)
+  // All three are required together in a COMPLETE document (Create, or the
+  // re-validated merged result of a PATCH). An Update FRAGMENT may legally touch
+  // a subset of geoQ — the members it omits are taken from the stored geoQ by
+  // the recursive merge (RFC 7396), and the merged result is re-validated with
+  // complete=true — so don't require all three on a fragment.
+  if (complete && (geometryP == NULL || coordinatesP == NULL || georelP == NULL))
   {
     const char* missing = (geometryP == NULL) ? "geometry" : (coordinatesP == NULL) ? "coordinates" : "georel";
     ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
             "'geoQ' requires 'geometry', 'coordinates', and 'georel' — missing '%s'", missing);
     return false;
   }
+
+  // The geometry/coordinates consistency check below needs both. On a fragment
+  // that carries only one of them, there is nothing further to validate here.
+  if (geometryP == NULL || coordinatesP == NULL)
+    return true;
 
   //
   // geometry and coordinates must be structurally consistent. Without this a
@@ -1177,7 +1186,7 @@ bool ldCheckSubscription(KjNode* subP, LdOp op, bool merged, LdFormat* notifForm
   //
   if (geoQP != NULL)
   {
-    if (checkGeoQ(geoQP, kaP) == false)
+    if (checkGeoQ(geoQP, complete, kaP) == false)
       return false;
   }
 
