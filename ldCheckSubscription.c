@@ -10,6 +10,7 @@
 #include <stdlib.h>                                      // free, calloc
 #include <string.h>                                      // strcmp
 #include <time.h>                                        // time
+#include <regex.h>                                       // regcomp, regfree, REG_EXTENDED
 
 #include "kbase/kLibLog.h"                             // KLOG_T
 #include "kalloc/KAlloc.h"                             // KAlloc
@@ -28,6 +29,8 @@
 #include "swNgsild/LdTypeExpr.h"                         // ldTypeExprParse, ldTypeExprFree
 #include "swNgsild/LdCheck.h"                            // OBJECT_CHECK, STRING_CHECK, ...
 #include "swNgsild/LdVocab.h"                            // LD_VOCAB_*
+#include "swNgsild/LdGeoRel.h"                            // ldGeoRelParse
+#include "swNgsild/ldSubscriptionNotify.h"               // ldTriggerFromString
 #include "swNgsild/ldQParse.h"                           // ldQParse
 #include "swNgsild/ldCheckGeo.h"                          // ldCheckGeoQuery
 #include "swNgsild/ldTypes.h"                            // ldOpToString
@@ -604,6 +607,18 @@ static bool checkEntitiesArray(KjNode* entitiesP)
           ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription", "'entities[].idPattern' must not be empty");
           return false;
         }
+        // idPattern is an IEEE 1003.2 regular expression (§ 5.2.6.6.3). An
+        // uncompilable pattern is malformed input and must be rejected here —
+        // otherwise regcomp fails silently at cache time, leaving the selector
+        // with no id constraint (it then matches every entity).
+        regex_t re;
+        if (regcomp(&re, fieldP->value.s, REG_EXTENDED) != 0)
+        {
+          ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
+                  "'entities[].idPattern' is not a valid regular expression");
+          return false;
+        }
+        regfree(&re);
         hasIdPattern = true;
       }
     }
@@ -669,6 +684,17 @@ static bool checkGeoQ(KjNode* geoQP, KAlloc* kaP)
     {
       DUPLICATE_CHECK(georelP, "geoQ.georel", childP);
       STRING_CHECK(childP, "Invalid Subscription", "'geoQ.georel' must be a string");
+      // The georel value must be a valid geo-relationship (§ 5.2.13 / clause
+      // 7.2.4): near;maxDistance/minDistance, within, contains, intersects,
+      // equals, disjoint, overlaps. An unparseable georel is otherwise stored
+      // and then silently fails to compile at cache time, leaving a geoQ that
+      // matches nothing.
+      if (ldGeoRelParse(childP->value.s, kaP) == NULL)
+      {
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
+                "'geoQ.georel' is not a valid geo-relationship: '%s'", childP->value.s);
+        return false;
+      }
     }
     else if (strcmp(name, "https://uri.etsi.org/ngsi-ld/geoproperty") == 0 || strcmp(name, "geoproperty") == 0)
     {
@@ -794,6 +820,7 @@ bool ldCheckSubscription(KjNode* subP, LdOp op, bool merged, LdFormat* notifForm
   KjNode*  throttlingP    = NULL;
   KjNode*  expiresAtP     = NULL;
   KjNode*  isActiveP      = NULL;
+  KjNode*  notifTriggerP  = NULL;
   KjNode*  qP             = NULL;
   KjNode*  geoQP          = NULL;
   KjNode*  scopeQP        = NULL;
@@ -856,6 +883,33 @@ bool ldCheckSubscription(KjNode* subP, LdOp op, bool merged, LdFormat* notifForm
       DUPLICATE_CHECK(expiresAtP, "expiresAt", childP);
     else if (strcmp(name, LD_VOCAB_IS_ACTIVE) == 0)
       DUPLICATE_CHECK(isActiveP, "isActive", childP);
+    else if (strcmp(name, "notificationTrigger") == 0)
+    {
+      DUPLICATE_CHECK(notifTriggerP, "notificationTrigger", childP);
+      // § 5.2.12 — notificationTrigger is a String[] whose values must be one of
+      // the defined triggers. A non-array, or an unknown token, otherwise reaches
+      // the cache where it maps to a 0 bitmask and is silently coerced to the
+      // DEFAULT trigger set — firing on changes the subscriber did not ask for.
+      if (childP->type != KjArray)
+      {
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription", "'notificationTrigger' must be a JSON array");
+        return false;
+      }
+      for (KjNode* trigP = childP->value.firstChildP; trigP != NULL; trigP = trigP->next)
+      {
+        if (trigP->type != KjString)
+        {
+          ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription", "'notificationTrigger' items must be strings");
+          return false;
+        }
+        if (ldTriggerFromString(trigP->value.s) == 0)
+        {
+          ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
+                  "'notificationTrigger' has an invalid value: '%s'", trigP->value.s);
+          return false;
+        }
+      }
+    }
     else if (strcmp(name, "https://uri.etsi.org/ngsi-ld/q") == 0 || strcmp(name, "q") == 0)
       DUPLICATE_CHECK(qP, "q", childP);
     else if (strcmp(name, "https://uri.etsi.org/ngsi-ld/geoQ") == 0 || strcmp(name, "geoQ") == 0)
@@ -1025,7 +1079,13 @@ bool ldCheckSubscription(KjNode* subP, LdOp op, bool merged, LdFormat* notifForm
   if (timeIntervalP != NULL)
   {
     NUMBER_CHECK(timeIntervalP, "Invalid Subscription", "'timeInterval' must be a number");
-    POSITIVE_NUMBER_CHECK(timeIntervalP, "'timeInterval' must be >= 0");
+    // § 5.2.12 — timeInterval must be "Greater than 0" (a zero period is invalid).
+    if (((timeIntervalP->type == KjInt) && (timeIntervalP->value.i <= 0)) ||
+        ((timeIntervalP->type == KjFloat) && (timeIntervalP->value.f <= 0.0)))
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription", "'timeInterval' must be greater than 0");
+      return false;
+    }
   }
 
   //
@@ -1047,7 +1107,13 @@ bool ldCheckSubscription(KjNode* subP, LdOp op, bool merged, LdFormat* notifForm
   if (throttlingP != NULL)
   {
     NUMBER_CHECK(throttlingP, "Invalid Subscription", "'throttling' must be a number");
-    POSITIVE_NUMBER_CHECK(throttlingP, "'throttling' must be >= 0");
+    // § 5.2.12 — throttling must be "Greater than 0" (fractional values allowed).
+    if (((throttlingP->type == KjInt) && (throttlingP->value.i <= 0)) ||
+        ((throttlingP->type == KjFloat) && (throttlingP->value.f <= 0.0)))
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription", "'throttling' must be greater than 0");
+      return false;
+    }
   }
 
   //
