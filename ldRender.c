@@ -320,6 +320,17 @@ bool ldToSimplified(KjNode* entityP, KAlloc* faP)
         childP = nextP;
         continue;
       }
+      if (entityValP != NULL && entityValP->type == KjArray)
+      {
+        // Multivalued join (§ C.2.2.1.2): the Relationship's value becomes the
+        // ARRAY of inlined Entities, each itself simplified — not the object URIs.
+        for (KjNode* linkedP = entityValP->value.firstChildP; linkedP != NULL; linkedP = linkedP->next)
+          ldToSimplified(linkedP, faP);
+        childP->type  = entityValP->type;
+        childP->value = entityValP->value;
+        childP = nextP;
+        continue;
+      }
 
       KjNode* valueP = ldAttrValueNode(childP);
 
