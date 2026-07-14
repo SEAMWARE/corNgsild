@@ -604,10 +604,16 @@ bool ldCheckAttribute(KjNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc*
           ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid observedAt", "Attribute '%s': 'observedAt' must be a string", attrP->name);
           return false;
         }
-        if (!ldCheckDateTime(childP->value.s, NULL))
+        // § 5.4.1: in a merge/update fragment the NGSI-LD Null marker on
+        // observedAt removes the sub-attribute — accept it without running the
+        // DateTime shape check (the removal is applied downstream).
+        if (!(nullAllowed && strcmp(childP->value.s, LD_VOCAB_NGSILD_NULL) == 0))
         {
-          ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid observedAt", "Attribute '%s': 'observedAt' is not a valid ISO 8601 DateTime: '%s'", attrP->name, childP->value.s);
-          return false;
+          if (!ldCheckDateTime(childP->value.s, NULL))
+          {
+            ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid observedAt", "Attribute '%s': 'observedAt' is not a valid ISO 8601 DateTime: '%s'", attrP->name, childP->value.s);
+            return false;
+          }
         }
       }
       else if (strcmp(childP->name, LD_VOCAB_UNIT_CODE) == 0)

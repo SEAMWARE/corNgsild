@@ -113,6 +113,12 @@ static void temporalPropertiesToNanoseconds(KjNode* attrP)
 
     if (childP->type == KjString)
     {
+      // NGSI-LD Null marker: leave the bare string so a merge/update apply
+      // removes the temporal sub-attribute (§ 5.4.1) — converting it here would
+      // store epoch 0 instead. (A Create/Replace with a null observedAt is
+      // already rejected earlier by ldCheckAttribute.)
+      if (strcmp(childP->value.s, LD_VOCAB_NGSILD_NULL) == 0)
+        continue;
       childP->value.i = isoToNanoseconds(childP->value.s);
       childP->type = KjInt;
     }

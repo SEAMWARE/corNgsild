@@ -474,7 +474,19 @@ static bool rfc7396Merge(KjNode* targetP, KjNode* patchP, uint64_t ts, Kjson* ta
       if (rfc7396Merge(tChild, pChild, ts, targetAllocP, deepValueMerge))
       {
         mutated = true;
-        if (hasModifiedAt(tChild))
+
+        // § 5.4.1 sub-attribute removal: if the PATCH set this sub-attribute's
+        // primary value to the NGSI-LD Null marker (Property.value / Relationship.
+        // object / …, normalised to "value"), the recursion above removed that
+        // member — the sub-attribute is now an orphaned typed shell and is
+        // removed too. Guarded on the patch carrying value=null (not on tChild's
+        // post-state alone) so a JsonProperty's opaque object value whose own
+        // keys change — its content may itself hold a "type" key — is never
+        // mistaken for an orphaned sub-attribute.
+        KjNode* pValueP = kjLookup(pChild, "value");
+        if (pValueP != NULL && isNgsildNull(pValueP) && kjLookup(tChild, "type") != NULL)
+          kjChildRemove(targetP, tChild);
+        else if (hasModifiedAt(tChild))
           bumpModifiedAt(tChild, ts, targetAllocP);
       }
     }
