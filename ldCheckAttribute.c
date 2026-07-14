@@ -177,6 +177,12 @@ static bool checkPartialSubAttrs(KjNode* attrP)
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid datasetId", "Attribute '%s': 'datasetId' must be a URI string", attrP->name);
       return false;
     }
+    if (strcmp(datasetIdP->value.s, LD_VOCAB_NGSILD_NULL) == 0)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid datasetId",
+              "Attribute '%s': a 'datasetId' cannot be set to the NGSI-LD Null 'urn:ngsi-ld:null' — it identifies an Attribute instance and cannot be deleted this way (§ 8.4.2)", attrP->name);
+      return false;
+    }
     URI_CHECK(datasetIdP->value.s);
   }
 
@@ -617,6 +623,12 @@ bool ldCheckAttribute(KjNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc*
         if (childP->type != KjString)
         {
           ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid datasetId", "Attribute '%s': 'datasetId' must be a URI string", attrP->name);
+          return false;
+        }
+        if (strcmp(childP->value.s, LD_VOCAB_NGSILD_NULL) == 0)
+        {
+          ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid datasetId",
+                  "Attribute '%s': a 'datasetId' cannot be set to the NGSI-LD Null 'urn:ngsi-ld:null' — it identifies an Attribute instance and cannot be deleted this way (§ 8.4.2)", attrP->name);
           return false;
         }
         URI_CHECK(childP->value.s);
