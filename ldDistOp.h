@@ -208,6 +208,20 @@ extern int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
 
 // -----------------------------------------------------------------------------
 //
+// ldDistOpWarning299 - § 6.3.5 comma-joined NGSILD-Warning (299) warn-values
+//
+// For a completed GET/HEAD forward batch: one `299 <host[:port]> "<text>"`
+// warn-value per source that returned an HTTP error status (4xx/5xx received
+// within the timeout period), comma-joined. Request-arena string; NULL if no
+// source qualifies. Transport failures (199), invalid payloads (111) and
+// cooldown-declined legs are not 299 and are skipped.
+//
+extern char* ldDistOpWarning299(LdDistOpBatchItem* itemV, LdDistOpBatchResult* resultV, int itemCount);
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldDistOpBatchErrorAdd - append one BatchEntityError (§ 5.2.17) to errors[]
 //
 // Used by the decision-matrix at the end of every distributed write op to

@@ -693,6 +693,90 @@ static void distOpBodyParse(LdDistOpBatchResult* rP)
 
 // -----------------------------------------------------------------------------
 //
+// ldDistOpWarning299 - § 6.3.5 NGSILD-Warning (299) for distributed GET/HEAD error responses
+//
+// Scans a completed forward batch and returns a request-arena string of
+// comma-joined RFC 7234 [n.15] Warning warn-values for every registered source
+// that returned a genuine HTTP error status (a 4xx/5xx response received within
+// the timeout period) while the overall response is still assembled and
+// returned to the client. Warning code 299 - "Miscellaneous Persistent
+// Warning" (the § 6.3.5 table entry for e.g. a 403 - Forbidden from the
+// endpoint). Each warn-value is `299 <host[:port]> "<text>"`; multiple failing
+// sources are comma-joined into a single header value.
+//
+// Not a 299 (skipped here):
+//   - a 404 Not Found — § 6.3.5 states a source responding with no data and a
+//     404 is NOT abnormal behaviour for distributed operations;
+//   - statusCode 0  — transport failure / timeout (a 199 case);
+//   - the 2xx→502 payload downgrade — an invalid forwarded payload (a 111 case);
+//   - a cooldown-declined leg (§ 5.2.34) — no request was made at all.
+// (110/111/199 are not emitted in this increment.)
+//
+// Returns NULL when no source qualifies.
+//
+char* ldDistOpWarning299(LdDistOpBatchItem* itemV, LdDistOpBatchResult* resultV, int itemCount)
+{
+  static const char* warnText = "An error response was received from the registration endpoint";
+  char*              acc       = NULL;
+  int                accLen    = 0;
+
+  for (int i = 0; i < itemCount; i++)
+  {
+    LdDistOpBatchResult* rP = &resultV[i];
+
+    if (rP->statusCode < 400)                                                         continue;  // 2xx/3xx/0 — no received error status
+    if (rP->statusCode == 404)                                                        continue;  // § 6.3.5: a 404 (no data) is NOT abnormal behaviour
+    if ((rP->errorDetail != NULL) && (strstr(rP->errorDetail, "cooldown")  != NULL))  continue;  // no request was made (§ 5.2.34)
+    if ((rP->errorDetail != NULL) && (strstr(rP->errorDetail, "malformed") != NULL))  continue;  // invalid payload → 111 (deferred)
+
+    // warn-agent — authority (host[:port]) of the registration endpoint, or "-"
+    char        authority[128];
+    const char* ep = ((itemV[i].csr != NULL) && (itemV[i].csr->endpoint != NULL)) ? itemV[i].csr->endpoint : NULL;
+
+    if (ep == NULL)
+      strcpy(authority, "-");
+    else
+    {
+      if      (strncmp(ep, "https://", 8) == 0) ep += 8;
+      else if (strncmp(ep, "http://",  7) == 0) ep += 7;
+
+      int a = 0;
+      while ((ep[a] != 0) && (ep[a] != '/') && (a < (int) sizeof(authority) - 1))
+      {
+        authority[a] = ep[a];
+        a++;
+      }
+      authority[a] = 0;
+      if (a == 0)
+        strcpy(authority, "-");
+    }
+
+    char wv[256];
+    int  wvLen  = snprintf(wv, sizeof(wv), "299 %s \"%s\"", authority, warnText);
+    int  sepLen = (acc != NULL) ? 2 : 0;                       // ", " between warn-values
+
+    char* nacc = (char*) kaAlloc(&swRest.kalloc, accLen + sepLen + wvLen + 1);
+    if (nacc == NULL)
+      return acc;
+
+    if (acc != NULL)
+    {
+      memcpy(nacc, acc, accLen);
+      memcpy(nacc + accLen, ", ", 2);
+    }
+    memcpy(nacc + accLen + sepLen, wv, wvLen + 1);
+
+    acc     = nacc;
+    accLen += sepLen + wvLen;
+  }
+
+  return acc;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldDistOpSendMulti -
 //
 // Fan out N CSR forwards concurrently over swRestClientMulti. The per-CSR
