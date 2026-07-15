@@ -1173,6 +1173,22 @@ static void ldRenderHook(void)
   if (swRest.out.problemType != NULL)
     return;
 
+  // § 6.2.3 — an error response that returns a payload, or a partial success
+  // (207 Multi-Status), SHALL always respond with application/json regardless
+  // of the Accept header, and its payload uses Fully Qualified Names only, "as
+  // there is no context present" (§ 6.2.2 further: error responses carry no
+  // Link header). So for a 207, or any error status that reached here carrying
+  // a responseTree (a batch per-element error rendered as a bare error object —
+  // a direct ProblemDetails error already returned above via problemType),
+  // force the media type and skip ALL of the context machinery below
+  // (compaction, an inline @context, and the Link header): the body is already
+  // FQN and any of those would (re)introduce a context that must not be there.
+  if ((swRest.out.httpStatusCode == 207) || (swRest.out.httpStatusCode >= 400))
+  {
+    swRest.out.contentType = (char*) swMimeString(SwMimeJson);
+    return;
+  }
+
   KjNode* treeP = swRest.out.responseTree;
 
   //
