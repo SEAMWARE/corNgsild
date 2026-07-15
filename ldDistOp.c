@@ -693,41 +693,57 @@ static void distOpBodyParse(LdDistOpBatchResult* rP)
 
 // -----------------------------------------------------------------------------
 //
-// ldDistOpWarning299 - § 6.3.5 NGSILD-Warning (299) for distributed GET/HEAD error responses
+// ldDistOpWarnings - § 6.3.5 NGSILD-Warning for distributed GET/HEAD error legs
 //
 // Scans a completed forward batch and returns a request-arena string of
-// comma-joined RFC 7234 [n.15] Warning warn-values for every registered source
-// that returned a genuine HTTP error status (a 4xx/5xx response received within
-// the timeout period) while the overall response is still assembled and
-// returned to the client. Warning code 299 - "Miscellaneous Persistent
-// Warning" (the § 6.3.5 table entry for e.g. a 403 - Forbidden from the
-// endpoint). Each warn-value is `299 <host[:port]> "<text>"`; multiple failing
-// sources are comma-joined into a single header value.
+// comma-joined RFC 7234 [n.15] Warning warn-values, one per registered source
+// that behaved abnormally while the overall response is still assembled and
+// returned to the client. Each warn-value is `<code> <host[:port]> "<text>"`;
+// multiple failing sources are comma-joined into a single header value. The
+// § 6.3.5 warning codes emitted, by leg outcome:
 //
-// Not a 299 (skipped here):
+//   199 - Miscellaneous Warning          — no response was received from the
+//         endpoint within the timeout period (transport failure / timeout);
+//         statusCode 0.
+//   111 - Revalidation Failed            — a response arrived within the timeout
+//         but its payload was invalid / non-NGSI-LD (the 2xx→502 downgrade set
+//         by distOpBodyParse, errorDetail "malformed...").
+//   299 - Miscellaneous Persistent Warning — a genuine HTTP error status (e.g.
+//         403 - Forbidden) was received from the endpoint.
+//
+// NOT signalled (skipped here):
 //   - a 404 Not Found — § 6.3.5 states a source responding with no data and a
 //     404 is NOT abnormal behaviour for distributed operations;
-//   - statusCode 0  — transport failure / timeout (a 199 case);
-//   - the 2xx→502 payload downgrade — an invalid forwarded payload (a 111 case);
-//   - a cooldown-declined leg (§ 5.2.34) — no request was made at all.
-// (110/111/199 are not emitted in this increment.)
+//   - a cooldown-declined leg (§ 5.2.34, statusCode 504 + "cooldown" detail) —
+//     no request was made at all;
+//   - a 2xx/3xx success.
+// (110 - Response is Stale is a GET-response-cache signal; no such cache exists.
+// The 199 "registration loop detected" sub-case does not surface here: loop
+// legs are reaped before forwarding — inclusive loops silently, exclusive/
+// redirect loops as a hard 508 to the client, see ldDistOpLoopReap.)
 //
 // Returns NULL when no source qualifies.
 //
-char* ldDistOpWarning299(LdDistOpBatchItem* itemV, LdDistOpBatchResult* resultV, int itemCount)
+char* ldDistOpWarnings(LdDistOpBatchItem* itemV, LdDistOpBatchResult* resultV, int itemCount)
 {
-  static const char* warnText = "An error response was received from the registration endpoint";
-  char*              acc       = NULL;
-  int                accLen    = 0;
+  char* acc    = NULL;
+  int   accLen = 0;
 
   for (int i = 0; i < itemCount; i++)
   {
-    LdDistOpBatchResult* rP = &resultV[i];
+    LdDistOpBatchResult* rP       = &resultV[i];
+    bool                 cooldown = (rP->errorDetail != NULL) && (strstr(rP->errorDetail, "cooldown")  != NULL);
+    bool                 malformed = (rP->errorDetail != NULL) && (strstr(rP->errorDetail, "malformed") != NULL);
 
-    if (rP->statusCode < 400)                                                         continue;  // 2xx/3xx/0 — no received error status
-    if (rP->statusCode == 404)                                                        continue;  // § 6.3.5: a 404 (no data) is NOT abnormal behaviour
-    if ((rP->errorDetail != NULL) && (strstr(rP->errorDetail, "cooldown")  != NULL))  continue;  // no request was made (§ 5.2.34)
-    if ((rP->errorDetail != NULL) && (strstr(rP->errorDetail, "malformed") != NULL))  continue;  // invalid payload → 111 (deferred)
+    int         code;
+    const char* warnText;
+
+    if      (cooldown)             continue;                    // no request was made (§ 5.2.34)
+    else if (rP->statusCode == 0)  { code = 199; warnText = "No response was received from the registration endpoint within the timeout period"; }
+    else if (malformed)            { code = 111; warnText = "An invalid response payload was received from the registration endpoint"; }
+    else if (rP->statusCode == 404) continue;                   // § 6.3.5: a 404 (no data) is NOT abnormal behaviour
+    else if (rP->statusCode >= 400) { code = 299; warnText = "An error response was received from the registration endpoint"; }
+    else                            continue;                   // 2xx/3xx — no abnormal behaviour
 
     // warn-agent — authority (host[:port]) of the registration endpoint, or "-"
     char        authority[128];
@@ -752,7 +768,7 @@ char* ldDistOpWarning299(LdDistOpBatchItem* itemV, LdDistOpBatchResult* resultV,
     }
 
     char wv[256];
-    int  wvLen  = snprintf(wv, sizeof(wv), "299 %s \"%s\"", authority, warnText);
+    int  wvLen  = snprintf(wv, sizeof(wv), "%d %s \"%s\"", code, authority, warnText);
     int  sepLen = (acc != NULL) ? 2 : 0;                       // ", " between warn-values
 
     char* nacc = (char*) kaAlloc(&swRest.kalloc, accLen + sepLen + wvLen + 1);

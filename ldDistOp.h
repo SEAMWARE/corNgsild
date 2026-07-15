@@ -208,15 +208,16 @@ extern int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
 
 // -----------------------------------------------------------------------------
 //
-// ldDistOpWarning299 - § 6.3.5 comma-joined NGSILD-Warning (299) warn-values
+// ldDistOpWarnings - § 6.3.5 comma-joined NGSILD-Warning warn-values
 //
-// For a completed GET/HEAD forward batch: one `299 <host[:port]> "<text>"`
-// warn-value per source that returned an HTTP error status (4xx/5xx received
-// within the timeout period), comma-joined. Request-arena string; NULL if no
-// source qualifies. Transport failures (199), invalid payloads (111) and
-// cooldown-declined legs are not 299 and are skipped.
+// For a completed GET/HEAD forward batch: one `<code> <host[:port]> "<text>"`
+// warn-value per source that behaved abnormally, comma-joined. Codes: 199 (no
+// response within timeout — statusCode 0), 111 (invalid payload — the 2xx→502
+// downgrade), 299 (an HTTP error status received). A 404 (no data), a 2xx/3xx
+// success and a cooldown-declined leg are not abnormal and are skipped.
+// Request-arena string; NULL if no source qualifies.
 //
-extern char* ldDistOpWarning299(LdDistOpBatchItem* itemV, LdDistOpBatchResult* resultV, int itemCount);
+extern char* ldDistOpWarnings(LdDistOpBatchItem* itemV, LdDistOpBatchResult* resultV, int itemCount);
 
 
 
