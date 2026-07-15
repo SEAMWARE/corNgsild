@@ -1055,35 +1055,47 @@ static void filterDatasetId(KjNode* entityP, char** datasetIdV)
 
 // -----------------------------------------------------------------------------
 //
+// ldAcceptPrecondition - § 6.2.2 Accept-header content-negotiation PRECONDITION
+//
+// § 6.2.2 ("HTTP request preconditions"): a request whose Accept header implies
+// neither application/json nor application/ld+json is Not Acceptable → 406, and
+// application/geo+json is acceptable ONLY for the Context Information Consumption
+// operations Retrieve Entity / Query Entity; for every other operation geo+json
+// is Not Acceptable too. As a *precondition* it is evaluated BEFORE the service
+// routine runs (from the pre-service hook), so an unacceptable Accept on a write
+// (POST/PATCH/PUT/DELETE) is rejected with no side effect — the operation is not
+// performed (spec-doubt #109). The 406 body lists the available representations;
+// geo+json is offered only where it is actually available (read ops).
+//
+// Returns true when the Accept header is acceptable (dispatch proceeds), false
+// after setting the 406 (dispatch is aborted by the caller).
+//
+bool ldAcceptPrecondition(void)
+{
+  SwMimeType acceptType   = swAcceptParse(swRest.in.accept);
+  uint64_t   ldOp         = (swRest.serviceP != NULL) ? swRest.serviceP->ldOp : 0;
+  bool       entityReadOp = (ldOp & (LdOpRetrieveEntity | LdOpQueryEntities | LdOpBatchQuery)) != 0;
+
+  if (acceptType == SwMimeNone ||
+      (acceptType == SwMimeGeoJson && !entityReadOp))
+  {
+    ldError(406, LD_ERROR_INVALID_REQUEST, "Not Acceptable",
+            "supported response media types: application/json, application/ld+json%s",
+            entityReadOp ? ", application/geo+json" : "");
+    return false;
+  }
+
+  return true;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldRenderHook - compact outgoing JSON-LD payload
 //
 static void ldRenderHook(void)
 {
-  // § 6.3.4 — Accept negotiation runs FIRST, before any body work.
-  // It must trump an earlier 4xx (e.g. retrieving a non-existent
-  // entity with Accept: application/xml answers 406, not 404), so the
-  // check sits in the renderHook (called even on error paths) and
-  // overrides whatever problemType the service routine set.
-  {
-    SwMimeType acceptType    = swAcceptParse(swRest.in.accept);
-    uint64_t     ldOp          = (swRest.serviceP != NULL) ? swRest.serviceP->ldOp : 0;
-    bool         entityReadOp  = (ldOp & (LdOpRetrieveEntity | LdOpQueryEntities | LdOpBatchQuery)) != 0;
-
-    if (acceptType == SwMimeNone ||
-        (acceptType == SwMimeGeoJson && !entityReadOp))
-    {
-      // A read op (Retrieve/Query Entity) has ALREADY built the resource into
-      // responseTree; drop it so the 406 carries the ProblemDetails (whose
-      // detail lists the available representations, § 6.2.2) instead of leaking
-      // the resource with a 406 status.
-      swRest.out.responseTree = NULL;
-      ldError(406, LD_ERROR_INVALID_REQUEST, "Not Acceptable",
-              "supported response media types: application/json, application/ld+json%s",
-              entityReadOp ? ", application/geo+json" : "");
-      return;
-    }
-  }
-
   //
   // Flatten a *complete-failure* 207 into a single ProblemDetails.
   //
