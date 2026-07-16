@@ -956,6 +956,7 @@ int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
       csr->timesFailed++;
       csr->lastFailure = nowNs;
       resultV[i].statusCode = 0;
+      resultV[i].timedOut   = (resp != NULL) && (resp->error == SWC_ERR_TIMEOUT);
       if (resp != NULL && resp->errorDetail[0] != 0)
       {
         char* d = (char*) kaAlloc(&swRest.kalloc, strlen(resp->errorDetail) + 1);

@@ -196,6 +196,11 @@ typedef struct LdDistOpBatchResult
   // A forwarded read body MUST be expanded via its own context, not the
   // client's request context nor the outgoing forward context.
   const char*  responseContextUrl;
+  // true when statusCode 0 was caused by the broker's own per-CSR timeout
+  // (SWC_ERR_TIMEOUT), NOT a connection failure. § 6.3.5: a single exclusive/
+  // redirect source that fails to respond in time → 504 (vs 502 for any other
+  // reason). Left false for cooldown-declined legs (§ 5.2.6.5.3).
+  bool         timedOut;
 } LdDistOpBatchResult;
 
 extern int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
