@@ -200,6 +200,12 @@ static KjNode* attrInstanceOf(KjNode* containerP, const char* attrName)
 
 
 
+// qLeafCompare - compare a fully-resolved value node against a term's operator
+// (forward declaration; defined right after matchTerm).
+static bool qLeafCompare(LdQTerm* term, KjNode* valueP);
+
+
+
 // -----------------------------------------------------------------------------
 //
 // matchTerm - evaluate a single LdQTerm against an entity
@@ -279,6 +285,27 @@ static bool matchTerm(KjNode* entityP, LdQTerm* term)
   {
     if (valueP->type != KjObject)
       return (term->op == LdQNotExists);
+
+    // § 7.2.3.4 item 5 — "[*]" (no natural language specified) matches across
+    // ALL keys of a LanguageProperty's languageMap: the term matches if ANY
+    // key's value satisfies the comparison; for the negative operators
+    // (!= / notPattern) EVERY key must satisfy it (mirroring the array
+    // "no element matches" semantics). A "*" segment is terminal.
+    if (strcmp(term->valuePathV[i], "*") == 0)
+    {
+      if (term->op == LdQExists)    return (valueP->value.firstChildP != NULL);
+      if (term->op == LdQNotExists) return (valueP->value.firstChildP == NULL);
+
+      bool negative = (term->op == LdQUnequal) || (term->op == LdQNotPattern);
+      for (KjNode* langP = valueP->value.firstChildP; langP != NULL; langP = langP->next)
+      {
+        bool m = qLeafCompare(term, langP);
+        if (negative && !m) return false;   // ALL keys must satisfy != / notPattern
+        if (!negative && m) return true;    // ANY key satisfies the positive op
+      }
+      return negative;   // positive: no key matched → false; negative: all matched → true
+    }
+
     valueP = kjLookup(valueP, term->valuePathV[i]);
     if (valueP == NULL)
       return (term->op == LdQNotExists);
@@ -289,6 +316,21 @@ static bool matchTerm(KjNode* entityP, LdQTerm* term)
   if (term->op == LdQNotExists)
     return false;  // the attribute/path resolved, so not-exists is false
 
+  return qLeafCompare(term, valueP);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// qLeafCompare - compare a fully-resolved value node against a term's operator.
+//
+// valueP is the value under test (scalar or array); array values use "any
+// element matches" for == / pattern / ordering and "no element matches" for
+// != / notPattern (§ 4.9). Existence ops are resolved by the caller.
+//
+static bool qLeafCompare(LdQTerm* term, KjNode* valueP)
+{
   double entityNum = 0;
   bool   isNum     = false;
 
