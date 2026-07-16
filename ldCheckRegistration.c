@@ -789,7 +789,7 @@ bool ldCheckRegistration(KjNode* regP, LdOp op, bool merged, KAlloc* faP)
   // re-validation legitimately carries the stored values, so leave them there.
   if (op == LdOpCreateRegistration && !merged)
   {
-    static const char* readOnly[] = { "status", "lastFailure", "lastSuccess", "timesFailed", "timesSent", NULL };
+    static const char* readOnly[] = { "status", "lastFailure", "lastSuccess", "timesFailed", "timesSent", "createdAt", "modifiedAt", NULL };
     for (int i = 0; readOnly[i] != NULL; i++)
     {
       KjNode* roP = kjLookup(regP, readOnly[i]);

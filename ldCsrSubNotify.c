@@ -44,6 +44,7 @@
 
 #include "swNgsild/LdSubCache.h"                       // LdSubCacheItem, LdSubEntitySelector
 #include "swNgsild/ldSubCache.h"                       // ldSubCacheRdLock, ldSubCacheUnlock
+#include "swNgsild/ldStripSysAttrs.h"                  // ldStripSysAttrs
 #include "swNgsild/LdRegCache.h"                       // LdRegCache, LdRegCacheItem, LdRegInfo, LdRegEntityInfo
 #include "swNgsild/ldRegCache.h"                       // ldRegCacheRdLock, ldRegCacheUnlock
 #include "swNgsild/SwNgsild.h"                          // swNgsild (per-conn csrPending* cache)
@@ -263,6 +264,11 @@ static KjNode* csourceNotificationBuild(LdSubCacheItem* subItemP,
     if (matchV[i]->regTree == NULL) continue;
 
     KjNode* regClone = kjClone(swRest.kjsonP, matchV[i]->regTree);
+
+    // § 6.4.5 — the registration's server-owned createdAt/modifiedAt (stored as
+    // nanosecond integers) are not part of a CsourceNotification payload; strip
+    // them so they don't leak into the notified registration.
+    ldStripSysAttrs(regClone);
 
     // § 5.11.7 — "implementations should return context source
     // registration information relevant for the subscription, in

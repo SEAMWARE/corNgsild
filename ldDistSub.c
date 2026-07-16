@@ -27,6 +27,7 @@
 #include "swJsonld/swldInit.h"                         // SWLD_CORE_CONTEXT_URL
 
 #include "swNgsild/SwNgsild.h"                         // ldBrokerHttpEndpoint
+#include "swNgsild/ldStripSysAttrs.h"                  // ldStripSysAttrs
 #include "swNgsild/LdSubCache.h"                       // LdSubCacheItem, LdSubSubordinate
 #include "swNgsild/ldSubCache.h"                       // ldSubCacheRdLock, ldSubCacheUnlock
 #include "swNgsild/LdRegCache.h"                       // LdRegCache, LdRegCacheItem
@@ -208,6 +209,10 @@ static char* derivedSubBody(LdSubCacheItem* itemP,
   KjNode* statusP = kjLookup(clone, LD_VOCAB_STATUS);
   if (statusP != NULL)
     kjChildRemove(clone, statusP);
+
+  // § 6.4.5 — the parent's server-owned createdAt/modifiedAt must not flow to
+  // the subordinate (which stamps its own); a remote create would reject them.
+  ldStripSysAttrs(clone);
 
   // Strip both the user-facing jsonldContext (the remote will resolve its
   // own from @context) and the broker-filled `_jcResolved` (internal-only).
@@ -484,6 +489,8 @@ static char* patchBody(LdSubCacheItem* itemP, KjNode* fragmentP, int* bodyLenP)
 
   KjNode* statusP = kjLookup(clone, LD_VOCAB_STATUS);
   if (statusP != NULL) kjChildRemove(clone, statusP);
+
+  ldStripSysAttrs(clone);  // § 6.4.5 — never forward server-owned timestamps
 
   KjNode* jcP = kjLookup(clone, "jsonldContext");
   if (jcP != NULL) kjChildRemove(clone, jcP);

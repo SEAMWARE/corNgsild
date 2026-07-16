@@ -33,6 +33,7 @@ LIB_SOURCES   = swNgsild.c \
                 ldQueryParams.c \
                 ldPickOmit.c \
                 ldStripSysAttrs.c \
+                ldSysTimestamp.c \
                 ldApiEntityToDbModel.c \
                 ldEntityToApi.c \
                 ldEntityMerge.c \

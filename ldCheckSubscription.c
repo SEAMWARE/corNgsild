@@ -950,6 +950,17 @@ bool ldCheckSubscription(KjNode* subP, LdOp op, bool merged, LdFormat* notifForm
         return false;
       }
     }
+    else if (strcmp(name, LD_VOCAB_CREATED_AT)  == 0 || strcmp(name, "https://uri.etsi.org/ngsi-ld/createdAt")  == 0 ||
+             strcmp(name, LD_VOCAB_MODIFIED_AT) == 0 || strcmp(name, "https://uri.etsi.org/ngsi-ld/modifiedAt") == 0)
+    {
+      // § 6.4.5 — system-generated read-only timestamps: rejected from a client
+      // payload, tolerated when re-validating our own stamped/merged document.
+      if (!merged)
+      {
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Read-Only Field", "'%s' is read-only and cannot be set", name);
+        return false;
+      }
+    }
     else if (strcmp(name, LD_VOCAB_DATASET_ID) == 0)
     {
       // datasetId: array of URIs + "@none" — restricts which attribute instances
