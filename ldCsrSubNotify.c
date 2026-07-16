@@ -323,6 +323,26 @@ static void csourceNotificationPost(LdSubCacheItem* subItemP, KjNode* notificati
       swldCompactTree(notification);
   }
 
+  // § 6.5.3: the POST MIME type is application/json by default but switches to
+  // application/ld+json when endpoint.accept says so. For ld+json the @context
+  // ships inline in the body (one per data[] member, parallel to the entity-
+  // notification path in ldSubscriptionNotify) and NO Link header is sent; for
+  // plain json the @context travels in the Link header instead.
+  bool acceptLdJson = (subItemP->endpointAccept == SwMimeLdJson);
+
+  if (acceptLdJson && subItemP->contextUrl != NULL)
+  {
+    KjNode* dataP = kjLookup(notification, "data");
+    if (dataP != NULL && dataP->type == KjArray)
+    {
+      for (KjNode* ep = dataP->value.firstChildP; ep != NULL; ep = ep->next)
+      {
+        if (ep->type == KjObject && kjLookup(ep, "@context") == NULL)
+          kjChildAdd(ep, kjString(swRest.kjsonP, "@context", subItemP->contextUrl));
+      }
+    }
+  }
+
   int   bodySize = kjFastRenderSize(notification) + 1;
   char* body     = (char*) kaAlloc(&swRest.kalloc, bodySize);
   kjFastRender(notification, body);
@@ -331,21 +351,24 @@ static void csourceNotificationPost(LdSubCacheItem* subItemP, KjNode* notificati
   SwRestClientResponse resp;
 
   swRestClientRequestInit(&req, SwVerbPost, subItemP->endpointUri, NULL);
-  swRestClientRequestHeader(&req, "Content-Type", "application/json");
+  swRestClientRequestHeader(&req, "Content-Type", acceptLdJson ? "application/ld+json" : "application/json");
 
-  const char* ctxUrl = subItemP->contextUrl;
-  if (ctxUrl == NULL)
+  if (!acceptLdJson)
   {
-    SwldContext* coreP = swldCoreContext();
-    if (coreP != NULL) ctxUrl = coreP->url;
-  }
-  if (ctxUrl != NULL)
-  {
-    char linkBuf[512];
-    snprintf(linkBuf, sizeof(linkBuf),
-             "<%s>; rel=\"http://www.w3.org/ns/json-ld#context\"; type=\"application/ld+json\"",
-             ctxUrl);
-    swRestClientRequestHeader(&req, "Link", linkBuf);
+    const char* ctxUrl = subItemP->contextUrl;
+    if (ctxUrl == NULL)
+    {
+      SwldContext* coreP = swldCoreContext();
+      if (coreP != NULL) ctxUrl = coreP->url;
+    }
+    if (ctxUrl != NULL)
+    {
+      char linkBuf[512];
+      snprintf(linkBuf, sizeof(linkBuf),
+               "<%s>; rel=\"http://www.w3.org/ns/json-ld#context\"; type=\"application/ld+json\"",
+               ctxUrl);
+      swRestClientRequestHeader(&req, "Link", linkBuf);
+    }
   }
 
   // § 5.2.15 endpoint.receiverInfo — emit each {key,value} as a request header
