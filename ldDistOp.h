@@ -325,6 +325,10 @@ typedef struct LdDistOpEntry
   char*             responseBody;
   int               responseBodyLen;
   const char*       errorDetail;
+  // true when statusCode 0 was the broker's own per-CSR timeout (SWC_ERR_TIMEOUT),
+  // NOT a connection failure. § 6.3.5: a single exclusive/redirect source that fails
+  // to respond in time → 504 Gateway Timeout (vs 502 for any other reason).
+  bool              timedOut;
 } LdDistOpEntry;
 
 typedef struct LdDistOpGroup

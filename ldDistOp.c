@@ -1379,5 +1379,6 @@ void ldDistOpEntriesPerform(LdDistOpEntry* entries,
     entries[i].responseBody    = results[i].responseBody;
     entries[i].responseBodyLen = results[i].responseBodyLen;
     entries[i].errorDetail     = results[i].errorDetail;
+    entries[i].timedOut        = results[i].timedOut;
   }
 }
