@@ -281,6 +281,17 @@ static int entityCompare(const void* pa, const void* pb)
     KjNode* va = getAttrValueByPath(a, sortTerms[i].pathSegV, sortTerms[i].pathSegN);
     KjNode* vb = getAttrValueByPath(b, sortTerms[i].pathSegV, sortTerms[i].pathSegN);
 
+    // § 7.6.2.2 "(null values last)": an Attribute whose value is Null, or that
+    // does not exist, shall always sort LAST — irrespective of the asc/desc
+    // direction. Handle it before the directional negation below, which would
+    // otherwise flip a null/missing entity to the front on ;desc.
+    bool aNil = (va == NULL) || (va->type == KjNull);
+    bool bNil = (vb == NULL) || (vb->type == KjNull);
+    if (aNil != bNil)
+      return aNil ? 1 : -1;
+    if (aNil)
+      continue;                 // both null/missing — equal for this term
+
     int cmp = compareValues(va, vb);
     if (cmp != 0)
       return (sortTerms[i].dir == LdOrderDesc) ? -cmp : cmp;
