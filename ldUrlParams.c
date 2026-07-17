@@ -755,9 +755,42 @@ void ldParamHook(const char* name, const char* value)
         else if (strcmp(dirStr, "dist-desc") == 0) { dir = LdOrderDesc; byDistance = true; }
       }
 
+      // § 7.6.2.3 trailing path: "attr[member]" / "attr[a.b]" addresses a
+      // sub-item inside the attribute's compound JSON value. Split it off the
+      // attribute name here — before name expansion, whose § 4.6.2 name check
+      // would reject the '['. The bracket members are raw JSON keys (not
+      // @context-expanded), stored on the term for the sort comparator.
+      char**     valuePathV = NULL;
+      int        valuePathN = 0;
+      char*      lbr        = strchr(tok, '[');
+      if (lbr != NULL)
+      {
+        size_t last = strlen(tok) - 1;
+        if (tok[last] != ']' || lbr == tok || lbr[1] == ']')
+        {
+          ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid orderBy",
+                  "malformed trailing path in orderBy term '%s' (§ 7.6.2.3)", tok);
+          return;
+        }
+        *lbr        = 0;             // terminate the attribute name at '['
+        tok[last]   = 0;             // drop the closing ']'
+        char* inner = lbr + 1;
+
+        int members = 1;
+        for (char* p = inner; *p != 0; p++)
+          if (*p == '.') members++;
+        valuePathV = (char**) kaAlloc(faP, (members + 1) * sizeof(char*));
+        char* vsave = NULL;
+        for (char* m = strtok_r(inner, ".", &vsave); m != NULL; m = strtok_r(NULL, ".", &vsave))
+          valuePathV[valuePathN++] = m;
+        valuePathV[valuePathN] = NULL;
+      }
+
       terms[ix].attrName   = tok;  // expanded later in ldExpandParams
       terms[ix].dir        = dir;
       terms[ix].byDistance = byDistance;
+      terms[ix].valuePathV = valuePathV;
+      terms[ix].valuePathN = valuePathN;
       ix++;
     }
 

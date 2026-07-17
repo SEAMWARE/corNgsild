@@ -286,6 +286,24 @@ static int compareValues(KjNode* a, KjNode* b)
 
 // -----------------------------------------------------------------------------
 //
+// descendValuePath - § 7.6.2.3 trailing path
+//
+// Descend a compound Property value (raw JSON object) by a list of member
+// names (from orderBy=attr[a.b]). An undefined member yields NULL — the target
+// is "non-existent" (§ 7.6.2.3), so the entity sorts last via the null-last
+// rule in entityCompare.
+//
+static KjNode* descendValuePath(KjNode* valP, char** memberV, int memberN)
+{
+  for (int i = 0; (i < memberN) && (valP != NULL); i++)
+    valP = (valP->type == KjObject) ? kjLookup(valP, memberV[i]) : NULL;
+  return valP;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // entityCompare - qsort comparator for entity pointers
 //
 static int entityCompare(const void* pa, const void* pb)
@@ -324,6 +342,13 @@ static int entityCompare(const void* pa, const void* pb)
 
     KjNode* va = getAttrValueByPath(a, sortTerms[i].pathSegV, sortTerms[i].pathSegN);
     KjNode* vb = getAttrValueByPath(b, sortTerms[i].pathSegV, sortTerms[i].pathSegN);
+
+    // § 7.6.2.3 trailing path: descend into the attribute's compound JSON value.
+    if (sortTerms[i].valuePathN > 0)
+    {
+      va = descendValuePath(va, sortTerms[i].valuePathV, sortTerms[i].valuePathN);
+      vb = descendValuePath(vb, sortTerms[i].valuePathV, sortTerms[i].valuePathN);
+    }
 
     // § 7.6.2.2 "(null values last)": an Attribute whose value is Null, or that
     // does not exist, shall always sort LAST — irrespective of the asc/desc

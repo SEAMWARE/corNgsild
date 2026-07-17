@@ -45,6 +45,12 @@ typedef enum LdOrderDir
 //                key is each entity's computed `geoDistance` from `orderFrom`,
 //                not an attribute value. GeoProperty-bearing entities rank ahead
 //                of those without (which have no distance).
+// `valuePathV`   § 7.6.2.3 trailing path — the dot-separated JSON member names
+//                inside a single pair of square brackets (e.g. orderBy=
+//                address[city] or address[a.b]). Descends INTO the compound
+//                JSON value of the attribute (raw JSON keys, NOT @context-
+//                expanded). NULL when the term has no trailing path.
+// `valuePathN`   count of trailing-path members (0 when none).
 //
 typedef struct LdOrderTerm
 {
@@ -53,6 +59,8 @@ typedef struct LdOrderTerm
   int         pathSegN;
   LdOrderDir  dir;
   bool        byDistance;
+  char**      valuePathV;
+  int         valuePathN;
 } LdOrderTerm;
 
 #endif  // SWNGSILD_LDORDER_H_
