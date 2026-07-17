@@ -12,7 +12,22 @@ CC            = gcc
 PREFIX        = ..
 INCLUDE       = -I$(PREFIX)
 DFLAGS        = -DANSI
-CFLAGS        = -Wall -Werror -O2 -fPIC -Wno-unused-function $(DFLAGS) $(INCLUDE) -MMD -MP
+
+#
+# ICU "root" collation for orderBy string ordering (§ 7.6.2.1). ON by default;
+# build with 'make SW_WITH_ICU=0 ...' to drop the libicu dependency (orderBy
+# then uses a case-insensitive ASCII approximation of root collation). The
+# swBroker CMake option SW_FEATURE_ICU_COLLATION must match this setting — it
+# adds the matching -licui18n/-licuuc/-licudata to the final broker link.
+#
+SW_WITH_ICU  ?= 1
+ifeq ($(SW_WITH_ICU),1)
+DFLAGS       += -DSW_WITH_ICU
+ICU_CFLAGS   := $(shell pkg-config --cflags icu-i18n 2>/dev/null)
+ICU_LIBS     := $(shell pkg-config --libs icu-i18n 2>/dev/null)
+endif
+
+CFLAGS        = -Wall -Werror -O2 -fPIC -Wno-unused-function $(DFLAGS) $(INCLUDE) $(ICU_CFLAGS) -MMD -MP
 
 debug: CFLAGS += -g -DDEBUG
 debug: all
@@ -141,7 +156,7 @@ $(LIB):			$(LIB_OBJS) $(LIB_SOURCES)
 $(LIB_SO):	$(LIB_OBJS) $(LIB_SOURCES)
 					$(CC) -shared $(LIB_OBJS) -o $(LIB_SO) \
 						-L../swRest -L../swJsonld -L../kalloc -L../kjson -L../kbase -L../klog -L../ktrace -L../khash \
-						-lswRest -lswJsonld -lkalloc -lkjson -lkbase -lklog -lktrace -lkhash -lmicrohttpd -lssl -lcrypto -lpthread -lmosquitto \
+						-lswRest -lswJsonld -lkalloc -lkjson -lkbase -lklog -lktrace -lkhash -lmicrohttpd -lssl -lcrypto -lpthread -lmosquitto $(ICU_LIBS) \
 						-Wl,-rpath,'$$ORIGIN/../swRest:$$ORIGIN/../swJsonld:$$ORIGIN/../kalloc:$$ORIGIN/../kjson:$$ORIGIN/../kbase:$$ORIGIN/../klog:$$ORIGIN/../ktrace:$$ORIGIN/../khash'
 
 %.o: %.c

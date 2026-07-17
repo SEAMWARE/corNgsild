@@ -14,6 +14,11 @@
 
 
 // ldOrderSort - sort an entity array in-place per orderBy terms
-extern void ldOrderSort(KjNode* arrayP, LdOrderTerm* terms, int termCount);
+//
+// 'collation' is the § 7.6.2.3 collation= parameter (a BCP-47 tag, NULL = the
+// § 7.6.2.1 default "root" order). It only affects string ordering: an ICU
+// build honours it via the root/locale collator; a non-ICU build ignores it
+// and applies a case-insensitive ASCII approximation of root collation.
+extern void ldOrderSort(KjNode* arrayP, LdOrderTerm* terms, int termCount, const char* collation);
 
 #endif  // SWNGSILD_LDORDERSORT_H_

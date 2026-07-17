@@ -10,7 +10,11 @@
 // { "@none": { type, value, ... } }.
 //
 #include <stdlib.h>                                    // qsort
-#include <string.h>                                    // strcmp
+#include <string.h>                                    // strcmp, strcasecmp
+
+#ifdef SW_WITH_ICU
+#include <unicode/ucol.h>                              // UCollator, ucol_open, ucol_strcollUTF8
+#endif
 
 #include "kjson/KjNode.h"                              // KjNode, KjObject, KjArray
 #include "kjson/kjLookup.h"                            // kjLookup
@@ -23,6 +27,46 @@
 // Thread-local context for qsort comparator (no qsort_r on all platforms)
 static __thread LdOrderTerm* sortTerms;
 static __thread int          sortTermCount;
+
+#ifdef SW_WITH_ICU
+// Per-sort ICU collator, opened once in ldOrderSort and read by the comparator
+// (opening one per comparison would be catastrophic inside qsort).
+static __thread UCollator*   sortCollatorP;
+#endif
+
+
+
+// -----------------------------------------------------------------------------
+//
+// strCollate - compare two UTF-8 strings for orderBy string ordering (§ 7.6.2.1)
+//
+// § 7.6.2.1 mandates ICU "root" collation as the default (a "reasonable
+// language-agnostic" order, case-insensitive at the primary level). An ICU
+// build uses the opened collator (root, or the requested collation= locale);
+// any other build falls back to a dependency-free approximation: compare
+// case-insensitively, and for otherwise-equal strings order lowercase before
+// uppercase (matching ICU root's tertiary preference), so e.g.
+// apple < Apple < banana < Banana < cherry — never the raw-byte order where
+// every uppercase initial sorts ahead of every lowercase one.
+//
+static int strCollate(const char* a, const char* b)
+{
+#ifdef SW_WITH_ICU
+  if (sortCollatorP != NULL)
+  {
+    UErrorCode        ec = U_ZERO_ERROR;
+    UCollationResult  r  = ucol_strcollUTF8(sortCollatorP, a, -1, b, -1, &ec);
+    if (U_SUCCESS(ec))
+      return (r == UCOL_LESS) ? -1 : (r == UCOL_GREATER) ? 1 : 0;
+    // ec failure (e.g. malformed UTF-8) — fall through to the ASCII approximation
+  }
+#endif
+
+  int c = strcasecmp(a, b);
+  if (c != 0)
+    return c;
+  return -strcmp(a, b);   // equal ignoring case → lowercase before uppercase
+}
 
 
 
@@ -228,7 +272,7 @@ static int compareValues(KjNode* a, KjNode* b)
       return (a->value.f < b->value.f) ? -1 : (a->value.f > b->value.f) ? 1 : 0;
 
     case KjString:
-      return strcmp(a->value.s, b->value.s);
+      return strCollate(a->value.s, b->value.s);
 
     case KjBoolean:
       return (int)(a->value.b) - (int)(b->value.b);
@@ -306,7 +350,7 @@ static int entityCompare(const void* pa, const void* pb)
 //
 // ldOrderSort - sort an entity array in-place
 //
-void ldOrderSort(KjNode* arrayP, LdOrderTerm* terms, int termCount)
+void ldOrderSort(KjNode* arrayP, LdOrderTerm* terms, int termCount, const char* collation)
 {
   if (arrayP == NULL || arrayP->type != KjArray || terms == NULL || termCount == 0)
     return;
@@ -329,7 +373,28 @@ void ldOrderSort(KjNode* arrayP, LdOrderTerm* terms, int termCount)
   sortTerms     = terms;
   sortTermCount = termCount;
 
+#ifdef SW_WITH_ICU
+  // Open one collator for the whole sort: the requested collation= locale, or
+  // "" for the § 7.6.2.1 root order. ICU falls back to root for an unknown tag
+  // (best-effort), so an unsupported collation is never an error. On failure
+  // sortCollatorP stays NULL and strCollate uses the ASCII approximation.
+  UErrorCode ec = U_ZERO_ERROR;
+  sortCollatorP = ucol_open((collation != NULL) ? collation : "", &ec);
+  if (U_FAILURE(ec))
+    sortCollatorP = NULL;
+#else
+  (void) collation;
+#endif
+
   qsort(ptrV, count, sizeof(KjNode*), entityCompare);
+
+#ifdef SW_WITH_ICU
+  if (sortCollatorP != NULL)
+  {
+    ucol_close(sortCollatorP);
+    sortCollatorP = NULL;
+  }
+#endif
 
   // Re-link the list in sorted order
   arrayP->value.firstChildP = ptrV[0];
