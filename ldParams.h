@@ -71,6 +71,8 @@
 // bit 49 was LD_PARAM_PAGE (non-spec ?page= shim) — removed; pagination is limit+offset
 #define LD_PARAM_FIRST_N               (1ULL << 50)  // § 6.4.7.3 — temporal pagination, ascending order limit
 #define LD_PARAM_OFFSET_N              (1ULL << 51)  // § 6.4.7.3 — temporal pagination offset (with firstN/lastN)
+#define LD_PARAM_ORDER_FROM            (1ULL << 52)  // § 7.6.2.2 — sort-by-distance reference coordinates
+#define LD_PARAM_ORDER_GEOMETRY        (1ULL << 53)  // § 7.6.2.2 — sort-by-distance reference geometry type
 
 
 
@@ -107,6 +109,8 @@
   | LD_PARAM_JSON_KEYS           \
   | LD_PARAM_GEOMETRY_PROPERTY   \
   | LD_PARAM_ORDER_BY            \
+  | LD_PARAM_ORDER_FROM          \
+  | LD_PARAM_ORDER_GEOMETRY      \
   | LD_PARAM_COLLATION           \
   | LD_PARAM_SPLIT_ENTITIES      \
   | LD_PARAM_JOIN                \

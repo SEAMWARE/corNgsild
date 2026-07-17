@@ -67,6 +67,8 @@ SwRestParam ldParamRegistryV[] =
   { "kind",                  LD_PARAM_KIND },
   { "reload",                LD_PARAM_RELOAD },
   { "orderBy",               LD_PARAM_ORDER_BY },
+  { "orderFrom",             LD_PARAM_ORDER_FROM },
+  { "orderGeometry",         LD_PARAM_ORDER_GEOMETRY },
   { "collation",             LD_PARAM_COLLATION },
   { "splitEntities",         LD_PARAM_SPLIT_ENTITIES },
   { "join",                  LD_PARAM_JOIN },

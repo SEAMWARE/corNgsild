@@ -139,10 +139,12 @@ typedef struct SwNgsild
   char**  keepV;         // ?keep=a,b — exclusionary attr list (delete everything except these)
 
   // URL parameters — ordering (§ 4.23)
-  char*         orderBy;       // raw orderBy string
-  LdOrderTerm*  orderByV;      // parsed terms (NULL-terminated array, expanded in ldExpandParams)
-  int           orderByCount;  // number of terms
-  char*         collation;     // BCP47 collation tag (NULL = default)
+  char*         orderBy;         // raw orderBy string
+  LdOrderTerm*  orderByV;        // parsed terms (NULL-terminated array, expanded in ldExpandParams)
+  int           orderByCount;    // number of terms
+  char*         collation;       // BCP47 collation tag (NULL = default)
+  char*         orderFrom;       // ?orderFrom= reference coordinates (JSON array) for dist-* sort (§ 7.6.2.2)
+  char*         orderGeometry;   // ?orderGeometry= reference geometry type (default Point)
 
   // URL parameters — entity map + split entities
   bool    entityMapCreate;    // true if ?entityMap=true (create new map)

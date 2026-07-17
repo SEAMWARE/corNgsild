@@ -251,6 +251,33 @@ static int entityCompare(const void* pa, const void* pb)
 
   for (int i = 0; i < sortTermCount; i++)
   {
+    if (sortTerms[i].byDistance)
+    {
+      // § 7.6.2.2 — order by the `geoDistance` the plugin attached (in metres
+      // from ?orderFrom). Entities that convey the GeoProperty (geoDistance
+      // present) rank ahead of those that do not, regardless of direction; among
+      // geo-bearing entities the order is ascending (nearest first) or, for
+      // dist-desc, descending.
+      KjNode* da = kjLookup(a, "geoDistance");
+      KjNode* dbn = kjLookup(b, "geoDistance");
+      bool    ha = (da  != NULL) && (da->type  == KjFloat || da->type  == KjInt);
+      bool    hb = (dbn != NULL) && (dbn->type == KjFloat || dbn->type == KjInt);
+
+      if (ha != hb)
+        return ha ? -1 : 1;   // geo-bearing first
+      if (!ha)
+        continue;             // neither carries a distance — try the next term
+
+      double va = (da->type  == KjFloat) ? da->value.f  : (double) da->value.i;
+      double vb = (dbn->type == KjFloat) ? dbn->value.f : (double) dbn->value.i;
+      if (va != vb)
+      {
+        int cmp = (va < vb) ? -1 : 1;
+        return (sortTerms[i].dir == LdOrderDesc) ? -cmp : cmp;
+      }
+      continue;               // equal distance — try the next term
+    }
+
     KjNode* va = getAttrValueByPath(a, sortTerms[i].pathSegV, sortTerms[i].pathSegN);
     KjNode* vb = getAttrValueByPath(b, sortTerms[i].pathSegV, sortTerms[i].pathSegN);
 

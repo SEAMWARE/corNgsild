@@ -624,6 +624,34 @@ void ldParamHook(const char* name, const char* value)
   {
     swNgsild.geoproperty = (char*) value;  // expanded later in ldExpandParams
   }
+  else if (strcmp(name, "orderFrom") == 0)
+  {
+    // § 7.6.2.2 sort-by-distance reference coordinates (RFC 7946 § 3.1.2).
+    if (value[0] == 0)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid orderBy", "orderFrom value is empty");
+      return;
+    }
+    if (value[0] != '[')
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid orderBy", "orderFrom must be a JSON coordinates array");
+      return;
+    }
+    swNgsild.orderFrom = (char*) value;
+  }
+  else if (strcmp(name, "orderGeometry") == 0)
+  {
+    // Reference geometry type for sort-by-distance (default Point). Only Point is
+    // supported for now — a non-Point reference is refused later with 501.
+    if (strcmp(value, "Point")           != 0 && strcmp(value, "MultiPoint")      != 0 &&
+        strcmp(value, "LineString")      != 0 && strcmp(value, "MultiLineString") != 0 &&
+        strcmp(value, "Polygon")         != 0 && strcmp(value, "MultiPolygon")    != 0)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid orderBy", "unsupported orderGeometry type: '%s'", value);
+      return;
+    }
+    swNgsild.orderGeometry = (char*) value;
+  }
   else if (strcmp(name, "timerel") == 0)
   {
     if (strcmp(value, "before") != 0 && strcmp(value, "after") != 0 && strcmp(value, "between") != 0)
@@ -710,20 +738,26 @@ void ldParamHook(const char* name, const char* value)
     char* saveptr = NULL;
     for (char* tok = strtok_r(copy, ",", &saveptr); tok != NULL; tok = strtok_r(NULL, ",", &saveptr))
     {
-      // Each token: "attrName" or "attrName;desc" or "attrName;asc"
+      // Each token: "attrName" or "attrName;<dir>" where <dir> is one of
+      // asc / desc / dist-asc / dist-desc. The two "dist-*" forms (§ 7.6.2.2)
+      // sort by distance from ?orderFrom against the GeoProperty named by attrName.
       char* semi = strchr(tok, ';');
-      LdOrderDir dir = LdOrderAsc;
+      LdOrderDir dir        = LdOrderAsc;
+      bool       byDistance = false;
 
       if (semi != NULL)
       {
         *semi = 0;
         char* dirStr = semi + 1;
-        if (strcmp(dirStr, "desc") == 0)
-          dir = LdOrderDesc;
+        if      (strcmp(dirStr, "desc")      == 0)   dir = LdOrderDesc;
+        else if (strcmp(dirStr, "asc")       == 0)   dir = LdOrderAsc;
+        else if (strcmp(dirStr, "dist-asc")  == 0) { dir = LdOrderAsc;  byDistance = true; }
+        else if (strcmp(dirStr, "dist-desc") == 0) { dir = LdOrderDesc; byDistance = true; }
       }
 
-      terms[ix].attrName = tok;  // expanded later in ldExpandParams
-      terms[ix].dir      = dir;
+      terms[ix].attrName   = tok;  // expanded later in ldExpandParams
+      terms[ix].dir        = dir;
+      terms[ix].byDistance = byDistance;
       ix++;
     }
 

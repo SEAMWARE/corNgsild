@@ -1,6 +1,8 @@
 #ifndef SWNGSILD_LDORDER_H_
 #define SWNGSILD_LDORDER_H_
 
+#include <stdbool.h>                                   // bool
+
 //
 // FILE            LdOrder.h
 //
@@ -38,6 +40,11 @@ typedef enum LdOrderDir
 // `pathSegV`     NULL-terminated array of expanded segments (allocated from
 //                the request arena). Use this for sort lookups.
 // `pathSegN`     count of segments (== 1 for a flat orderBy term).
+// `byDistance`   true for a "dist-asc"/"dist-desc" term (§ 7.6.2.2 sort by
+//                distance): `attrName` names the GeoProperty and the ordering
+//                key is each entity's computed `geoDistance` from `orderFrom`,
+//                not an attribute value. GeoProperty-bearing entities rank ahead
+//                of those without (which have no distance).
 //
 typedef struct LdOrderTerm
 {
@@ -45,6 +52,7 @@ typedef struct LdOrderTerm
   char**      pathSegV;
   int         pathSegN;
   LdOrderDir  dir;
+  bool        byDistance;
 } LdOrderTerm;
 
 #endif  // SWNGSILD_LDORDER_H_
