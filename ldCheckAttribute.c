@@ -201,7 +201,7 @@ static bool checkPartialSubAttrs(KjNode* attrP, bool nullAllowed)
 //
 // isAllowedCoreAttrTerm - check if a core context term is allowed in an attribute
 //
-static bool isAllowedCoreAttrTerm(const char* name, const char* valueKey)
+static bool isAllowedCoreAttrTerm(const char* name, const char* valueKey, LdAttrType attrType)
 {
   if (strcmp(name, "type")              == 0)  return true;
   if (strcmp(name, valueKey)            == 0)  return true;
@@ -214,9 +214,11 @@ static bool isAllowedCoreAttrTerm(const char* name, const char* valueKey)
     return ((strcmp(valueKey, LD_VOCAB_HAS_OBJECT) != 0) && (strcmp(valueKey, LD_VOCAB_HAS_OBJECT_LIST) != 0));
 
   // unitCode is a unit for a numeric/plain value — only Property and ListProperty
-  // (§ 5.2.6), not GeoProperty / LanguageProperty / VocabProperty / JsonProperty.
+  // (§ 5.2.6.4.7/10/5). GeoProperty shares the "value" key with Property, so the
+  // attribute type (not the value key) has to be checked to exclude it, along
+  // with LanguageProperty / VocabProperty / JsonProperty which are unitless too.
   if (strcmp(name, LD_VOCAB_UNIT_CODE) == 0)
-    return ((strcmp(valueKey, LD_VOCAB_HAS_VALUE) == 0) || (strcmp(valueKey, LD_VOCAB_HAS_VALUE_LIST) == 0));
+    return ((attrType == LdAttrProperty) || (attrType == LdAttrListProperty));
 
   // objectType qualifies a relationship's target — only for object / objectList.
   if (strcmp(name, "objectType") == 0)
@@ -603,7 +605,7 @@ bool ldCheckAttribute(KjNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc*
     // Core context term -- must be in the allowlist for this attribute type
     if (ldIsCoreAttrTerm(childP->name))
     {
-      if (isAllowedCoreAttrTerm(childP->name, expectedKey) == false)
+      if (isAllowedCoreAttrTerm(childP->name, expectedKey, attrType) == false)
       {
         ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Attribute Member", "Attribute '%s' of type %s has a forbidden NGSI-LD term: '%s'", attrP->name, ldAttrTypeToString(attrType), childP->name);
         return false;
