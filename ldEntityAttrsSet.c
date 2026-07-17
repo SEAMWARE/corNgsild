@@ -307,7 +307,17 @@ static void applyScope(KjNode* target, KjNode* fragScope, bool overwrite, Kjson*
   }
 
   removeChild(target, tScope, allocP);
-  kjChildAdd(target, arrayP);
+
+  //
+  // § 5.2.5: scope is "a String or Array of Strings" — a single scope renders
+  // as a bare String, not a one-element Array. Collapse when the union left
+  // exactly one value (e.g. target "/x" ∪ fragment "/x").
+  //
+  KjNode* firstP = arrayP->value.firstChildP;
+  if ((firstP != NULL) && (firstP->next == NULL))
+    kjChildAdd(target, kjString(allocP, LD_VOCAB_SCOPE, firstP->value.s));
+  else
+    kjChildAdd(target, arrayP);
 }
 
 
