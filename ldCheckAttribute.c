@@ -144,7 +144,7 @@ static bool ldIsCoreAttrTerm(const char* name)
 //   § 5.2.4 observedAt is a DateTime · § 5.2.6 unitCode is a string ·
 //   datasetId is a URI string.
 //
-static bool checkPartialSubAttrs(KjNode* attrP)
+static bool checkPartialSubAttrs(KjNode* attrP, bool nullAllowed)
 {
   KjNode* observedAtP = kjLookup(attrP, LD_VOCAB_OBSERVED_AT);
   KjNode* unitCodeP   = kjLookup(attrP, LD_VOCAB_UNIT_CODE);
@@ -157,10 +157,16 @@ static bool checkPartialSubAttrs(KjNode* attrP)
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid observedAt", "Attribute '%s': 'observedAt' must be a string", attrP->name);
       return false;
     }
-    if (!ldCheckDateTime(observedAtP->value.s, NULL))
+    // § 4.5.5.9 — in a merge/update fragment the NGSI-LD Null marker on observedAt
+    // removes the sub-attribute; accept it without the DateTime shape check (the
+    // removal is applied downstream, as for any other sub-attribute).
+    if (!(nullAllowed && strcmp(observedAtP->value.s, LD_VOCAB_NGSILD_NULL) == 0))
     {
-      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid observedAt", "Attribute '%s': 'observedAt' is not a valid ISO 8601 DateTime: '%s'", attrP->name, observedAtP->value.s);
-      return false;
+      if (!ldCheckDateTime(observedAtP->value.s, NULL))
+      {
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid observedAt", "Attribute '%s': 'observedAt' is not a valid ISO 8601 DateTime: '%s'", attrP->name, observedAtP->value.s);
+        return false;
+      }
     }
   }
 
@@ -386,13 +392,20 @@ bool ldCheckAttribute(KjNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc*
     return false;
   }
 
+  // urn:ngsi-ld:null on an attribute value or sub-attribute is the delete marker,
+  // permitted in the merge/update flows (§ 4.5.5.9). Computed here so the type-less
+  // partial-fragment path honours it too (a bare {observedAt: "urn:ngsi-ld:null"}
+  // removes observedAt), and reused for the value-marker check further down.
+  const bool nullAllowed = (op == LdOpMergeEntity) || (op == LdOpBatchMerge) ||
+                           (op == LdOpUpdateEntity) || (op == LdOpUpdateAttrs);
+
   // If no type detected (might be a partial update), the type-specific value
   // checks below don't apply — but a structural sub-attribute carried by the
   // fragment (observedAt / unitCode / datasetId) still has a fixed shape and
   // must be validated, or an invalid value grafts unchecked onto the stored
   // instance.
   if (attrType == LdAttrNone)
-    return checkPartialSubAttrs(attrP);
+    return checkPartialSubAttrs(attrP, nullAllowed);
 
   // Step 3: Check required value field and validate it
   const char*  expectedKey    = valueKeyForType(attrType);
@@ -450,8 +463,7 @@ bool ldCheckAttribute(KjNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc*
   // validation — the type-specific checks below (ldCheckGeo for
   // GeoProperty, checkLanguageMap, etc.) would reject the bare string
   // as the wrong shape (ETSI 011_07_03 / 012_05_03 / 056_03_03 etc.).
-  const bool nullAllowed = (op == LdOpMergeEntity) || (op == LdOpBatchMerge) ||
-                           (op == LdOpUpdateEntity) || (op == LdOpUpdateAttrs);
+  // nullAllowed is computed above (before the type-less partial-fragment path).
 
   // A scalar value/object/vocab carrying the sentinel. A JsonProperty's `json`
   // is opaque (value-opaqueness) — there the sentinel is literal data, never a
