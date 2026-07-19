@@ -18,6 +18,7 @@
 #include "swJsonld/swldExpand.h"                       // swldAlreadyExpanded
 
 #include "swNgsild/LdQ.h"                              // LdQNode, LdQTerm
+#include "swNgsild/ldSysTimestamp.h"                   // ldSysTimestampToIso
 #include "swNgsild/ldQRender.h"                        // Own interface
 
 
@@ -244,10 +245,14 @@ static int renderTerm(LdQTerm* term, SwldContext* contextP, KAlloc* allocP, char
     break;
 
   case LdQDateTime:
-    // Render as ISO 8601 — for now, just render the nanosecond value as a number
-    // (a proper implementation would convert back to ISO string)
-    n = snprintf(buf, bufSize, "%s%s%lld", attr, op, term->value.ns);
+  {
+    // Render back to the ISO 8601 string it was parsed from — emitting the raw
+    // nanosecond integer would re-parse as a Number (semantics silently changed).
+    char isoBuf[40];
+    ldSysTimestampToIso(term->value.ns, isoBuf, sizeof(isoBuf));
+    n = snprintf(buf, bufSize, "%s%s%s", attr, op, isoBuf);
     break;
+  }
 
   default:
     n = snprintf(buf, bufSize, "%s%s?", attr, op);
