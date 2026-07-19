@@ -38,6 +38,25 @@
 
 // -----------------------------------------------------------------------------
 //
+// ldAggrMethodValid - is 's' a recognised aggregation method (§ 3.2.7)?
+//
+bool ldAggrMethodValid(const char* s)
+{
+  return (strcmp(s, "totalCount")    == 0 ||
+          strcmp(s, "count")         == 0 ||   // documented alias for totalCount
+          strcmp(s, "distinctCount") == 0 ||
+          strcmp(s, "sum")           == 0 ||
+          strcmp(s, "sumsq")         == 0 ||
+          strcmp(s, "avg")           == 0 ||
+          strcmp(s, "min")           == 0 ||
+          strcmp(s, "max")           == 0 ||
+          strcmp(s, "stddev")        == 0);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldIso8601DurationToNs - parse PnYnMnDTnHnMnS into nanoseconds.
 //
 // Years and months are intentionally rejected — calendar lengths aren't

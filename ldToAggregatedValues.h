@@ -8,6 +8,8 @@
 //
 // Copyright 2026 Seamware
 //
+#include <stdbool.h>                                    // bool
+
 #include "kalloc/KAlloc.h"                              // KAlloc
 #include "kjson/kjson.h"                                // Kjson
 #include "kjson/KjNode.h"                               // KjNode
@@ -60,5 +62,16 @@ extern void ldToAggregatedValues(KjNode*       treeP,
 // or when the duration is zero.
 //
 extern uint64_t ldIso8601DurationToNs(const char* iso);
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldAggrMethodValid - is 's' a recognised aggregation method?
+//
+// The § 3.2.7 closed enum (avg, distinctCount, max, min, stddev, sum, sumsq,
+// totalCount) plus the broker's documented "count" alias for totalCount.
+//
+extern bool ldAggrMethodValid(const char* s);
 
 #endif  // SWNGSILD_LDTOAGGREGATEDVALUES_H_
