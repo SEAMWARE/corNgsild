@@ -105,12 +105,19 @@ bool ldCheckDateTime(const char* dateTimeStr, double* secondsP)
   // Check timezone: must end with 'Z' or '+/-hh:mm'
   const char* tz = dateTimeStr + 19;
 
-  // Skip optional fractional seconds
+  // Skip optional fractional seconds. § 5.2.2.4: the decimal fraction is
+  // "one or more fractional digits, up to a maximum of six" — so 1..6 digits.
   if (*tz == '.')
   {
     tz++;
+    int fracDigits = 0;
     while (isdigit(*tz))
+    {
       tz++;
+      fracDigits++;
+    }
+    if (fracDigits < 1 || fracDigits > 6)
+      return false;
   }
 
   if (*tz == 0)
