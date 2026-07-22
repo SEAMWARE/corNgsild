@@ -42,6 +42,16 @@ bool        ldLocalOnly          = false;
 bool        ldSplitEntities      = true;
 
 //
+// ldTimestampHighPrecision - --high-precision / -hp CLI flag (default false).
+//
+// System-attribute timestamps (createdAt/modifiedAt) are stamped from a nanosecond
+// clock. NGSI-LD (§ 5.2.2.4) caps DateTime at 6 fractional digits (microseconds), so by
+// default we render at most 6 — some brokers reject 9. Enable this flag to emit the full
+// nanosecond precision (up to 9 digits) instead. Non-spec, off by default.
+//
+bool        ldTimestampHighPrecision = false;
+
+//
 // ldNotifyValueChangeOnly - --notifyValueChangeOnly CLI flag (default false).
 //
 // Default (false) is NGSI-LD compliant: every update operation fires a

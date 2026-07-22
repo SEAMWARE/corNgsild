@@ -30,12 +30,19 @@
 //
 void ldSysTimestampToIso(long long nsec, char* buf, int bufSize)
 {
+  extern bool ldTimestampHighPrecision;  // §5.2.2.4: 6 fractional digits by default, 9 with -hp
+
   time_t     sec  = (time_t)(nsec / 1000000000LL);
   int        frac = (int)(nsec % 1000000000LL);
   struct tm  tm;
 
   gmtime_r(&sec, &tm);
   int n = strftime(buf, bufSize, "%Y-%m-%dT%H:%M:%S", &tm);
+
+  // NGSI-LD (§ 5.2.2.4) caps DateTime at 6 fractional digits (microseconds). Drop the
+  // sub-microsecond part so the trailing-zero trim below yields at most 6 digits; -hp keeps all 9.
+  if (!ldTimestampHighPrecision)
+    frac = (frac / 1000) * 1000;
 
   if (frac == 0)
   {

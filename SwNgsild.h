@@ -281,6 +281,10 @@ extern uint64_t ldDefaultCooldownNs;   // --cooldownMillis: default endpoint coo
 //
 extern bool ldSplitEntities;
 
+// System-attribute timestamps render at most 6 fractional digits (§ 5.2.2.4) by default;
+// --high-precision/-hp opts into the full 9 (nanoseconds). See ldUrlParams.c.
+extern bool ldTimestampHighPrecision;
+
 
 
 // ldCsourceAliasBase - per-broker contextSourceAlias base (NGSI-LD § 5.7.5 /
