@@ -1194,6 +1194,68 @@ const char* ldRegCacheLocalWriteConflict(LdRegCache* cacheP,
 
 // -----------------------------------------------------------------------------
 //
+// ldRegCacheAttrExclusivelyClaimed - is 'attrIri' on entity (entityId, entityTypeV)
+// claimed by an EXCLUSIVE registration?
+//
+// Used by the multi-source read merge: an attribute claimed by an exclusive
+// registration is authoritative from that source alone, so a colliding copy
+// arriving from a non-exclusive source (inclusive) must be discarded — the
+// timestamp tiebreaker in ldDistInstanceShouldReplace would otherwise let a
+// newer inclusive value overwrite the exclusive one. Redirect is deliberately
+// NOT included here (its query semantics are handled elsewhere).
+//
+bool ldRegCacheAttrExclusivelyClaimed(LdRegCache* cacheP,
+                                      const char* entityId,
+                                      char**      entityTypeV,
+                                      const char* attrIri,
+                                      uint64_t    nowNs)
+{
+  if (cacheP == NULL || entityId == NULL || attrIri == NULL)
+    return false;
+
+  bool claimed = false;
+  ldRegCacheRdLock(cacheP);
+
+  for (LdRegCacheItem* itemP = cacheP->itemList; itemP != NULL && !claimed; itemP = itemP->next)
+  {
+    if (itemP->mode != LdRegModeExclusive)
+      continue;
+    if (itemP->expiresAt > 0 && itemP->expiresAt <= nowNs)
+      continue;
+
+    for (LdRegInfo* riP = itemP->infoV; riP != NULL && !claimed; riP = riP->next)
+    {
+      bool entityCovered = (riP->entityInfoV == NULL);  // attrs-only claim: any entity
+      for (LdRegEntityInfo* eiP = riP->entityInfoV; eiP != NULL && !entityCovered; eiP = eiP->next)
+        if (entityInfoMatches(eiP, entityId, entityTypeV))
+          entityCovered = true;
+      if (!entityCovered)
+        continue;
+
+      // Whole-entity claim (no attributeNames) — every attr of the entity is exclusive.
+      if (riP->attributeNamesV == NULL)
+      {
+        claimed = true;
+        break;
+      }
+
+      for (int ax = 0; riP->attributeNamesV[ax] != NULL; ax++)
+        if (strcmp(attrIri, riP->attributeNamesV[ax]) == 0)
+        {
+          claimed = true;
+          break;
+        }
+    }
+  }
+
+  ldRegCacheUnlock(cacheP);
+  return claimed;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldRegCacheLocalWriteConflictTree - tree convenience over
 // ldRegCacheLocalWriteConflict.
 //

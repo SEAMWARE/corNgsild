@@ -275,4 +275,13 @@ extern const char* ldRegCacheLocalWriteConflictTree(LdRegCache* cacheP,
                                                     KjNode*     fragP,
                                                     KAlloc*     kaP);
 
+// Is 'attrIri' on entity (entityId, entityTypeV) claimed by an EXCLUSIVE
+// registration? Used by the multi-source read merge to discard a colliding
+// attribute arriving from a non-exclusive source (the exclusive source wins).
+extern bool ldRegCacheAttrExclusivelyClaimed(LdRegCache* cacheP,
+                                             const char* entityId,
+                                             char**      entityTypeV,
+                                             const char* attrIri,
+                                             uint64_t    nowNs);
+
 #endif  // SWNGSILD_LDREGCACHE_OPS_H_
