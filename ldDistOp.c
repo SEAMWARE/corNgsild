@@ -20,6 +20,7 @@
 #include "kjson/kjParse.h"                             // kjParse
 
 #include "kalloc/kaAlloc.h"                            // kaAlloc
+#include "ktrace/kTrace.h"                             // KT_T
 #include "swRest/SwRestState.h"                        // swRest
 #include "swRest/SwRestKeyValue.h"                     // SwRestKeyValue
 #include "swRest/SwRestVerb.h"                         // SwVerbGet, SwVerbDelete
@@ -37,6 +38,7 @@
 #include "swJsonld/swldInit.h"                         // swldCoreContext
 #include "swJsonld/swldDownload.h"                     // swldIsCoreContextUrl
 #include "swNgsild/ldContextHost.h"                    // ldContextHostVolatile
+#include "swNgsild/ldTraceLevels.h"                    // LdTForwardResp
 #include "swNgsild/ldDistOp.h"                         // Own interface
 
 
@@ -206,12 +208,14 @@ static SwRestKeyValue* buildHeaders(SwRestVerb     verb,
     }
   }
 
-  if (csiAccept != NULL)
-  {
-    hv[hc].key   = (char*) "Accept";
-    hv[hc].value = (char*) csiAccept;
-    hc++;
-  }
+  // Always send an explicit Accept. Per § 6.2.2 a receiver SHALL assume application/json
+  // when no Accept header is present, so sending none is spec-legal — but a non-conformant
+  // peer may 406 an Accept-less request. Send it explicitly (the CSR's contextSourceInfo
+  // accept if declared, else application/json — what swBroker wants back anyway) to protect
+  // ourselves against such misbehaving peers. Interop hardening, not a spec requirement.
+  hv[hc].key   = (char*) "Accept";
+  hv[hc].value = (char*) ((csiAccept != NULL) ? csiAccept : "application/json");
+  hc++;
 
   for (int i = 0; i < swRest.in.httpHeaderCount; i++)
   {
@@ -486,6 +490,57 @@ bool ldDistOpCsrInCooldown(LdRegCacheItem* csr)
 
 
 
+// -----------------------------------------------------------------------------
+//
+// distOpTraceRequest - trace an outgoing forwarded request (line / params / headers / body)
+//
+// Each aspect has its own trace level so they can be enabled independently.
+// URL params are emitted one line per param (the '?' query string of 'url').
+//
+static void distOpTraceRequest(SwRestVerb verb, const char* url, SwRestKeyValue* hv, int hc, const char* body, int bodyLen)
+{
+  if (url == NULL)
+    return;
+
+  const char* q = strchr(url, '?');
+  int         pathLen = (q != NULL) ? (int)(q - url) : (int) strlen(url);
+  KT_T(LdTFwdReq, "forward request: %s %.*s", swRestVerbToString(verb), pathLen, url);
+
+  if (q != NULL)
+  {
+    for (const char* p = q + 1; *p != 0; )
+    {
+      const char* amp = strchr(p, '&');
+      int         len = (amp != NULL) ? (int)(amp - p) : (int) strlen(p);
+      KT_T(LdTFwdReqParam, "forward request param: %.*s", len, p);
+      if (amp == NULL) break;
+      p = amp + 1;
+    }
+  }
+
+  for (int i = 0; i < hc; i++)
+    KT_T(LdTFwdReqHeader, "forward request header: %s: %s", hv[i].key, hv[i].value ? hv[i].value : "");
+
+  if (body != NULL && bodyLen > 0)
+    KT_T(LdTFwdReqBody, "forward request body (%d bytes): %.*s", bodyLen, bodyLen, body);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// distOpTraceResponse - trace a forwarded request's response line + headers.
+// (The response body is traced by distOpBodyParse, before it is tokenized.)
+//
+static void distOpTraceResponse(int statusCode, SwRestKeyValue* hv, int hc)
+{
+  KT_T(LdTFwdRes, "forward response: status %d", statusCode);
+  for (int i = 0; i < hc; i++)
+    KT_T(LdTFwdResHeader, "forward response header: %s: %s", hv[i].key, hv[i].value ? hv[i].value : "");
+}
+
+
+
 int ldDistOpSendReceiveEx(LdRegCacheItem*  csr,
                           SwRestVerb       verb,
                           const char*      url,
@@ -551,6 +606,8 @@ int ldDistOpSendReceiveEx(LdRegCacheItem*  csr,
   resp.error           = 0;
   resp.errorDetail[0]  = 0;
 
+  distOpTraceRequest(verb, url, hv, hc, body, req.bodyLen);
+
   int rc;
   if (endpointIsSelf(csr->endpoint))
   {
@@ -573,6 +630,8 @@ int ldDistOpSendReceiveEx(LdRegCacheItem*  csr,
   }
   else
     rc = plugin->send(&req, &resp);
+
+  distOpTraceResponse(resp.statusCode, resp.headerV, resp.headerCount);
 
   // Counters — § 5.2.36 distribution accounting.
   struct timespec ts;
@@ -679,6 +738,11 @@ static void distOpBodyParse(LdDistOpBatchResult* rP)
 {
   if ((rP->responseBody == NULL) || (rP->responseBodyLen == 0))
     return;
+
+  // Trace the RAW forwarded-response body before kjParse tokenizes it in place
+  // (afterwards it is no longer printable as a string).
+  KT_T(LdTFwdResBody, "forward response body (status %d, %d bytes): %.*s",
+       rP->statusCode, rP->responseBodyLen, rP->responseBodyLen, rP->responseBody);
 
   rP->responseTree = kjParse(swRest.kjsonP, rP->responseBody);
 
@@ -861,6 +925,8 @@ int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
     int             hc = 0;
     SwRestKeyValue* hv = buildHeaders(itemVerb, ownAlias, csr->tenant, csr->contextSourceInfoKV, ldDistOpForwardContext(csr), &hc);
 
+    distOpTraceRequest(itemVerb, itemV[i].url, hv, hc, itemV[i].body, itemV[i].bodyLen);
+
     if (endpointIsSelf(csr->endpoint))
     {
       selfHv[i]   = hv;
@@ -926,6 +992,7 @@ int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
       resultV[i].statusCode        = sc;
       resultV[i].responseBody      = respBody;
       resultV[i].responseBodyLen   = respBodyLen;
+      distOpTraceResponse(sc, respHdrV, respHdrCount);
       distOpBodyParse(&resultV[i]);
       resultV[i].responseContextUrl = responseContextLink(respHdrV, respHdrCount);
 
@@ -983,6 +1050,7 @@ int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
     else
       resultV[i].responseBody = NULL;
 
+    distOpTraceResponse(resp->statusCode, resp->headerV, resp->headerCount);
     distOpBodyParse(&resultV[i]);
 
     // The context the response speaks (its json-ld#context Link), so the

@@ -24,4 +24,24 @@
 #define LdTCheckUri   209   // URI validation
 #define LdTRender     210   // Format conversion
 
+//
+// Forwarding / distributed operations (220-229).
+//
+#define LdTFwdReq        220  // forwarded request — request line (verb + URL path)
+#define LdTFwdReqParam   221  // forwarded request — URL params (one line per param)
+#define LdTFwdReqHeader  222  // forwarded request — HTTP request headers (one per line)
+#define LdTFwdReqBody    223  // forwarded request — request body
+#define LdTFwdRes        224  // forwarded request — response line (status)
+#define LdTFwdResHeader  225  // forwarded request — HTTP response headers (one per line)
+#define LdTFwdResBody    226  // forwarded request — response body
+
+//
+// Notifications (230-239).
+//
+#define LdTNotifReq      230  // notification — request line (verb + URL)
+#define LdTNotifReqParam 231  // notification — URL params (one line per param)
+#define LdTNotifHeader   232  // notification — HTTP headers (one per line)
+#define LdTNotifBody     233  // notification — body
+#define LdTNotifRes      234  // notification — response line (status)
+
 #endif  // SWNGSILD_LDTRACELEVELS_H_

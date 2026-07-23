@@ -22,6 +22,7 @@
 #include <time.h>                                      // time
 
 #include "kalloc/kaAlloc.h"                            // kaAlloc
+#include "ktrace/kTrace.h"                             // KT_T
 #include "kjson/KjNode.h"                              // KjNode
 #include "kjson/kjBuilder.h"                           // kjObject, kjString, kjArray, kjChildAdd
 #include "kjson/kjChildReplace.h"                      // kjChildReplace
@@ -35,6 +36,7 @@
 #include "swJsonld/swldCompactTree.h"                  // swldCompactTree, swldCompactTreeWith
 #include "swJsonld/swldDownload.h"                     // swldContextFromUrl
 
+#include "swNgsild/ldTraceLevels.h"                    // LdTNotif*
 #include "swNgsild/ldTypes.h"                          // ldFormatToString
 #include "swNgsild/LdVocab.h"                          // LD_VOCAB_*
 #include "swNgsild/SwNgsild.h"                         // swNgsild
@@ -1038,7 +1040,27 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   int reqTmoMs = (itemP->timeoutMs > 0) ? itemP->timeoutMs : 10000;
   swRestClientRequestTimeout(&req, 5000, reqTmoMs);
 
+  // Trace the outgoing notification (each aspect on its own level).
+  {
+    const char* nq       = (req.url != NULL) ? strchr(req.url, '?') : NULL;
+    int         nPathLen  = (nq != NULL) ? (int)(nq - req.url) : (req.url ? (int) strlen(req.url) : 0);
+    KT_T(LdTNotifReq, "notification request: %s %.*s", swRestVerbToString(req.verb), nPathLen, req.url ? req.url : "");
+    for (const char* p = (nq != NULL) ? nq + 1 : NULL; p != NULL && *p != 0; )
+    {
+      const char* amp = strchr(p, '&');
+      int         len = (amp != NULL) ? (int)(amp - p) : (int) strlen(p);
+      KT_T(LdTNotifReqParam, "notification request param: %.*s", len, p);
+      if (amp == NULL) break;
+      p = amp + 1;
+    }
+    for (int h = 0; h < req.headerCount; h++)
+      KT_T(LdTNotifHeader, "notification request header: %s: %s", req.headerV[h].key, req.headerV[h].value ? req.headerV[h].value : "");
+    KT_T(LdTNotifBody, "notification request body (%zu bytes): %s", strlen(body), body);
+  }
+
   swRestClientSend(&req, &resp);
+
+  KT_T(LdTNotifRes, "notification response: status %d", resp.statusCode);
 
   //
   // Update notification counters (use request timestamp, nanoseconds)
