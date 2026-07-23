@@ -49,9 +49,11 @@ char* ldProbeSourceIdentity(const char* endpoint, const char* tenant, int timeou
     return NULL;
 
   //
-  // Compose URL: <endpoint>/info/sourceIdentity
+  // Compose URL: <endpoint>/ngsi-ld/v1/info/sourceIdentity
+  // The sourceIdentity resource (§ 12.2.2) is defined relative to the API root
+  // {apiRoot}/ngsi-ld/v1 (§ 5), so the full path carries the /ngsi-ld/v1 prefix.
   //
-  static const char pathSuffix[] = "/info/sourceIdentity";
+  static const char pathSuffix[] = "/ngsi-ld/v1/info/sourceIdentity";
   int   endpointLen = strlen(endpoint);
   char  urlBuf[1024];
   if (endpointLen + sizeof(pathSuffix) > sizeof(urlBuf))
