@@ -105,9 +105,15 @@ bool ldCheckDateTime(const char* dateTimeStr, double* secondsP)
   // Check timezone: must end with 'Z' or '+/-hh:mm'
   const char* tz = dateTimeStr + 19;
 
-  // Skip optional fractional seconds. § 5.2.2.4: the decimal fraction is
-  // "one or more fractional digits, up to a maximum of six" — so 1..6 digits.
-  if (*tz == '.')
+  // Skip optional fractional seconds. § 5.2.2.4 states a maximum of six digits,
+  // but on input we are more liberal: the value is stored as epoch-nanoseconds
+  // (9-digit resolution) and anything beyond nine is rounded to nanoseconds by
+  // the converter below, so extra precision is never a parse error. The only
+  // invalid case here is a bare separator with zero digits. The separator is a
+  // decimal point; a comma is also accepted "for compatibility reasons"
+  // (§ 5.2.2.4). Output precision is a render-time choice (6 digits by default,
+  // 9 under --high-precision), not an input constraint.
+  if (*tz == '.' || *tz == ',')
   {
     tz++;
     int fracDigits = 0;
@@ -116,7 +122,7 @@ bool ldCheckDateTime(const char* dateTimeStr, double* secondsP)
       tz++;
       fracDigits++;
     }
-    if (fracDigits < 1 || fracDigits > 6)
+    if (fracDigits < 1)
       return false;
   }
 
@@ -167,7 +173,7 @@ int64_t ldIsoToNanoseconds(const char* iso)
   // compared as signed int64 (range ~1677..2262) so negatives order correctly.
   int64_t ns = (int64_t) timegm(&tm) * 1000000000LL;
 
-  if (*rest == '.')
+  if (*rest == '.' || *rest == ',')  // § 5.2.2.4: '.' canonical, ',' accepted on input
   {
     rest++;
     int64_t frac   = 0;
@@ -183,6 +189,16 @@ int64_t ldIsoToNanoseconds(const char* iso)
       frac *= 10;
       digits++;
     }
+
+    // More than nine fractional digits: round to nanosecond resolution on the
+    // tenth digit, then skip any remaining digits so the timezone parse below
+    // sees 'Z' / '+' / '-'. A round-up past 999999999 carries into the whole
+    // second correctly, since ns is accumulated in nanoseconds.
+    if ((*rest >= '5') && (*rest <= '9'))
+      frac += 1;
+    while ((*rest >= '0') && (*rest <= '9'))
+      rest++;
+
     ns += frac;
   }
 
