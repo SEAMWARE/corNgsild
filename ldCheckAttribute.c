@@ -8,6 +8,7 @@
 //
 #include <stdbool.h>                                     // bool
 #include <string.h>                                      // strcmp
+#include <ctype.h>                                       // isalpha, isalnum
 
 #include "kbase/kLibLog.h"                             // KLOG_T
 #include "kalloc/KAlloc.h"                             // KAlloc
@@ -250,6 +251,56 @@ static bool isValueKey(const char* name)
 
 // -----------------------------------------------------------------------------
 //
+// languageTagWellFormed - is `tag` a well-formed IETF RFC 5646 language tag?
+//
+// § 5.2.6.4.6: a languageMap key "shall be a JSON string representing an IETF RFC
+// 5646 language code, or the JSON-LD @none". This checks SHAPE, not registration -
+// "zz" and "qqq-ZZ" are well-formed and accepted even though no such language is
+// registered. Validating against the IANA registry would need the registry itself,
+// and would reject tags that become valid when it is next updated.
+//
+//   primary subtag  2-8 ALPHA          en, deu, klingon
+//   further subtags 1-8 ALPHANUM each  en-US, zh-Hans-CN, de-CH-1901
+//   singletons      x-... / i-...      private-use and grandfathered forms
+//
+static bool languageTagWellFormed(const char* tag)
+{
+  int i = 0;
+
+  // Private-use (x-) and grandfathered (i-) tags start with a one-letter singleton.
+  if (((tag[0] == 'x') || (tag[0] == 'X') || (tag[0] == 'i') || (tag[0] == 'I')) && (tag[1] == '-'))
+    i = 1;
+  else
+  {
+    while (isalpha((unsigned char) tag[i]))
+      i++;
+    if ((i < 2) || (i > 8))                                 // primary subtag length
+      return false;
+    if (tag[i] == 0)
+      return true;
+  }
+
+  // Remaining subtags: '-' followed by 1-8 alphanumerics, repeated.
+  while (tag[i] == '-')
+  {
+    int len = 0;
+    i++;
+    while (isalnum((unsigned char) tag[i]))
+    {
+      i++;
+      len++;
+    }
+    if ((len < 1) || (len > 8))
+      return false;
+  }
+
+  return (tag[i] == 0);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // checkLanguageMap - validate a languageMap value (object with string values)
 //
 static bool checkLanguageMap(KjNode* lmP)
@@ -262,10 +313,19 @@ static bool checkLanguageMap(KjNode* lmP)
 
   for (KjNode* childP = lmP->value.firstChildP; childP != NULL; childP = childP->next)
   {
-    // § 5.2.6.4.6 — a languageMap key is a non-empty BCP47 language tag.
+    // § 5.2.6.4.6 — a languageMap key shall be an RFC 5646 language tag, or @none
+    // (the JSON-LD default when no more specific language matches; it is also what
+    // the NGSI-LD Null encoding {"@none": "urn:ngsi-ld:null"} uses).
     if (childP->name == NULL || childP->name[0] == 0)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid LanguageProperty", "'languageMap' has an empty language key");
+      return false;
+    }
+
+    if ((strcmp(childP->name, "@none") != 0) && (!languageTagWellFormed(childP->name)))
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid LanguageProperty",
+              "'languageMap' key is not an RFC 5646 language tag: '%s'", childP->name);
       return false;
     }
 
