@@ -57,10 +57,23 @@ extern void ldToAggregatedValues(KjNode*       treeP,
 //
 // ldIso8601DurationToNs - parse an ISO 8601 duration string into nanoseconds.
 //
-// Supports PnYnMnDTnHnMnS — but only D / H / M / S parts are honored. Y / M
-// (months) are rejected (their length isn't fixed). Returns 0 on parse error
-// or when the duration is zero.
+// § 5.3.2.7 allows two forms: PnYnMnDTnHnMnS and PnW. A week is exactly 7 days,
+// so W maps onto the fixed-width bucketing just like D/H/M/S.
 //
+// Returns:
+//   LD_DURATION_INVALID - not a valid duration (no leading 'P', empty, unknown
+//                         unit, number without a unit, ...). The caller raises
+//                         400; it must NOT be treated as "zero".
+//   0                   - a zero duration (PT0S / P0D / P0Y ...), which § 5.3.2.7
+//                         defines as one bucket spanning the whole time range.
+//   > 0                 - the bucket width in nanoseconds.
+//
+// A NON-zero Y or M has no fixed width (calendar lengths vary) and currently
+// yields 0 = whole window; bucketing those needs a calendar boundary walk
+// instead of a constant width. See the TODO at the ldHooks call site.
+//
+#define LD_DURATION_INVALID  UINT64_MAX
+
 extern uint64_t ldIso8601DurationToNs(const char* iso);
 
 

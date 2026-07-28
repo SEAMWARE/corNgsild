@@ -57,53 +57,80 @@ bool ldAggrMethodValid(const char* s)
 
 // -----------------------------------------------------------------------------
 //
-// ldIso8601DurationToNs - parse PnYnMnDTnHnMnS into nanoseconds.
+// ldIso8601DurationToNs - parse PnYnMnDTnHnMnS / PnW into nanoseconds.
 //
-// Years and months are intentionally rejected — calendar lengths aren't
-// fixed, and the temporal API's bucketing math relies on a constant period.
+// See the header for the return contract. The distinction this draws — and that
+// the previous version could not — is INVALID vs ZERO: both used to come back as
+// 0, so "aggrPeriodDuration=banana" was silently answered as a single
+// whole-window bucket with 200 instead of being rejected.
+//
+// W is honored: § 5.3.2.7 lists PnW explicitly, and a week is always exactly 7
+// days, so it fits the constant-width bucketing. A non-zero Y/M does not
+// (calendar lengths vary) and still resolves to 0 = whole window.
 //
 uint64_t ldIso8601DurationToNs(const char* iso)
 {
   if (iso == NULL || *iso != 'P')
-    return 0;
+    return LD_DURATION_INVALID;
 
   iso++;
-  bool inTime = false;
-  uint64_t totalNs = 0;
+  if (*iso == 0)                                              // bare "P"
+    return LD_DURATION_INVALID;
+
+  bool     inTime   = false;
+  bool     anyField = false;                                  // "PT" alone is invalid too
+  uint64_t totalNs  = 0;
 
   while (*iso != 0)
   {
     if (*iso == 'T')
     {
+      if (inTime)                                             // a second 'T'
+        return LD_DURATION_INVALID;
       inTime = true;
       iso++;
       continue;
     }
 
-    char* end = NULL;
-    long long n = strtoll(iso, &end, 10);
+    char*     end = NULL;
+    long long n   = strtoll(iso, &end, 10);
     if (end == iso || n < 0)
-      return 0;
+      return LD_DURATION_INVALID;
 
     char unit = *end;
+    if (unit == 0)                                            // number with no unit
+      return LD_DURATION_INVALID;
     iso = end + 1;
 
     uint64_t mult = 0;
     if (!inTime)
     {
-      if (unit == 'D')                     mult = 86400ULL * 1000000000ULL;
-      else                                 return 0;            // Y / M / W not supported
+      if      (unit == 'D')                mult = 86400ULL * 1000000000ULL;
+      else if (unit == 'W')                mult = 7ULL * 86400ULL * 1000000000ULL;
+      else if ((unit == 'Y') || (unit == 'M'))
+      {
+        // Zero is a zero duration whatever the unit. A non-zero calendar period
+        // can't be expressed as a constant width — whole window, as before.
+        if (n != 0)
+          return 0;
+        mult = 0;
+      }
+      else                                 return LD_DURATION_INVALID;
     }
     else
     {
       if      (unit == 'H')                mult = 3600ULL * 1000000000ULL;
       else if (unit == 'M')                mult = 60ULL   * 1000000000ULL;
       else if (unit == 'S')                mult = 1000000000ULL;
-      else                                 return 0;
+      else                                 return LD_DURATION_INVALID;
     }
 
     totalNs += (uint64_t) n * mult;
+    anyField = true;
   }
+
+  if (!anyField)
+    return LD_DURATION_INVALID;
 
   return totalNs;
 }
