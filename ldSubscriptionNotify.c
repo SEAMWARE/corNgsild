@@ -500,8 +500,10 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
   // matching the de-facto compliance bar. Flip back to a conditional default
   // once the fixtures align with v1.9.1.
   //
-  // datasetId-driven multi-instance handling is not yet implemented — would
-  // require emitting one wrapper per deleted dataset instance.
+  // When the change removed dataset instances, the report lists their dsKeys
+  // in "datasetIds" and one marker is injected per instance, so a receiver can
+  // tell exactly which instances went away (§ 10.5.7: the datasetId has to be
+  // provided when the deleted instance carries one).
   //
   if (op == LdNotifyEntityUpdate && reportP != NULL && reportP->changes != NULL)
   {
@@ -516,8 +518,10 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
       if (attrP   == NULL || attrP->type   != KjString) continue;
       if (strcmp(reasonP->value.s, "attributeDeleted") != 0) continue;
 
-      KjNode* dsKeyP        = kjLookup(chP, "datasetId");
-      const char* deletedDs = (dsKeyP != NULL && dsKeyP->type == KjString) ? dsKeyP->value.s : NULL;
+      // "datasetIds" lists the dsKey of every instance the change removed.
+      KjNode* dsKeysP = kjLookup(chP, "datasetIds");
+      if ((dsKeysP != NULL) && ((dsKeysP->type != KjArray) || (dsKeysP->value.firstChildP == NULL)))
+        dsKeysP = NULL;
 
       KjNode* existingAttr = kjLookup(entityClone, attrP->value.s);
 
@@ -559,25 +563,38 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
       if (itemP->sysAttrs == true && deletedNs != 0)
         kjChildAdd(inst, kjInteger(swRest.kjsonP, LD_VOCAB_DELETED_AT, deletedNs));
 
-      if (existingAttr != NULL && deletedDs != NULL)
+      if (dsKeysP != NULL)
       {
-        // Per-instance deletion (§ 5.8.6 datasetId trigger): the wrapper
-        // still holds surviving instances. Add the deleted instance as
-        // a fresh dsKey-keyed entry so the array form rendered downstream
-        // includes it as the null-marker entry.
-        inst->name = (char*) deletedDs;
-        kjChildAdd(existingAttr, inst);
+        // One null marker per removed instance, each keyed by its dsKey
+        // ("@none" for the default instance). Surviving instances, if any,
+        // are already in the wrapper - the markers join them and the array
+        // form rendered downstream carries a datasetId on each keyed entry.
+        for (KjNode* keyP = dsKeysP->value.firstChildP; keyP != NULL; keyP = keyP->next)
+        {
+          if (keyP->type != KjString)
+            continue;
+
+          KjNode* marker = kjClone(swRest.kjsonP, inst);
+          marker->name   = keyP->value.s;
+
+          if (existingAttr == NULL)
+          {
+            existingAttr = kjObject(swRest.kjsonP, attrP->value.s);
+            kjChildAdd(entityClone, existingAttr);
+          }
+          kjChildAdd(existingAttr, marker);
+        }
       }
       else if (existingAttr == NULL)
       {
-        // Whole-attribute deletion: inject a new wrapper with a single
-        // @none instance carrying the null marker.
+        // Whole-attribute deletion reported without instance detail (batch
+        // and merge paths): a single @none instance carrying the marker.
         inst->name = (char*) "@none";
         KjNode* wrapper = kjObject(swRest.kjsonP, attrP->value.s);
         kjChildAdd(wrapper, inst);
         kjChildAdd(entityClone, wrapper);
       }
-      // else: attribute still present and no datasetId — nothing to inject.
+      // else: attribute still present and no instance detail — nothing to inject.
     }
   }
 
