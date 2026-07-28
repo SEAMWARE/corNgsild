@@ -30,7 +30,7 @@
 #include "swNgsild/LdGeoRel.h"                           // ldGeoRelParse
 #include "swNgsild/LdScopeExpr.h"                        // ldScopeExprParse
 #include "swNgsild/LdTypeExpr.h"                         // ldTypeExprParse
-#include "swNgsild/ldToAggregatedValues.h"              // ldIso8601DurationToNs, LD_DURATION_INVALID
+#include "swNgsild/ldToAggregatedValues.h"              // ldIso8601DurationParse, LdDuration
 #include "swNgsild/SwNgsild.h"                           // Own interface
 
 
@@ -719,7 +719,8 @@ void ldParamHook(const char* name, const char* value)
   {
     // § 5.3.2.7: PnYnMnDTnHnMnS or PnW. An unparseable value used to be accepted
     // silently and answered as a single whole-window bucket with 200.
-    if (ldIso8601DurationToNs(value) == LD_DURATION_INVALID)
+    LdDuration period;
+    if (!ldIso8601DurationParse(value, &period))
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid temporal query",
               "aggrPeriodDuration is not a valid ISO 8601 duration: '%s'", value);

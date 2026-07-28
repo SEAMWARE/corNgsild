@@ -57,36 +57,38 @@ bool ldAggrMethodValid(const char* s)
 
 // -----------------------------------------------------------------------------
 //
-// ldIso8601DurationToNs - parse PnYnMnDTnHnMnS / PnW into nanoseconds.
+// ldIso8601DurationParse - parse PnYnMnDTnHnMnS / PnW (§ 5.3.2.7).
 //
-// See the header for the return contract. The distinction this draws — and that
-// the previous version could not — is INVALID vs ZERO: both used to come back as
-// 0, so "aggrPeriodDuration=banana" was silently answered as a single
-// whole-window bucket with 200 instead of being rejected.
+// Returns false when the string is not a valid duration - "banana", "1D" (no P),
+// bare "P", "PT", a number with no unit. That case must NOT be confused with a
+// zero duration, which is valid and means "the whole time range".
 //
-// W is honored: § 5.3.2.7 lists PnW explicitly, and a week is always exactly 7
-// days, so it fits the constant-width bucketing. A non-zero Y/M does not
-// (calendar lengths vary) and still resolves to 0 = whole window.
+// Splits the result in two, because the two halves bucket differently:
+//   months - Y and M, whose length varies -> a calendar boundary walk
+//   ns     - W/D/H/M/S, all constant       -> a fixed width
+// A duration may carry both (P1M15D); boundaries then step a month, then 15 days.
 //
-uint64_t ldIso8601DurationToNs(const char* iso)
+bool ldIso8601DurationParse(const char* iso, LdDuration* durationP)
 {
+  durationP->months = 0;
+  durationP->ns     = 0;
+
   if (iso == NULL || *iso != 'P')
-    return LD_DURATION_INVALID;
+    return false;
 
   iso++;
   if (*iso == 0)                                              // bare "P"
-    return LD_DURATION_INVALID;
+    return false;
 
-  bool     inTime   = false;
-  bool     anyField = false;                                  // "PT" alone is invalid too
-  uint64_t totalNs  = 0;
+  bool inTime   = false;
+  bool anyField = false;                                      // "PT" alone is invalid too
 
   while (*iso != 0)
   {
     if (*iso == 'T')
     {
       if (inTime)                                             // a second 'T'
-        return LD_DURATION_INVALID;
+        return false;
       inTime = true;
       iso++;
       continue;
@@ -95,45 +97,89 @@ uint64_t ldIso8601DurationToNs(const char* iso)
     char*     end = NULL;
     long long n   = strtoll(iso, &end, 10);
     if (end == iso || n < 0)
-      return LD_DURATION_INVALID;
+      return false;
 
     char unit = *end;
     if (unit == 0)                                            // number with no unit
-      return LD_DURATION_INVALID;
+      return false;
     iso = end + 1;
 
-    uint64_t mult = 0;
     if (!inTime)
     {
-      if      (unit == 'D')                mult = 86400ULL * 1000000000ULL;
-      else if (unit == 'W')                mult = 7ULL * 86400ULL * 1000000000ULL;
-      else if ((unit == 'Y') || (unit == 'M'))
-      {
-        // Zero is a zero duration whatever the unit. A non-zero calendar period
-        // can't be expressed as a constant width — whole window, as before.
-        if (n != 0)
-          return 0;
-        mult = 0;
-      }
-      else                                 return LD_DURATION_INVALID;
+      if      (unit == 'D')  durationP->ns     += (uint64_t) n * 86400ULL * 1000000000ULL;
+      else if (unit == 'W')  durationP->ns     += (uint64_t) n * 7ULL * 86400ULL * 1000000000ULL;
+      else if (unit == 'Y')  durationP->months += (uint32_t) n * 12;
+      else if (unit == 'M')  durationP->months += (uint32_t) n;
+      else                   return false;
     }
     else
     {
-      if      (unit == 'H')                mult = 3600ULL * 1000000000ULL;
-      else if (unit == 'M')                mult = 60ULL   * 1000000000ULL;
-      else if (unit == 'S')                mult = 1000000000ULL;
-      else                                 return LD_DURATION_INVALID;
+      if      (unit == 'H')  durationP->ns += (uint64_t) n * 3600ULL * 1000000000ULL;
+      else if (unit == 'M')  durationP->ns += (uint64_t) n * 60ULL   * 1000000000ULL;
+      else if (unit == 'S')  durationP->ns += (uint64_t) n * 1000000000ULL;
+      else                   return false;
     }
 
-    totalNs += (uint64_t) n * mult;
     anyField = true;
   }
 
-  if (!anyField)
-    return LD_DURATION_INVALID;
-
-  return totalNs;
+  return anyField;
 }
+
+
+
+// -----------------------------------------------------------------------------
+//
+// daysInMonth - days in month `mon` (0-11) of year `year` (proleptic Gregorian).
+//
+static int daysInMonth(int year, int mon)
+{
+  static const int dim[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+  if (mon != 1)
+    return dim[mon];
+  bool leap = ((year % 4) == 0) && (((year % 100) != 0) || ((year % 400) == 0));
+  return leap ? 29 : 28;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// periodAdvance - the next bucket boundary after `ns`.
+//
+// Calendar months are added on the broken-down date, then the fixed part in ns.
+// The day-of-month is CLAMPED to the target month's length, so 2026-01-31 + P1M
+// is 2026-02-28 and not 2026-03-03 (which is what letting timegm() normalise an
+// overflowing mday would produce). That clamp is why P1M cannot be expressed as
+// a constant nanosecond width, and it keeps boundaries monotonic.
+//
+static uint64_t periodAdvance(uint64_t ns, uint32_t months, uint64_t fixedNs)
+{
+  uint64_t out = ns;
+
+  if (months > 0)
+  {
+    time_t    t    = (time_t) (out / 1000000000ULL);
+    uint64_t  frac = out % 1000000000ULL;
+    struct tm tmv;
+    gmtime_r(&t, &tmv);
+
+    int total   = (tmv.tm_year + 1900) * 12 + tmv.tm_mon + (int) months;
+    tmv.tm_year = (total / 12) - 1900;
+    tmv.tm_mon  = total % 12;
+
+    int dim = daysInMonth(tmv.tm_year + 1900, tmv.tm_mon);
+    if (tmv.tm_mday > dim)
+      tmv.tm_mday = dim;
+
+    out = (uint64_t) timegm(&tmv) * 1000000000ULL + frac;
+  }
+
+  return out + fixedNs;
+}
+
+
+
 
 
 
@@ -206,6 +252,8 @@ static char* nsToIso(uint64_t ns, KAlloc* faP)
 typedef struct Bucket
 {
   uint64_t  startNs;
+  uint64_t  endNs;                                  // exclusive; stored, not derived - a
+                                                    // calendar period has no constant width
 
   // Numeric sub-accumulator (Number / Boolean-as-0-1 / Array-size).
   int       numericCount;
@@ -230,10 +278,36 @@ typedef struct Bucket
 
 
 
-static void bucketInit(Bucket* b, uint64_t startNs)
+static void bucketInit(Bucket* b, uint64_t startNs, uint64_t endNs)
 {
   memset(b, 0, sizeof(*b));
   b->startNs = startNs;
+  b->endNs   = endNs;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// bucketIndexOf - which bucket does `ts` fall in? -1 = none.
+//
+// Boundaries are monotonic, so a binary search works for both the fixed-width
+// and the calendar case without caring which produced them.
+//
+static int bucketIndexOf(const Bucket* buckets, int bucketCount, uint64_t ts)
+{
+  int lo = 0;
+  int hi = bucketCount - 1;
+
+  while (lo <= hi)
+  {
+    int mid = (lo + hi) / 2;
+    if      (ts <  buckets[mid].startNs) hi = mid - 1;
+    else if (ts >= buckets[mid].endNs)   lo = mid + 1;
+    else                                 return mid;
+  }
+
+  return -1;
 }
 
 
@@ -368,7 +442,6 @@ static double bucketStddev(const Bucket* b)
 static KjNode* emitValueArray(const char*   method,
                               Bucket*       buckets,
                               int           bucketCount,
-                              uint64_t      periodNs,
                               const char*   attrType,
                               Kjson*        kjsonP,
                               KAlloc*       faP)
@@ -447,7 +520,7 @@ static KjNode* emitValueArray(const char*   method,
     else
       kjChildAdd(tuple, kjFloat(kjsonP, NULL, tupleNumeric));
     kjChildAdd(tuple, kjString(kjsonP, NULL, nsToIso(b->startNs, faP)));
-    kjChildAdd(tuple, kjString(kjsonP, NULL, nsToIso(b->startNs + periodNs, faP)));
+    kjChildAdd(tuple, kjString(kjsonP, NULL, nsToIso(b->endNs, faP)));
     kjChildAdd(arr, tuple);
   }
 
@@ -464,6 +537,7 @@ static KjNode* emitValueArray(const char*   method,
 //
 static void aggregateAttr(KjNode*      attrP,
                           char**       methodsV,
+                          uint32_t      periodMonths,
                           uint64_t     periodNs,
                           uint64_t     startNs,
                           uint64_t     endNs,
@@ -527,14 +601,35 @@ static void aggregateAttr(KjNode*      attrP,
   // bucket spanning the whole [winStart, winEnd) window. Use that width as the
   // bucket period so the rest of the bucketing math (index, "to" timestamp) is
   // uniform; without this a 0 period bailed out and the attr stayed normalized.
-  uint64_t bucketWidth = (periodNs == 0) ? (winEnd - winStart) : periodNs;
+  // § 5.3.2.7 bucket boundaries. Three cases:
+  //   zero duration      - ONE bucket spanning the whole [winStart, winEnd)
+  //   fixed (W/D/H/M/S)  - constant width, so the count is a division
+  //   calendar (Y/M)     - width varies per bucket, so the boundaries are walked
+  bool zeroPeriod = ((periodMonths == 0) && (periodNs == 0));
+  int  bucketCount;
 
-  int bucketCount = (int) ((winEnd - winStart + bucketWidth - 1) / bucketWidth);
+  if (zeroPeriod)
+    bucketCount = 1;
+  else if (periodMonths == 0)
+    bucketCount = (int) ((winEnd - winStart + periodNs - 1) / periodNs);
+  else
+  {
+    bucketCount = 0;
+    for (uint64_t b = winStart; b < winEnd; b = periodAdvance(b, periodMonths, periodNs))
+      bucketCount++;
+  }
   if (bucketCount <= 0) bucketCount = 1;
 
-  Bucket* buckets = (Bucket*) kaAlloc(faP, sizeof(Bucket) * bucketCount);
+  Bucket*  buckets = (Bucket*) kaAlloc(faP, sizeof(Bucket) * bucketCount);
+  uint64_t boundary = winStart;
   for (int i = 0; i < bucketCount; i++)
-    bucketInit(&buckets[i], winStart + (uint64_t) i * bucketWidth);
+  {
+    uint64_t next = zeroPeriod ? winEnd : periodAdvance(boundary, periodMonths, periodNs);
+    if (next > winEnd)                       // last bucket is clipped to the window
+      next = winEnd;
+    bucketInit(&buckets[i], boundary, next);
+    boundary = next;
+  }
 
   // Bucket the instances. Per § 4.5.19.1:
   //   Property:     Number / Boolean / String / Array / Object — different
@@ -551,8 +646,8 @@ static void aggregateAttr(KjNode*      attrP,
     uint64_t ts = isoToNs(tsP->value.s);
     if (ts < winStart || ts >= winEnd) continue;
 
-    int idx = (int) ((ts - winStart) / bucketWidth);
-    if (idx < 0 || idx >= bucketCount) continue;
+    int idx = bucketIndexOf(buckets, bucketCount, ts);
+    if (idx < 0) continue;
     Bucket* b = &buckets[idx];
 
     if (isRelationship)
@@ -582,7 +677,7 @@ static void aggregateAttr(KjNode*      attrP,
   for (int m = 0; methodsV != NULL && methodsV[m] != NULL; m++)
   {
     KjNode* methodArr = emitValueArray(methodsV[m], buckets, bucketCount,
-                                       bucketWidth, attrType, kjsonP, faP);
+                                       attrType, kjsonP, faP);
     kjChildAdd(attrP, methodArr);
   }
 }
@@ -596,6 +691,7 @@ static void aggregateAttr(KjNode*      attrP,
 //
 static void aggregateEntity(KjNode*       entityP,
                             char**        methodsV,
+                            uint32_t       periodMonths,
                             uint64_t      periodNs,
                             uint64_t      startNs,
                             uint64_t      endNs,
@@ -612,7 +708,7 @@ static void aggregateEntity(KjNode*       entityP,
       continue;
     if (childP->type != KjArray)
       continue;
-    aggregateAttr(childP, methodsV, periodNs, startNs, endNs, timeProp, kjsonP, faP);
+    aggregateAttr(childP, methodsV, periodMonths, periodNs, startNs, endNs, timeProp, kjsonP, faP);
   }
 }
 
@@ -624,6 +720,7 @@ static void aggregateEntity(KjNode*       entityP,
 //
 void ldToAggregatedValues(KjNode*       treeP,
                           char**        methodsV,
+                          uint32_t       periodMonths,
                           uint64_t      periodNs,
                           uint64_t      startNs,
                           uint64_t      endNs,
@@ -639,10 +736,10 @@ void ldToAggregatedValues(KjNode*       treeP,
   if (treeP->type == KjArray)
   {
     for (KjNode* itemP = treeP->value.firstChildP; itemP != NULL; itemP = itemP->next)
-      aggregateEntity(itemP, methodsV, periodNs, startNs, endNs, timeProp, kjsonP, faP);
+      aggregateEntity(itemP, methodsV, periodMonths, periodNs, startNs, endNs, timeProp, kjsonP, faP);
   }
   else
   {
-    aggregateEntity(treeP, methodsV, periodNs, startNs, endNs, timeProp, kjsonP, faP);
+    aggregateEntity(treeP, methodsV, periodMonths, periodNs, startNs, endNs, timeProp, kjsonP, faP);
   }
 }

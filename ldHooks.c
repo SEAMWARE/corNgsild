@@ -32,7 +32,7 @@
 #include "swNgsild/ldNameContentCheck.h"                 // ldCheckNamesAndContent
 #include "swNgsild/ldPickOmit.h"                         // ldPickOmit
 #include "swNgsild/ldToTemporalValues.h"                 // ldToTemporalValues
-#include "swNgsild/ldToAggregatedValues.h"               // ldToAggregatedValues, ldIso8601DurationToNs
+#include "swNgsild/ldToAggregatedValues.h"               // ldToAggregatedValues, ldIso8601DurationParse
 #include "swNgsild/ldToGeoJson.h"                        // ldToGeoJson
 #include "swNgsild/ldStripSysAttrs.h"                    // ldStripSysAttrs
 #include "swNgsild/ldLangReduce.h"                       // ldLangReduce
@@ -1279,13 +1279,17 @@ static void ldRenderHook(void)
     // ldEntityToApi so the bucketed-object attrs aren't re-mangled.
     if (swNgsild.format == LdFormatAggregatedValues && swNgsild.aggrMethodsV != NULL)
     {
-      // § 5.3.2.7: aggrPeriodDuration absent, or PT0S/P0D (→ 0 ns), means a
-      // single bucket over the whole [timeAt, endTimeAt) window. Pass periodNs=0
-      // through — ldToAggregatedValues treats 0 as the whole-window bucket.
-      uint64_t periodNs = (swNgsild.aggrPeriodDuration != NULL) ? ldIso8601DurationToNs(swNgsild.aggrPeriodDuration) : 0;
+      // § 5.3.2.7: aggrPeriodDuration absent, or any spelling of zero, means a
+      // single bucket over the whole [timeAt, endTimeAt) window - an all-zero
+      // LdDuration says exactly that. The value was already validated when the
+      // param was parsed (ldUrlParams), so the parse cannot fail here; ignoring
+      // the return keeps the zero default if it somehow did.
+      LdDuration period = { 0, 0 };
+      if (swNgsild.aggrPeriodDuration != NULL)
+        ldIso8601DurationParse(swNgsild.aggrPeriodDuration, &period);
       uint64_t startNs  = swNgsild.timeAtNs;       // 0 → ldToAggregatedValues uses earliest sample seen
       uint64_t endNs    = swNgsild.endTimeAtNs;    // 0 → ldToAggregatedValues uses latest sample seen
-      ldToAggregatedValues(treeP, swNgsild.aggrMethodsV, periodNs, startNs, endNs,
+      ldToAggregatedValues(treeP, swNgsild.aggrMethodsV, period.months, period.ns, startNs, endNs,
                            swNgsild.timeproperty, swRest.kjsonP, &swRest.kalloc);
     }
   }

@@ -9,6 +9,7 @@
 // Copyright 2026 Seamware
 //
 #include <stdbool.h>                                    // bool
+#include <stdint.h>                                     // uint32_t, uint64_t
 
 #include "kalloc/KAlloc.h"                              // KAlloc
 #include "kjson/kjson.h"                                // Kjson
@@ -44,6 +45,7 @@
 //
 extern void ldToAggregatedValues(KjNode*       treeP,
                                  char**        methodsV,
+                                 uint32_t      periodMonths,
                                  uint64_t      periodNs,
                                  uint64_t      startNs,
                                  uint64_t      endNs,
@@ -55,26 +57,29 @@ extern void ldToAggregatedValues(KjNode*       treeP,
 
 // -----------------------------------------------------------------------------
 //
-// ldIso8601DurationToNs - parse an ISO 8601 duration string into nanoseconds.
+// LdDuration - an ISO 8601 duration split by how it buckets (§ 5.3.2.7).
 //
-// § 5.3.2.7 allows two forms: PnYnMnDTnHnMnS and PnW. A week is exactly 7 days,
-// so W maps onto the fixed-width bucketing just like D/H/M/S.
+// The two halves cannot be merged: months (from Y and M) have no constant length,
+// while ns (from W/D/H/M/S) does. A duration may carry both, e.g. P1M15D.
+// months == 0 && ns == 0 is a ZERO duration = one bucket over the whole range.
 //
-// Returns:
-//   LD_DURATION_INVALID - not a valid duration (no leading 'P', empty, unknown
-//                         unit, number without a unit, ...). The caller raises
-//                         400; it must NOT be treated as "zero".
-//   0                   - a zero duration (PT0S / P0D / P0Y ...), which § 5.3.2.7
-//                         defines as one bucket spanning the whole time range.
-//   > 0                 - the bucket width in nanoseconds.
-//
-// A NON-zero Y or M has no fixed width (calendar lengths vary) and currently
-// yields 0 = whole window; bucketing those needs a calendar boundary walk
-// instead of a constant width. See the TODO at the ldHooks call site.
-//
-#define LD_DURATION_INVALID  UINT64_MAX
+typedef struct LdDuration
+{
+  uint32_t  months;
+  uint64_t  ns;
+} LdDuration;
 
-extern uint64_t ldIso8601DurationToNs(const char* iso);
+
+
+// -----------------------------------------------------------------------------
+//
+// ldIso8601DurationParse - parse PnYnMnDTnHnMnS or PnW into an LdDuration.
+//
+// Returns false when the string is not a valid duration; the caller raises 400.
+// An invalid duration must never be treated as zero - "the whole time range" is
+// what zero MEANS, so conflating them answers a bad request with plausible data.
+//
+extern bool ldIso8601DurationParse(const char* iso, LdDuration* durationP);
 
 
 
