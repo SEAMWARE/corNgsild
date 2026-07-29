@@ -54,4 +54,32 @@ extern bool ldDistInstanceShouldReplace(KjNode* destInstP, KjNode* srcInstP, int
 //
 extern bool ldDistInstanceIsExpired(KjNode* instP, int64_t nowNs);
 
+
+
+// -----------------------------------------------------------------------------
+//
+// ldDistExpiresAtReconcile - § 4.5.5.3 entity-level expiresAt across versions
+//
+// The non-reified expiresAt at the Entity level is reconciled separately from
+// the Attribute instances (which ldDistInstanceShouldReplace handles):
+//
+//   - if expiresAt is missing from at least one version of the Entity, it is
+//     removed from the assembled Entity (it isn't transient everywhere), and
+//   - otherwise the assembled Entity expires at the DateTime furthest in the
+//     future.
+//
+// Called once per merged-in version with 'destP' the running assembly and
+// 'srcP' the further version. Order-independent: a dest without expiresAt
+// already means "some version had none", so it is never re-added.
+//
+// Each version's own entity-level expiresAt has already cascaded onto its
+// Attributes by then (§ 4.5.5.2, ldExpiresAtPropagate), so shortening or
+// dropping the Entity-level value leaves the per-Attribute expiry in place —
+// which is the point of the cascade.
+//
+// Auxiliary sources (§ 4.3.6.2) fill gaps only and stay out of the § 4.5.5.3
+// algorithm, this reconciliation included.
+//
+extern void ldDistExpiresAtReconcile(KjNode* destP, KjNode* srcP);
+
 #endif  // SWNGSILD_LDDISTMERGE_H_

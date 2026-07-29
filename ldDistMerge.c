@@ -14,6 +14,7 @@
 
 #include "kjson/KjNode.h"                                // KjNode
 #include "kjson/kjLookup.h"                              // kjLookup
+#include "kjson/kjBuilder.h"                             // kjChildRemove
 
 #include "swNgsild/LdVocab.h"                            // LD_VOCAB_OBSERVED_AT, LD_VOCAB_MODIFIED_AT, LD_VOCAB_EXPIRES_AT
 #include "swNgsild/ldCheckDateTime.h"                    // ldIsoToNanoseconds
@@ -103,4 +104,35 @@ bool ldDistInstanceShouldReplace(KjNode* destInstP, KjNode* srcInstP, int64_t no
   // Step 4 — indeterminate. Spec says "shall choose at random"; we keep
   // the existing dest for determinism.
   return false;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldDistExpiresAtReconcile -
+//
+void ldDistExpiresAtReconcile(KjNode* destP, KjNode* srcP)
+{
+  if (destP == NULL || srcP == NULL)
+    return;
+
+  KjNode* destExpP = kjLookup(destP, LD_VOCAB_EXPIRES_AT);
+  if (destExpP == NULL)                 // an earlier version wasn't transient — stays that way
+    return;
+
+  KjNode* srcExpP = kjLookup(srcP, LD_VOCAB_EXPIRES_AT);
+  if (srcExpP == NULL)
+  {
+    // This version isn't transient → the merged Entity isn't either.
+    kjChildRemove(destP, destExpP);
+    return;
+  }
+
+  // Both versions are transient — the latest DateTime wins.
+  if (nodeNs(srcExpP) > nodeNs(destExpP))
+  {
+    destExpP->type  = srcExpP->type;
+    destExpP->value = srcExpP->value;
+  }
 }
