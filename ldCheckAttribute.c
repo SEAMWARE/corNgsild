@@ -540,6 +540,30 @@ bool ldCheckAttribute(KjNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc*
     if (nullAllowed)
       return true;  // skip type-specific shape checks for the marker
   }
+  // A LanguageProperty carries the sentinel INSIDE the map, as
+  // {"@none": "urn:ngsi-ld:null"} (§ 5.2.6.4.6), so the scalar test above never
+  // sees it — the value node is an object. § 8.2.3 puts it under the same rule:
+  // using that form as the right-hand side of languageMap is BadRequestData
+  // except in the fragments of update/merge, and in notifications and the
+  // temporal evolution. Without this a Create stored the delete marker as if it
+  // were data: {"languageMap": {"@none": "urn:ngsi-ld:null"}} came back from a
+  // subsequent GET verbatim.
+  else if ((attrType == LdAttrLanguageProperty) && (valueNodeP->type == KjObject))
+  {
+    KjNode* noneP = kjLookup(valueNodeP, "@none");
+
+    if ((noneP != NULL) && (noneP->type == KjString) && (strcmp(noneP->value.s, "urn:ngsi-ld:null") == 0))
+    {
+      if (!nullAllowed)
+      {
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Value",
+                "'urn:ngsi-ld:null' is not allowed as the languageMap of attribute '%s'", attrP->name);
+        return false;
+      }
+
+      return true;  // the delete marker — skip the type-specific shape checks
+    }
+  }
   // Inside a List value the sentinel can only be erroneous input: a single list
   // element is not a delete position (the merge/update flows delete a whole
   // attribute via a top-level sentinel). § 4.5.5: an NGSI-LD Null encountered
