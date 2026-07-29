@@ -44,4 +44,6 @@
 #define LdTNotifBody     233  // notification — body
 #define LdTNotifRes      234  // notification — response line (status)
 
+#define LdTExpiry        240  // transient Entity — lazily removed after a read found it expired
+
 #endif  // SWNGSILD_LDTRACELEVELS_H_

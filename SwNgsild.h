@@ -29,6 +29,24 @@
 
 
 
+
+// -----------------------------------------------------------------------------
+//
+// LdExpiredEntity - a transient Entity a read found past its expiresAt
+//
+// § 5.2.4. Queued during the read, deleted in the post-response hook. Lives in
+// the per-connection state, NOT a thread-local: the hook does not necessarily
+// run on the thread that served the request.
+//
+#define LD_EXPIRED_PENDING_MAX 64
+
+typedef struct LdExpiredEntity
+{
+  void*       tenantP;    // Tenant* — opaque here, the broker owns the type
+  const char* entityId;   // request-arena copy
+} LdExpiredEntity;
+
+
 // -----------------------------------------------------------------------------
 //
 // SwNgsild - per-request NGSI-LD state (thread-local)
@@ -211,6 +229,9 @@ typedef struct SwNgsild
 
   ProbePending           probePendingV[PROBE_PENDING_MAX];  // ldRegCache.c (fixed)
   int                    probePendingN;
+
+  LdExpiredEntity        expiredV[LD_EXPIRED_PENDING_MAX];   // dbExpiredEntities.c (fixed)
+  int                    expiredN;
 
   // TRoE deferred-event queue (troeDispatch.c). Opaque TroeEvent* (a broker
   // type) — the events live in the request arena, so nothing here is freed.
