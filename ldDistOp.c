@@ -428,13 +428,16 @@ static int authorityLen(const char* url)
 
 // -----------------------------------------------------------------------------
 //
-// endpointIsSelf - does this endpoint point back at this broker?
+// ldDistOpEndpointIsSelf - does this endpoint point back at this broker?
 //
 // Compares the scheme://host:port authority of the CSR endpoint against the
 // broker's own ldBrokerHttpEndpoint. A match means a forward would loop back to
 // us over a socket — the self-forward short-circuit runs it in-process instead.
 //
-static bool endpointIsSelf(const char* endpoint)
+// Also used at registration time: a redirect registration has to name another
+// broker (§ 12.2.2.4), and that is decided on the authority alone.
+//
+bool ldDistOpEndpointIsSelf(const char* endpoint)
 {
   if (ldBrokerHttpEndpoint == NULL || endpoint == NULL)
     return false;
@@ -609,7 +612,7 @@ int ldDistOpSendReceiveEx(LdRegCacheItem*  csr,
   distOpTraceRequest(verb, url, hv, hc, body, req.bodyLen);
 
   int rc;
-  if (endpointIsSelf(csr->endpoint))
+  if (ldDistOpEndpointIsSelf(csr->endpoint))
   {
     // Self-forward short-circuit (Inc5b): the endpoint is this broker. Run the
     // request in-process rather than opening a socket back to ourselves (which
@@ -927,7 +930,7 @@ int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
 
     distOpTraceRequest(itemVerb, itemV[i].url, hv, hc, itemV[i].body, itemV[i].bodyLen);
 
-    if (endpointIsSelf(csr->endpoint))
+    if (ldDistOpEndpointIsSelf(csr->endpoint))
     {
       selfHv[i]   = hv;
       selfHc[i]   = hc;

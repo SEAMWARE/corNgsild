@@ -72,6 +72,18 @@ extern bool ldDistOpCsrWouldLoop(LdRegCacheItem* csr, const char* ownAlias);
 
 // -----------------------------------------------------------------------------
 //
+// ldDistOpEndpointIsSelf - does this endpoint's authority resolve to us?
+//
+// Compares scheme://host:port against the broker's own ldBrokerHttpEndpoint,
+// ignoring path and tenant. Used by the self-forward short-circuit and by the
+// § 12.2.2.4 check that a redirect registration names ANOTHER broker.
+//
+extern bool ldDistOpEndpointIsSelf(const char* endpoint);
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldDistOpSend - send one CSR forward and update its counters
 //
 // Common machinery shared by every dispatcher:
