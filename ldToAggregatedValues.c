@@ -571,6 +571,12 @@ static void aggregateAttr(KjNode*      attrP,
   // Establish window start if caller passed 0 → take earliest sample seen.
   // (timerel/timeAt are optional on the single-entity GET, so startNs may
   // be unset; aggregating over the full data range is the natural default.)
+  // An explicit query upper bound (endTimeAt) is a real boundary the client
+  // asked for, so a period may be clipped to it. A winEnd DERIVED from the
+  // data below is not: § 4.5.19.1 element 3 is "the end DateTime of the
+  // corresponding period", and a period does not end where the samples
+  // happen to stop (ETSI TS 104-175 021_17_0x pins exactly this).
+  bool     endExplicit = (endNs != 0);
   uint64_t winEnd   = endNs;
   uint64_t winStart = startNs;
   if (winEnd == 0 || winStart == 0)
@@ -625,7 +631,7 @@ static void aggregateAttr(KjNode*      attrP,
   for (int i = 0; i < bucketCount; i++)
   {
     uint64_t next = zeroPeriod ? winEnd : periodAdvance(boundary, periodMonths, periodNs);
-    if (next > winEnd)                       // last bucket is clipped to the window
+    if (endExplicit && (next > winEnd))      // clipped to an EXPLICIT endTimeAt only
       next = winEnd;
     bucketInit(&buckets[i], boundary, next);
     boundary = next;
