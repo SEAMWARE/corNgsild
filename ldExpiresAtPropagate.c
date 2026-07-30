@@ -12,7 +12,7 @@
 
 #include "kjson/KjNode.h"                                // KjNode
 #include "kjson/kjLookup.h"                              // kjLookup
-#include "kjson/kjBuilder.h"                             // kjString, kjChildAdd
+#include "kjson/kjBuilder.h"                             // kjString, kjInteger, kjChildAdd
 
 #include "swNgsild/LdVocab.h"                            // LD_VOCAB_EXPIRES_AT
 #include "swNgsild/ldCheckDateTime.h"                    // ldIsoToNanoseconds
@@ -46,16 +46,33 @@ static bool isAttributeContainer(KjNode* nodeP)
 //
 // applyToInstance -
 //
-// Set or shorten the per-instance expiresAt to entityIso when entityIso is
-// earlier than what's already there.
+// Set or shorten the per-instance expiresAt to the Entity-level value when the
+// latter is earlier than what's already there.
 //
-static void applyToInstance(KjNode* instP, const char* entityIso, int64_t entityNs, Kjson* kjsonP)
+// 'entityExpP' is the Entity-level node, in one of the two shapes an expiresAt
+// takes: an ISO-8601 string (an Entity fresh off a Context Source, on the read
+// paths) or epoch-nanoseconds as an integer (the DB model, e.g. the Snapshot
+// capture path). An instance inherits the shape of the value it copies, and an
+// instance that already has one keeps its own shape.
+//
+static void applyToInstance(KjNode* instP, KjNode* entityExpP, int64_t entityNs, Kjson* kjsonP)
 {
   KjNode* attrExpP = kjLookup(instP, LD_VOCAB_EXPIRES_AT);
 
   if (attrExpP == NULL)
   {
-    kjChildAdd(instP, kjString(kjsonP, LD_VOCAB_EXPIRES_AT, entityIso));
+    KjNode* newP = (entityExpP->type == KjInt)
+                     ? kjInteger(kjsonP, LD_VOCAB_EXPIRES_AT, entityExpP->value.i)
+                     : kjString (kjsonP, LD_VOCAB_EXPIRES_AT, entityExpP->value.s);
+    kjChildAdd(instP, newP);
+    return;
+  }
+
+  // Nanosecond-int form (DB model): compare and shorten in place.
+  if (attrExpP->type == KjInt)
+  {
+    if (attrExpP->value.i > entityNs)
+      attrExpP->value.i = entityNs;
     return;
   }
 
@@ -79,7 +96,7 @@ static void applyToInstance(KjNode* instP, const char* entityIso, int64_t entity
     return;
 
   if (attrNs > entityNs)
-    dateP->value.s = (char*) entityIso;
+    dateP->value.s = (char*) entityExpP->value.s;
 }
 
 
@@ -94,10 +111,13 @@ void ldExpiresAtPropagate(KjNode* entityP, Kjson* kjsonP)
     return;
 
   KjNode* entityExpP = kjLookup(entityP, LD_VOCAB_EXPIRES_AT);
-  if (entityExpP == NULL || entityExpP->type != KjString)
+  if (entityExpP == NULL)
     return;
 
-  int64_t  entityNs = ldIsoToNanoseconds(entityExpP->value.s);
+  int64_t entityNs = 0;
+  if      (entityExpP->type == KjString)  entityNs = ldIsoToNanoseconds(entityExpP->value.s);
+  else if (entityExpP->type == KjInt)     entityNs = (int64_t) entityExpP->value.i;
+
   if (entityNs == 0)
     return;
 
@@ -112,7 +132,7 @@ void ldExpiresAtPropagate(KjNode* entityP, Kjson* kjsonP)
     {
       if (instP->type != KjObject)
         continue;
-      applyToInstance(instP, entityExpP->value.s, entityNs, kjsonP);
+      applyToInstance(instP, entityExpP, entityNs, kjsonP);
     }
   }
 }

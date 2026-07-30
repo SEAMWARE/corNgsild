@@ -17,7 +17,9 @@
 //
 // Operates on the post-apiAttrToStorageWrap shape (keys are expanded
 // IRIs at the attribute level, but system attrs like "expiresAt" stay
-// short). Idempotent.
+// short), and on the DB model, whose expiresAt is epoch-nanoseconds
+// rather than an ISO string (the Snapshot capture path). An instance
+// inherits the shape of the Entity-level value it copies. Idempotent.
 //
 #include "kjson/KjNode.h"                                 // KjNode
 
