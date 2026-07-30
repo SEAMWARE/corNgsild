@@ -387,6 +387,11 @@ int ldDistSubFanout(LdSubCacheItem*      itemP,
   if (itemP->subId == NULL || itemP->entitySelectors == NULL)
     return 0;
 
+  // A subscription fanned out to registered Context Sources is a distributed
+  // operation — off unless --distributed says so.
+  if (ldDistributed == false)
+    return 0;
+
   int forwarded = 0;
 
   // Reg-cache walk under its rdlock — top-level reg lock (the sub-side
@@ -421,6 +426,11 @@ int ldDistSubFanout(LdSubCacheItem*      itemP,
 int ldDistSubCascadeDelete(LdSubCacheItem* itemP, LdRegCache* regCacheP, const char* ownAlias)
 {
   if (itemP == NULL || regCacheP == NULL)
+    return 0;
+
+  // Nothing was ever fanned out with --distributed off, so there is nothing
+  // subordinate to cascade to.
+  if (ldDistributed == false)
     return 0;
   if (itemP->subordinateP == NULL)
     return 0;

@@ -74,6 +74,11 @@ static int remainingHops(void)
 //
 bool ldDiscoveryShouldForward(void)
 {
+  // Forwarding /types and /attributes to registered Context Sources is a
+  // distributed operation like any other — off unless --distributed says so.
+  if (ldDistributed == false)
+    return false;
+
   int n = swNgsild.hopsSet ? swNgsild.hops : LD_DISCOVERY_HOPS_DEFAULT;
   return (n > 0);
 }

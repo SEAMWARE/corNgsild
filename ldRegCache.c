@@ -895,6 +895,13 @@ int ldRegCacheMatchForRetrieveScoped(LdRegCache*       cacheP,
   if (cacheP == NULL || matchVP == NULL)
     return 0;
 
+  // --distributed is off: no forwarding, so no registration matches. The
+  // Registry API (ldRegCacheMatchForDiscovery) is deliberately not gated —
+  // registrations can still be provisioned and discovered.
+  if (ldDistributed == false)
+    return 0;
+
+
   // Expired CSRs are dead — § 5.2.9 expiresAt. Compare once per call.
   struct timespec ts;
   clock_gettime(CLOCK_REALTIME, &ts);
@@ -1033,6 +1040,12 @@ int ldRegCacheMatchForQuery(LdRegCache*       cacheP,
                             LdRegCacheItem*** matchVP)
 {
   if (cacheP == NULL || matchVP == NULL)
+    return 0;
+
+  // --distributed is off: no forwarding, so no registration matches. The
+  // Registry API (ldRegCacheMatchForDiscovery) is deliberately not gated —
+  // registrations can still be provisioned and discovered.
+  if (ldDistributed == false)
     return 0;
 
   regex_t idRegex;

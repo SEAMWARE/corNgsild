@@ -302,6 +302,25 @@ extern uint64_t ldDefaultCooldownNs;   // --cooldownMillis: default endpoint coo
 //
 extern bool ldSplitEntities;
 
+
+
+// -----------------------------------------------------------------------------
+//
+// ldDistributed - global flag, default FALSE. Set via --distributed / -dist.
+//
+// Distributed operations cost a registration-cache lookup on EVERY entity
+// operation, and most deployments hold all their data locally and never
+// register a Context Source. So the whole mechanism is opt-in, exactly like
+// TRoE: with it off, the forwarding matchers report no matches and every
+// operation stays local.
+//
+// It gates FORWARDING only. The Registry API itself (create/update/delete/
+// discover Context Source Registrations, § 12) keeps working either way —
+// ldRegCacheMatchForDiscovery is deliberately NOT gated — so registrations can
+// be provisioned before the feature is switched on.
+//
+extern bool ldDistributed;
+
 // System-attribute timestamps render at most 6 fractional digits (§ 5.2.2.4) by default;
 // --high-precision/-hp opts into the full 9 (nanoseconds). See ldUrlParams.c.
 extern bool ldTimestampHighPrecision;

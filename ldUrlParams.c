@@ -41,6 +41,7 @@
 //
 bool        ldLocalOnly          = false;
 bool        ldSplitEntities      = true;
+bool        ldDistributed        = false;   // --distributed / -dist (opt-in, like TRoE)
 
 //
 // ldTimestampHighPrecision - --high-precision / -hp CLI flag (default false).
