@@ -13,7 +13,6 @@
 
 #include "swRest/SwRestState.h"                         // swRest
 
-#include "swJsonld/swldCompact.h"                       // swldCompact
 #include "swJsonld/swldInit.h"                          // swldCoreContext
 
 #include "swNgsild/ldIsEntityKeyword.h"                 // ldIsEntityKeyword
@@ -25,19 +24,15 @@
 
 // -----------------------------------------------------------------------------
 //
-// shortNameOf - compact a (possibly expanded) attribute name for the response
-//
-static const char* shortNameOf(const char* attrIri)
-{
-  const char* compact = swldCompact(swldCoreContext(), attrIri);
-  return (compact != NULL) ? compact : attrIri;
-}
-
-
-
-// -----------------------------------------------------------------------------
-//
 // ldWriteResultUpdatedAdd -
+//
+// Attribute names go in as the FULLY QUALIFIED name: an UpdateResult only ever
+// travels in a 207 partial-success body, and TS 104-176 § 6.2.3 says "Only
+// Fully Qualified Names shall be used in the payload body of error or partial
+// success responses, as there is no context present". These names used to be
+// compacted against the core context, which silently produced short names for
+// default-context attributes (and left foreign-context IRIs expanded — so one
+// UpdateResult could carry both spellings at once).
 //
 void ldWriteResultUpdatedAdd(KjNode* updatedP, const char* attrName)
 {
@@ -97,7 +92,7 @@ void ldWriteResultFragUpdated(KjNode* updatedP, KjNode* fragP)
   {
     if (ldIsEntityKeyword(c->name))
       continue;
-    ldWriteResultUpdatedAdd(updatedP, shortNameOf(c->name));
+    ldWriteResultUpdatedAdd(updatedP, c->name);
   }
 }
 
@@ -116,7 +111,7 @@ void ldWriteResultFragNotUpdated(KjNode* notUpdatedP, KjNode* fragP, const char*
   {
     if (ldIsEntityKeyword(c->name))
       continue;
-    ldWriteResultNotUpdatedAdd(notUpdatedP, shortNameOf(c->name), reason, regId, statusCode);
+    ldWriteResultNotUpdatedAdd(notUpdatedP, c->name, reason, regId, statusCode);
   }
 }
 
