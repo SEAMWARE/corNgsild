@@ -30,15 +30,25 @@ bool ldScopePatternMatch(const char* pattern, const char* value)
   {
     if (p[0] == '/' && p[1] == '#' && p[2] == 0)
     {
-      // Multi-level wildcard at end: match anything remaining (including nothing)
-      return true;
+      //
+      // Multi-level wildcard at end: match the whole hierarchy below the scope given so far.
+      // "Below" starts at a scope level boundary — "/Madrid/G/#" covers "/Madrid/G/Gardens"
+      // but not "/Madrid/Gardens", which is a different scope, not a scope below "/Madrid/G".
+      //
+      return (*v == '/');
     }
 
     if (*p == '+')
     {
-      // Single-level wildcard: skip one path segment in value
+      // Single-level wildcard: skip one path segment in value - and a scope level is never empty
+      const char* levelStart = v;
+
       while (*v != 0 && *v != '/')
         v++;
+
+      if (v == levelStart)
+        return false;
+
       p++;
     }
     else

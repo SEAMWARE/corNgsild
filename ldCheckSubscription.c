@@ -30,6 +30,7 @@
 #include "swNgsild/LdCheck.h"                            // OBJECT_CHECK, STRING_CHECK, ...
 #include "swNgsild/LdVocab.h"                            // LD_VOCAB_*
 #include "swNgsild/LdGeoRel.h"                            // ldGeoRelParse
+#include "swNgsild/LdScopeExpr.h"                         // ldScopeExprParse
 #include "swNgsild/ldSubscriptionNotify.h"               // ldTriggerFromString
 #include "swNgsild/ldQParse.h"                           // ldQParse
 #include "swNgsild/ldCheckGeo.h"                          // ldCheckGeoQuery
@@ -1213,11 +1214,17 @@ bool ldCheckSubscription(KjNode* subP, LdOp op, bool merged, LdFormat* notifForm
   }
 
   //
-  // "scopeQ" must be string
+  // "scopeQ" must be a string, and a valid scope query expression (§ 7.2.5)
+  //
+  // Just as for geoQ above: what isn't rejected here is parsed again at cache time, where a
+  // failure has nowhere to go and would leave a subscription with a scopeQ that never matches.
   //
   if (scopeQP != NULL)
   {
     STRING_CHECK(scopeQP, "Invalid Subscription", "'scopeQ' must be a string");
+
+    if ((scopeQP->value.s[0] != 0) && (ldScopeExprParse(scopeQP->value.s, kaP) == NULL))
+      return false;  // ldScopeExprParse has filled in the error
   }
 
   //

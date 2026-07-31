@@ -87,6 +87,31 @@ LdScopeExpr* ldScopeExprParse(const char* value, KAlloc* faP)
   if (value == NULL || value[0] == 0)
     return NULL;
 
+  //
+  // Parenthesis balance
+  //
+  // Both splitting loops below use the parenthesis depth to tell a top-level OR operator from one
+  // inside an AND group, and the second loop ends on the string-terminating zero *at depth zero*.
+  // An unbalanced expression leaves the depth off, so without this check the loop walks past the
+  // end of the string, reading whatever follows it in memory.
+  //
+  int depth = 0;
+
+  for (const char* p = value; *p != 0; p++)
+  {
+    if      (*p == '(')  depth++;
+    else if (*p == ')')  depth--;
+
+    if (depth < 0)
+      break;
+  }
+
+  if (depth != 0)
+  {
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid scopeQ parameter", "unbalanced parenthesis in scopeQ expression");
+    return NULL;
+  }
+
   // Work on a copy
   char* buf = kaStrdup(faP, value);
 
@@ -94,7 +119,8 @@ LdScopeExpr* ldScopeExprParse(const char* value, KAlloc* faP)
   // First pass: count OR groups by scanning for '|' and ',' outside parens
   //
   int groupCount = 1;
-  int depth      = 0;
+
+  depth = 0;
 
   for (char* p = buf; *p != 0; p++)
   {
@@ -125,7 +151,7 @@ LdScopeExpr* ldScopeExprParse(const char* value, KAlloc* faP)
   {
     if (*p == '(')       depth++;
     else if (*p == ')')  depth--;
-    else if (depth == 0 && (*p == '|' || *p == ',' || *p == 0))
+    else if (*p == 0 || (depth == 0 && (*p == '|' || *p == ',')))
     {
       bool end = (*p == 0);
 
