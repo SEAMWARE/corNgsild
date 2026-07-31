@@ -38,6 +38,8 @@
 //
 // Notifications (230-239).
 //
+#define LdTRegMatch      227  // registration matching — why a registration did or did not match,
+                              // and why a matched one was still not forwarded to
 #define LdTNotifReq      230  // notification — request line (verb + URL)
 #define LdTNotifReqParam 231  // notification — URL params (one line per param)
 #define LdTNotifHeader   232  // notification — HTTP headers (one per line)

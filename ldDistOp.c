@@ -66,12 +66,29 @@ bool ldDistOpCsrWouldLoop(LdRegCacheItem* csr, const char* ownAlias)
   if (csr == NULL || csr->csourceAlias == NULL)
     return false;
 
-  // Pointing at ourselves
+  const char* regId = (csr->regId != NULL) ? csr->regId : "<no id>";
+
+  // Pointing at ourselves. This is the single most confusing way for a forward
+  // to disappear — an inclusive loop-block is silent by design, so without this
+  // line nothing anywhere explains the empty answer. Two brokers that compute
+  // the same alias (same executable and port, different hosts) look identical
+  // to each other and neither will forward to the other.
   if (ownAlias != NULL && strcmp(csr->csourceAlias, ownAlias) == 0)
+  {
+    KT_T(LdTRegMatch, "%s: matched, but NOT forwarded to: loop — its alias '%s' is our own",
+         regId, csr->csourceAlias);
     return true;
+  }
 
   // Pointing at a broker we've already transited
-  return ldViaHasAlias(swRest.in.httpHeaderV, swRest.in.httpHeaderCount, csr->csourceAlias);
+  if (ldViaHasAlias(swRest.in.httpHeaderV, swRest.in.httpHeaderCount, csr->csourceAlias))
+  {
+    KT_T(LdTRegMatch, "%s: matched, but NOT forwarded to: loop — '%s' is already in the inbound Via",
+         regId, csr->csourceAlias);
+    return true;
+  }
+
+  return false;
 }
 
 
@@ -488,7 +505,16 @@ bool ldDistOpCsrInCooldown(LdRegCacheItem* csr)
   clock_gettime(CLOCK_REALTIME, &ts);
   uint64_t nowNs = (uint64_t) ts.tv_sec * 1000000000ULL + (uint64_t) ts.tv_nsec;
 
-  return nowNs < csr->lastFailure + (uint64_t) csr->cooldownMs * 1000000ULL;
+  uint64_t endsNs = csr->lastFailure + (uint64_t) csr->cooldownMs * 1000000ULL;
+
+  if (nowNs >= endsNs)
+    return false;
+
+  KT_T(LdTRegMatch, "%s: matched, but NOT forwarded to: in cooldown after a failure, %llu ms left of %d",
+       (csr->regId != NULL) ? csr->regId : "<no id>",
+       (unsigned long long) ((endsNs - nowNs) / 1000000ULL), csr->cooldownMs);
+
+  return true;
 }
 
 
@@ -1335,6 +1361,9 @@ int ldDistOpEntriesBuild(const LdDistOpGroup  groupV[],
 
       if (!ldRegOpSupported(csr, op))
       {
+        KT_T(LdTRegMatch, "%s: matched, but NOT forwarded to: the registration's 'operations' does not cover %s",
+             (csr->regId != NULL) ? csr->regId : "<no id>", opName);
+
         if (grp->opConflict && errorsArrayP != NULL)
         {
           char detail[256];

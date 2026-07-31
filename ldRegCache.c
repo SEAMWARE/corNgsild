@@ -24,6 +24,8 @@
 #include "swJsonld/swldInit.h"                         // swldCoreContext
 #include "swNgsild/LdVocab.h"                          // LD_VOCAB_*
 #include "swNgsild/LdRegCache.h"                       // LdRegCache, LdRegCacheItem
+#include "ktrace/kTrace.h"                              // KT_T
+#include "swNgsild/ldTraceLevels.h"                     // LdTRegMatch
 #include "swNgsild/SwNgsild.h"                          // swNgsild (per-conn probePending cache)
 #include "swNgsild/ldCheckDateTime.h"                  // ldIsoToNanoseconds
 #include "swNgsild/ldScopeMatch.h"                     // ldScopePatternMatch
@@ -816,7 +818,26 @@ bool ldRegCacheItemRemove(LdRegCache* cacheP, const char* regId)
 // type matching: NULL entityType (caller doesn't know) bypasses type
 // constraint and accepts any.
 //
-static bool entityInfoMatches(LdRegEntityInfo* eiP, const char* entityId, char** entityTypeV)
+// -----------------------------------------------------------------------------
+//
+// regModeName - LdRegMode → the § 5.2.9 spelling, for trace lines
+//
+static const char* regModeName(LdRegMode mode)
+{
+  switch (mode)
+  {
+    case LdRegModeInclusive:  return "inclusive";
+    case LdRegModeExclusive:  return "exclusive";
+    case LdRegModeRedirect:   return "redirect";
+    case LdRegModeAuxiliary:  return "auxiliary";
+  }
+
+  return "?";
+}
+
+
+
+static bool entityInfoMatches(LdRegEntityInfo* eiP, const char* entityId, char** entityTypeV, const char* regId)
 {
   if (entityTypeV != NULL && eiP->type != NULL)
   {
@@ -826,7 +847,11 @@ static bool entityInfoMatches(LdRegEntityInfo* eiP, const char* entityId, char**
       if (strcmp(eiP->type, entityTypeV[i]) == 0) { typeMatch = true; break; }
     }
     if (!typeMatch)
+    {
+      KT_T(LdTRegMatch, "%s: no match due to entity type ('%s' in reg, '%s' asked for)",
+           regId, eiP->type, entityTypeV[0]);
       return false;
+    }
   }
 
   if (eiP->id == NULL && eiP->idPatternList == NULL)
@@ -846,6 +871,11 @@ static bool entityInfoMatches(LdRegEntityInfo* eiP, const char* entityId, char**
       return true;
   }
 
+  if (eiP->id != NULL)
+    KT_T(LdTRegMatch, "%s: no match due to entity id ('%s' in reg, '%s' asked for)", regId, eiP->id, entityId);
+  else
+    KT_T(LdTRegMatch, "%s: no match due to entity idPattern ('%s' matched no pattern)", regId, entityId);
+
   return false;
 }
 
@@ -857,14 +887,20 @@ static bool entityInfoMatches(LdRegEntityInfo* eiP, const char* entityId, char**
 //
 static bool itemMatches(LdRegCacheItem* itemP, const char* entityId, char** entityTypeV)
 {
+  const char* regId = (itemP->regId != NULL) ? itemP->regId : "<no id>";
+
   for (LdRegInfo* riP = itemP->infoV; riP != NULL; riP = riP->next)
   {
     for (LdRegEntityInfo* eiP = riP->entityInfoV; eiP != NULL; eiP = eiP->next)
     {
-      if (entityInfoMatches(eiP, entityId, entityTypeV))
+      if (entityInfoMatches(eiP, entityId, entityTypeV, regId))
+      {
+        KT_T(LdTRegMatch, "%s: MATCH", regId);
         return true;
+      }
     }
   }
+
   return false;
 }
 
@@ -915,12 +951,26 @@ int ldRegCacheMatchForRetrieveScoped(LdRegCache*       cacheP,
   int count = 0;
   for (LdRegCacheItem* itemP = cacheP->itemList; itemP != NULL; itemP = itemP->next)
   {
+    const char* regId = (itemP->regId != NULL) ? itemP->regId : "<no id>";
+
+    // Only this (counting) pass traces — the populating pass below repeats the
+    // very same filters and would print every line twice.
     if (itemP->mode != modeFilter)
+    {
+      KT_T(LdTRegMatch, "%s: no match due to mode ('%s' in reg, '%s' wanted by this pass)",
+           regId, regModeName(itemP->mode), regModeName(modeFilter));
       continue;
+    }
     if (itemP->expiresAt > 0 && itemP->expiresAt <= nowNs)
+    {
+      KT_T(LdTRegMatch, "%s: no match due to expiresAt — the registration has expired", regId);
       continue;
+    }
     if (!csrScopeMatches(itemP->scopeV, entityScopeV))
+    {
+      KT_T(LdTRegMatch, "%s: no match due to scope", regId);
       continue;
+    }
     if (itemMatches(itemP, entityId, entityTypeV))
       count++;
   }
@@ -1081,10 +1131,22 @@ int ldRegCacheMatchForQuery(LdRegCache*       cacheP,
 
     for (LdRegCacheItem* itemP = cacheP->itemList; itemP != NULL; itemP = itemP->next)
     {
+      const char* regId = (itemP->regId != NULL) ? itemP->regId : "<no id>";
+
+      // Pass 0 traces; pass 1 repeats the same filters to populate the array.
       if (itemP->mode != modeFilter)
+      {
+        if (pass == 0)
+          KT_T(LdTRegMatch, "%s: no match due to mode ('%s' in reg, '%s' wanted by this pass)",
+               regId, regModeName(itemP->mode), regModeName(modeFilter));
         continue;
+      }
       if (itemP->expiresAt > 0 && itemP->expiresAt <= nowNs)
+      {
+        if (pass == 0)
+          KT_T(LdTRegMatch, "%s: no match due to expiresAt — the registration has expired", regId);
         continue;
+      }
 
       bool match = false;
       for (LdRegInfo* riP = itemP->infoV; riP != NULL && !match; riP = riP->next)
@@ -1099,10 +1161,14 @@ int ldRegCacheMatchForQuery(LdRegCache*       cacheP,
       }
 
       if (!match)
+      {
+        if (pass == 0)
+          KT_T(LdTRegMatch, "%s: no match due to entity id/type — the query selects nothing this registration covers", regId);
         continue;
+      }
 
-      if (pass == 0) count++;
-      else         { v[ix++] = itemP; ldRegCacheItemPin(itemP); }
+      if (pass == 0) { count++; KT_T(LdTRegMatch, "%s: MATCH", regId); }
+      else           { v[ix++] = itemP; ldRegCacheItemPin(itemP); }
     }
 
     if (pass == 1)
@@ -1175,7 +1241,8 @@ const char* ldRegCacheLocalWriteConflict(LdRegCache* cacheP,
 
       for (LdRegEntityInfo* eiP = riP->entityInfoV; eiP != NULL && !entityCovered; eiP = eiP->next)
       {
-        if (entityInfoMatches(eiP, entityId, entityTypeV))
+        if (entityInfoMatches(eiP, entityId, entityTypeV,
+                              (itemP->regId != NULL) ? itemP->regId : "<no id>"))
           entityCovered = true;
       }
       if (!entityCovered)
@@ -1240,7 +1307,8 @@ bool ldRegCacheAttrExclusivelyClaimed(LdRegCache* cacheP,
     {
       bool entityCovered = (riP->entityInfoV == NULL);  // attrs-only claim: any entity
       for (LdRegEntityInfo* eiP = riP->entityInfoV; eiP != NULL && !entityCovered; eiP = eiP->next)
-        if (entityInfoMatches(eiP, entityId, entityTypeV))
+        if (entityInfoMatches(eiP, entityId, entityTypeV,
+                              (itemP->regId != NULL) ? itemP->regId : "<no id>"))
           entityCovered = true;
       if (!entityCovered)
         continue;
