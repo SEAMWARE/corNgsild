@@ -563,6 +563,11 @@ int ldDistSubReconcile(LdSubCacheItem*      itemP,
   if (itemP == NULL || regCacheP == NULL || fragmentP == NULL)
     return 0;
 
+  // A subscription reconciled against registered Context Sources is a
+  // distributed operation — off unless --distributed says so.
+  if (ldDistributed == false)
+    return 0;
+
   bool  touched = false;
   int   changes = 0;
   int   bodyLen = 0;

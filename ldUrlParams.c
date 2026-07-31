@@ -37,9 +37,6 @@
 
 // -----------------------------------------------------------------------------
 //
-// ldLocalOnly - global flag set by --localOnly CLI arg (no distributed ops)
-//
-bool        ldLocalOnly          = false;
 bool        ldSplitEntities      = true;
 bool        ldDistributed        = false;   // --distributed / -dist (opt-in, like TRoE)
 
