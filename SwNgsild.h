@@ -135,6 +135,7 @@ typedef struct SwNgsild
 
   // URL parameters — booleans
   bool    sysAttrs;
+  bool    dateTimeRounded;   // a DateTime input lost precision past nanoseconds — NGSILD-Warning 214 already sent
   bool    count;         // true if ?count=true
   bool    local;         // true if ?local=true
   bool    noForward;     // true if ?noForward=true  (discovery: local + CSR metadata, no forward)

@@ -12,6 +12,9 @@
 #include <stdint.h>                                      // int64_t
 #include <time.h>                                        // struct tm, timegm, strptime
 
+#include "swRest/swRestOutHeader.h"                       // swRestOutHeaderAdd
+
+#include "swNgsild/SwNgsild.h"                           // swNgsild
 #include "swNgsild/ldCheckDateTime.h"                    // Own interface
 
 
@@ -196,8 +199,34 @@ int64_t ldIsoToNanoseconds(const char* iso)
     // second correctly, since ns is accumulated in nanoseconds.
     if ((*rest >= '5') && (*rest <= '9'))
       frac += 1;
+
+    //
+    // Everything past the ninth digit is gone once this returns, so say so —
+    // but only when something was actually lost. A tenth digit of '0' rounds
+    // to the very same instant, and warning about it would cry wolf. The
+    // 1..9-digit case is not a loss either: it is stored whole and only
+    // RENDERED at six digits by default (nine with --high-precision).
+    //
+    // 214 "Transformation Applied" is the IANA code for a representation the
+    // broker itself altered. § 6.3.5's table covers distributed-operation
+    // warnings only, and its 299 means "the registration endpoint returned an
+    // error" — reusing that here would make a stored-precision notice look
+    // like a federation failure.
+    //
+    bool lost = false;
     while ((*rest >= '0') && (*rest <= '9'))
+    {
+      if (*rest != '0')
+        lost = true;
       rest++;
+    }
+
+    if (lost && !swNgsild.dateTimeRounded)
+    {
+      swNgsild.dateTimeRounded = true;
+      swRestOutHeaderAdd("NGSILD-Warning",
+                         "214 - \"DateTime values were rounded to nanosecond resolution\"");
+    }
 
     ns += frac;
   }
