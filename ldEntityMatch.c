@@ -250,15 +250,18 @@ static bool matchTerm(KjNode* entityP, LdQTerm* term)
 
   if (term->subPathN > 0)
   {
+    // A segment that isn't there means the path as a whole isn't there, so a
+    // not-exists term is satisfied — an Entity without 'p' at all certainly
+    // does not contain 'p.sub'. Every other term needs the element and fails.
     KjNode* instP = attrInstanceOf(entityP, term->attr);
     if (instP == NULL || instP->type != KjObject)
-      return false;
+      return (term->op == LdQNotExists);
 
     for (int i = 0; i < term->subPathN - 1; i++)
     {
       instP = attrInstanceOf(instP, term->subPathV[i]);
       if (instP == NULL || instP->type != KjObject)
-        return false;
+        return (term->op == LdQNotExists);
     }
 
     containerP = instP;
