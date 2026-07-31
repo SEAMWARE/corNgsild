@@ -14,9 +14,10 @@
 
 #include "kjson/KjNode.h"                                // KjNode
 #include "kjson/kjLookup.h"                              // kjLookup
-#include "kjson/kjBuilder.h"                             // kjChildRemove
+#include "kjson/kjBuilder.h"                             // kjChildRemove, kjArray, kjString, kjChildAdd
+#include "kjson/kjClone.h"                               // kjClone
 
-#include "swNgsild/LdVocab.h"                            // LD_VOCAB_OBSERVED_AT, LD_VOCAB_MODIFIED_AT, LD_VOCAB_EXPIRES_AT
+#include "swNgsild/LdVocab.h"                            // LD_VOCAB_OBSERVED_AT, LD_VOCAB_MODIFIED_AT, LD_VOCAB_EXPIRES_AT, LD_VOCAB_SCOPE
 #include "swNgsild/ldCheckDateTime.h"                    // ldIsoToNanoseconds
 #include "swNgsild/ldDistMerge.h"                        // Own interface
 
@@ -135,4 +136,84 @@ void ldDistExpiresAtReconcile(KjNode* destP, KjNode* srcP)
     destExpP->type  = srcExpP->type;
     destExpP->value = srcExpP->value;
   }
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// scopeValuesInto - add the Scopes of a "scope" member (String or Array) to an array, without duplicates
+//
+static void scopeValuesInto(KjNode* arrayP, KjNode* scopeP, Kjson* allocP)
+{
+  bool    isArray = (scopeP->type == KjArray);
+  KjNode* valueP  = (isArray == true) ? scopeP->value.firstChildP : scopeP;
+
+  while (valueP != NULL)
+  {
+    if (valueP->type == KjString)
+    {
+      bool present = false;
+
+      for (KjNode* haveP = arrayP->value.firstChildP; haveP != NULL; haveP = haveP->next)
+      {
+        if (strcmp(haveP->value.s, valueP->value.s) == 0)
+        {
+          present = true;
+          break;
+        }
+      }
+
+      if (present == false)
+        kjChildAdd(arrayP, kjString(allocP, NULL, valueP->value.s));
+    }
+
+    // A String "scope" holds the single value that is scopeP itself - its 'next' belongs to the Entity
+    valueP = (isArray == true) ? valueP->next : NULL;
+  }
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldDistScopeMerge -
+//
+void ldDistScopeMerge(KjNode* destP, KjNode* srcP, Kjson* allocP)
+{
+  if (destP == NULL || srcP == NULL)
+    return;
+
+  KjNode* srcScopeP = kjLookup(srcP, LD_VOCAB_SCOPE);
+  if (srcScopeP == NULL)
+    return;
+
+  KjNode* destScopeP = kjLookup(destP, LD_VOCAB_SCOPE);
+
+  if (destScopeP == NULL)
+  {
+    KjNode* cloneP = kjClone(allocP, srcScopeP);
+
+    cloneP->name = (char*) LD_VOCAB_SCOPE;
+    kjChildAdd(destP, cloneP);
+    return;
+  }
+
+  KjNode* unionP = kjArray(allocP, LD_VOCAB_SCOPE);
+
+  scopeValuesInto(unionP, destScopeP, allocP);
+  scopeValuesInto(unionP, srcScopeP,  allocP);
+
+  kjChildRemove(destP, destScopeP);
+
+  //
+  // § 5.2.7: the value of scope "is represented as a JSON array in case there is more than one
+  // Scope" - so a union that came out as a single Scope goes back to a bare String.
+  //
+  KjNode* onlyP = unionP->value.firstChildP;
+
+  if ((onlyP != NULL) && (onlyP->next == NULL))
+    kjChildAdd(destP, kjString(allocP, LD_VOCAB_SCOPE, onlyP->value.s));
+  else
+    kjChildAdd(destP, unionP);
 }

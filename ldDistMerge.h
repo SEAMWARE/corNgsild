@@ -28,6 +28,7 @@
 #include <stdbool.h>                                     // bool
 #include <stdint.h>                                      // uint64_t
 
+#include "kjson/kjson.h"                                 // Kjson
 #include "kjson/KjNode.h"                                // KjNode
 
 
@@ -81,5 +82,24 @@ extern bool ldDistInstanceIsExpired(KjNode* instP, int64_t nowNs);
 // algorithm, this reconciliation included.
 //
 extern void ldDistExpiresAtReconcile(KjNode* destP, KjNode* srcP);
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldDistScopeMerge - § 5.2.7 the Scopes of every version of an Entity are merged
+//
+// "In case multiple representations of the same Entity have to be merged, e.g. when
+// combining the results of distributed queries, the values of scope are merged."
+//
+// Unlike expiresAt, no version can take a Scope away from another: each version knows the
+// Scopes of the part of the Entity it holds, and the assembled Entity is in all of them.
+// The union keeps the order in which the Scopes were seen, drops duplicates, and renders
+// as a bare String when it comes out as a single Scope.
+//
+// Called once per merged-in version with 'destP' the running assembly and 'srcP' the
+// further version. Auxiliary sources (§ 4.3.6.2) fill gaps only and stay out of it.
+//
+extern void ldDistScopeMerge(KjNode* destP, KjNode* srcP, Kjson* allocP);
 
 #endif  // SWNGSILD_LDDISTMERGE_H_
