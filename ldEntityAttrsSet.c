@@ -17,6 +17,7 @@
 
 #include "swNgsild/LdVocab.h"                         // LD_VOCAB_*
 #include "swNgsild/ldEntityAttrsSet.h"                // Own interface
+#include "swNgsild/ldIsEntityKeyword.h"                   // ldIsNotAttributeName
 
 
 
@@ -33,20 +34,6 @@ static void removeChild(KjNode* container, KjNode* node, Kjson* allocP)
   kjChildRemove(container, node);
   if (allocP == NULL)
     kjFree(node);
-}
-
-
-
-// -----------------------------------------------------------------------------
-//
-// isEntityKeyword - top-level node names that are not attributes
-//
-static bool isEntityKeyword(const char* name)
-{
-  if (name == NULL)              return true;
-  if (name[0] == '@')            return true;
-  if (strcmp(name, "id")   == 0) return true;
-  return false;
 }
 
 
@@ -427,10 +414,9 @@ void ldEntityAttrsSet(KjNode* target, KjNode* fragment,
   //
   for (KjNode* fAttrP = fragment->value.firstChildP; fAttrP != NULL; fAttrP = fAttrP->next)
   {
-    if (isEntityKeyword(fAttrP->name)) continue;
-    if (strcmp(fAttrP->name, "type")            == 0) continue;
-    if (strcmp(fAttrP->name, LD_VOCAB_SCOPE)      == 0) continue;
-    if (strcmp(fAttrP->name, LD_VOCAB_EXPIRES_AT) == 0) continue;   // handled in the first pass
+    // type, scope and expiresAt were handled in the first pass - and are Entity members anyway
+    if (ldIsNotAttributeName(fAttrP->name))
+      continue;
 
     //
     // Top-level null-marker → delete the whole attr. Used by PATCH /attrs

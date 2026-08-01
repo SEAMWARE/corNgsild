@@ -45,20 +45,7 @@
 #include "kjson/kjBuilder.h"                           // kjChildRemove, kjObject, kjChildAdd
 
 #include "swNgsild/ldSimplifyEntity.h"                 // Own interface
-
-
-
-// -----------------------------------------------------------------------------
-//
-// isEntityKeyword - id, type, scope are entity-level fields, not attributes
-//
-static bool isEntityKeyword(const char* name)
-{
-  if (strcmp(name, "id")    == 0) return true;
-  if (strcmp(name, "type")  == 0) return true;
-  if (strcmp(name, "scope") == 0) return true;
-  return false;
-}
+#include "swNgsild/ldIsEntityKeyword.h"                   // ldIsNotAttributeName
 
 
 
@@ -153,7 +140,7 @@ void ldSimplifyEntity(KjNode* entityP)
   {
     KjNode* nextP = childP->next;
 
-    if (childP->name == NULL || isEntityKeyword(childP->name))
+    if (childP->name == NULL || ldIsNotAttributeName(childP->name))
     {
       childP = nextP;
       continue;
@@ -336,7 +323,7 @@ void ldConciseEntity(KjNode* entityP)
 
   for (KjNode* childP = entityP->value.firstChildP; childP != NULL; childP = childP->next)
   {
-    if ((childP->name == NULL) || isEntityKeyword(childP->name) || (childP->type != KjObject))
+    if ((childP->name == NULL) || ldIsNotAttributeName(childP->name) || (childP->type != KjObject))
       continue;
 
     conciseAttr(childP);

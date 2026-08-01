@@ -37,4 +37,23 @@ static inline bool ldIsEntityKeyword(const char* name)
   return false;
 }
 
+
+
+// -----------------------------------------------------------------------------
+//
+// ldIsNotAttributeName - is this top-level member name anything other than an Attribute?
+//
+// The Entity members above, plus the two shapes that are never Attributes either: a nameless
+// node, and any JSON-LD keyword. Every walk that separates Attributes from the rest asks THIS
+// - so the separation cannot drift from file to file, which is exactly what it did until a
+// member fell through to the attribute machinery and a plain PATCH crashed the broker.
+//
+static inline bool ldIsNotAttributeName(const char* name)
+{
+  if (name == NULL)    return true;
+  if (name[0] == '@')  return true;
+
+  return ldIsEntityKeyword(name);
+}
+
 #endif  // SWNGSILD_LD_IS_ENTITY_KEYWORD_H_

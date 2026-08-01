@@ -730,12 +730,9 @@ static bool mergeApply(KjNode*        target,
     KjNode*     fNext = fChild->next;
     const char* name  = fChild->name;
 
-    // Skip keywords we either inject ourselves or ignore at merge time
-    if (name == NULL ||
-        strcmp(name, "id")                 == 0 ||
-        strcmp(name, "@id")                == 0 ||
-        strcmp(name, LD_VOCAB_CREATED_AT)  == 0 ||
-        strcmp(name, LD_VOCAB_MODIFIED_AT) == 0)
+    // A nameless node is nothing this loop can act on; every other Entity member is
+    // either handled just below (type, scope, expiresAt) or skipped by the shared test.
+    if (name == NULL)
     {
       fChild = fNext;
       continue;
@@ -820,7 +817,7 @@ static bool mergeApply(KjNode*        target,
     // merged against a stored value that is not an attribute wrapper at all - which is how a
     // plain PATCH of expiresAt came to walk an integer as if it were a list of instances.
     //
-    if (ldIsEntityKeyword(name))
+    if (ldIsNotAttributeName(name))
     {
       fChild = fNext;
       continue;
