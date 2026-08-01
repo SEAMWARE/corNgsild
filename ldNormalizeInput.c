@@ -405,7 +405,13 @@ static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool m
     {
       KjNode* subNextP = subP->next;
       if (isAttrKeyword(subP) == false)
-        normalizeAttr(attrP, subP, kaP, mergeMode);
+        //
+        // NOT mergeMode: leaving a simplified scalar raw is a rule about the ATTRIBUTE, whose
+        // type only the target can settle. A sub-attribute has no such ambiguity - a scalar
+        // is a Property - and passing mergeMode down here is what made Merge Entity the one
+        // path that stored a bare "b": 2 inside an attribute, which is not NGSI-LD at all.
+        //
+        normalizeAttr(attrP, subP, kaP, false);
       subP = subNextP;
     }
     return;
@@ -443,7 +449,13 @@ static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool m
     {
       KjNode* subNextP = subP->next;
       if (isAttrKeyword(subP) == false)
-        normalizeAttr(attrP, subP, kaP, mergeMode);
+        //
+        // NOT mergeMode: leaving a simplified scalar raw is a rule about the ATTRIBUTE, whose
+        // type only the target can settle. A sub-attribute has no such ambiguity - a scalar
+        // is a Property - and passing mergeMode down here is what made Merge Entity the one
+        // path that stored a bare "b": 2 inside an attribute, which is not NGSI-LD at all.
+        //
+        normalizeAttr(attrP, subP, kaP, false);
       subP = subNextP;
     }
     return;
@@ -475,7 +487,13 @@ static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool m
     {
       KjNode* subNextP = subP->next;
       if (isAttrKeyword(subP) == false)
-        normalizeAttr(attrP, subP, kaP, mergeMode);
+        //
+        // NOT mergeMode: leaving a simplified scalar raw is a rule about the ATTRIBUTE, whose
+        // type only the target can settle. A sub-attribute has no such ambiguity - a scalar
+        // is a Property - and passing mergeMode down here is what made Merge Entity the one
+        // path that stored a bare "b": 2 inside an attribute, which is not NGSI-LD at all.
+        //
+        normalizeAttr(attrP, subP, kaP, false);
       subP = subNextP;
     }
     return;
