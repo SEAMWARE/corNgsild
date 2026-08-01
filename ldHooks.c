@@ -35,6 +35,7 @@
 #include "swNgsild/ldToAggregatedValues.h"               // ldToAggregatedValues, ldIso8601DurationParse
 #include "swNgsild/ldToGeoJson.h"                        // ldToGeoJson
 #include "swNgsild/ldStripSysAttrs.h"                    // ldStripSysAttrs
+#include "swNgsild/ldScopeMatch.h"                        // ldScopeCanonicalize
 #include "swNgsild/ldLangReduce.h"                       // ldLangReduce
 #include "swNgsild/ldCsrSubNotify.h"                  // ldCsrSubPendingDiscard
 #include "swRest/SwRestIn.h"                      // swAcceptParse, SwMimeType
@@ -968,6 +969,22 @@ static void ldParseHook(void)
   bool isAttrFragmentUrl = (swRest.serviceP != NULL
                             && swRest.serviceP->url != NULL
                             && strstr(swRest.serviceP->url, "/attrs/") != NULL);
+
+  //
+  // § 5.2.7 — the leading '/' of a Scope is optional: it is there, it is just implicit.
+  // The scope query language of § 7.2.5 has no such option (every scope query names a
+  // Scope beginning with '/'), so a Scope written without the slash would be selectable
+  // by no query at all. Canonicalize on the way in, for every payload that can carry
+  // Scopes: Entities (single, fragment and batch) and Registrations.
+  //
+  // An attribute fragment is not an Entity - a member named "scope" there is a
+  // sub-attribute of the addressed Attribute, and none of the broker's business.
+  //
+  if (swRest.in.requestTree != NULL && swRest.in.urlPath != NULL && !isAttrFragmentUrl
+      && (isEntityPayload
+          || strncmp(swRest.in.urlPath, "/ngsi-ld/v1/entityOperations",     28) == 0
+          || strncmp(swRest.in.urlPath, "/ngsi-ld/v1/csourceRegistrations", 32) == 0))
+    ldScopeCanonicalize(swRest.in.requestTree, &swRest.kalloc);
 
   if (isEntityPayload && !isAttrFragmentUrl)
   {

@@ -57,7 +57,24 @@ static bool parseGroup(char* str, LdScopeGroup* group, KAlloc* faP)
         return false;
       }
 
-      group->scopeV[ix++] = kaStrdup(faP, start);
+      //
+      // § 5.2.7 — the leading '/' of a Scope is implicit, and a scope query names Scopes.
+      // § 7.2.5's grammar spells the slash out, so a query that has it is untouched; one
+      // written the other way, by a client that writes its Entity Scopes the same way,
+      // means the very same Scope.
+      //
+      if (start[0] != '/')
+      {
+        int   len     = strlen(start);
+        char* slashed = (char*) kaAlloc(faP, len + 2);
+
+        slashed[0] = '/';
+        memcpy(&slashed[1], start, len + 1);
+
+        group->scopeV[ix++] = slashed;
+      }
+      else
+        group->scopeV[ix++] = kaStrdup(faP, start);
 
       if (end)
         break;

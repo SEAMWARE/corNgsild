@@ -11,6 +11,9 @@
 //
 #include <stdbool.h>                                    // bool
 
+#include "kalloc/KAlloc.h"                              // KAlloc
+#include "kjson/KjNode.h"                               // KjNode
+
 
 
 // -----------------------------------------------------------------------------
@@ -40,5 +43,23 @@ extern bool ldScopePatternMatch(const char* pattern, const char* value);
 // Returns the number of bytes written (excluding NUL).
 //
 extern int ldScopeToRegex(const char* pattern, char* buf, int bufSize);
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldScopeCanonicalize - give every Scope of an Entity/Registration its implicit leading '/'
+//
+// § 5.2.7 makes the leading '/' of a Scope optional - the slash is there, it is just
+// implicit - while the scope query language of § 7.2.5 has no such option: every scope
+// query names a Scope beginning with '/'. Storing the canonical form is what keeps a
+// Scope written without the slash selectable, and what lets the two spellings of one
+// Scope deduplicate when the versions of a distributed Entity are merged.
+//
+// The NGSI-LD Null is left alone: it marks a deleted Scope, it is not one.
+//
+// Takes an Entity/Registration object or an array of them (batch operations).
+//
+extern void ldScopeCanonicalize(KjNode* treeP, KAlloc* kaP);
 
 #endif  // SWNGSILD_LDSCOPEMATCH_H_

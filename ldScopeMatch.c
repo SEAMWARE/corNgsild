@@ -10,6 +10,11 @@
 #include <stdio.h>                                      // snprintf
 #include <string.h>                                     // strcmp, strlen, memcpy
 
+#include "kalloc/kaAlloc.h"                             // kaAlloc
+#include "kjson/KjNode.h"                               // KjNode
+#include "kjson/kjLookup.h"                             // kjLookup
+
+#include "swNgsild/LdVocab.h"                           // LD_VOCAB_SCOPE, LD_VOCAB_NGSILD_NULL
 #include "swNgsild/ldScopeMatch.h"                      // Own interface
 
 
@@ -141,4 +146,73 @@ int ldScopeToRegex(const char* pattern, char* buf, int bufSize)
 
   *out = 0;
   return (int)(out - buf);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// scopeValueCanonicalize - give one Scope its implicit leading '/'
+//
+static void scopeValueCanonicalize(KjNode* valueP, KAlloc* kaP)
+{
+  if ((valueP->type != KjString) || (valueP->value.s == NULL) || (valueP->value.s[0] == '/'))
+    return;
+
+  if (strcmp(valueP->value.s, LD_VOCAB_NGSILD_NULL) == 0)   // the NGSI-LD Null marks a deleted Scope, it is not one
+    return;
+
+  int   len     = strlen(valueP->value.s);
+  char* slashed = kaAlloc(kaP, len + 2);
+
+  slashed[0] = '/';
+  memcpy(&slashed[1], valueP->value.s, len + 1);
+
+  valueP->value.s = slashed;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// objectCanonicalize - canonicalize the "scope" member of one Entity/Registration
+//
+static void objectCanonicalize(KjNode* objectP, KAlloc* kaP)
+{
+  if (objectP == NULL || objectP->type != KjObject)
+    return;
+
+  KjNode* scopeP = kjLookup(objectP, LD_VOCAB_SCOPE);
+  if (scopeP == NULL)
+    return;
+
+  if (scopeP->type == KjArray)
+  {
+    for (KjNode* valueP = scopeP->value.firstChildP; valueP != NULL; valueP = valueP->next)
+      scopeValueCanonicalize(valueP, kaP);
+  }
+  else
+    scopeValueCanonicalize(scopeP, kaP);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldScopeCanonicalize -
+//
+void ldScopeCanonicalize(KjNode* treeP, KAlloc* kaP)
+{
+  if (treeP == NULL)
+    return;
+
+  if (treeP->type == KjObject)
+  {
+    objectCanonicalize(treeP, kaP);
+  }
+  else if (treeP->type == KjArray)
+  {
+    for (KjNode* itemP = treeP->value.firstChildP; itemP != NULL; itemP = itemP->next)
+      objectCanonicalize(itemP, kaP);
+  }
 }
