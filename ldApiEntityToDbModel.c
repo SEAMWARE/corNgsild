@@ -353,6 +353,14 @@ void ldApiEntityToDbModel(KjNode* entityP, KAlloc* faP, int64_t createdAt)
 
     if (cP->type == KjString)
     {
+      //
+      // The NGSI-LD Null is not a DateTime - it is the request to delete the member (§ 5.4.1),
+      // and it has to reach the merge as itself. Converting it would turn "delete this" into
+      // "expires at epoch zero".
+      //
+      if (strcmp(cP->value.s, LD_VOCAB_NGSILD_NULL) == 0)
+        continue;
+
       cP->value.i = isoToNanoseconds(cP->value.s);
       cP->type    = KjInt;
     }

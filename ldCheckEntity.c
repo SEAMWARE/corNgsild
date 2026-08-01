@@ -196,6 +196,18 @@ bool ldCheckEntity(KjNode* entityP, LdOp op, KjNode* dbEntityP, KAlloc* faP)
   {
     if (typeNodeP->type == KjString)
     {
+      //
+      // § 5.4.1 has the NGSI-LD Null remove the member it is the value of, but the Entity
+      // 'type' is mandatory (§ 5.2.4, 1..1) and can only be added to - an Entity without a
+      // type is not an Entity. Refuse the deletion instead of performing it.
+      //
+      if (strcmp(typeNodeP->value.s, LD_VOCAB_NGSILD_NULL) == 0)
+      {
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Entity Type",
+                "Entity 'type' is mandatory and cannot be deleted with the NGSI-LD Null");
+        return false;
+      }
+
       if (typeNodeP->value.s[0] == '@')
       {
         ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Entity Type",
@@ -229,6 +241,13 @@ bool ldCheckEntity(KjNode* entityP, LdOp op, KjNode* dbEntityP, KAlloc* faP)
         {
           ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Entity Type",
                   "Entity 'type' must not be a JSON-LD keyword ('%s')", elemP->value.s);
+          return false;
+        }
+
+        if (strcmp(elemP->value.s, LD_VOCAB_NGSILD_NULL) == 0)
+        {
+          ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Entity Type",
+                  "the NGSI-LD Null is not an Entity type");
           return false;
         }
       }
@@ -274,6 +293,19 @@ bool ldCheckEntity(KjNode* entityP, LdOp op, KjNode* dbEntityP, KAlloc* faP)
             ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Scope", "Entity 'scope' array elements must not be empty strings");
             return false;
           }
+
+          //
+          // § 5.2.7: the NGSI-LD Null "shall be only used and only appear in case of deleted
+          // scopes" - as the value of the whole member, where § 5.4.1 gives it its meaning.
+          // Inside the array it names no Scope, and storing it would leave the Entity carrying
+          // a Scope no query can name and every reader has to special-case.
+          //
+          if (strcmp(elemP->value.s, LD_VOCAB_NGSILD_NULL) == 0)
+          {
+            ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Scope",
+                    "the NGSI-LD Null is not a Scope - as the value of 'scope' it deletes it, inside the array it means nothing");
+            return false;
+          }
         }
       }
       else
@@ -281,6 +313,36 @@ bool ldCheckEntity(KjNode* entityP, LdOp op, KjNode* dbEntityP, KAlloc* faP)
         ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Scope", "Entity 'scope' must be a string or array of strings");
         return false;
       }
+    }
+  }
+
+  //
+  // Validate the entity-level expiresAt (§ 5.2.4: a DateTime)
+  //
+  // Unvalidated it reached the merge as whatever the client sent, and the merge treats every
+  // member it does not know as an Attribute - a scalar where a dataset-keyed wrapper is expected.
+  // The NGSI-LD Null is the one non-DateTime value allowed, and only on the operations that can
+  // delete a member (§ 5.4.1); on create the first-level check above has already refused it.
+  //
+  for (KjNode* childP = entityP->value.firstChildP; childP != NULL; childP = childP->next)
+  {
+    if (strcmp(childP->name, LD_VOCAB_EXPIRES_AT) != 0)
+      continue;
+
+    if (childP->type != KjString)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid expiresAt", "Entity 'expiresAt' must be a DateTime string");
+      return false;
+    }
+
+    if (strcmp(childP->value.s, LD_VOCAB_NGSILD_NULL) == 0)
+      continue;
+
+    if (ldCheckDateTime(childP->value.s, NULL) == false)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid expiresAt",
+              "Entity 'expiresAt' is not a valid DateTime ('%s')", childP->value.s);
+      return false;
     }
   }
 

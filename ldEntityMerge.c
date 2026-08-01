@@ -741,20 +741,87 @@ static bool mergeApply(KjNode*        target,
       continue;
     }
 
-    // type — union semantics
+    //
+    // type — union semantics, scope — replace semantics.
+    //
+    // Both are reported like any other change: the database drivers persist what the report
+    // names, so a merge that touches nothing but the Entity members would otherwise be merged
+    // in memory, notified, and then dropped on the floor by the write. "entityModified" is the
+    // reason ldEntityAttrsSet already uses for these two, and every driver treats a reason
+    // other than "attributeDeleted" as "take this member from the merged Entity".
+    //
     if (strcmp(name, "type") == 0 || strcmp(name, "@type") == 0)
     {
       if (typeUnion(target, fChild, targetAllocP))
+      {
         entityMutated = true;
+        reportAdd(reportP, "type", "entityModified", NULL);
+      }
       fChild = fNext;
       continue;
     }
 
-    // scope — replace semantics
     if (strcmp(name, LD_VOCAB_SCOPE) == 0)
     {
       if (scopeReplace(target, fChild, targetAllocP))
+      {
         entityMutated = true;
+
+        // A removed scope has to be reported as such - the drivers only unset what is named deleted
+        bool removed = (kjLookup(target, LD_VOCAB_SCOPE) == NULL);
+
+        reportAdd(reportP, LD_VOCAB_SCOPE, (removed == true) ? "attributeDeleted" : "entityModified", NULL);
+      }
+      fChild = fNext;
+      continue;
+    }
+
+    //
+    // expiresAt — replace semantics, like scope. It arrives from ldApiEntityToDbModel as the
+    // epoch-nanosecond integer the DB model stores, or as the NGSI-LD Null string (left alone
+    // there, so that the delete survives the conversion).
+    //
+    if (strcmp(name, LD_VOCAB_EXPIRES_AT) == 0)
+    {
+      KjNode* tExpiresAt = kjLookup(target, LD_VOCAB_EXPIRES_AT);
+
+      if (isNgsildNull(fChild))
+      {
+        if (tExpiresAt != NULL)
+        {
+          kjChildRemove(target, tExpiresAt);
+          reportAdd(reportP, LD_VOCAB_EXPIRES_AT, "attributeDeleted", NULL);
+          entityMutated = true;
+        }
+      }
+      else
+      {
+        KjNode* cloneP = kjClone(targetAllocP, fChild);
+
+        cloneP->name = (char*) LD_VOCAB_EXPIRES_AT;
+
+        if (tExpiresAt != NULL)
+          kjChildReplace(target, tExpiresAt, cloneP);
+        else
+          kjChildAdd(target, cloneP);
+
+        reportAdd(reportP, LD_VOCAB_EXPIRES_AT, "entityModified", NULL);
+        entityMutated = true;
+      }
+
+      fChild = fNext;
+      continue;
+    }
+
+    //
+    // Whatever else is an Entity member is none of the attribute machinery's business. The list
+    // above is hand-written and ldIsEntityKeyword is the authority on what is not an Attribute;
+    // when the two drift apart, a member falls through to the attribute branch below and is
+    // merged against a stored value that is not an attribute wrapper at all - which is how a
+    // plain PATCH of expiresAt came to walk an integer as if it were a list of instances.
+    //
+    if (ldIsEntityKeyword(name))
+    {
       fChild = fNext;
       continue;
     }
@@ -769,6 +836,18 @@ static bool mergeApply(KjNode*        target,
     //   * KjObject dataset-keyed wrapper (from ldApiEntityToDbModel)
     //
     KjNode* tAttr = kjLookup(target, name);
+
+    //
+    // In the DB model every Attribute is an object of dataset-keyed instances. Anything else
+    // under an attribute name is not one, and walking it as if it were reads a child pointer
+    // out of a union that holds a number or a string. No payload may take the broker there.
+    //
+    if ((tAttr != NULL) && (tAttr->type != KjObject))
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Attribute",
+              "'%s' is not an Attribute of this Entity and cannot be merged as one", name);
+      return false;
+    }
 
     if (isNgsildNull(fChild))
     {

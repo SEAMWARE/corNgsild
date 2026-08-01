@@ -257,6 +257,41 @@ static void applyType(KjNode* target, KjNode* fragType, Kjson* allocP)
 
 // -----------------------------------------------------------------------------
 //
+// applyExpiresAt - replace the target's expiresAt, or delete it on the NGSI-LD Null
+//
+// The fragment carries what ldApiEntityToDbModel left: the epoch-nanosecond integer of the
+// DB model, or the NGSI-LD Null string it deliberately does not convert. Either way this is
+// an Entity member, not an Attribute - it never grows dataset-keyed instances.
+//
+static void applyExpiresAt(KjNode* target, KjNode* fragExpiresAt, Kjson* allocP)
+{
+  if (fragExpiresAt == NULL)
+    return;
+
+  KjNode* tExpiresAt = kjLookup(target, LD_VOCAB_EXPIRES_AT);
+
+  if (isNgsildNull(fragExpiresAt))
+  {
+    if (tExpiresAt != NULL)
+      removeChild(target, tExpiresAt, allocP);
+
+    return;
+  }
+
+  KjNode* cloneP = kjClone(allocP, fragExpiresAt);
+
+  cloneP->name = (char*) LD_VOCAB_EXPIRES_AT;
+
+  if (tExpiresAt != NULL)
+    removeChild(target, tExpiresAt, allocP);
+
+  kjChildAdd(target, cloneP);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // applyScope - replace or union fragment's scope into target's scope
 //
 static void applyScope(KjNode* target, KjNode* fragScope, bool overwrite, Kjson* allocP)
@@ -265,6 +300,19 @@ static void applyScope(KjNode* target, KjNode* fragScope, bool overwrite, Kjson*
     return;
 
   KjNode* tScope = kjLookup(target, LD_VOCAB_SCOPE);
+
+  //
+  // § 5.4.1 — a member whose value is the NGSI-LD Null is removed from the target, and § 10.2.7.4
+  // has scope among the Entity members that can be deleted. Removing it is the point: storing the
+  // marker would leave the Entity in a Scope that is not a Scope.
+  //
+  if ((fragScope->type == KjString) && (strcmp(fragScope->value.s, LD_VOCAB_NGSILD_NULL) == 0))
+  {
+    if (tScope != NULL)
+      removeChild(target, tScope, allocP);
+
+    return;
+  }
 
   if (overwrite || tScope == NULL)
   {
@@ -359,6 +407,19 @@ void ldEntityAttrsSet(KjNode* target, KjNode* fragment,
       anyChange = true;
       addReportEntry(reportP, LD_VOCAB_SCOPE, "entityModified", NULL);
     }
+    else if (strcmp(fP->name, LD_VOCAB_EXPIRES_AT) == 0)
+    {
+      //
+      // An Entity member like the two above, and reported the same way - a fragment carrying
+      // nothing else has to reach the database too. Deleting it is reported as a deletion:
+      // that is the only reason a driver unsets rather than sets.
+      //
+      applyExpiresAt(target, fP, targetAllocP);
+      anyChange = true;
+      addReportEntry(reportP, LD_VOCAB_EXPIRES_AT,
+                     (kjLookup(target, LD_VOCAB_EXPIRES_AT) == NULL) ? "attributeDeleted" : "entityModified",
+                     NULL);
+    }
   }
 
   //
@@ -367,8 +428,9 @@ void ldEntityAttrsSet(KjNode* target, KjNode* fragment,
   for (KjNode* fAttrP = fragment->value.firstChildP; fAttrP != NULL; fAttrP = fAttrP->next)
   {
     if (isEntityKeyword(fAttrP->name)) continue;
-    if (strcmp(fAttrP->name, "type")         == 0) continue;
-    if (strcmp(fAttrP->name, LD_VOCAB_SCOPE) == 0) continue;
+    if (strcmp(fAttrP->name, "type")            == 0) continue;
+    if (strcmp(fAttrP->name, LD_VOCAB_SCOPE)      == 0) continue;
+    if (strcmp(fAttrP->name, LD_VOCAB_EXPIRES_AT) == 0) continue;   // handled in the first pass
 
     //
     // Top-level null-marker → delete the whole attr. Used by PATCH /attrs
