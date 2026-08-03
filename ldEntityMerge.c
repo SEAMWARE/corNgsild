@@ -30,6 +30,9 @@
 #include "kjson/kjChildReplace.h"                     // kjChildReplace
 #include "swRest/swRest.h"                            // swRest
 
+#include "swJsonld/swldExpand.h"                      // swldExpand
+#include "swJsonld/swldInit.h"                        // swldCoreContext
+
 #include "swNgsild/LdVocab.h"                         // LD_VOCAB_*
 #include "swNgsild/LdAttrType.h"                      // LdAttrType, LdAttr*
 #include "swNgsild/ldAttrTypeDetect.h"                // ldAttrTypeDetect
@@ -193,11 +196,39 @@ static bool validateNoTypeChange(const char* attrName, KjNode* tWrapper, KjNode*
 
 // -----------------------------------------------------------------------------
 //
-// buildInstanceFromScalar - construct an attribute-instance object from a
-// simplified-form scalar, shaped to match the target attribute's type.
+// typeChangeToProperty - the fragment value can only be read as a Property
 //
-// Returns NULL with ldError() set on error (e.g. LanguageProperty without
-// lang URL param, or unsupported target type like GeoProperty).
+// § 5.3.2.3 (Concise-to-Normalized Expansion) step 3 is unconditional: a JSON
+// primitive expands to a Property. So a bare value that cannot be read as the
+// target's type is not a malformed something-else — it is a Property landing on
+// an Attribute that is not one, which Merge Entity refuses as a type change.
+//
+static void typeChangeToProperty(const char* attrName, LdAttrType targetType)
+{
+  ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Attribute Type Change",
+          "cannot change attribute '%s' type from '%s' to 'Property' in a Merge Entity operation",
+          attrName, ldAttrTypeToString(targetType));
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// buildInstanceFromScalar - construct an attribute-instance object from a
+// simplified-form value, shaped to match the target attribute's type.
+//
+// Only reached for a request that declared ?format=simplified (or the deprecated
+// ?options=keyValues) — see ldNormalizeInput. § 10.2.9.4 then says: "If the
+// Attribute to be merged is represented in a simplified representation, the type
+// of any pre-existing Attribute in the target entity shall be preserved." That
+// holds for EVERY Attribute type, so each one below reads the bare value as its
+// own § 5.3.2.4 simplified form: a scalar for Property/Relationship/Vocab, an
+// array for the two List types, anything at all for a JsonProperty.
+//
+// Where the bare value cannot be that type's simplified form, the fragment is
+// simply a Property (§ 5.3.2.3 step 3) and the merge is an Attribute type change.
+//
+// Returns NULL with ldError() set on error.
 //
 static KjNode* buildInstanceFromScalar(const char* attrName,
                                        KjNode*     targetInstance,
@@ -231,10 +262,10 @@ static KjNode* buildInstanceFromScalar(const char* attrName,
 
   case LdAttrRelationship:
   {
+    // § 5.3.2.4 EXAMPLE 6 — the simplified form of a Relationship is its object URI.
     if (fragScalar->type != KjString)
     {
-      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Relationship",
-              "simplified value for Relationship '%s' must be a URI string", attrName);
+      typeChangeToProperty(attrName, targetType);
       return NULL;
     }
     kjChildAdd(inst, kjString(targetAllocP, "type", "Relationship"));
@@ -252,11 +283,27 @@ static KjNode* buildInstanceFromScalar(const char* attrName,
               "simplified value for LanguageProperty '%s' requires the 'lang' URL parameter", attrName);
       return NULL;
     }
-    if (fragScalar->type != KjString)
+    //
+    // The HTTP binding's own words for the lang parameter: "when ... the value is
+    // supplied as a string OR STRING ARRAY in the payload body". § 5.2.6.4.6 lets a
+    // languageMap entry hold either, so both go in under the language tag as they come.
+    //
+    if (fragScalar->type != KjString && fragScalar->type != KjArray)
     {
-      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid LanguageProperty",
-              "simplified value for LanguageProperty '%s' must be a string", attrName);
+      typeChangeToProperty(attrName, targetType);
       return NULL;
+    }
+
+    if (fragScalar->type == KjArray)
+    {
+      for (KjNode* elemP = fragScalar->value.firstChildP; elemP != NULL; elemP = elemP->next)
+      {
+        if (elemP->type != KjString)
+        {
+          typeChangeToProperty(attrName, targetType);
+          return NULL;
+        }
+      }
     }
 
     kjChildAdd(inst, kjString(targetAllocP, "type", "LanguageProperty"));
@@ -279,15 +326,108 @@ static KjNode* buildInstanceFromScalar(const char* attrName,
         }
       }
     }
-    kjChildAdd(languageMap, kjString(targetAllocP, swNgsild.lang, fragScalar->value.s));
+    KjNode* langEntryP = kjClone(targetAllocP, fragScalar);
+    langEntryP->name = (char*) swNgsild.lang;
+    kjChildAdd(languageMap, langEntryP);
     kjChildAdd(inst, languageMap);
     break;
   }
 
-  default:
-    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Unsupported simplified merge",
-            "attribute '%s' has a type that does not accept simplified scalar values", attrName);
+  case LdAttrVocabProperty:
+  {
+    // § 5.3.2.4 EXAMPLE 5 — a VocabProperty's simplified value is its vocab term.
+    if (fragScalar->type != KjString)
+    {
+      typeChangeToProperty(attrName, targetType);
+      return NULL;
+    }
+
+    //
+    // A vocab is stored @vocab-EXPANDED ("go" → ".../default-context/go"): the core
+    // context types the "vocab" term as @type:@vocab, so swldExpandTree expands it
+    // wherever it appears under that key, and swldCompactTree compacts it back on
+    // the way out. A bare scalar never sat under a "vocab" key, so it arrives here
+    // unexpanded and has to be expanded by hand — otherwise the same term written
+    // simplified and written concise would be two different values in the database.
+    //
+    SwldContext* ctxP     = (swNgsild.contextP != NULL) ? swNgsild.contextP : swldCoreContext();
+    const char*  vocabIri = swldExpand(ctxP, fragScalar->value.s, &swRest.kalloc, NULL, NULL);
+
+    kjChildAdd(inst, kjString(targetAllocP, "type", "VocabProperty"));
+    kjChildAdd(inst, kjString(targetAllocP, "value", (char*) ((vocabIri != NULL) ? vocabIri : fragScalar->value.s)));
+    break;
+  }
+
+  case LdAttrJsonProperty:
+  {
+    //
+    // § 5.2.6.4.10 — a JsonProperty holds raw JSON, so every bare value is a valid
+    // one and nothing needs checking. This is also the one type whose value is NOT
+    // descended into: inside a JSON value nothing is a sub-attribute.
+    //
+    kjChildAdd(inst, kjString(targetAllocP, "type", "JsonProperty"));
+    KjNode* jsonP = kjClone(targetAllocP, fragScalar);
+    jsonP->name = (char*) "value";
+    kjChildAdd(inst, jsonP);
+    break;
+  }
+
+  case LdAttrListProperty:
+  case LdAttrListRelationship:
+  {
+    //
+    // § 5.3.2.4 EXAMPLE 8/9 — both List types wear a bare ARRAY in simplified form:
+    // an ordered array of values for a ListProperty, of object URIs for a
+    // ListRelationship. A bare scalar is not one, and is therefore a Property.
+    //
+    if (fragScalar->type != KjArray)
+    {
+      typeChangeToProperty(attrName, targetType);
+      return NULL;
+    }
+
+    if (targetType == LdAttrListRelationship)
+    {
+      for (KjNode* elemP = fragScalar->value.firstChildP; elemP != NULL; elemP = elemP->next)
+      {
+        if (elemP->type != KjString)
+        {
+          ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid ListRelationship",
+                  "simplified value for ListRelationship '%s' must be an array of URI strings", attrName);
+          return NULL;
+        }
+      }
+    }
+
+    kjChildAdd(inst, kjString(targetAllocP, "type",
+                              (char*) ((targetType == LdAttrListProperty) ? "ListProperty" : "ListRelationship")));
+    KjNode* listP = kjClone(targetAllocP, fragScalar);
+    listP->name = (char*) "value";
+    kjChildAdd(inst, listP);
+    break;
+  }
+
+  case LdAttrGeoProperty:
+  {
+    //
+    // § 5.3.2.4 EXAMPLE 2 — a GeoProperty's simplified value is a GeoJSON geometry,
+    // which is a JSON OBJECT and so never reaches this function (only non-objects
+    // do). Whatever bare value did arrive cannot be a geometry, so it is a Property.
+    //
+    typeChangeToProperty(attrName, targetType);
     return NULL;
+  }
+
+  default:
+    //
+    // ldAttrTypeDetect could not name the stored Attribute's type — nothing to
+    // preserve, so § 5.3.2.3 step 3 stands on its own: the value is a Property.
+    //
+    kjChildAdd(inst, kjString(targetAllocP, "type", "Property"));
+    KjNode* fallbackP = kjClone(targetAllocP, fragScalar);
+    fallbackP->name = (char*) "value";
+    kjChildAdd(inst, fallbackP);
+    break;
   }
 
   return inst;

@@ -281,6 +281,23 @@ static KjNode* wrapSingleAttr(KjNode* attrP, uint64_t ts, KAlloc* faP)
 //
 static KjNode* wrapMultiAttr(KjNode* arrayP, uint64_t ts, KAlloc* faP)
 {
+  //
+  // An array of non-objects is not a multi-attribute: it is the simplified value
+  // of a ListProperty / ListRelationship / LanguageProperty on a Merge Entity that
+  // declared ?format=simplified (§ 5.3.2.4, § 10.2.9.4). Leave it raw — exactly as
+  // a bare scalar is left raw — for ldEntityMerge to shape against the type of the
+  // pre-existing Attribute. Wrapping it produced a dataset-keyed object whose
+  // "instances" were bare numbers, and the RFC 7396 merge walked one as if it had
+  // children.
+  //
+  // Any other request has already had such an array wrapped as a Property by
+  // ldNormalizeInput, so it cannot reach here; a genuine multi-attribute always
+  // leads with an object, and one that turns non-object further along is still
+  // rejected by ldCheckEntity.
+  //
+  if (arrayP->value.firstChildP != NULL && arrayP->value.firstChildP->type != KjObject)
+    return NULL;
+
   KjNode* wrapperP = kjObject(swRest.kjsonP, arrayP->name);
 
   // Move each array element into the wrapper, keyed by its datasetId

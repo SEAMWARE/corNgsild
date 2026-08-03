@@ -30,7 +30,16 @@
 // merge semantics, such an object is a partial fragment targeting existing
 // sub-attributes, not a new Property whose value happens to be an object.
 //
-extern void ldNormalizeInput(KjNode* entityP, KAlloc* kaP, bool mergeMode);
+// simplified: the request declared its body to be in the simplified format
+// (?format=simplified, or the deprecated ?options=keyValues). It is a declared
+// flag, not something to sniff — § 10.2.9.3 lists it among the operation's input
+// data. Only a merge does anything with it, and what it buys is § 10.2.9.4: "the
+// type of any pre-existing Attribute in the target entity shall be preserved".
+// So bare scalars and bare arrays are left raw here for ldEntityMerge to shape
+// against the target. Undeclared, the body is normalized or concise, where
+// § 5.3.2.3 admits no such target-dependence: a JSON primitive is a Property.
+//
+extern void ldNormalizeInput(KjNode* entityP, KAlloc* kaP, bool mergeMode, bool simplified);
 
 
 

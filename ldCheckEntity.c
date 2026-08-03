@@ -366,6 +366,21 @@ bool ldCheckEntity(KjNode* entityP, LdOp op, KjNode* dbEntityP, KAlloc* faP)
         return false;
       }
 
+      //
+      // An array of non-objects reaching a Merge Entity is not a multi-attribute at
+      // all — it is a simplified value: § 5.3.2.4 gives a ListProperty a bare array
+      // of values (EXAMPLE 8), a ListRelationship a bare array of object URIs
+      // (EXAMPLE 9), and the lang parameter admits a string array for a
+      // LanguageProperty. ldEntityMerge shapes it against the type of the
+      // pre-existing Attribute, exactly as it does a bare scalar, so leave it be.
+      //
+      // No flag is consulted here and none is needed: ldNormalizeInput only leaves
+      // an array raw when the request declared ?format=simplified. Undeclared, it
+      // has already been wrapped as a Property and cannot arrive as a bare array.
+      //
+      if (op == LdOpMergeEntity && childP->value.firstChildP->type != KjObject)
+        continue;
+
       // Each element must be an object (shape check before dedup).
       for (KjNode* instP = childP->value.firstChildP; instP != NULL; instP = instP->next)
       {

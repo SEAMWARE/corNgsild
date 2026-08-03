@@ -321,7 +321,7 @@ void ldWrapAsGeoProperty(KjNode* entityP, KjNode* childP, KAlloc* kaP)
 
 
 
-static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool mergeMode);
+static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool mergeMode, bool simplified);
 
 
 
@@ -332,7 +332,7 @@ static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool m
 // containerP: the parent node (entity or attribute object) — needed for kjChildReplace
 // attrP:      the attribute node to normalize
 //
-static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool mergeMode)
+static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool mergeMode, bool simplified)
 {
   // ---  Scalar children → simplified Property  ---
   if (attrP->type == KjInt || attrP->type == KjFloat || attrP->type == KjString || attrP->type == KjBoolean || attrP->type == KjNull)
@@ -343,12 +343,14 @@ static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool m
     if (attrP->type == KjString && strcmp(attrP->value.s, LD_VOCAB_NGSILD_NULL) == 0)
       return;
 
-    // In merge mode (PATCH), leave simplified scalars untouched. ldEntityMerge
-    // resolves them against the target's existing attribute type so that e.g.
-    // a scalar in the fragment updates the Relationship's object, the
-    // LanguageProperty's languageMap[<lang>], or the Property's value, without
-    // changing the attribute's type.
-    if (mergeMode)
+    // A simplified merge (§ 10.2.9.4) is the one case where a bare scalar does NOT
+    // mean a Property: "the type of any pre-existing Attribute in the target entity
+    // shall be preserved", so the scalar is left raw for ldEntityMerge to shape
+    // against whatever the target says the Attribute is. Everywhere else the body
+    // is normalized or concise, where § 5.3.2.3 step 3 is unconditional - a JSON
+    // primitive is a Property - and a merge onto an Attribute of another type is
+    // therefore an Attribute type change, which Merge Entity refuses.
+    if (simplified)
       return;
 
     wrapAsProperty(containerP, attrP, kaP);
@@ -371,13 +373,21 @@ static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool m
       {
         KjNode* elemNextP = elemP->next;
         if (elemP->type == KjObject)
-          normalizeAttr(attrP, elemP, kaP, mergeMode);
+          normalizeAttr(attrP, elemP, kaP, mergeMode, simplified);
         elemP = elemNextP;
       }
     }
     else
     {
       // Simplified array value (e.g. "tags": ["fast", "red"])
+      //
+      // § 5.3.2.4 gives an array its own readings: the simplified form of a
+      // ListProperty is a bare array of values and of a ListRelationship a bare
+      // array of URIs. So in a simplified merge an array is as target-dependent
+      // as a scalar - leave it for ldEntityMerge.
+      if (simplified)
+        return;
+
       wrapAsProperty(containerP, attrP, kaP);
     }
     return;
@@ -411,7 +421,7 @@ static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool m
         // is a Property - and passing mergeMode down here is what made Merge Entity the one
         // path that stored a bare "b": 2 inside an attribute, which is not NGSI-LD at all.
         //
-        normalizeAttr(attrP, subP, kaP, false);
+        normalizeAttr(attrP, subP, kaP, false, false);
       subP = subNextP;
     }
     return;
@@ -455,7 +465,7 @@ static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool m
         // is a Property - and passing mergeMode down here is what made Merge Entity the one
         // path that stored a bare "b": 2 inside an attribute, which is not NGSI-LD at all.
         //
-        normalizeAttr(attrP, subP, kaP, false);
+        normalizeAttr(attrP, subP, kaP, false, false);
       subP = subNextP;
     }
     return;
@@ -493,7 +503,7 @@ static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool m
         // is a Property - and passing mergeMode down here is what made Merge Entity the one
         // path that stored a bare "b": 2 inside an attribute, which is not NGSI-LD at all.
         //
-        normalizeAttr(attrP, subP, kaP, false);
+        normalizeAttr(attrP, subP, kaP, false, false);
       subP = subNextP;
     }
     return;
@@ -508,7 +518,7 @@ static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool m
 //
 // ldNormalizeInput -
 //
-void ldNormalizeInput(KjNode* entityP, KAlloc* kaP, bool mergeMode)
+void ldNormalizeInput(KjNode* entityP, KAlloc* kaP, bool mergeMode, bool simplified)
 {
   if (entityP == NULL || entityP->type != KjObject)
     return;
@@ -520,7 +530,7 @@ void ldNormalizeInput(KjNode* entityP, KAlloc* kaP, bool mergeMode)
     KjNode* nextP = childP->next;  // save before normalizeAttr may replace childP
 
     if (ldIsEntityKeyword(childP->name) == false)
-      normalizeAttr(entityP, childP, kaP, mergeMode);
+      normalizeAttr(entityP, childP, kaP, mergeMode, simplified);
 
     childP = nextP;
   }

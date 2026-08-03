@@ -341,6 +341,66 @@ static bool checkRawInputTree(KjNode* nodeP, bool checkEmpty)
 
 // -----------------------------------------------------------------------------
 //
+// simplifiedBodyDeclared - did the request declare its body to be simplified?
+//
+// § 10.2.9.3 lists this among Merge Entity's input data ("an optional flag
+// indicating whether the JSON-LD document contains a simplified representation")
+// and the HTTP binding binds it to ?format=simplified, with the deprecated
+// ?options=keyValues as the alternative spelling and format taking precedence.
+//
+// Read straight off the raw parameter list rather than from swNgsild.format:
+// swRest runs the payload-parse hook BEFORE it validates URL parameters and
+// calls the param hook (swRestInit.c — parse at ~542, params at ~650), so
+// swNgsild.format is still LdFormatNone while the body is being normalized.
+// The array itself is populated by then; only its interpretation comes later.
+//
+static bool simplifiedBodyDeclared(void)
+{
+  const char* options = NULL;
+
+  for (int ix = 0; ix < swRest.in.uriParamCount; ix++)
+  {
+    const char* key = swRest.in.uriParamV[ix].key;
+    const char* val = swRest.in.uriParamV[ix].value;
+
+    if (val == NULL)
+      continue;
+
+    if (strcmp(key, "format") == 0)  // takes precedence over options — no need to look further
+      return (strcmp(val, "simplified") == 0 || strcmp(val, "keyValues") == 0);
+
+    if (strcmp(key, "options") == 0)
+      options = val;
+  }
+
+  if (options == NULL)
+    return false;
+
+  //
+  // options is a comma-separated list: match whole items only, so that a value
+  // like "keyValuesFoo" (or a future "noKeyValues") does not count as a hit.
+  //
+  for (const char* p = options; *p != 0; )
+  {
+    const char* end = strchr(p, ',');
+    size_t      len = (end != NULL) ? (size_t) (end - p) : strlen(p);
+
+    if ((len == 9  && strncmp(p, "keyValues",  9)  == 0) ||
+        (len == 10 && strncmp(p, "simplified", 10) == 0))
+      return true;
+
+    if (end == NULL)
+      break;
+    p = end + 1;
+  }
+
+  return false;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldParseHook - validate @context and expand incoming JSON-LD payload
 //
 static void ldParseHook(void)
@@ -998,7 +1058,17 @@ static void ldParseHook(void)
     // normalized (scalars/objects wrapped as Properties); leaving a scalar raw
     // made ldApiEntityToDbModel silently drop it. Hence mergeMode only for merge.
     bool mergeMode = (swRest.serviceP != NULL) && (swRest.serviceP->ldOp == LdOpMergeEntity);
-    ldNormalizeInput(swRest.in.requestTree, &swRest.kalloc, mergeMode);
+
+    //
+    // The HTTP binding: "when a merge operation applies to an existing Attribute the
+    // type field of the Attribute shall remain unchanged". So type preservation is
+    // something a client asks for, not something the broker guesses from the shape of
+    // a value — an undeclared body is normalized or concise and follows § 5.3.2.3.
+    // Only a merge has a pre-existing type to preserve, hence the mergeMode guard.
+    //
+    bool simplified = mergeMode && simplifiedBodyDeclared();
+
+    ldNormalizeInput(swRest.in.requestTree, &swRest.kalloc, mergeMode, simplified);
   }
 }
 
