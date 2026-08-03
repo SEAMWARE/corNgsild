@@ -133,6 +133,16 @@ typedef struct SwNgsild
   // URL parameters — representation format
   LdFormat format;       // normalized/concise/simplified (from ?format= or ?options=keyValues)
 
+  //
+  // The Attribute a storage layer refused because the tenant already holds that
+  // name as the other kind (GeoProperty vs anything else). Set with
+  // DB_GEO_TYPE_CONFLICT, read by the service routine building the 409 so it can
+  // name the attribute instead of describing the symptom. Points into the request
+  // tree, so it lives exactly as long as the request does. Per-request state, and
+  // therefore in here rather than a static of its own.
+  //
+  const char* geoConflictAttr;
+
   // URL parameters — booleans
   bool    sysAttrs;
   bool    dateTimeRounded;   // a DateTime input lost precision past nanoseconds — NGSILD-Warning 214 already sent

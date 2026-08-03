@@ -15,6 +15,9 @@
 #include "kjson/kjBuilder.h"                    // kjObject, kjString, kjChildAdd
 #include "swRest/swRest.h"                      // swRest
 
+#include "swNgsild/SwNgsild.h"                   // swNgsild (geoConflictAttr)
+#include "swNgsild/LdProblem.h"                  // LD_ERROR_CONFLICT
+
 #include "ldError.h"                              // Own interface
 
 
@@ -81,4 +84,31 @@ void ldErrorExtraInt(const char* name, int value)
     swRest.out.problemExtras = kjObject(swRest.kjsonP, NULL);
 
   kjChildAdd(swRest.out.problemExtras, kjInteger(swRest.kjsonP, name, value));
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldGeoTypeConflict -
+//
+void ldGeoTypeConflict(void)
+{
+  const char* attrName = (swNgsild.geoConflictAttr != NULL) ? swNgsild.geoConflictAttr : "the Attribute";
+
+  //
+  // § 5.2.6.4 ties no Attribute name to a single type — the same name may be a
+  // GeoProperty on one Entity and a Property on another, and ramdb stores exactly
+  // that. It is the mongoc backend that cannot: its 2dsphere index is created per
+  // Attribute PATH and applies to the whole collection, i.e. to every Entity of
+  // the tenant, so one name cannot hold a geometry and a non-geometry at once.
+  //
+  // Conflict rather than BadRequestData: the payload is well-formed and would be
+  // accepted against an empty tenant. What refuses it is the state of the tenant.
+  //
+  ldError(409, LD_ERROR_CONFLICT, "Attribute Type Conflict",
+          "attribute '%s' is already in use with a conflicting Attribute type in this tenant "
+          "(a GeoProperty and another type cannot share one Attribute name here)", attrName);
+
+  ldErrorExtraString("attributeName", swNgsild.geoConflictAttr);
 }

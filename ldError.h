@@ -60,4 +60,18 @@ extern void ldErrorExtraString(const char* name, const char* value);
 //
 extern void ldErrorExtraInt(const char* name, int value);
 
+
+
+// -----------------------------------------------------------------------------
+//
+// ldGeoTypeConflict - 409 for an Attribute name held as both GeoProperty and not
+//
+// Raised on DB_GEO_TYPE_CONFLICT. The storage layer has recorded the offending
+// Attribute in swNgsild.geoConflictAttr, so the message can name it. One writer
+// for the whole broker, because the same explanation has to come out of every
+// write path and the previous message ("self-intersecting or degenerate
+// polygon") sent people looking at geometries that were not there.
+//
+extern void ldGeoTypeConflict(void);
+
 #endif  // SWNGSILD_LDERROR_H_
