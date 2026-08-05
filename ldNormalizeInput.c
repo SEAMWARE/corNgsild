@@ -372,8 +372,23 @@ static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool m
       while (elemP != NULL)
       {
         KjNode* elemNextP = elemP->next;
+
         if (elemP->type == KjObject)
           normalizeAttr(attrP, elemP, kaP, mergeMode, simplified);
+        else if (simplified == false)
+        {
+          //
+          // § 5.3.2.3 runs BOTH directions per element ("in the multi-attribute
+          // case ... the operation shall be run on each element of the array"),
+          // so an instance may arrive as a bare primitive - which step 3 of the
+          // expansion makes a Property, exactly as it would outside an array.
+          // That is precisely what our own concise renderer emits for the
+          // default instance of a multi-attribute, so refusing it here made the
+          // concise form un-round-trippable: we would not accept what we print.
+          //
+          wrapAsProperty(attrP, elemP, kaP);
+        }
+
         elemP = elemNextP;
       }
     }

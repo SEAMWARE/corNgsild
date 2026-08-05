@@ -51,7 +51,7 @@
 #include "swNgsild/ldEntityMerge.h"                    // LdMergeReport
 #include "swJsonld/swldInit.h"                          // swldCoreContext
 #include "swJsonld/SwldContext.h"                       // SwldContext
-#include "swNgsild/ldSimplifyEntity.h"                 // ldSimplifyEntity, ldConciseEntity
+#include "swNgsild/ldRender.h"                          // ldToConcise, ldToSimplified
 #include "swNgsild/ldPickOmit.h"                       // ldPickOmit
 #include "swNgsild/ldLangReduce.h"                     // ldLangReduce
 #include "swNgsild/ldNotifyStatsHook.h"                // ldNotifyStatsHookInvoke
@@ -811,17 +811,21 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   // Relationship when join=inline attached it — if simplify ran before
   // the join hook, the Relationship would already be collapsed to its
   // URI and the inlined Entity dropped on the floor.
+  //
+  // The very same renderers the GET/query path uses. There used to be a second
+  // pair here (ldConciseEntity/ldSimplifyEntity), and the two copies had drifted:
+  // only this side implemented § 5.3.2.4's multi-attribute `dataset` map, and
+  // neither concise copy implemented § 5.3.2.3 step 1 - so one entity rendered
+  // two different shapes depending on whether it was fetched or notified.
+  //
   if (itemP->format != LdFormatNone)
   {
-    void (*fmtFn)(KjNode*) = NULL;
-    if (itemP->format == LdFormatSimplified)
-      fmtFn = ldSimplifyEntity;
-    else if (itemP->format == LdFormatConcise)
-      fmtFn = ldConciseEntity;
-    if (fmtFn != NULL)
+    for (KjNode* eP = dataArray->value.firstChildP; eP != NULL; eP = eP->next)
     {
-      for (KjNode* eP = dataArray->value.firstChildP; eP != NULL; eP = eP->next)
-        fmtFn(eP);
+      if (itemP->format == LdFormatSimplified)
+        ldToSimplified(eP, &swRest.kalloc);
+      else if (itemP->format == LdFormatConcise)
+        ldToConcise(eP, &swRest.kalloc);
     }
   }
 

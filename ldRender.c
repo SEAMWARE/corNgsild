@@ -243,7 +243,25 @@ bool ldToConcise(KjNode* entityP, KAlloc* faP)
 
   for (KjNode* childP = entityP->value.firstChildP; childP != NULL; childP = childP->next)
   {
-    if (ldIsEntityKeyword(childP->name) == false)
+    if (ldIsEntityKeyword(childP->name) == true)
+      continue;
+
+    //
+    // § 5.3.2.3 Normalized-to-Concise step 1: "In the multi-attribute case (see
+    // clause 8.5), this becomes a series of values (an array of JSON objects)
+    // and the operation shall be run on each element of the array."
+    //
+    // So a multi-attribute compacts per instance, exactly like a single one -
+    // datasetId is a defined member of the Attribute type (step 4) and stays.
+    // Skipping the array is what left every instance carrying its "type" while
+    // the single-instance attribute beside it had dropped it.
+    //
+    if (childP->type == KjArray)
+    {
+      for (KjNode* instP = childP->value.firstChildP; instP != NULL; instP = instP->next)
+        attrToConcise(instP);
+    }
+    else
       attrToConcise(childP);
   }
 
@@ -304,6 +322,60 @@ bool ldToSimplified(KjNode* entityP, KAlloc* faP)
   while (childP != NULL)
   {
     KjNode* nextP = childP->next;
+
+    //
+    // § 5.3.2.4 "Multi-Attribute Representation": a multi-attribute does NOT
+    // simplify to its bare value like a single-instance one - it becomes
+    //
+    //     "speed": { "dataset": { "@none": 55, "urn:ngsi-ld:ds:1": 54.5 } }
+    //
+    // keyed by datasetId, with the default instance under the JSON-LD keyword
+    // "@none" (annex C.2.2.4.2). Leaving the array alone shipped the fully
+    // NORMALIZED instances - type, value key and all - in a simplified response.
+    //
+    if (ldIsEntityKeyword(childP->name) == false && childP->type == KjArray)
+    {
+      KjNode* datasetMap = kjObject(NULL, "dataset");
+
+      for (KjNode* instP = childP->value.firstChildP; instP != NULL; instP = instP->next)
+      {
+        if (instP->type != KjObject)
+          continue;
+
+        KjNode* valueP = ldAttrValueNode(instP);
+        if (valueP == NULL)
+          continue;
+
+        KjNode*     dsP   = kjLookup(instP, "datasetId");
+        const char* dsKey = (dsP != NULL && dsP->type == KjString) ? dsP->value.s : "@none";
+
+        kjChildRemove(instP, valueP);
+
+        if ((strcmp(valueP->name, LD_VOCAB_HAS_LANGUAGE_MAP) == 0) ||
+            (strcmp(valueP->name, LD_VOCAB_HAS_VOCAB)        == 0) ||
+            (strcmp(valueP->name, LD_VOCAB_HAS_JSON)         == 0))
+        {
+          // Same carve-out as the single-instance path below: these three keep
+          // their { languageMap | vocab | json : ... } wrapper in simplified form.
+          KjNode* wrapP = kjObject(NULL, dsKey);
+          kjChildAdd(wrapP, valueP);
+          kjChildAdd(datasetMap, wrapP);
+        }
+        else
+        {
+          valueP->name = (char*) dsKey;
+          kjChildAdd(datasetMap, valueP);
+        }
+      }
+
+      childP->type              = KjObject;
+      childP->value.firstChildP = NULL;
+      childP->lastChild         = NULL;
+      kjChildAdd(childP, datasetMap);
+
+      childP = nextP;
+      continue;
+    }
 
     if (ldIsEntityKeyword(childP->name) == false && childP->type == KjObject)
     {

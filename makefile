@@ -101,7 +101,6 @@ LIB_SOURCES   = swNgsild.c \
                 ldQAttrs.c \
                 ldSubscriptionCompactQ.c \
                 ldSubscriptionCounters.c \
-                ldSimplifyEntity.c \
                 ldDiscovery.c \
                 ldDiscoveryForward.c \
                 ldStripAtContext.c \
