@@ -200,6 +200,79 @@ static KjNode* attrInstanceOf(KjNode* containerP, const char* attrName)
 
 
 
+// -----------------------------------------------------------------------------
+//
+// Multi-attribute instances (§ 8.5) — clause 7 defines the q "target value" of a
+// Property with several instances, when no datasetId is addressed, as "any Value
+// of such instances". The matcher used to take wrapperP->value.firstChildP and
+// compare that one, so only the FIRST instance was ever under test.
+//
+// These two resolve the instance list instead. Both non-multi shapes count as a
+// single instance: the flat API wrapper ({type,value,...}) and the bare scalar
+// (a CSR simplified user-Property, § 5.2.9).
+//
+static int attrInstanceCountOf(KjNode* containerP, const char* attrName)
+{
+  KjNode* wrapperP = kjLookup(containerP, attrName);
+
+  if (wrapperP == NULL)
+    return 0;
+  if (wrapperP->type != KjObject)
+    return 1;                                                  // scalar
+  if (kjLookup(wrapperP, "value") != NULL || kjLookup(wrapperP, "object") != NULL)
+    return 1;                                                  // flat API shape
+
+  int n = 0;
+  for (KjNode* instP = wrapperP->value.firstChildP; instP != NULL; instP = instP->next)
+    n++;
+
+  return (n > 0) ? n : 1;
+}
+
+
+
+static KjNode* attrInstanceAt(KjNode* containerP, const char* attrName, int ix)
+{
+  KjNode* wrapperP = kjLookup(containerP, attrName);
+
+  if (wrapperP == NULL || wrapperP->type != KjObject)
+    return wrapperP;
+  if (kjLookup(wrapperP, "value") != NULL || kjLookup(wrapperP, "object") != NULL)
+    return wrapperP;
+
+  int i = 0;
+  for (KjNode* instP = wrapperP->value.firstChildP; instP != NULL; instP = instP->next, i++)
+  {
+    if (i == ix)
+      return (instP->type == KjObject) ? instP : wrapperP;
+  }
+
+  return wrapperP;
+}
+
+
+
+// getAttrValueAt - the ix-th instance's value node (see attrInstanceAt)
+//
+static KjNode* getAttrValueAt(KjNode* containerP, const char* attrName, int ix)
+{
+  if (strcmp(attrName, LD_VOCAB_CREATED_AT)  == 0 ||
+      strcmp(attrName, LD_VOCAB_MODIFIED_AT) == 0 ||
+      strcmp(attrName, LD_VOCAB_EXPIRES_AT)  == 0)
+    return kjLookup(containerP, attrName);
+
+  KjNode* instP = attrInstanceAt(containerP, attrName, ix);
+  if (instP == NULL)
+    return NULL;
+  if (instP->type != KjObject)
+    return instP;                                              // scalar
+
+  KjNode* valueP = kjLookup(instP, "value");
+  return (valueP != NULL) ? valueP : kjLookup(instP, "object");
+}
+
+
+
 // qLeafCompare - compare a fully-resolved value node against a term's operator
 // (forward declaration; defined right after matchTerm).
 static bool qLeafCompare(LdQTerm* term, KjNode* valueP);
@@ -210,7 +283,7 @@ static bool qLeafCompare(LdQTerm* term, KjNode* valueP);
 //
 // matchTerm - evaluate a single LdQTerm against an entity
 //
-static bool matchTerm(KjNode* entityP, LdQTerm* term)
+static bool matchTermOnInstance(KjNode* entityP, LdQTerm* term, int instIx)
 {
   //
   // System temporal attributes (createdAt / modifiedAt) are stored as top-level
@@ -253,7 +326,7 @@ static bool matchTerm(KjNode* entityP, LdQTerm* term)
     // A segment that isn't there means the path as a whole isn't there, so a
     // not-exists term is satisfied — an Entity without 'p' at all certainly
     // does not contain 'p.sub'. Every other term needs the element and fails.
-    KjNode* instP = attrInstanceOf(entityP, term->attr);
+    KjNode* instP = attrInstanceAt(entityP, term->attr, instIx);
     if (instP == NULL || instP->type != KjObject)
       return (term->op == LdQNotExists);
 
@@ -277,7 +350,13 @@ static bool matchTerm(KjNode* entityP, LdQTerm* term)
 
   // A missing attribute / value-path segment makes a not-exists term TRUE and
   // every other term (existence and the comparisons) FALSE.
-  KjNode* valueP = getAttrValue(containerP, leafName);
+  //
+  // instIx addresses the multi-attribute instance only at the TOP level, which
+  // is where datasetId lives (§ 8.5: no multi-attribute support below it). Once
+  // a sub-path has been walked, containerP is already one instance's object and
+  // the leaf is resolved normally.
+  KjNode* valueP = (containerP == entityP) ? getAttrValueAt(containerP, leafName, instIx)
+                                           : getAttrValue(containerP, leafName);
   if (valueP == NULL)
     return (term->op == LdQNotExists);
 
@@ -320,6 +399,44 @@ static bool matchTerm(KjNode* entityP, LdQTerm* term)
     return false;  // the attribute/path resolved, so not-exists is false
 
   return qLeafCompare(term, valueP);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// matchTerm - evaluate one q term against EVERY instance of the Attribute
+//
+// Clause 7: "If a Property has multiple instances (identified by its respective
+// datasetId), and no datasetId is explicitly addressed, the target value shall
+// be any Value of such instances" (and the same sentence for a Relationship's
+// object). Only the first instance used to be looked at, so an Entity whose
+// matching value sat on a datasetId instance was simply not found.
+//
+// Positive operators take ANY instance; the negative ones (!=, notPattern,
+// !exists) need EVERY instance to satisfy them, which is the rule this file
+// already applies to the two other places where one term faces several
+// candidate values: an array value in qLeafCompare, and "[*]" across a
+// languageMap. It is also the answer that does not surprise - `speed!=10` on an
+// Entity that does have an instance of 10 should not match.
+//
+static bool matchTerm(KjNode* entityP, LdQTerm* term)
+{
+  bool negative = (term->op == LdQUnequal) || (term->op == LdQNotPattern) || (term->op == LdQNotExists);
+  int  n        = attrInstanceCountOf(entityP, term->attr);
+
+  if (n <= 1)
+    return matchTermOnInstance(entityP, term, 0);
+
+  for (int ix = 0; ix < n; ix++)
+  {
+    bool m = matchTermOnInstance(entityP, term, ix);
+
+    if (negative && !m)  return false;   // ALL instances must satisfy != / notPattern / !exists
+    if (!negative && m)  return true;    // ANY instance satisfies a positive operator
+  }
+
+  return negative;
 }
 
 
