@@ -114,7 +114,7 @@ SwldContext* ldContextHostVolatile(KjNode* ctxBody)
   // auto-population uses.
   SwldContext* ctxP = (ctxBody->type == KjObject)
                         ? swldContextFromObject(ctxBody, storeP, NULL)
-                        : swldContextFromTree(ctxBody, storeP);
+                        : swldContextFromTree(ctxBody, storeP, NULL);  // Hosted @context - identified by localId, no URL of its own to resolve against
   if (ctxP == NULL)
     return NULL;
 
