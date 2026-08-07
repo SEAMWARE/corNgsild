@@ -17,9 +17,11 @@
 //   - per § 5.12: at least one LdRegInfo must satisfy BOTH entity-side
 //     AND attr-side within that same RegistrationInfo.
 //
+//   - csf: matched against the CSR's own Properties (§ 5.2.12 / § 5.11.2.4)
+//
 // Deferred (documented as 501/no-op):
 //   - q (over CSR user-Properties per § 4.9)
-//   - geoQ, scopeQ, temporalQ, csf, lang
+//   - geoQ, scopeQ, temporalQ, lang
 //
 #include <stdlib.h>                                    // realloc
 #include <regex.h>                                     // regexec
@@ -47,6 +49,7 @@
 #include "swNgsild/ldStripSysAttrs.h"                  // ldStripSysAttrs
 #include "swNgsild/LdRegCache.h"                       // LdRegCache, LdRegCacheItem, LdRegInfo, LdRegEntityInfo
 #include "swNgsild/ldRegCache.h"                       // ldRegCacheRdLock, ldRegCacheUnlock
+#include "swNgsild/ldEntityMatch.h"                    // ldEntityMatchQ
 #include "swNgsild/SwNgsild.h"                          // swNgsild (per-conn csrPending* cache)
 #include "swNgsild/ldPeriodicLoop.h"                   // ldPeriodicLoopRegister
 #include "swNgsild/swNgsild.h"                         // swNgsild (for tenant access via opaque)
@@ -189,6 +192,16 @@ static bool subMatchesReg(LdSubCacheItem* subItemP, LdRegCacheItem* regItemP)
 {
   if (regItemP->infoV == NULL)
     return false;
+
+  //
+  // § 5.2.12 / § 5.11.2.4: the csf is matched against the registration's own
+  // Properties. A registration we cannot inspect cannot satisfy it.
+  //
+  if (subItemP->csfExpr != NULL)
+  {
+    if ((regItemP->regTree == NULL) || !ldEntityMatchQ(regItemP->regTree, subItemP->csfExpr))
+      return false;
+  }
 
   for (LdRegInfo* info = regItemP->infoV; info != NULL; info = info->next)
   {

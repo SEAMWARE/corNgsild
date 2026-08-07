@@ -389,13 +389,18 @@ void ldParamHook(const char* name, const char* value)
   {
     if (!parseBool("sysAttrs", value, &swNgsild.sysAttrs)) return;
   }
-  else if (strcmp(name, "q") == 0 || strcmp(name, "csf") == 0)
+  else if (strcmp(name, "q") == 0)
   {
-    // csf (Context Source Filter) is q-shaped — § 5.10.2 / § 4.9 — and
-    // semantically the CSR-discovery flavour of q. Parse into the same
-    // field; the discovery service routine can use either name.
     swNgsild.q     = (char*) value;
     swNgsild.qExpr = ldQParse(value, faP);
+  }
+  else if (strcmp(name, "csf") == 0)
+  {
+    // csf (Context Source Filter) is q-shaped — § 5.2.23 / § 7.2.3 — but it
+    // selects Context Source REGISTRATIONS, not Entities. Its own field: a
+    // request may carry both q and csf, and they filter different things.
+    swNgsild.csf     = (char*) value;
+    swNgsild.csfExpr = ldQParse(value, faP);
   }
   else if (strcmp(name, "local") == 0)
   {

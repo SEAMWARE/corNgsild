@@ -392,6 +392,12 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
       itemP->qExpr = ldQParse(qNodeP->value.s, &cacheP->alloc);
   }
 
+  // csf — the Context Source Filter. Only a Context Source Registration
+  // Subscription consults it (§ 5.2.12); parsing it is harmless either way.
+  KjNode* csfNodeP = kjLookup(itemP->subTree, "csf");
+  if (csfNodeP != NULL && csfNodeP->type == KjString)
+    itemP->csfExpr = ldQParse(csfNodeP->value.s, &cacheP->alloc);
+
   //
   // geoQ: { georel: "near;maxDistance==1000", geometry: "Point", coordinates: "[-3.7,40.4]", geoproperty: "location" }
   //

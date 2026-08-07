@@ -71,6 +71,11 @@ typedef struct SwNgsild
   char*     q;
   LdQNode*  qExpr;             // parsed q expression tree (or NULL)
 
+  // § 5.2.23 csf — the Context Source Filter. q-shaped, but matched against the
+  // Context Source REGISTRATIONS, never against the queried Entities.
+  char*     csf;
+  LdQNode*  csfExpr;           // parsed csf expression tree (or NULL)
+
   char*               pick;
   char**              pickV;     // top-level names, split + JSON-LD expanded
   struct LdProjItem*  pickTree;  // § 4.21 NGSI-LD Attribute Projection Language —

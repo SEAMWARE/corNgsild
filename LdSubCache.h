@@ -124,6 +124,9 @@ typedef struct LdSubCacheItem
   LdSubEntitySelector*      entitySelectors;// linked list of parsed entities[] items (NULL = match all)
   char**                    watchedAttrsV;  // NULL-terminated array of expanded attr IRIs (NULL = all)
   LdQNode*                  qExpr;          // parsed q-filter tree (NULL if no q)
+  LdQNode*                  csfExpr;        // parsed csf, matched against the CSR itself. § 5.2.12
+                                            // applies it to a Context Source Registration
+                                            // Subscription only — on an entity Subscription it is ignored
   LdScopeExpr*              scopeExpr;      // parsed scopeQ (NULL if no scopeQ)
   LdGeoRel*                 geoRel;         // parsed geoQ.georel (NULL if no geoQ)
   char*                     geoGeometry;    // geoQ.geometry ("Point", "Polygon", etc.) (NULL if no geoQ)

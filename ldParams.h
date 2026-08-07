@@ -151,6 +151,7 @@
   | LD_PARAM_ID_PATTERN          \
   | LD_PARAM_ATTRS               \
   | LD_PARAM_Q                   \
+  | LD_PARAM_CSF                 \
   | LD_PARAM_GEOREL              \
   | LD_PARAM_GEOMETRY            \
   | LD_PARAM_COORDINATES         \
