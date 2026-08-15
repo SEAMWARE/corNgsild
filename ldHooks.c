@@ -772,6 +772,16 @@ static void ldParseHook(void)
     }
     if (offendingUrl != NULL)
     {
+      //
+      // Unless the JSON-LD layer has already said something more precise. It
+      // names the failures it can name (a cyclic @context, say) through the
+      // error callback, and those have already been turned into a
+      // ProblemDetails - "unable to retrieve" would replace an answer the
+      // client can act on with one it cannot.
+      //
+      if (swNgsild.contextError == true)
+        return;
+
       ldError(504, LD_ERROR_LD_CONTEXT_NOT_AVAILABLE, "Context Not Available",
               "unable to retrieve @context from '%s'", offendingUrl);
       swNgsild.contextError = true;
@@ -986,6 +996,16 @@ static void ldParseHook(void)
 
     if ((swNgsild.contextP == NULL || swNgsild.contextP == coreP) && !userUrlIsCore)
     {
+      //
+      // Unless the JSON-LD layer has already said something more precise. It
+      // names the failures it can name (a cyclic @context, say) through the
+      // error callback, and those have already been turned into a
+      // ProblemDetails - "unable to retrieve" would replace an answer the
+      // client can act on with one it cannot.
+      //
+      if (swNgsild.contextError == true)
+        return;
+
       ldError(504, LD_ERROR_LD_CONTEXT_NOT_AVAILABLE, "Context Not Available",
               "unable to retrieve @context from '%s'", swNgsild.userContextUrl);
       swNgsild.contextError = true;
