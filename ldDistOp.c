@@ -45,6 +45,70 @@
 
 // -----------------------------------------------------------------------------
 //
+// ldForwardTenant - the tenant a forward to this CSR will carry (§ 5.2.9)
+//
+// The registration's own tenant is a REWRITE - a mapping to a different tenant at the
+// context source. Without one, the ORIGINAL request's tenant travels on. Two places need
+// exactly this answer and must not drift apart: buildHeaders, which SENDS the tenant, and
+// the loop check below, which has to predict the alias the receiver will compute from it.
+//
+static const char* ldForwardTenant(const char* csrTenant)
+{
+  if ((csrTenant != NULL) && (csrTenant[0] != 0))
+    return csrTenant;
+
+  for (int i = 0; i < swRest.in.httpHeaderCount; i++)
+  {
+    if ((swRest.in.httpHeaderV[i].key != NULL) &&
+        (strcasecmp(swRest.in.httpHeaderV[i].key, "NGSILD-Tenant") == 0))
+      return swRest.in.httpHeaderV[i].value;
+  }
+
+  return NULL;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldCsrAliasForForward - the CSR's alias, scoped to the tenant the forward will carry
+//
+// § 5.7.5 wants the alias to identify a specific TENANT within a Context Source, and the
+// receiver derives its own from the NGSILD-Tenant it is handed - so a comparison is only
+// sound when both sides carry the same tenant.
+//
+// A CSR that rewrites the tenant was PROBED with that tenant (ldRegCacheProbePending passes
+// itemP->tenant), so its alias is already tenant-scoped - nothing to add. A CSR WITHOUT a
+// rewrite was probed with no tenant at all and answered with the endpoint's DEFAULT-tenant
+// alias, while the forward will carry ours. Compose what the receiver will actually compute,
+// or a self-loop on a non-default tenant slips past this proactive skip: it is still caught
+// by ldDistOpLoopDetected when the request lands back on us, but only after the whole request
+// has been dispatched a second time.
+//
+static const char* ldCsrAliasForForward(LdRegCacheItem* csr)
+{
+  if ((csr->tenant != NULL) && (csr->tenant[0] != 0))
+    return csr->csourceAlias;
+
+  const char* tenant = ldForwardTenant(NULL);
+  if ((tenant == NULL) || (tenant[0] == 0))
+    return csr->csourceAlias;   // default tenant - the base alias IS the scoped one
+
+  int   aliasLen  = strlen(csr->csourceAlias);
+  int   tenantLen = strlen(tenant);
+  char* scopedP   = (char*) kaAlloc(&swRest.kalloc, aliasLen + 1 + tenantLen + 1);
+
+  strcpy(scopedP, csr->csourceAlias);
+  scopedP[aliasLen] = ':';
+  strcpy(scopedP + aliasLen + 1, tenant);
+
+  return scopedP;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldDistOpLoopDetected -
 //
 bool ldDistOpLoopDetected(const char* ownAlias)
@@ -67,24 +131,25 @@ bool ldDistOpCsrWouldLoop(LdRegCacheItem* csr, const char* ownAlias)
     return false;
 
   const char* regId = (csr->regId != NULL) ? csr->regId : "<no id>";
+  const char* alias = ldCsrAliasForForward(csr);
 
   // Pointing at ourselves. This is the single most confusing way for a forward
   // to disappear — an inclusive loop-block is silent by design, so without this
   // line nothing anywhere explains the empty answer. Two brokers that compute
   // the same alias (same executable and port, different hosts) look identical
   // to each other and neither will forward to the other.
-  if (ownAlias != NULL && strcmp(csr->csourceAlias, ownAlias) == 0)
+  if (ownAlias != NULL && strcmp(alias, ownAlias) == 0)
   {
     KT_T(LdTRegMatch, "%s: matched, but NOT forwarded to: loop — its alias '%s' is our own",
-         regId, csr->csourceAlias);
+         regId, alias);
     return true;
   }
 
   // Pointing at a broker we've already transited
-  if (ldViaHasAlias(swRest.in.httpHeaderV, swRest.in.httpHeaderCount, csr->csourceAlias))
+  if (ldViaHasAlias(swRest.in.httpHeaderV, swRest.in.httpHeaderCount, alias))
   {
     KT_T(LdTRegMatch, "%s: matched, but NOT forwarded to: loop — '%s' is already in the inbound Via",
-         regId, csr->csourceAlias);
+         regId, alias);
     return true;
   }
 
@@ -264,18 +329,7 @@ static SwRestKeyValue* buildHeaders(SwRestVerb     verb,
   // addressed. (The inbound NGSILD-Tenant is otherwise banned from pass-through
   // below, so it is picked up explicitly here.)
   //
-  const char* fwdTenant = (csrTenant != NULL && csrTenant[0] != 0) ? csrTenant : NULL;
-
-  if (fwdTenant == NULL)
-  {
-    for (int i = 0; i < swRest.in.httpHeaderCount; i++)
-      if ((swRest.in.httpHeaderV[i].key != NULL) &&
-          (strcasecmp(swRest.in.httpHeaderV[i].key, "NGSILD-Tenant") == 0))
-      {
-        fwdTenant = swRest.in.httpHeaderV[i].value;
-        break;
-      }
-  }
+  const char* fwdTenant = ldForwardTenant(csrTenant);
 
   if (fwdTenant != NULL && fwdTenant[0] != 0)
   {

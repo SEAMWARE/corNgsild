@@ -63,6 +63,11 @@ extern bool ldDistOpLoopDetected(const char* ownAlias);
 //   - csr->csourceAlias in incoming Via chain → true (skip this CSR).
 //   - csr->csourceAlias equals our own alias → true (pointing at self).
 //
+// Both comparisons run on the alias SCOPED TO THE TENANT THE FORWARD WILL CARRY (§ 5.7.5) —
+// see ldCsrAliasForForward. A CSR with a § 5.2.9 tenant rewrite is scoped already (that is
+// the tenant it was probed with); one without carries the caller's tenant, which has to be
+// appended before comparing against ownAlias, itself "<base>:<tenant>".
+//
 // This is the PROACTIVE form — distinct from ldDistOpLoopDetected which
 // reacts to our own alias already appearing in the chain at entry.
 //
