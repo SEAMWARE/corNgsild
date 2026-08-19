@@ -8,7 +8,7 @@
 //
 // Copyright 2026 Seamware
 //
-// MQTT notification delivery for the sw stack — § 7 of NGSI-LD v1.9.1.
+// MQTT notification delivery for the Coraine stack — § 7 of NGSI-LD v1.9.1.
 //
 // Backed by libmosquitto. The broker is the MQTT *client*: it connects
 // to the subscriber-supplied broker, publishes one message, and
@@ -32,7 +32,7 @@
 //
 // ldMqttInit / ldMqttCleanup - global libmosquitto setup / teardown.
 //
-// ldMqttInit must be called once at broker startup, after sw libs are
+// ldMqttInit must be called once at broker startup, after the Cor-Libs are
 // initialised and before any notifications are dispatched.
 //
 extern int  ldMqttInit(void);
