@@ -10,8 +10,7 @@
 //
 // Canonical attribute / system-field key strings.
 //
-// Per the core-context shortcut (orion-ld style, see project memory
-// "Core-context shortcut"), terms defined in the NGSI-LD core context
+// Per the core-context shortcut, terms defined in the NGSI-LD core context
 // stay as their *short* form everywhere — in the parsed tree after
 // expand, in the in-memory cache, in the persisted DB row, and on the
 // wire. The expand step in corJsonld already enforces this; the macros

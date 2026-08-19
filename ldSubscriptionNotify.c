@@ -1012,8 +1012,8 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   // Ngsild-Attribute-Format — non-default representation format of the
   // notification data, as the lowercase NGSI-LD format value (concise /
   // simplified). The default (normalized) carries no header, and the v2 synonym
-  // "keyValues" is normalised to "simplified". (Orion-LD extension carried from
-  // Orion's Fiware-AttrsFormat; pending addition to TS 104-176.)
+  // "keyValues" is normalised to "simplified". (A non-standard extension;
+  // pending addition to TS 104-176.)
   if (itemP->format != LdFormatNone && itemP->format != LdFormatNormalized)
     corRestClientRequestHeader(&req, "Ngsild-Attribute-Format", ldFormatToString(itemP->format));
 

@@ -176,8 +176,7 @@ extern int ldDistOpSendReceiveEx(LdRegCacheItem*  csr,
 // LdDistOpBatchItem / LdDistOpBatchResult / ldDistOpSendMulti -
 //
 // Concurrent fan-out to N CSRs. The whole batch waits at most
-// max(per-CSR timeout) instead of the sequential sum. orion-ld uses
-// curl_multi_perform for this; coraine uses the equivalent
+// max(per-CSR timeout) instead of the sequential sum, over the
 // corRestClientMulti engine (non-blocking epoll over N sockets).
 //
 // Each item carries a caller-built URL and optional body. ldDistOpSendMulti
@@ -297,7 +296,7 @@ extern const char* ldDistOpForwardFailureReason(int upCode, const char* upErr);
 // -----------------------------------------------------------------------------
 //
 // LdDistOpEntry / LdDistOpGroup / ldDistOpEntriesBuild + Perform —
-// orion-ld-style refactor of the per-route distop boilerplate.
+// the per-route distop boilerplate, lifted into one place.
 //
 // What this owns:
 //   - Iterating the 3-or-4 matched groups (excl / redir / incl [/ aux])

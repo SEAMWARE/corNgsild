@@ -11,7 +11,6 @@
 //
 // Validation macros for NGSI-LD payload checking.
 // Each macro calls ldError() and returns false on failure.
-// Modeled after Orion-LD's CHECK.h.
 //
 #include "corNgsild/LdProblem.h"                          // LD_ERROR_*
 #include "corNgsild/ldError.h"                            // ldError

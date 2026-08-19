@@ -73,7 +73,7 @@ KjNode* ldDistSubSubordinatesFragment(LdSubCacheItem* itemP, Kjson* kjsonP)
 // regHasMatchingType - any reg.information[].entities[].type equals one of itemP's types?
 //
 // Both sides are expanded IRIs; string-equality is sufficient. itemP without
-// any typed entitySelector returns false (orion-ld's punt — translating a
+// any typed entitySelector returns false (a deliberate punt — translating a
 // "match any type" sub to a remote requires per-CSR type narrowing, which is
 // step 7 of the dist-sub plan).
 //

@@ -62,7 +62,7 @@ extern void ldWriteResultUpdatedAdd(KjNode* updatedP, const char* attrName);
 // ldWriteResultNotUpdatedAdd - push one NotUpdatedDetails entry
 //
 // Keeps the registrationId and, when statusCode > 0, the upstream HTTP status
-// that caused the failure (orion-ld distOpFailure shape). statusCode 0 omits
+// that caused the failure. statusCode 0 omits
 // the field — for local rejections (e.g. noOverwrite conflict) that have no
 // HTTP status of their own.
 //

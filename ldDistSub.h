@@ -65,7 +65,7 @@ extern KjNode* ldDistSubSubordinatesFragment(LdSubCacheItem* itemP, struct Kjson
 //
 // Returns the number of derived subs successfully created.
 //
-// Match scope (initial cut, mirrors orion-ld's punt):
+// Match scope (initial cut, deliberately narrow):
 //   * Only the sub's entitySelectors with a `type` are considered.
 //   * A registration matches if any of its information[].entities[] entries
 //     declares the same type. Reg-side id / idPattern narrowing is not yet
