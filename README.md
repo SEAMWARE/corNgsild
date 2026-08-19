@@ -4,7 +4,7 @@ The NGSI-LD engine of the coraine context broker: payload validation, the
 normalized/concise/simplified format conversions, the query/scope/geo expression
 languages, the subscription & registration caches, entity merge/replace logic, and
 the distributed-operation (context-source) machinery. It sits on top of
-[`corRest`](../corRest) (transport) and [`corJsonld`](../corJsonld) (context handling)
+[`corRest`](https://github.com/SEAMWARE/corRest) (transport) and [`corJsonld`](https://github.com/SEAMWARE/corJsonld) (context handling)
 and targets **ETSI GS CIM 009 (NGSI-LD)**.
 
 - **Version:** post-0.2.0
@@ -102,16 +102,16 @@ make di         # debug + install
 
 Sibling Cor-Lib repos:
 
-- [`corRest`](../corRest) — REST server + HTTP client (transport)
-- [`corJsonld`](../corJsonld) — JSON-LD context expansion / compaction
+- [`corRest`](https://github.com/SEAMWARE/corRest) — REST server + HTTP client (transport)
+- [`corJsonld`](https://github.com/SEAMWARE/corJsonld) — JSON-LD context expansion / compaction
 
 Sibling k-lib repos:
 
-- [`kalloc`](../kalloc) — arena allocator (`KAlloc`)
-- [`kjson`](../kjson) — JSON parsing / trees (`KjNode`)
-- [`kbase`](../kbase) — core utilities
-- [`klog`](../klog) — logging
-- [`ktrace`](../ktrace) — trace levels
-- [`khash`](../khash) — hash tables (cache indexes)
+- [`kalloc`](https://gitlab.com/kzangeli/kalloc) — arena allocator (`KAlloc`)
+- [`kjson`](https://gitlab.com/kzangeli/kjson) — JSON parsing / trees (`KjNode`)
+- [`kbase`](https://gitlab.com/kzangeli/kbase) — core utilities
+- [`klog`](https://gitlab.com/kzangeli/klog) — logging
+- [`ktrace`](https://gitlab.com/kzangeli/ktrace) — trace levels
+- [`khash`](https://gitlab.com/kzangeli/khash) — hash tables (cache indexes)
 
 Plus `pthread`.
