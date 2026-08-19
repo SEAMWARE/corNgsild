@@ -4,6 +4,7 @@
 // AUTHOR          Ken Zangelin
 //
 // Copyright 2026 Seamware
+// SPDX-License-Identifier: Apache-2.0
 // 
 //
 // Recursive descent parser for the NGSI-LD ?q= URL parameter.

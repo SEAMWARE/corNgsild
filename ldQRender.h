@@ -7,6 +7,7 @@
 // AUTHOR          Ken Zangelin
 //
 // Copyright 2026 Seamware
+// SPDX-License-Identifier: Apache-2.0
 //
 // Render a parsed LdQNode tree back to a q-filter string.
 // Used to reconstruct the q-string for subscription GET responses,

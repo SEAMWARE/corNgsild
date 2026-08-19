@@ -7,6 +7,7 @@
 // AUTHOR          Ken Zangelin
 //
 // Copyright 2026 Seamware
+// SPDX-License-Identifier: Apache-2.0
 //
 // Shared translator for the § 5.2.23 Query object. Walks a Query body
 // (POST /entityMaps, POST /entityOperations/query, and POST

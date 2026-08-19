@@ -4,6 +4,7 @@
 // AUTHOR          Ken Zangelin
 //
 // Copyright 2026 Seamware
+// SPDX-License-Identifier: Apache-2.0
 //
 #include <regex.h>                                     // regex_t, regcomp, regfree
 #include <stdlib.h>                                    // calloc, malloc, free

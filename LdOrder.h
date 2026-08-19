@@ -9,6 +9,7 @@
 // AUTHOR          Ken Zangelin
 //
 // Copyright 2026 Seamware
+// SPDX-License-Identifier: Apache-2.0
 //
 // NGSI-LD Entity Ordering (§ 4.23). Parsed from the ?orderBy= URL param.
 //

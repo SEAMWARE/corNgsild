@@ -7,6 +7,7 @@
 // AUTHOR          Ken Zangelin
 //
 // Copyright 2026 Seamware
+// SPDX-License-Identifier: Apache-2.0
 //
 // § 4.3.6.5 / § 6.3.18 — when a contextSourceInfo or
 // notification.endpoint.receiverInfo entry has value "urn:ngsi-ld:request",

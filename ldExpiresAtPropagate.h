@@ -7,6 +7,7 @@
 // AUTHOR          Ken Zangelin
 //
 // Copyright 2026 Seamware
+// SPDX-License-Identifier: Apache-2.0
 //
 // § 4.5.5.2 — when an Entity arrives from a registered Context Source
 // with a top-level expiresAt, propagate it to each Attribute. If the

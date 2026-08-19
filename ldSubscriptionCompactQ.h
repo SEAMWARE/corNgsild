@@ -7,6 +7,7 @@
 // AUTHOR          Ken Zangelin
 //
 // Copyright 2026 Seamware
+// SPDX-License-Identifier: Apache-2.0
 //
 // Compact the q-filter string inside a subscription tree.
 // Parses the stored (expanded) q string, compacts attr IRIs against

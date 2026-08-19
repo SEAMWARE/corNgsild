@@ -7,6 +7,7 @@
 // AUTHOR          Ken Zangelin
 //
 // Copyright 2026 Seamware
+// SPDX-License-Identifier: Apache-2.0
 //
 // Generic "set attrs/dsKeys on a target entity" — the primitive behind
 // POST /entities/{id}/attrs (Append Attributes, § 5.6.3) and reusable by

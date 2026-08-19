@@ -4,6 +4,7 @@
 // AUTHOR          Ken Zangelin
 //
 // Copyright 2026 Seamware
+// SPDX-License-Identifier: Apache-2.0
 //
 // § 4.5.5.3 — Processing of Conflicting Attributes during multi-source
 // merge. See header for the algorithm.

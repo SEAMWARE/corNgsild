@@ -7,6 +7,7 @@
 // AUTHOR          Ken Zangelin
 //
 // Copyright 2026 Seamware
+// SPDX-License-Identifier: Apache-2.0
 //
 // § 5.2.x throttling — the coalesce-to-latest dirty set of a throttled
 // subscription. A match landing inside the per-subscription throttling window

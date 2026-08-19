@@ -4,6 +4,7 @@
 // AUTHOR          Ken Zangelin
 //
 // Copyright 2026 Seamware
+// SPDX-License-Identifier: Apache-2.0
 //
 // Sort a KjArray of entities in-place per NGSI-LD orderBy terms (§ 4.23).
 // Entities are in storage format: each attr is a dataset-keyed wrapper

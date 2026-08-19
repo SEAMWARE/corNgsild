@@ -7,6 +7,7 @@
 // AUTHOR          Ken Zangelin
 //
 // Copyright 2026 Seamware
+// SPDX-License-Identifier: Apache-2.0
 //
 // § 4.5.5.3 — Processing of Conflicting Attributes for a single LOCAL
 // write payload that contains more than one instance with the same

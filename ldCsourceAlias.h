@@ -7,6 +7,7 @@
 // AUTHOR          Ken Zangelin
 //
 // Copyright 2026 Seamware
+// SPDX-License-Identifier: Apache-2.0
 //
 // Per-tenant Context Source Alias derivation + Via-header loop detection.
 // NGSI-LD § 5.7.5 (ContextSourceIdentity) requires the alias to identify

@@ -7,6 +7,7 @@
 // AUTHOR          Ken Zangelin
 //
 // Copyright 2026 Seamware
+// SPDX-License-Identifier: Apache-2.0
 //
 // Helper for write-op distributed dispatch: build a sub-entity fragment
 // containing only the attributes claimed by one RegistrationInfo (§ 5.2.10).

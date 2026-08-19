@@ -7,6 +7,7 @@
 // AUTHOR          Ken Zangelin
 //
 // Copyright 2026 Seamware
+// SPDX-License-Identifier: Apache-2.0
 //
 // CSR-Subscription matcher + CsourceNotification (§ 5.3.2) sender.
 //

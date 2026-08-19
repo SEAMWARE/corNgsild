@@ -4,6 +4,7 @@
 // AUTHOR          Ken Zangelin
 //
 // Copyright 2026 Seamware
+// SPDX-License-Identifier: Apache-2.0
 //
 // Inject notification counters from the in-memory subscription cache
 // into a subscription JSON tree for GET responses.

@@ -7,6 +7,7 @@
 // AUTHOR          Ken Zangelin
 //
 // Copyright 2026 Seamware
+// SPDX-License-Identifier: Apache-2.0
 //
 // Optional callback fired each time a notification is POSTed — for
 // the broker's metrics layer (Prometheus counters, etc.) to bump a

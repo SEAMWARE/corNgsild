@@ -7,6 +7,7 @@
 // AUTHOR          Ken Zangelin
 //
 // Copyright 2026 Seamware
+// SPDX-License-Identifier: Apache-2.0
 //
 // Forwarding-plugin registry. The dispatcher looks up the plugin
 // matching an endpoint URL's scheme; plugins register at broker

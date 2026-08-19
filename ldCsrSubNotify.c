@@ -4,6 +4,7 @@
 // AUTHOR          Ken Zangelin
 //
 // Copyright 2026 Seamware
+// SPDX-License-Identifier: Apache-2.0
 //
 // CSR-subscription matcher (§ 5.12) + CsourceNotification (§ 5.3.2)
 // sender. First cut covers the initial-on-subscribe notification

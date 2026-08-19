@@ -4,6 +4,7 @@
 // AUTHOR          Ken Zangelin
 //
 // Copyright 2026 Seamware
+// SPDX-License-Identifier: Apache-2.0
 //
 // Payload-body validator for POST /ngsi-ld/v1/entityOperations/query (§ 5.2.23
 // Query). Run as the route's 'payloadCheck' hook before the service routine.

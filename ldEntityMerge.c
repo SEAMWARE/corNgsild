@@ -4,6 +4,7 @@
 // AUTHOR          Ken Zangelin
 //
 // Copyright 2026 Seamware
+// SPDX-License-Identifier: Apache-2.0
 //
 // Merge Entity (PATCH /entities/{id}) implementation — see ETSI GS CIM 009
 // v1.9.1 clauses 5.5.12 (Merge Patch Behaviour) and 5.6.17 (Merge Entity),

@@ -7,6 +7,7 @@
 // AUTHOR          Ken Zangelin
 //
 // Copyright 2026 Seamware
+// SPDX-License-Identifier: Apache-2.0
 //
 // § 4.21 NGSI-LD Attribute Projection Language — tree representation of
 // `?pick=` / `?omit=`. Supports linked-entity nesting:

@@ -4,6 +4,7 @@
 // AUTHOR          Ken Zangelin
 //
 // Copyright 2026 Seamware
+// SPDX-License-Identifier: Apache-2.0
 //
 // Validation of CSourceRegistration payloads (NGSI-LD § 5.2.9 / § 5.9.2).
 //

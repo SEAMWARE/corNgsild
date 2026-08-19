@@ -4,6 +4,7 @@
 // AUTHOR          Ken Zangelin
 //
 // Copyright 2026 Seamware
+// SPDX-License-Identifier: Apache-2.0
 //
 // Discovery § 5.7.11 mode 3: forward /types, /types/{type}, /attributes,
 // /attributes/{attrId} to every CSR that supports the matching retrieve

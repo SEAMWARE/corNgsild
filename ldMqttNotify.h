@@ -7,6 +7,7 @@
 // AUTHOR          Ken Zangelin
 //
 // Copyright 2026 Seamware
+// SPDX-License-Identifier: Apache-2.0
 //
 // MQTT notification delivery for the Coraine stack — § 7 of NGSI-LD v1.9.1.
 //

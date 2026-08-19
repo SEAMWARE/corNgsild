@@ -7,6 +7,7 @@
 // AUTHOR          Ken Zangelin
 //
 // Copyright 2026 Seamware
+// SPDX-License-Identifier: Apache-2.0
 //
 // Generic forwarding-transport abstraction for distributed operations
 // (NGSI-LD § 4.3.6). The dispatcher in corNgsild builds an

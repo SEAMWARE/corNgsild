@@ -7,6 +7,7 @@
 // AUTHOR          Ken Zangelin
 //
 // Copyright 2026 Seamware
+// SPDX-License-Identifier: Apache-2.0
 //
 // EntityMap (§ 5.2.39): a cached mapping of entity IDs to their source
 // Context Source Registrations. Used for consistent pagination of

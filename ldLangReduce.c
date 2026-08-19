@@ -4,6 +4,7 @@
 // AUTHOR          Ken Zangelin
 //
 // Copyright 2026 Seamware
+// SPDX-License-Identifier: Apache-2.0
 // 
 //
 // Operates on COMPACTED trees (after corLdCompactTree), so all names are

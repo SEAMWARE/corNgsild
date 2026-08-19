@@ -8,6 +8,7 @@
 // AUTHOR          Ken Zangelin
 //
 // Copyright 2026 Seamware
+// SPDX-License-Identifier: Apache-2.0
 //
 // TS 104-176 § 6.4.5 — system-generated createdAt/modifiedAt timestamps for
 // the Subscription and Registration NGSI-LD Elements. Stored in the resource

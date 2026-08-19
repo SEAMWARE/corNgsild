@@ -4,6 +4,7 @@
 // AUTHOR          Ken Zangelin
 //
 // Copyright 2026 Seamware
+// SPDX-License-Identifier: Apache-2.0
 //
 // Forwarding-plugin registry. Implementation is intentionally trivial:
 // a fixed-size linear array. Plugins register at broker startup; lookup

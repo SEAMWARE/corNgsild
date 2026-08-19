@@ -7,6 +7,7 @@
 // AUTHOR          Ken Zangelin
 //
 // Copyright 2026 Seamware
+// SPDX-License-Identifier: Apache-2.0
 //
 // Shared distributed-operation plumbing used by every NGSI-LD entity
 // write / read service routine. Each endpoint composes its own URL

@@ -7,6 +7,7 @@
 // AUTHOR          Ken Zangelin
 //
 // Copyright 2026 Seamware
+// SPDX-License-Identifier: Apache-2.0
 //
 // Background pthread that periodically flushes subscription stats
 // (entity-sub + CSR-sub + pernot) to the current-state DB plugin.

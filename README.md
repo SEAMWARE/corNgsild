@@ -9,7 +9,7 @@ and targets **ETSI GS CIM 009 (NGSI-LD)**.
 
 - **Version:** post-0.2.0
 - **Language:** C
-- **License:** Copyright 2026 Seamware
+- **License:** [Apache License 2.0](LICENSE) — Copyright 2026 Seamware
 
 > corNgsild is a large library. This README is an orientation map — the feature
 > areas and their main entry points — not an exhaustive function list. Each area's

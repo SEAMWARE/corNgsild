@@ -7,6 +7,7 @@
 // AUTHOR          Ken Zangelin
 //
 // Copyright 2026 Seamware
+// SPDX-License-Identifier: Apache-2.0
 //
 // § 4.6.2 / § 4.6.4 — name + content validation, applied to the raw
 // payload BEFORE JSON-LD expansion. Post-expansion the names are full

@@ -4,6 +4,7 @@
 // AUTHOR          Ken Zangelin
 //
 // Copyright 2026 Seamware
+// SPDX-License-Identifier: Apache-2.0
 //
 #ifndef CORNGSILD_LD_PCHECK_QUERY_H_
 #define CORNGSILD_LD_PCHECK_QUERY_H_

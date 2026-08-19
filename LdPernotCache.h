@@ -7,6 +7,7 @@
 // AUTHOR          Ken Zangelin
 //
 // Copyright 2026 Seamware
+// SPDX-License-Identifier: Apache-2.0
 //
 // Separate cache for periodic notification (timeInterval) subscriptions.
 // Kept apart from the regular LdSubCache so that entity-write matching

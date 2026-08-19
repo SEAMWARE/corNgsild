@@ -7,6 +7,7 @@
 // AUTHOR          Ken Zangelin
 //
 // Copyright 2026 Seamware
+// SPDX-License-Identifier: Apache-2.0
 //
 // Subscription-stats flush: walks the entity-sub + CSR-sub caches of every
 // tenant, computes per-item deltas (timesSent/timesFailed since last flush)

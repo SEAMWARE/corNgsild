@@ -7,6 +7,7 @@
 // AUTHOR          Ken Zangelin
 //
 // Copyright 2026 Seamware
+// SPDX-License-Identifier: Apache-2.0
 //
 // Probe a Context Source's /info/sourceIdentity endpoint (§ 5.15 /
 // § 6.33) and return its contextSourceAlias. Used at CSR-creation time

@@ -7,6 +7,7 @@
 // AUTHOR          Ken Zangelin
 //
 // Copyright 2026 Seamware
+// SPDX-License-Identifier: Apache-2.0
 //
 // Optional callback fired during notification body shaping when the
 // subscription has notification.join set (§ 4.5.23 / § 5.2.14). The
