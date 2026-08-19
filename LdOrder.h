@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDORDER_H_
-#define SWNGSILD_LDORDER_H_
+#ifndef CORNGSILD_LDORDER_H_
+#define CORNGSILD_LDORDER_H_
 
 #include <stdbool.h>                                   // bool
 
@@ -63,4 +63,4 @@ typedef struct LdOrderTerm
   int         valuePathN;
 } LdOrderTerm;
 
-#endif  // SWNGSILD_LDORDER_H_
+#endif  // CORNGSILD_LDORDER_H_

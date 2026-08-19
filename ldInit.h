@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDINIT_H_
-#define SWNGSILD_LDINIT_H_
+#ifndef CORNGSILD_LDINIT_H_
+#define CORNGSILD_LDINIT_H_
 
 //
 // FILE            ldInit.h
@@ -44,4 +44,4 @@ extern bool ldTypedValueCheck(const char* subject, const char* datatype, KjNode*
 //
 extern void ldCleanup(void);
 
-#endif  // SWNGSILD_LDINIT_H_
+#endif  // CORNGSILD_LDINIT_H_

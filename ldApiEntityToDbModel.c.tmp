@@ -16,12 +16,12 @@
 #include "kjson/kjBuilder.h"                        // kjChildRemove
 #include "kjson/kjChildReplace.h"                       // kjChildReplace
 #include "kjson/kjLookup.h"                             // kjLookup
-#include "swRest/swRest.h"                             // swRest
+#include "corRest/corRest.h"                             // corRest
 
-#include "swNgsild/LdVocab.h"                            // LD_VOCAB_*
-#include "swNgsild/LdAttrType.h"                         // LdAttrType, LdAttrGeoProperty
-#include "swNgsild/ldAttrTypeDetect.h"                   // ldAttrTypeDetect
-#include "swNgsild/ldApiEntityToDbModel.h"               // Own interface
+#include "corNgsild/LdVocab.h"                            // LD_VOCAB_*
+#include "corNgsild/LdAttrType.h"                         // LdAttrType, LdAttrGeoProperty
+#include "corNgsild/ldAttrTypeDetect.h"                   // ldAttrTypeDetect
+#include "corNgsild/ldApiEntityToDbModel.h"               // Own interface
 
 
 
@@ -125,8 +125,8 @@ static bool isEntityKeyword(const char* name)
 //
 static void timestampSet(KjNode* objP, uint64_t ts, KAlloc* faP)
 {
-  kjChildAdd(objP, kjInteger(swRest.kjsonP, LD_VOCAB_CREATED_AT,  (long long) ts));
-  kjChildAdd(objP, kjInteger(swRest.kjsonP, LD_VOCAB_MODIFIED_AT, (long long) ts));
+  kjChildAdd(objP, kjInteger(corRest.kjsonP, LD_VOCAB_CREATED_AT,  (long long) ts));
+  kjChildAdd(objP, kjInteger(corRest.kjsonP, LD_VOCAB_MODIFIED_AT, (long long) ts));
 }
 
 
@@ -222,7 +222,7 @@ static KjNode* wrapSingleAttr(KjNode* attrP, uint64_t ts, KAlloc* faP)
   attrToDbModel(attrP, ts, faP);
 
   // Create wrapper object with same name as the attribute
-  KjNode* wrapperP = kjObject(swRest.kjsonP, attrP->name);
+  KjNode* wrapperP = kjObject(corRest.kjsonP, attrP->name);
 
   // Save the sibling pointer before kjChildAdd clobbers it
   KjNode* savedNext = attrP->next;
@@ -250,7 +250,7 @@ static KjNode* wrapSingleAttr(KjNode* attrP, uint64_t ts, KAlloc* faP)
 //
 static KjNode* wrapMultiAttr(KjNode* arrayP, uint64_t ts, KAlloc* faP)
 {
-  KjNode* wrapperP = kjObject(swRest.kjsonP, arrayP->name);
+  KjNode* wrapperP = kjObject(corRest.kjsonP, arrayP->name);
 
   // Move each array element into the wrapper, keyed by its datasetId
   KjNode* instP = arrayP->value.firstChildP;
@@ -284,7 +284,7 @@ void ldApiEntityToDbModel(KjNode* entityP, KAlloc* faP)
   if (entityP == NULL || entityP->type != KjObject)
     return;
 
-  uint64_t ts = swRest.requestStartTime;
+  uint64_t ts = corRest.requestStartTime;
 
   KjNode* childP = entityP->value.firstChildP;
 

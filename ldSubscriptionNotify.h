@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDSUBSCRIPTIONNOTIFY_H_
-#define SWNGSILD_LDSUBSCRIPTIONNOTIFY_H_
+#ifndef CORNGSILD_LDSUBSCRIPTIONNOTIFY_H_
+#define CORNGSILD_LDSUBSCRIPTIONNOTIFY_H_
 
 //
 // FILE            ldSubscriptionNotify.h
@@ -23,8 +23,8 @@
 
 #include "kjson/KjNode.h"
 
-#include "swNgsild/ldEntityMerge.h"                    // LdMergeReport
-#include "swNgsild/LdSubCache.h"                       // LdSubCache
+#include "corNgsild/ldEntityMerge.h"                    // LdMergeReport
+#include "corNgsild/LdSubCache.h"                       // LdSubCache
 
 
 
@@ -151,4 +151,4 @@ typedef KjNode* (*LdThrottleRetrieveFunc)(const char* entityId, void* allocP);
 //
 extern void ldThrottleFlushStart(LdSubCache* cacheP, LdThrottleRetrieveFunc retrieveFn);
 
-#endif  // SWNGSILD_LDSUBSCRIPTIONNOTIFY_H_
+#endif  // CORNGSILD_LDSUBSCRIPTIONNOTIFY_H_

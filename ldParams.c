@@ -9,9 +9,9 @@
 #include <stddef.h>                                      // NULL
 #include <stdbool.h>                                     // bool
 
-#include "swRest/swRest.h"                             // SwRestParam, swRestParamInit
+#include "corRest/corRest.h"                             // CorRestParam, corRestParamInit
 
-#include "swNgsild/ldParams.h"                           // Own interface
+#include "corNgsild/ldParams.h"                           // Own interface
 
 
 
@@ -19,7 +19,7 @@
 //
 // ldParamRegistryV - parameter name-to-bit registry
 //
-SwRestParam ldParamRegistryV[] =
+CorRestParam ldParamRegistryV[] =
 {
   { "id",                    LD_PARAM_ID },
   { "type",                  LD_PARAM_TYPE },
@@ -83,9 +83,9 @@ SwRestParam ldParamRegistryV[] =
 
 // -----------------------------------------------------------------------------
 //
-// ldParamsInit - register all NGSI-LD URL parameters with swRest
+// ldParamsInit - register all NGSI-LD URL parameters with corRest
 //
 bool ldParamsInit(void)
 {
-  return swRestParamInit(ldParamRegistryV);
+  return corRestParamInit(ldParamRegistryV);
 }

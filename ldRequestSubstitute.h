@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LD_REQUEST_SUBSTITUTE_H_
-#define SWNGSILD_LD_REQUEST_SUBSTITUTE_H_
+#ifndef CORNGSILD_LD_REQUEST_SUBSTITUTE_H_
+#define CORNGSILD_LD_REQUEST_SUBSTITUTE_H_
 
 //
 // FILE            ldRequestSubstitute.h
@@ -14,7 +14,7 @@
 // the triggering request. Returns the verbatim value otherwise, or
 // NULL when the request had no such header.
 //
-// MUST be called only from a request-handling thread (uses swRest.in).
+// MUST be called only from a request-handling thread (uses corRest.in).
 //
 
 extern const char* ldRequestSubstitute(const char* key, const char* value);

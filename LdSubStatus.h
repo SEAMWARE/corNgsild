@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LD_SUB_STATUS_H_
-#define SWNGSILD_LD_SUB_STATUS_H_
+#ifndef CORNGSILD_LD_SUB_STATUS_H_
+#define CORNGSILD_LD_SUB_STATUS_H_
 
 //
 // FILE            LdSubStatus.h

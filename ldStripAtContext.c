@@ -11,7 +11,7 @@
 #include "kjson/KjNode.h"                                 // KjNode
 #include "kjson/kjBuilder.h"                              // kjChildRemove
 
-#include "swNgsild/ldStripAtContext.h"                    // Own interface
+#include "corNgsild/ldStripAtContext.h"                    // Own interface
 
 
 

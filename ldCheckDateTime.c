@@ -12,10 +12,10 @@
 #include <stdint.h>                                      // int64_t
 #include <time.h>                                        // struct tm, timegm, strptime
 
-#include "swRest/swRestOutHeader.h"                       // swRestOutHeaderAdd
+#include "corRest/corRestOutHeader.h"                       // corRestOutHeaderAdd
 
-#include "swNgsild/SwNgsild.h"                           // swNgsild
-#include "swNgsild/ldCheckDateTime.h"                    // Own interface
+#include "corNgsild/CorNgsild.h"                           // corNgsild
+#include "corNgsild/ldCheckDateTime.h"                    // Own interface
 
 
 
@@ -221,10 +221,10 @@ int64_t ldIsoToNanoseconds(const char* iso)
       rest++;
     }
 
-    if (lost && !swNgsild.dateTimeRounded)
+    if (lost && !corNgsild.dateTimeRounded)
     {
-      swNgsild.dateTimeRounded = true;
-      swRestOutHeaderAdd("NGSILD-Warning",
+      corNgsild.dateTimeRounded = true;
+      corRestOutHeaderAdd("NGSILD-Warning",
                          "214 - \"DateTime values were rounded to nanosecond resolution\"");
     }
 

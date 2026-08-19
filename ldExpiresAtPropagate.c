@@ -14,10 +14,10 @@
 #include "kjson/kjLookup.h"                              // kjLookup
 #include "kjson/kjBuilder.h"                             // kjString, kjInteger, kjChildAdd
 
-#include "swNgsild/LdVocab.h"                            // LD_VOCAB_EXPIRES_AT
-#include "swNgsild/ldCheckDateTime.h"                    // ldIsoToNanoseconds
+#include "corNgsild/LdVocab.h"                            // LD_VOCAB_EXPIRES_AT
+#include "corNgsild/ldCheckDateTime.h"                    // ldIsoToNanoseconds
 
-#include "swNgsild/ldExpiresAtPropagate.h"               // Own interface
+#include "corNgsild/ldExpiresAtPropagate.h"               // Own interface
 
 
 

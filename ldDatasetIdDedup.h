@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDDATASETIDDEDUP_H_
-#define SWNGSILD_LDDATASETIDDEDUP_H_
+#ifndef CORNGSILD_LDDATASETIDDEDUP_H_
+#define CORNGSILD_LDDATASETIDDEDUP_H_
 
 //
 // FILE            ldDatasetIdDedup.h
@@ -43,4 +43,4 @@
 //
 extern void ldDatasetIdDedup(KjNode* arrayP, int64_t nowNs);
 
-#endif  // SWNGSILD_LDDATASETIDDEDUP_H_
+#endif  // CORNGSILD_LDDATASETIDDEDUP_H_

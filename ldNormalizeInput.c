@@ -14,7 +14,7 @@
 // Normalized:  "speed": { "type": "Property", ... }   -> unchanged
 //
 #include <stdbool.h>                                     // bool
-#include "swRest/swRest.h"                            // swRest
+#include "corRest/corRest.h"                            // corRest
 #include <string.h>                                      // strcmp
 
 #include "kalloc/KAlloc.h"                             // KAlloc
@@ -23,13 +23,13 @@
 #include "kjson/kjBuilder.h"                             // kjObject
 #include "kjson/kjChildReplace.h"                       // kjChildReplace
 
-#include "swJsonld/swldExpand.h"                          // KJF_CORE_TERM
-#include "swNgsild/LdVocab.h"                            // LD_VOCAB_*
-#include "swNgsild/LdAttrType.h"                         // LdAttrType
-#include "swNgsild/ldTypes.h"                             // ldAttrTypeToString
-#include "swNgsild/ldAttrTypeDetect.h"                   // ldAttrTypeDetect
-#include "swNgsild/ldIsEntityKeyword.h"                   // ldIsEntityKeyword
-#include "swNgsild/LdNormalizeInput.h"                   // Own interface
+#include "corJsonld/corLdExpand.h"                          // KJF_CORE_TERM
+#include "corNgsild/LdVocab.h"                            // LD_VOCAB_*
+#include "corNgsild/LdAttrType.h"                         // LdAttrType
+#include "corNgsild/ldTypes.h"                             // ldAttrTypeToString
+#include "corNgsild/ldAttrTypeDetect.h"                   // ldAttrTypeDetect
+#include "corNgsild/ldIsEntityKeyword.h"                   // ldIsEntityKeyword
+#include "corNgsild/LdNormalizeInput.h"                   // Own interface
 
 
 
@@ -40,8 +40,8 @@
 // The specific structural members (type, value, object, languageMap, vocab,
 // valueList, objectList, json, observedAt, expiresAt, unitCode, datasetId,
 // valueType) are classified once at core-context load and the KJF_ATTR_TERM bit
-// is copied onto each matching node during swldExpandTree. ldNormalizeInput runs
-// only after swldExpandTree (ldHooks), so the bit is set by the time we look.
+// is copied onto each matching node during corLdExpandTree. ldNormalizeInput runs
+// only after corLdExpandTree (ldHooks), so the bit is set by the time we look.
 // One bit test instead of a strcmp chain — and it picks up valueType, which the
 // old list omitted (causing valueType to be wrongly reified as a sub-Property).
 // Note: a sub-attribute may itself be a core-context term, so this tests the
@@ -240,7 +240,7 @@ static bool hasExplicitAttrType(KjNode* objP)
 //
 static void addTypeField(KjNode* attrP, const char* typeName, KAlloc* kaP)
 {
-  KjNode* typeNodeP = kjString(swRest.kjsonP, "type", typeName);
+  KjNode* typeNodeP = kjString(corRest.kjsonP, "type", typeName);
   if (typeNodeP != NULL)
   {
     // Structural member created here (after expansion) — stamp it so the
@@ -262,7 +262,7 @@ static void addTypeField(KjNode* attrP, const char* typeName, KAlloc* kaP)
 //
 static void wrapAsProperty(KjNode* entityP, KjNode* childP, KAlloc* kaP)
 {
-  KjNode* wrapperP = kjObject(swRest.kjsonP, childP->name);
+  KjNode* wrapperP = kjObject(corRest.kjsonP, childP->name);
   if (wrapperP == NULL)
     return;
 
@@ -297,7 +297,7 @@ static void wrapAsProperty(KjNode* entityP, KjNode* childP, KAlloc* kaP)
 //
 void ldWrapAsGeoProperty(KjNode* entityP, KjNode* childP, KAlloc* kaP)
 {
-  KjNode* wrapperP = kjObject(swRest.kjsonP, childP->name);
+  KjNode* wrapperP = kjObject(corRest.kjsonP, childP->name);
   if (wrapperP == NULL)
     return;
 

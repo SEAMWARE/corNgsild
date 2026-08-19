@@ -16,13 +16,13 @@
 #include "kjson/kjParse.h"                              // kjParse
 #include "kjson/kjBuilder.h"                            // kjObject, kjString, kjChildAdd
 
-#include "swRest/SwRestState.h"                         // swRest
+#include "corRest/CorRestState.h"                         // corRest
 
-#include "swNgsild/LdProblem.h"                          // LD_ERROR_*
-#include "swNgsild/LdVocab.h"                            // LD_VOCAB_COORDINATES, LD_VOCAB_GEO_*
-#include "swNgsild/ldError.h"                            // ldError
-#include "swNgsild/ldCheckGeo.h"                         // Own interface
-#include "swNgsild/ldTraceLevels.h"                      // LdTCheckGeo
+#include "corNgsild/LdProblem.h"                          // LD_ERROR_*
+#include "corNgsild/LdVocab.h"                            // LD_VOCAB_COORDINATES, LD_VOCAB_GEO_*
+#include "corNgsild/ldError.h"                            // ldError
+#include "corNgsild/ldCheckGeo.h"                         // Own interface
+#include "corNgsild/ldTraceLevels.h"                      // LdTCheckGeo
 
 
 
@@ -443,7 +443,7 @@ bool ldCheckGeoQuery(const char* geometry, const char* coordinates)
   }
 
   Kjson  kjson;
-  Kjson* kjsonP = kjBufferCreate(&kjson, &swRest.kalloc);
+  Kjson* kjsonP = kjBufferCreate(&kjson, &corRest.kalloc);
 
   KjNode* coordsP = kjParse(kjsonP, dup);
   free(dup);

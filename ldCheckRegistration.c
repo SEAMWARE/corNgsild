@@ -23,18 +23,18 @@
 #include "kjson/kjLookup.h"                             // kjLookup
 #include "kjson/kjBuilder.h"                            // kjChildAdd, kjChildRemove
 
-#include "swRest/SwRestState.h"                          // swRest (requestStartTime)
+#include "corRest/CorRestState.h"                          // corRest (requestStartTime)
 
-#include "swNgsild/LdOp.h"                               // LdOp
-#include "swNgsild/LdCheck.h"                            // OBJECT_CHECK, ARRAY_CHECK, ...
-#include "swNgsild/LdVocab.h"                            // LD_VOCAB_*
-#include "swNgsild/ldCheckDateTime.h"                    // ldIsoToNanoseconds
-#include "swNgsild/ldCheckUri.h"                         // ldCheckUri
-#include "swNgsild/ldCheckGeo.h"                         // ldCheckGeo
-#include "swNgsild/ldTypes.h"                            // ldOpToString
-#include "swNgsild/ldError.h"                            // ldError
-#include "swNgsild/ldCheckRegistration.h"                // Own interface
-#include "swNgsild/ldTraceLevels.h"                      // LdTCheckReg
+#include "corNgsild/LdOp.h"                               // LdOp
+#include "corNgsild/LdCheck.h"                            // OBJECT_CHECK, ARRAY_CHECK, ...
+#include "corNgsild/LdVocab.h"                            // LD_VOCAB_*
+#include "corNgsild/ldCheckDateTime.h"                    // ldIsoToNanoseconds
+#include "corNgsild/ldCheckUri.h"                         // ldCheckUri
+#include "corNgsild/ldCheckGeo.h"                         // ldCheckGeo
+#include "corNgsild/ldTypes.h"                            // ldOpToString
+#include "corNgsild/ldError.h"                            // ldError
+#include "corNgsild/ldCheckRegistration.h"                // Own interface
+#include "corNgsild/ldTraceLevels.h"                      // LdTCheckReg
 
 
 
@@ -880,7 +880,7 @@ bool ldCheckRegistration(KjNode* regP, LdOp op, bool merged, KAlloc* faP)
   }
 
   // `type` is validated AND stripped by ldParseHook for /csourceRegistrations —
-  // see swNgsild.fixedTypeRecord. Nothing to check here.
+  // see corNgsild.fixedTypeRecord. Nothing to check here.
   (void) typeP;
 
   // information — required for create, validated when present
@@ -942,7 +942,7 @@ bool ldCheckRegistration(KjNode* regP, LdOp op, bool merged, KAlloc* faP)
     // must NOT be re-rejected — a registration has no 'expired' status and is
     // not auto-removed, so an unrelated PATCH of a TTL-elapsed reg must still go.
     uint64_t expiresNs = ldIsoToNanoseconds(expiresAtP->value.s);
-    if (!merged && expiresNs > 0 && expiresNs < swRest.requestStartTime)
+    if (!merged && expiresNs > 0 && expiresNs < corRest.requestStartTime)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
               "'expiresAt' must be a DateTime in the future");

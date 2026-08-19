@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDMQTTNOTIFY_H_
-#define SWNGSILD_LDMQTTNOTIFY_H_
+#ifndef CORNGSILD_LDMQTTNOTIFY_H_
+#define CORNGSILD_LDMQTTNOTIFY_H_
 
 //
 // FILE            ldMqttNotify.h
@@ -71,4 +71,4 @@ extern bool ldMqttNotify(const char* uri,
                          KjNode*     receiverInfo,
                          KjNode*     notifierInfo);
 
-#endif  // SWNGSILD_LDMQTTNOTIFY_H_
+#endif  // CORNGSILD_LDMQTTNOTIFY_H_

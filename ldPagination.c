@@ -11,12 +11,12 @@
 
 #include "kalloc/KAlloc.h"                             // kaAlloc
 #include "kalloc/kaAlloc.h"                            // kaAlloc
-#include "swRest/swRest.h"                             // swRest
-#include "swNgsild/SwNgsild.h"                           // swNgsild
-#include "swNgsild/ldParams.h"                           // LD_PARAM_LIMIT, LD_PARAM_OFFSET
-#include "swRest/SwRestIn.h"                      // swAcceptParse, SwMimeType
+#include "corRest/corRest.h"                             // corRest
+#include "corNgsild/CorNgsild.h"                           // corNgsild
+#include "corNgsild/ldParams.h"                           // LD_PARAM_LIMIT, LD_PARAM_OFFSET
+#include "corRest/CorRestIn.h"                      // corAcceptParse, CorMimeType
 
-#include "swNgsild/ldPagination.h"                       // Own interface
+#include "corNgsild/ldPagination.h"                       // Own interface
 
 
 
@@ -67,15 +67,15 @@ bool ldPaginationTrim(KjNode* arrayP, int limit)
 // pagination iteration. Per RFC 8288 § 3.4.1 it is only a non-binding hint —
 // it does not override the Content-Type a client gets by following the link —
 // but the spec still mandates it mirror the request, not a fixed value. The
-// render hook sets swRest.out.contentType after the service routine runs, so
+// render hook sets corRest.out.contentType after the service routine runs, so
 // evaluate Accept here the same way the render hook will.
 //
 const char* ldPaginationMediaType(void)
 {
-  switch (swAcceptParse(swRest.in.accept))
+  switch (corAcceptParse(corRest.in.accept))
   {
-  case SwMimeGeoJson: return "application/geo+json";
-  case SwMimeLdJson:  return "application/ld+json";
+  case CorMimeGeoJson: return "application/geo+json";
+  case CorMimeLdJson:  return "application/ld+json";
   default:              return "application/json";
   }
 }
@@ -91,8 +91,8 @@ const char* ldPaginationMediaType(void)
 //
 void ldPaginationLinkHeader(bool hasMore)
 {
-  int offset = swNgsild.offset;
-  int limit  = swNgsild.limit;
+  int offset = corNgsild.offset;
+  int limit  = corNgsild.limit;
 
   // No header needed if this is the first page and there are no more results
   if (!hasMore && offset == 0)
@@ -104,20 +104,20 @@ void ldPaginationLinkHeader(bool hasMore)
   params[0] = '\0';
   int  pLen = 0;
 
-  for (int i = 0; i < swRest.in.uriParamCount; i++)
+  for (int i = 0; i < corRest.in.uriParamCount; i++)
   {
     // Skip the pagination params we re-emit ourselves (tested by bit, not name).
-    if (swRest.in.uriParamV[i].bit & (LD_PARAM_LIMIT | LD_PARAM_OFFSET))
+    if (corRest.in.uriParamV[i].bit & (LD_PARAM_LIMIT | LD_PARAM_OFFSET))
       continue;
 
     pLen += snprintf(params + pLen, sizeof(params) - pLen, "%s=%s&",
-                     swRest.in.uriParamV[i].key, swRest.in.uriParamV[i].value);
+                     corRest.in.uriParamV[i].key, corRest.in.uriParamV[i].value);
   }
 
   // Build Link header value
   // Max: two link-values, each ~300 bytes => 1024 is plenty
   int  bufSize = 1024;
-  char* buf = (char*) kaAlloc(&swRest.kalloc, bufSize);
+  char* buf = (char*) kaAlloc(&corRest.kalloc, bufSize);
   int  bLen = 0;
 
   const char* mediaType = ldPaginationMediaType();
@@ -134,7 +134,7 @@ void ldPaginationLinkHeader(bool hasMore)
       prevOffset = 0;
 
     bLen += snprintf(buf + bLen, bufSize - bLen, "<%s?%slimit=%d&offset=%d>;rel=\"prev\";type=\"%s\"",
-                     swRest.in.urlPath, params, limit, prevOffset, mediaType);
+                     corRest.in.urlPath, params, limit, prevOffset, mediaType);
   }
 
   // next link (when more results exist)
@@ -146,15 +146,15 @@ void ldPaginationLinkHeader(bool hasMore)
       bLen += snprintf(buf + bLen, bufSize - bLen, ", ");
 
     bLen += snprintf(buf + bLen, bufSize - bLen, "<%s?%slimit=%d&offset=%d>;rel=\"next\";type=\"%s\"",
-                     swRest.in.urlPath, params, limit, nextOffset, mediaType);
+                     corRest.in.urlPath, params, limit, nextOffset, mediaType);
   }
 
   // Add Link header to response
-  if (swRest.out.headerCount < swRest.out.headerSize)
+  if (corRest.out.headerCount < corRest.out.headerSize)
   {
-    swRest.out.headerV[swRest.out.headerCount].key   = (char*) "Link";
-    swRest.out.headerV[swRest.out.headerCount].value  = buf;
-    swRest.out.headerCount++;
+    corRest.out.headerV[corRest.out.headerCount].key   = (char*) "Link";
+    corRest.out.headerV[corRest.out.headerCount].value  = buf;
+    corRest.out.headerCount++;
   }
 }
 
@@ -177,7 +177,7 @@ void ldPaginationLinkHeader(bool hasMore)
 //
 void ldTemporalPaginationLinkHeader(bool hasMore, int pageLimit)
 {
-  int offsetN = swNgsild.offsetN;
+  int offsetN = corNgsild.offsetN;
 
   // First page and nothing beyond it — no pointers needed.
   if (!hasMore && offsetN == 0)
@@ -192,14 +192,14 @@ void ldTemporalPaginationLinkHeader(bool hasMore, int pageLimit)
   int  pLen = 0;
   params[0] = '\0';
 
-  for (int i = 0; i < swRest.in.uriParamCount; i++)
+  for (int i = 0; i < corRest.in.uriParamCount; i++)
   {
-    const char* name = swRest.in.uriParamV[i].key;
+    const char* name = corRest.in.uriParamV[i].key;
 
     if (strcmp(name, "offsetN") == 0)
       continue;
 
-    pLen += snprintf(params + pLen, sizeof(params) - pLen, "%s=%s&", name, swRest.in.uriParamV[i].value);
+    pLen += snprintf(params + pLen, sizeof(params) - pLen, "%s=%s&", name, corRest.in.uriParamV[i].value);
   }
 
   const char* mediaType = ldPaginationMediaType();
@@ -209,12 +209,12 @@ void ldTemporalPaginationLinkHeader(bool hasMore, int pageLimit)
   // "intervalbefore" at the page with EARLIER ones. Paginating
   // descending (?lastN), a deeper page (larger offsetN) holds earlier
   // timestamps — the relations swap sides.
-  bool        descending = (swNgsild.lastN > 0);
+  bool        descending = (corNgsild.lastN > 0);
   const char* deeperRel  = descending ? "intervalbefore" : "intervalafter";
   const char* shallowRel = descending ? "intervalafter"  : "intervalbefore";
 
-  int   bufSize = 1024 + 2 * (pLen + (int) strlen(swRest.in.urlPath));
-  char* buf     = (char*) kaAlloc(&swRest.kalloc, bufSize);
+  int   bufSize = 1024 + 2 * (pLen + (int) strlen(corRest.in.urlPath));
+  char* buf     = (char*) kaAlloc(&corRest.kalloc, bufSize);
   int   bLen    = 0;
 
   // Shallower page (towards offsetN=0); absent on the first page.
@@ -225,7 +225,7 @@ void ldTemporalPaginationLinkHeader(bool hasMore, int pageLimit)
       prevOffset = 0;
 
     bLen += snprintf(buf + bLen, bufSize - bLen, "<%s?%soffsetN=%d>;rel=\"%s\";type=\"%s\"",
-                     swRest.in.urlPath, params, prevOffset, shallowRel, mediaType);
+                     corRest.in.urlPath, params, prevOffset, shallowRel, mediaType);
   }
 
   // Deeper page, when more instances exist in the pagination direction.
@@ -235,13 +235,13 @@ void ldTemporalPaginationLinkHeader(bool hasMore, int pageLimit)
       bLen += snprintf(buf + bLen, bufSize - bLen, ", ");
 
     bLen += snprintf(buf + bLen, bufSize - bLen, "<%s?%soffsetN=%d>;rel=\"%s\";type=\"%s\"",
-                     swRest.in.urlPath, params, offsetN + pageLimit, deeperRel, mediaType);
+                     corRest.in.urlPath, params, offsetN + pageLimit, deeperRel, mediaType);
   }
 
-  if (swRest.out.headerCount < swRest.out.headerSize)
+  if (corRest.out.headerCount < corRest.out.headerSize)
   {
-    swRest.out.headerV[swRest.out.headerCount].key   = (char*) "Link";
-    swRest.out.headerV[swRest.out.headerCount].value = buf;
-    swRest.out.headerCount++;
+    corRest.out.headerV[corRest.out.headerCount].key   = (char*) "Link";
+    corRest.out.headerV[corRest.out.headerCount].value = buf;
+    corRest.out.headerCount++;
   }
 }

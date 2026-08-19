@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDRENDER_H_
-#define SWNGSILD_LDRENDER_H_
+#ifndef CORNGSILD_LDRENDER_H_
+#define CORNGSILD_LDRENDER_H_
 
 //
 // FILE            ldRender.h
@@ -48,4 +48,4 @@ extern bool ldToSimplified(KjNode* entityP, KAlloc* faP);
 //
 extern KjNode* ldAttrValueNode(KjNode* attrP);
 
-#endif  // SWNGSILD_LDRENDER_H_
+#endif  // CORNGSILD_LDRENDER_H_

@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDCHECKENTITY_H_
-#define SWNGSILD_LDCHECKENTITY_H_
+#ifndef CORNGSILD_LDCHECKENTITY_H_
+#define CORNGSILD_LDCHECKENTITY_H_
 
 //
 // FILE            ldCheckEntity.h
@@ -13,7 +13,7 @@
 
 #include "kalloc/KAlloc.h"                             // KAlloc
 #include "kjson/KjNode.h"                               // KjNode
-#include "swNgsild/LdOp.h"                               // LdOp
+#include "corNgsild/LdOp.h"                               // LdOp
 
 
 
@@ -24,4 +24,4 @@
 extern bool ldCheckEntity(KjNode* entityP, LdOp op, KjNode* dbEntityP,
                            KAlloc* faP);
 
-#endif  // SWNGSILD_LDCHECKENTITY_H_
+#endif  // CORNGSILD_LDCHECKENTITY_H_

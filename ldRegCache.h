@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDREGCACHE_OPS_H_
-#define SWNGSILD_LDREGCACHE_OPS_H_
+#ifndef CORNGSILD_LDREGCACHE_OPS_H_
+#define CORNGSILD_LDREGCACHE_OPS_H_
 
 //
 // FILE            ldRegCache.h
@@ -14,8 +14,8 @@
 #include <stdint.h>                                    // uint64_t
 #include <regex.h>                                     // regex_t
 
-#include "swNgsild/LdOp.h"                             // LdOp
-#include "swNgsild/LdRegCache.h"                       // LdRegCache, LdRegCacheItem
+#include "corNgsild/LdOp.h"                             // LdOp
+#include "corNgsild/LdRegCache.h"                       // LdRegCache, LdRegCacheItem
 
 
 
@@ -72,11 +72,11 @@ extern void ldRegCacheItemUnpin(LdRegCacheItem* itemP);
 //
 // kaP is a TRANSIENT arena used only to resolve a CSR's forwarding @context
 // (contextSourceInfo.jsonldContext): the downloaded context is parsed into kaP
-// while the lasting SwldContext is cloned into the process-lifetime context
+// while the lasting CorLdContext is cloned into the process-lifetime context
 // cache. The caller's arena is reset right after (per-request arena at runtime,
 // the startup buffer during cache reload), so the parse tree is freed then.
 // May be NULL (no transient arena → the parse tree falls back to malloc and
-// leaks — every real caller passes &swRest.kalloc).
+// leaks — every real caller passes &corRest.kalloc).
 //
 extern LdRegCacheItem* ldRegCacheItemAdd(LdRegCache* cacheP, KjNode* regTree, KAlloc* kaP);
 
@@ -247,7 +247,7 @@ extern bool ldRegInfoDiscoveryMatches(LdRegInfo*     riP,
 // ldRegOpSupported - true if a registration declares support for opBit
 //
 // opBit is a single LdOp bit (e.g. LdOpCreateEntity), typically the
-// matched service's own ldOp (swRest.serviceP->ldOp). Inlined to a
+// matched service's own ldOp (corRest.serviceP->ldOp). Inlined to a
 // single AND — operationsMask already carries the § 4.20 default
 // (federationOps) when the registration omits operations[].
 //
@@ -284,4 +284,4 @@ extern bool ldRegCacheAttrExclusivelyClaimed(LdRegCache* cacheP,
                                              const char* attrIri,
                                              uint64_t    nowNs);
 
-#endif  // SWNGSILD_LDREGCACHE_OPS_H_
+#endif  // CORNGSILD_LDREGCACHE_OPS_H_

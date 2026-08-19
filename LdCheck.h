@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDCHECK_H_
-#define SWNGSILD_LDCHECK_H_
+#ifndef CORNGSILD_LDCHECK_H_
+#define CORNGSILD_LDCHECK_H_
 
 //
 // FILE            LdCheck.h
@@ -13,10 +13,10 @@
 // Each macro calls ldError() and returns false on failure.
 // Modeled after Orion-LD's CHECK.h.
 //
-#include "swNgsild/LdProblem.h"                          // LD_ERROR_*
-#include "swNgsild/ldError.h"                            // ldError
-#include "swNgsild/ldCheckUri.h"                         // ldCheckUri
-#include "swNgsild/ldCheckDateTime.h"                    // ldCheckDateTime
+#include "corNgsild/LdProblem.h"                          // LD_ERROR_*
+#include "corNgsild/ldError.h"                            // ldError
+#include "corNgsild/ldCheckUri.h"                         // ldCheckUri
+#include "corNgsild/ldCheckDateTime.h"                    // ldCheckDateTime
 
 
 
@@ -228,4 +228,4 @@ do                                                                              
   }                                                                                                                \
 } while (0)
 
-#endif  // SWNGSILD_LDCHECK_H_
+#endif  // CORNGSILD_LDCHECK_H_

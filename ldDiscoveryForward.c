@@ -27,18 +27,18 @@
 #include "kjson/kjBuilder.h"                          // kjArray, kjObject, kjString, kjInteger, kjChildAdd
 #include "kjson/kjLookup.h"                           // kjLookup
 #include "kjson/kjParse.h"                            // kjParse
-#include "swRest/SwRestState.h"                       // swRest
-#include "swRest/SwRestVerb.h"                        // SwVerbGet
+#include "corRest/CorRestState.h"                       // corRest
+#include "corRest/CorRestVerb.h"                        // CorVerbGet
 
-#include "swJsonld/swldExpand.h"                      // swldExpand
-#include "swJsonld/swldInit.h"                        // swldCoreContext
+#include "corJsonld/corLdExpand.h"                      // corLdExpand
+#include "corJsonld/corLdInit.h"                        // corLdCoreContext
 
-#include "swNgsild/LdRegCache.h"                      // LdRegCache, LdRegCacheItem
-#include "swNgsild/ldRegCache.h"                      // ldRegOpSupported
-#include "swNgsild/ldDistOp.h"                        // ldDistOpSendReceive, ldDistOpCsrWouldLoop
-#include "swNgsild/SwNgsild.h"                        // swNgsild (hops)
-#include "swNgsild/ldStripAtContext.h"                // ldStripAtContext
-#include "swNgsild/ldDiscoveryForward.h"              // Own interface
+#include "corNgsild/LdRegCache.h"                      // LdRegCache, LdRegCacheItem
+#include "corNgsild/ldRegCache.h"                      // ldRegOpSupported
+#include "corNgsild/ldDistOp.h"                        // ldDistOpSendReceive, ldDistOpCsrWouldLoop
+#include "corNgsild/CorNgsild.h"                        // corNgsild (hops)
+#include "corNgsild/ldStripAtContext.h"                // ldStripAtContext
+#include "corNgsild/ldDiscoveryForward.h"              // Own interface
 
 
 
@@ -62,7 +62,7 @@
 //
 static int remainingHops(void)
 {
-  int n = swNgsild.hopsSet ? swNgsild.hops : LD_DISCOVERY_HOPS_DEFAULT;
+  int n = corNgsild.hopsSet ? corNgsild.hops : LD_DISCOVERY_HOPS_DEFAULT;
   return (n > 0) ? n - 1 : 0;
 }
 
@@ -79,7 +79,7 @@ bool ldDiscoveryShouldForward(void)
   if (ldDistributed == false)
     return false;
 
-  int n = swNgsild.hopsSet ? swNgsild.hops : LD_DISCOVERY_HOPS_DEFAULT;
+  int n = corNgsild.hopsSet ? corNgsild.hops : LD_DISCOVERY_HOPS_DEFAULT;
   return (n > 0);
 }
 
@@ -96,7 +96,7 @@ static void stringArrayAddUnique(KjNode* arr, const char* s)
   for (KjNode* p = arr->value.firstChildP; p != NULL; p = p->next)
     if (p->type == KjString && strcmp(p->value.s, s) == 0)
       return;
-  kjChildAdd(arr, kjString(swRest.kjsonP, NULL, s));
+  kjChildAdd(arr, kjString(corRest.kjsonP, NULL, s));
 }
 
 
@@ -110,13 +110,13 @@ static KjNode* typeEntryEnsure(KjNode* agg, const char* typeIri, bool details)
       return e;
   }
 
-  KjNode* e = kjObject(swRest.kjsonP, NULL);
-  kjChildAdd(e, kjString(swRest.kjsonP, "typeIri", typeIri));
-  kjChildAdd(e, kjArray(swRest.kjsonP, "attrs"));
+  KjNode* e = kjObject(corRest.kjsonP, NULL);
+  kjChildAdd(e, kjString(corRest.kjsonP, "typeIri", typeIri));
+  kjChildAdd(e, kjArray(corRest.kjsonP, "attrs"));
   if (details)
   {
-    kjChildAdd(e, kjObject(swRest.kjsonP,  "attrTypes"));
-    kjChildAdd(e, kjInteger(swRest.kjsonP, "entityCount", 0));
+    kjChildAdd(e, kjObject(corRest.kjsonP,  "attrTypes"));
+    kjChildAdd(e, kjInteger(corRest.kjsonP, "entityCount", 0));
   }
   kjChildAdd(agg, e);
   return e;
@@ -133,13 +133,13 @@ static KjNode* attrEntryEnsure(KjNode* agg, const char* attrIri, bool details)
       return e;
   }
 
-  KjNode* e = kjObject(swRest.kjsonP, NULL);
-  kjChildAdd(e, kjString(swRest.kjsonP, "attrIri", attrIri));
+  KjNode* e = kjObject(corRest.kjsonP, NULL);
+  kjChildAdd(e, kjString(corRest.kjsonP, "attrIri", attrIri));
   if (details)
   {
-    kjChildAdd(e, kjArray(swRest.kjsonP,  "typeNames"));
-    kjChildAdd(e, kjArray(swRest.kjsonP,  "attrTypes"));
-    kjChildAdd(e, kjInteger(swRest.kjsonP, "attrCount", 0));
+    kjChildAdd(e, kjArray(corRest.kjsonP,  "typeNames"));
+    kjChildAdd(e, kjArray(corRest.kjsonP,  "attrTypes"));
+    kjChildAdd(e, kjInteger(corRest.kjsonP, "attrCount", 0));
   }
   kjChildAdd(agg, e);
   return e;
@@ -155,7 +155,7 @@ static void addAttrType(KjNode* typeEntry, const char* attrName, const char* at)
   KjNode* atArr = kjLookup(attrTypesObj, attrName);
   if (atArr == NULL)
   {
-    atArr = kjArray(swRest.kjsonP, attrName);
+    atArr = kjArray(corRest.kjsonP, attrName);
     kjChildAdd(attrTypesObj, atArr);
   }
   stringArrayAddUnique(atArr, at);
@@ -174,7 +174,7 @@ static void addAttrType(KjNode* typeEntry, const char* attrName, const char* at)
 //
 static const char* expandShort(const char* name)
 {
-  const char* iri = swldExpand(swldCoreContext(), name, &swRest.kalloc, NULL, NULL);
+  const char* iri = corLdExpand(corLdCoreContext(), name, &corRest.kalloc, NULL, NULL);
   return (iri != NULL) ? iri : name;
 }
 
@@ -204,7 +204,7 @@ static KjNode* forwardGet(LdRegCacheItem* csr, const char* path, bool details, i
   const char* upErr      = NULL;
   char*       respBody   = NULL;
   int         respBodyLen = 0;
-  int         status = ldDistOpSendReceive(csr, SwVerbGet, url, NULL, 0,
+  int         status = ldDistOpSendReceive(csr, CorVerbGet, url, NULL, 0,
                                            ownAlias, &upErr, &respBody, &respBodyLen);
   (void) upErr;
   (void) respBodyLen;
@@ -212,7 +212,7 @@ static KjNode* forwardGet(LdRegCacheItem* csr, const char* path, bool details, i
   if (status < 200 || status >= 300 || respBody == NULL)
     return NULL;
 
-  KjNode* treeP = kjParse(swRest.kjsonP, respBody);
+  KjNode* treeP = kjParse(corRest.kjsonP, respBody);
   if (treeP != NULL)
     ldStripAtContext(treeP);
   return treeP;

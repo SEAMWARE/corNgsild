@@ -13,10 +13,10 @@
 #include "kjson/KjNode.h"                                // KjNode
 #include "kjson/kjLookup.h"                              // kjLookup
 
-#include "swNgsild/ldError.h"                            // ldError
-#include "swNgsild/LdProblem.h"                          // LD_ERROR_BAD_REQUEST_DATA
-#include "swNgsild/LdVocab.h"                            // LD_VOCAB_*
-#include "swNgsild/ldNameContentCheck.h"                 // Own interface
+#include "corNgsild/ldError.h"                            // ldError
+#include "corNgsild/LdProblem.h"                          // LD_ERROR_BAD_REQUEST_DATA
+#include "corNgsild/LdVocab.h"                            // LD_VOCAB_*
+#include "corNgsild/ldNameContentCheck.h"                 // Own interface
 
 
 // Top-level entity members that are URIs / DateTimes / structural — not names.

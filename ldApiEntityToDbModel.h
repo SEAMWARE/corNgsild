@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDAPIENTITYTODBMODEL_H_
-#define SWNGSILD_LDAPIENTITYTODBMODEL_H_
+#ifndef CORNGSILD_LDAPIENTITYTODBMODEL_H_
+#define CORNGSILD_LDAPIENTITYTODBMODEL_H_
 
 //
 // FILE            ldApiEntityToDbModel.h
@@ -31,4 +31,4 @@
 //
 extern void ldApiEntityToDbModel(KjNode* entityP, KAlloc* faP, int64_t createdAt);
 
-#endif  // SWNGSILD_LDAPIENTITYTODBMODEL_H_
+#endif  // CORNGSILD_LDAPIENTITYTODBMODEL_H_

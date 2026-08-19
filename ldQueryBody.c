@@ -19,7 +19,7 @@
 #include <string.h>                                    // strcmp, strlen, memcpy
 #include <stdio.h>                                     // snprintf
 
-#include "swRest/swRest.h"                            // swRest
+#include "corRest/corRest.h"                            // corRest
 #include "kalloc/kaAlloc.h"                             // kaAlloc
 
 #include "kjson/KjNode.h"                               // KjNode
@@ -27,10 +27,10 @@
 #include "kjson/kjRender.h"                             // kjFastRender
 #include "kjson/kjRenderSize.h"                         // kjFastRenderSize
 
-#include "swNgsild/swNgsild.h"                          // ldError, LD_ERROR_*, swNgsild, ldParamHook
-#include "swNgsild/LdProblem.h"                         // LD_ERROR_BAD_REQUEST_DATA
-#include "swNgsild/ldError.h"                           // ldError
-#include "swNgsild/ldQueryBody.h"                       // Own interface
+#include "corNgsild/corNgsild.h"                          // ldError, LD_ERROR_*, corNgsild, ldParamHook
+#include "corNgsild/LdProblem.h"                         // LD_ERROR_BAD_REQUEST_DATA
+#include "corNgsild/ldError.h"                           // ldError
+#include "corNgsild/ldQueryBody.h"                       // Own interface
 
 
 
@@ -54,7 +54,7 @@ static const char* arrayJoin(KjNode* arrP)
   if (n == 0)
     return NULL;
 
-  char* buf = (char*) kaAlloc(&swRest.kalloc, total + 1);
+  char* buf = (char*) kaAlloc(&corRest.kalloc, total + 1);
   int pos = 0;
   for (KjNode* c = arrP->value.firstChildP; c != NULL; c = c->next)
   {
@@ -109,7 +109,7 @@ static void collectFromEntities(KjNode* entsArr)
 
   if (idCount > 0)
   {
-    char* buf = (char*) kaAlloc(&swRest.kalloc, idLen + 1);
+    char* buf = (char*) kaAlloc(&corRest.kalloc, idLen + 1);
     int pos = 0;
     for (KjNode* selP = entsArr->value.firstChildP; selP != NULL; selP = selP->next)
     {
@@ -127,7 +127,7 @@ static void collectFromEntities(KjNode* entsArr)
 
   if (typeCount > 0)
   {
-    char* buf = (char*) kaAlloc(&swRest.kalloc, typeLen + 1);
+    char* buf = (char*) kaAlloc(&corRest.kalloc, typeLen + 1);
     int pos = 0;
     for (KjNode* selP = entsArr->value.firstChildP; selP != NULL; selP = selP->next)
     {
@@ -170,7 +170,7 @@ static void collectFromGeoQ(KjNode* geoQ)
   if (coords != NULL)
   {
     int   bufSize = kjFastRenderSize(coords) + 1;
-    char* buf     = (char*) kaAlloc(&swRest.kalloc, bufSize);
+    char* buf     = (char*) kaAlloc(&corRest.kalloc, bufSize);
     kjFastRender(coords, buf);
     ldParamHook("coordinates", buf);
   }

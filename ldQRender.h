@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDQRENDER_H_
-#define SWNGSILD_LDQRENDER_H_
+#ifndef CORNGSILD_LDQRENDER_H_
+#define CORNGSILD_LDQRENDER_H_
 
 //
 // FILE            ldQRender.h
@@ -15,9 +15,9 @@
 #include <stdbool.h>                                   // bool
 #include "kalloc/KAlloc.h"                             // KAlloc
 #include "kjson/KjNode.h"                              // KjNode (unused but conventional)
-#include "swJsonld/SwldContext.h"                      // SwldContext
+#include "corJsonld/CorLdContext.h"                      // CorLdContext
 
-#include "swNgsild/LdQ.h"                              // LdQNode
+#include "corNgsild/LdQ.h"                              // LdQNode
 
 
 
@@ -31,7 +31,7 @@
 //                q-grammar-significant chars of an uncompactable IRI, leaving
 //                URL-reserved chars raw. false for a forward URL (full encoding).
 //
-extern char* ldQRender(LdQNode* nodeP, SwldContext* contextP, KAlloc* allocP, bool qGrammarOnly);
+extern char* ldQRender(LdQNode* nodeP, CorLdContext* contextP, KAlloc* allocP, bool qGrammarOnly);
 
 
 
@@ -46,6 +46,6 @@ extern char* ldQRender(LdQNode* nodeP, SwldContext* contextP, KAlloc* allocP, bo
 // q-grammar chars (response body); false encodes everything but RFC 3986
 // unreserved (forward URL). NULL contextP returns the IRI untouched (storage).
 //
-extern const char* ldCompactOrEncode(const char* iri, SwldContext* contextP, KAlloc* allocP, bool qGrammarOnly);
+extern const char* ldCompactOrEncode(const char* iri, CorLdContext* contextP, KAlloc* allocP, bool qGrammarOnly);
 
-#endif  // SWNGSILD_LDQRENDER_H_
+#endif  // CORNGSILD_LDQRENDER_H_

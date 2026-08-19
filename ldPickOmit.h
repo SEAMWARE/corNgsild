@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDPICKOMIT_H_
-#define SWNGSILD_LDPICKOMIT_H_
+#ifndef CORNGSILD_LDPICKOMIT_H_
+#define CORNGSILD_LDPICKOMIT_H_
 
 //
 // FILE            ldPickOmit.h
@@ -50,4 +50,4 @@ extern void ldPickOmitNested(KjNode* entityP, char** pickV, char** omitV);
 //
 extern void ldAttrsFilter(KjNode* entityP, char** attrsV);
 
-#endif  // SWNGSILD_LDPICKOMIT_H_
+#endif  // CORNGSILD_LDPICKOMIT_H_

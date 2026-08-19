@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDSCOPEEXPR_H_
-#define SWNGSILD_LDSCOPEEXPR_H_
+#ifndef CORNGSILD_LDSCOPEEXPR_H_
+#define CORNGSILD_LDSCOPEEXPR_H_
 
 //
 // FILE            LdScopeExpr.h
@@ -54,4 +54,4 @@ typedef struct LdScopeExpr
 //
 extern LdScopeExpr* ldScopeExprParse(const char* value, KAlloc* faP);
 
-#endif  // SWNGSILD_LDSCOPEEXPR_H_
+#endif  // CORNGSILD_LDSCOPEEXPR_H_

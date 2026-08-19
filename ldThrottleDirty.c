@@ -14,8 +14,8 @@
 #include "kjson/kjClone.h"                             // kjClone
 #include "kjson/kjFree.h"                              // kjFree
 
-#include "swNgsild/ldSubscriptionNotify.h"            // LdNotifyEntityDelete
-#include "swNgsild/ldThrottleDirty.h"                 // Own interface
+#include "corNgsild/ldSubscriptionNotify.h"            // LdNotifyEntityDelete
+#include "corNgsild/ldThrottleDirty.h"                 // Own interface
 
 
 

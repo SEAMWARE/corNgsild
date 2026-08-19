@@ -1,5 +1,5 @@
-#ifndef SW_NGSILD_LD_SUB_STATS_FLUSH_H
-#define SW_NGSILD_LD_SUB_STATS_FLUSH_H
+#ifndef COR_NGSILD_LD_SUB_STATS_FLUSH_H
+#define COR_NGSILD_LD_SUB_STATS_FLUSH_H
 
 //
 // FILE            ldSubStatsFlush.h
@@ -19,8 +19,8 @@
 //
 #include <stdint.h>                                   // uint64_t
 
-#include "swNgsild/LdSubCache.h"                      // LdSubCache
-#include "swNgsild/LdPernotCache.h"                   // LdPernotCache
+#include "corNgsild/LdSubCache.h"                      // LdSubCache
+#include "corNgsild/LdPernotCache.h"                   // LdPernotCache
 
 
 
@@ -38,7 +38,7 @@ typedef int (*LdSubStatsFlushFn)(void*        tenantP,
 //
 // ldSubStatsFlush - flush delta counters for every item in one sub cache
 //
-// $1: tenantP (opaque to swNgsild — passed through to flushFn)
+// $1: tenantP (opaque to corNgsild — passed through to flushFn)
 // $2: cacheP — entity-sub or CSR-sub cache
 // $3: flushFn — storage callback (may be NULL → walker is a no-op)
 //
@@ -64,4 +64,4 @@ extern int ldPernotStatsFlush(void*              tenantP,
                               LdPernotCache*     cacheP,
                               LdSubStatsFlushFn  flushFn);
 
-#endif  // SW_NGSILD_LD_SUB_STATS_FLUSH_H
+#endif  // COR_NGSILD_LD_SUB_STATS_FLUSH_H

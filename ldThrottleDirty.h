@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDTHROTTLEDIRTY_H_
-#define SWNGSILD_LDTHROTTLEDIRTY_H_
+#ifndef CORNGSILD_LDTHROTTLEDIRTY_H_
+#define CORNGSILD_LDTHROTTLEDIRTY_H_
 
 //
 // FILE            ldThrottleDirty.h
@@ -17,7 +17,7 @@
 #include <stdint.h>                                    // uint64_t
 
 #include "kjson/KjNode.h"                              // KjNode
-#include "swNgsild/LdSubCache.h"                       // LdSubCacheItem, LdThrottleEntry
+#include "corNgsild/LdSubCache.h"                       // LdSubCacheItem, LdThrottleEntry
 
 
 
@@ -70,4 +70,4 @@ extern void ldThrottleDirtyEntriesFree(LdThrottleEntry* v, int n);
 //
 extern void ldThrottleDirtyFree(LdSubCacheItem* itemP);
 
-#endif  // SWNGSILD_LDTHROTTLEDIRTY_H_
+#endif  // CORNGSILD_LDTHROTTLEDIRTY_H_

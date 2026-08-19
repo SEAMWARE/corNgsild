@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDSCOPEMATCH_H_
-#define SWNGSILD_LDSCOPEMATCH_H_
+#ifndef CORNGSILD_LDSCOPEMATCH_H_
+#define CORNGSILD_LDSCOPEMATCH_H_
 
 //
 // FILE            ldScopeMatch.h
@@ -62,4 +62,4 @@ extern int ldScopeToRegex(const char* pattern, char* buf, int bufSize);
 //
 extern void ldScopeCanonicalize(KjNode* treeP, KAlloc* kaP);
 
-#endif  // SWNGSILD_LDSCOPEMATCH_H_
+#endif  // CORNGSILD_LDSCOPEMATCH_H_

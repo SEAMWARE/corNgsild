@@ -6,8 +6,8 @@
 // Copyright 2026 Seamware
 // 
 //
-#ifndef SWNGSILD_LDERROR_H_
-#define SWNGSILD_LDERROR_H_
+#ifndef CORNGSILD_LDERROR_H_
+#define CORNGSILD_LDERROR_H_
 
 
 
@@ -31,7 +31,7 @@ extern void ldErrorFunction
 
 // -----------------------------------------------------------------------------
 //
-// ldError - set problem details in swRest.out and log the error
+// ldError - set problem details in corRest.out and log the error
 //
 // Macro captures caller's __FILE__, __LINE__, __FUNCTION__ so that the log
 // line points to the place where the error was detected, not to ldError.c.
@@ -45,7 +45,7 @@ extern void ldErrorFunction
 //
 // ldErrorExtraString - attach an RFC 9457 extension member to the ProblemDetails
 //
-// Adds a { name: value } member to swRest.out.problemExtras (created on first
+// Adds a { name: value } member to corRest.out.problemExtras (created on first
 // use), spliced into the error body alongside type/title/status/detail. Use for
 // machine-readable context — e.g. the registrationId of a failed forward — so
 // clients need not parse it out of the English 'detail'. No-op if value is NULL.
@@ -67,11 +67,11 @@ extern void ldErrorExtraInt(const char* name, int value);
 // ldGeoTypeConflict - 409 for an Attribute name held as both GeoProperty and not
 //
 // Raised on DB_GEO_TYPE_CONFLICT. The storage layer has recorded the offending
-// Attribute in swNgsild.geoConflictAttr, so the message can name it. One writer
+// Attribute in corNgsild.geoConflictAttr, so the message can name it. One writer
 // for the whole broker, because the same explanation has to come out of every
 // write path and the previous message ("self-intersecting or degenerate
 // polygon") sent people looking at geometries that were not there.
 //
 extern void ldGeoTypeConflict(void);
 
-#endif  // SWNGSILD_LDERROR_H_
+#endif  // CORNGSILD_LDERROR_H_

@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDORDERSORT_H_
-#define SWNGSILD_LDORDERSORT_H_
+#ifndef CORNGSILD_LDORDERSORT_H_
+#define CORNGSILD_LDORDERSORT_H_
 
 //
 // FILE            ldOrderSort.h
@@ -9,7 +9,7 @@
 // Copyright 2026 Seamware
 //
 #include "kjson/KjNode.h"                               // KjNode
-#include "swNgsild/LdOrder.h"                            // LdOrderTerm
+#include "corNgsild/LdOrder.h"                            // LdOrderTerm
 
 
 
@@ -21,4 +21,4 @@
 // and applies a case-insensitive ASCII approximation of root collation.
 extern void ldOrderSort(KjNode* arrayP, LdOrderTerm* terms, int termCount, const char* collation);
 
-#endif  // SWNGSILD_LDORDERSORT_H_
+#endif  // CORNGSILD_LDORDERSORT_H_

@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDENTITYMAP_H_
-#define SWNGSILD_LDENTITYMAP_H_
+#ifndef CORNGSILD_LDENTITYMAP_H_
+#define CORNGSILD_LDENTITYMAP_H_
 
 //
 // FILE            LdEntityMap.h
@@ -94,4 +94,4 @@ typedef struct LdEntityMapStore
   LdEntityMap*  tail;
 } LdEntityMapStore;
 
-#endif  // SWNGSILD_LDENTITYMAP_H_
+#endif  // CORNGSILD_LDENTITYMAP_H_

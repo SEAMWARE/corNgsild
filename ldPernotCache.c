@@ -17,10 +17,10 @@
 #include "kjson/kjBuilder.h"                           // kjChildRemove
 #include "kjson/kjFree.h"                              // kjFree
 
-#include "swNgsild/LdVocab.h"                          // LD_VOCAB_*
-#include "swNgsild/LdPernotCache.h"                    // LdPernotCache, LdPernotItem
-#include "swNgsild/ldPernotCache.h"                    // Own interface
-#include "swNgsild/ldCheckDateTime.h"                  // ldIsoToNanoseconds
+#include "corNgsild/LdVocab.h"                          // LD_VOCAB_*
+#include "corNgsild/LdPernotCache.h"                    // LdPernotCache, LdPernotItem
+#include "corNgsild/ldPernotCache.h"                    // Own interface
+#include "corNgsild/ldCheckDateTime.h"                  // ldIsoToNanoseconds
 
 
 

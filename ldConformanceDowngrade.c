@@ -17,7 +17,7 @@
 #include "kjson/kjLookup.h"                              // kjLookup
 #include "kjson/kjChildReplace.h"                        // kjChildReplace
 
-#include "swNgsild/ldConformanceDowngrade.h"             // Own interface
+#include "corNgsild/ldConformanceDowngrade.h"             // Own interface
 
 
 

@@ -11,17 +11,17 @@
 
 #include "kbase/kLibLog.h"                             // KLOG_T
 #include "kjson/KjNode.h"                              // KjNode
-#include "swJsonld/swldExpand.h"                       // swldSetVocabExpandCheck, swldSetValueCheck
+#include "corJsonld/corLdExpand.h"                       // corLdSetVocabExpandCheck, corLdSetValueCheck
 
-#include "swNgsild/ldTraceLevels.h"                      // LdTInit
-#include "swNgsild/ldParams.h"                           // ldParamsInit
-#include "swNgsild/ldError.h"                            // ldError
-#include "swNgsild/ldCheckDateTime.h"                    // ldCheckDateTime
-#include "swNgsild/ldCheckUri.h"                         // ldCheckUri
-#include "swNgsild/LdProblem.h"                          // LD_ERROR_BAD_REQUEST_DATA
-#include "swNgsild/ldHooks.h"                            // ldHooksRegister
-#include "swNgsild/ldMqttNotify.h"                       // ldMqttInit
-#include "swNgsild/ldInit.h"                             // Own interface
+#include "corNgsild/ldTraceLevels.h"                      // LdTInit
+#include "corNgsild/ldParams.h"                           // ldParamsInit
+#include "corNgsild/ldError.h"                            // ldError
+#include "corNgsild/ldCheckDateTime.h"                    // ldCheckDateTime
+#include "corNgsild/ldCheckUri.h"                         // ldCheckUri
+#include "corNgsild/LdProblem.h"                          // LD_ERROR_BAD_REQUEST_DATA
+#include "corNgsild/ldHooks.h"                            // ldHooksRegister
+#include "corNgsild/ldMqttNotify.h"                       // ldMqttInit
+#include "corNgsild/ldInit.h"                             // Own interface
 
 
 
@@ -29,7 +29,7 @@
 //
 // ldVocabNameCheck - validate a name about to be @vocab-expanded
 //
-// Called by swJsonld when a short name has no @context mapping and is
+// Called by corJsonld when a short name has no @context mapping and is
 // about to fall through to @vocab. Names from a user @context or from
 // the NGSI-LD core context are pre-validated by their @context author
 // and bypass this hook.
@@ -117,7 +117,7 @@ static bool datatypeMatches(const char* type, const char* xsdLocal)
 //
 // ldValueCheck - validate a value against a term's @type:<datatype>
 //
-// Invoked by swJsonld during expansion for any term whose @type is set
+// Invoked by corJsonld during expansion for any term whose @type is set
 // and is neither @id nor @vocab. Emits ldError + returns false on
 // mismatch.
 //
@@ -255,7 +255,7 @@ bool ldTypedValueCheck(const char* subject, const char* datatype, KjNode* valueP
 
 // -----------------------------------------------------------------------------
 //
-// ldValueCheck - the registered SwldValueCheck callback (JSON-LD expansion path).
+// ldValueCheck - the registered CorLdValueCheck callback (JSON-LD expansion path).
 //
 static bool ldValueCheck(const char* term, const char* datatype, KjNode* valueP)
 {
@@ -274,21 +274,21 @@ static bool ldInitialized = false;
 
 // -----------------------------------------------------------------------------
 //
-// ldInit - initialize swNgsild (register URL params + hooks with swRest)
+// ldInit - initialize corNgsild (register URL params + hooks with corRest)
 //
 int ldInit(void)
 {
   if (ldInitialized == true)
     return 0;
 
-  KLOG_T(LdTInit, "Initializing swNgsild library");
+  KLOG_T(LdTInit, "Initializing corNgsild library");
 
   if (ldParamsInit() == false)
     return -1;
 
   ldHooksRegister();
-  swldSetVocabExpandCheck(ldVocabNameCheck);
-  swldSetValueCheck(ldValueCheck);
+  corLdSetVocabExpandCheck(ldVocabNameCheck);
+  corLdSetValueCheck(ldValueCheck);
 
   // libmosquitto global init for MQTT notifications (§ 7).
   if (ldMqttInit() != 0)

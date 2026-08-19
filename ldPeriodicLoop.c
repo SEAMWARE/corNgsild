@@ -17,9 +17,9 @@
 #include "kalloc/kaBufferReset.h"                      // kaBufferReset
 #include "kjson/kjBufferCreate.h"                      // kjBufferCreate
 
-#include "swRest/SwRestState.h"                        // swRest (__thread)
+#include "corRest/CorRestState.h"                        // corRest (__thread)
 
-#include "swNgsild/ldPeriodicLoop.h"                   // Own interface
+#include "corNgsild/ldPeriodicLoop.h"                   // Own interface
 
 
 //
@@ -70,24 +70,24 @@ static void* dispatchThread(void* unused)
   // consumer starts clean.
   kaBufferInit(&ka, allocBuffer, sizeof(allocBuffer), 16384, NULL, "periodic");
 
-  // Per-thread swRest init — many ngsild notification helpers
-  // (ldCsrSubNotify, ldSubscriptionNotify) reach into swRest.kalloc /
-  // swRest.kjsonP for builders. Init once; refresh requestStartTime per
-  // tick. Reset swRest.kalloc per tick so it doesn't accumulate.
-  memset(&swRest, 0, sizeof(swRest));
-  kaBufferInit(&swRest.kalloc, swRest.kallocBuffer, sizeof(swRest.kallocBuffer),
+  // Per-thread corRest init — many ngsild notification helpers
+  // (ldCsrSubNotify, ldSubscriptionNotify) reach into corRest.kalloc /
+  // corRest.kjsonP for builders. Init once; refresh requestStartTime per
+  // tick. Reset corRest.kalloc per tick so it doesn't accumulate.
+  memset(&corRest, 0, sizeof(corRest));
+  kaBufferInit(&corRest.kalloc, corRest.kallocBuffer, sizeof(corRest.kallocBuffer),
                256 * 1024, NULL, "periodic-rest");
-  swRest.kjsonP = kjBufferCreate(&swRest.kjson, &swRest.kalloc);
+  corRest.kjsonP = kjBufferCreate(&corRest.kjson, &corRest.kalloc);
 
   while (loopRunning)
   {
     uint64_t now = nowNanos();
-    swRest.requestStartTime = now;
+    corRest.requestStartTime = now;
 
     for (int i = 0; i < sourceCount; i++)
     {
       kaBufferReset(&ka, true);
-      kaBufferReset(&swRest.kalloc, true);
+      kaBufferReset(&corRest.kalloc, true);
       sources[i].fn(sources[i].ctx, now, &ka);
     }
 
@@ -95,7 +95,7 @@ static void* dispatchThread(void* unused)
   }
 
   kaBufferReset(&ka, true);
-  kaBufferReset(&swRest.kalloc, true);
+  kaBufferReset(&corRest.kalloc, true);
   return NULL;
 }
 

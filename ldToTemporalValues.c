@@ -17,12 +17,12 @@
 #include "kjson/kjLookup.h"                             // kjLookup
 #include "kjson/kjClone.h"                              // kjClone
 
-#include "swJsonld/swldCompact.h"                        // swldCompact
-#include "swJsonld/swldInit.h"                           // swldCoreContext
+#include "corJsonld/corLdCompact.h"                        // corLdCompact
+#include "corJsonld/corLdInit.h"                           // corLdCoreContext
 
-#include "swNgsild/SwNgsild.h"                           // swNgsild (for response @context)
-#include "swNgsild/ldIsEntityKeyword.h"                  // ldIsEntityKeyword
-#include "swNgsild/ldToTemporalValues.h"                 // Own interface
+#include "corNgsild/CorNgsild.h"                           // corNgsild (for response @context)
+#include "corNgsild/ldIsEntityKeyword.h"                  // ldIsEntityKeyword
+#include "corNgsild/ldToTemporalValues.h"                 // Own interface
 
 
 
@@ -32,7 +32,7 @@
 //
 // The temporal store keeps vocab IRIs in expanded form (e.g.
 // "https://uri.etsi.org/ngsi-ld/default-context/monument"). On the
-// temporalValues render path, swldCompactTree only walks Object/Object-Array
+// temporalValues render path, corLdCompactTree only walks Object/Object-Array
 // shapes — the per-instance pair `[ {vocab: "..."}, ts ]` lives one Array
 // layer below where the generic walker reaches, so the inner string never
 // gets compacted to its short form ("monument"). Compact here, inline,
@@ -43,13 +43,13 @@ static void vocabCompactInPlace(KjNode* valP)
   if (valP == NULL)
     return;
 
-  SwldContext* ctxP = (swNgsild.contextP != NULL) ? swNgsild.contextP : swldCoreContext();
+  CorLdContext* ctxP = (corNgsild.contextP != NULL) ? corNgsild.contextP : corLdCoreContext();
   if (ctxP == NULL)
     return;
 
   if (valP->type == KjString)
   {
-    const char* cv = swldCompact(ctxP, valP->value.s);
+    const char* cv = corLdCompact(ctxP, valP->value.s);
     if (cv != NULL)
       valP->value.s = (char*) cv;
   }
@@ -59,7 +59,7 @@ static void vocabCompactInPlace(KjNode* valP)
     {
       if (itemP->type != KjString)
         continue;
-      const char* cv = swldCompact(ctxP, itemP->value.s);
+      const char* cv = corLdCompact(ctxP, itemP->value.s);
       if (cv != NULL)
         itemP->value.s = (char*) cv;
     }

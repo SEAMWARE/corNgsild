@@ -15,9 +15,9 @@
 #include "kjson/kjLookup.h"                              // kjLookup
 #include "kjson/kjBuilder.h"                             // kjChildRemove
 
-#include "swNgsild/LdVocab.h"                            // LD_VOCAB_DATASET_ID, LD_VOCAB_OBSERVED_AT, LD_VOCAB_EXPIRES_AT
-#include "swNgsild/ldCheckDateTime.h"                    // ldIsoToNanoseconds
-#include "swNgsild/ldDatasetIdDedup.h"                   // Own interface
+#include "corNgsild/LdVocab.h"                            // LD_VOCAB_DATASET_ID, LD_VOCAB_OBSERVED_AT, LD_VOCAB_EXPIRES_AT
+#include "corNgsild/ldCheckDateTime.h"                    // ldIsoToNanoseconds
+#include "corNgsild/ldDatasetIdDedup.h"                   // Own interface
 
 
 

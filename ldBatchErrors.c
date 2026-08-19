@@ -14,7 +14,7 @@
 #include "kjson/kjson.h"                               // Kjson
 #include "kjson/kjBuilder.h"                           // kjObject, kjArray, kjString, kjInteger, kjChildAdd
 
-#include "swNgsild/LdBatchErrors.h"                    // Own interface
+#include "corNgsild/LdBatchErrors.h"                    // Own interface
 
 
 

@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDDISTOP_H_
-#define SWNGSILD_LDDISTOP_H_
+#ifndef CORNGSILD_LDDISTOP_H_
+#define CORNGSILD_LDDISTOP_H_
 
 //
 // FILE            ldDistOp.h
@@ -18,12 +18,12 @@
 #include <stdbool.h>                                   // bool
 
 #include "kjson/KjNode.h"                              // KjNode
-#include "swRest/SwRestVerb.h"                         // SwRestVerb
-#include "swRest/SwRestKeyValue.h"                     // SwRestKeyValue
+#include "corRest/CorRestVerb.h"                         // CorRestVerb
+#include "corRest/CorRestKeyValue.h"                     // CorRestKeyValue
 
-#include "swNgsild/LdOp.h"                             // LdOp
-#include "swNgsild/LdRegCache.h"                       // LdRegCacheItem, LdRegInfo
-#include "swJsonld/SwldContext.h"                      // SwldContext
+#include "corNgsild/LdOp.h"                             // LdOp
+#include "corNgsild/LdRegCache.h"                       // LdRegCacheItem, LdRegInfo
+#include "corJsonld/CorLdContext.h"                      // CorLdContext
 
 
 
@@ -33,10 +33,10 @@
 //
 // csi.jsonldContext if the CSR declared one; else the incoming request's
 // @context when URL-addressable; else core. Emission sites compact the
-// forward body with this (swldCompactTreeWith) — buildHeaders uses the same
+// forward body with this (corLdCompactTreeWith) — buildHeaders uses the same
 // pointer internally, so the Link header always matches the body.
 //
-extern SwldContext* ldDistOpForwardContext(LdRegCacheItem* csr);
+extern CorLdContext* ldDistOpForwardContext(LdRegCacheItem* csr);
 
 
 
@@ -107,7 +107,7 @@ extern bool ldDistOpEndpointIsSelf(const char* endpoint);
 //   - Increments csr->timesSent. On transport or HTTP error: bumps
 //     timesFailed + lastFailure. On 2xx: updates lastSuccess.
 //
-// verb       HTTP verb (SwVerbGet / SwVerbPost / SwVerbDelete / ...).
+// verb       HTTP verb (CorVerbGet / CorVerbPost / CorVerbDelete / ...).
 // url        Full URL including any query string. Caller composes it.
 // body       Request body (NULL for GET/DELETE). Lifetime: request kalloc.
 // bodyLen    Body length; ignored when body == NULL.
@@ -120,7 +120,7 @@ extern bool ldDistOpEndpointIsSelf(const char* endpoint);
 // returns 502 and populates *errorDetailPP.
 //
 extern int ldDistOpSend(LdRegCacheItem*  csr,
-                        SwRestVerb       verb,
+                        CorRestVerb       verb,
                         const char*      url,
                         const char*      body,
                         int              bodyLen,
@@ -139,7 +139,7 @@ extern int ldDistOpSend(LdRegCacheItem*  csr,
 // leave them NULL/0. Both may be NULL — behaves like ldDistOpSend then.
 //
 extern int ldDistOpSendReceive(LdRegCacheItem*  csr,
-                               SwRestVerb       verb,
+                               CorRestVerb       verb,
                                const char*      url,
                                const char*      body,
                                int              bodyLen,
@@ -156,12 +156,12 @@ extern int ldDistOpSendReceive(LdRegCacheItem*  csr,
 extern bool ldDistOpCsrInCooldown(LdRegCacheItem* csr);
 
 extern int ldDistOpSendReceiveEx(LdRegCacheItem*  csr,
-                                 SwRestVerb       verb,
+                                 CorRestVerb       verb,
                                  const char*      url,
                                  const char*      body,
                                  int              bodyLen,
                                  const char*      ownAlias,
-                                 SwRestKeyValue*  extraHeaderV,
+                                 CorRestKeyValue*  extraHeaderV,
                                  int              extraHeaderCount,
                                  const char**     errorDetailPP,
                                  char**           responseBodyPP,
@@ -177,8 +177,8 @@ extern int ldDistOpSendReceiveEx(LdRegCacheItem*  csr,
 //
 // Concurrent fan-out to N CSRs. The whole batch waits at most
 // max(per-CSR timeout) instead of the sequential sum. orion-ld uses
-// curl_multi_perform for this; swBroker uses the equivalent
-// swRestClientMulti engine (non-blocking epoll over N sockets).
+// curl_multi_perform for this; coraine uses the equivalent
+// corRestClientMulti engine (non-blocking epoll over N sockets).
 //
 // Each item carries a caller-built URL and optional body. ldDistOpSendMulti
 // adds the standard distop headers (Via / NGSILD-Tenant / contextSourceInfo /
@@ -197,7 +197,7 @@ typedef struct LdDistOpBatchItem
   const char*      body;     // NULL for GET/DELETE
   int              bodyLen;
   bool             hasVerb;  // per-item verb override (mixed-verb batches —
-  SwRestVerb       verb;     // e.g. queryEntity GET next to queryBatch POST)
+  CorRestVerb       verb;     // e.g. queryEntity GET next to queryBatch POST)
 } LdDistOpBatchItem;
 
 typedef struct LdDistOpBatchResult
@@ -214,7 +214,7 @@ typedef struct LdDistOpBatchResult
   // client's request context nor the outgoing forward context.
   const char*  responseContextUrl;
   // true when statusCode 0 was caused by the broker's own per-CSR timeout
-  // (SWC_ERR_TIMEOUT), NOT a connection failure. § 6.3.5: a single exclusive/
+  // (CORR_ERR_TIMEOUT), NOT a connection failure. § 6.3.5: a single exclusive/
   // redirect source that fails to respond in time → 504 (vs 502 for any other
   // reason). Left false for cooldown-declined legs (§ 5.2.6.5.3).
   bool         timedOut;
@@ -222,7 +222,7 @@ typedef struct LdDistOpBatchResult
 
 extern int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
                              int                    itemCount,
-                             SwRestVerb             verb,
+                             CorRestVerb             verb,
                              const char*            ownAlias,
                              LdDistOpBatchResult*   resultV);
 
@@ -251,7 +251,7 @@ extern char* ldDistOpWarnings(LdDistOpBatchItem* itemV, LdDistOpBatchResult* res
 // carry per-CSR failures into the 207/409 response body. The error object
 // is rendered as a full ProblemDetails (RFC 7807) — type/title/status/detail.
 //
-// String fields are copied into swRest.kjsonP; callers may pass stack
+// String fields are copied into corRest.kjsonP; callers may pass stack
 // buffers without lifetime concerns.
 //
 extern void ldDistOpBatchErrorAdd(KjNode*      errorsArrayP,
@@ -305,7 +305,7 @@ extern const char* ldDistOpForwardFailureReason(int upCode, const char* upErr);
 //     ldRegOpSupported (with mode-specific Conflict emission)
 //   - Optional per-RegistrationInfo loop with entityInfoCoversId +
 //     infoCoversAttr filters
-//   - Concurrent dispatch via swRestClientMulti (entries-Perform delegates
+//   - Concurrent dispatch via corRestClientMulti (entries-Perform delegates
 //     to ldDistOpSendMulti)
 //
 // What stays per-route:
@@ -342,7 +342,7 @@ typedef struct LdDistOpEntry
   char*             responseBody;
   int               responseBodyLen;
   const char*       errorDetail;
-  // true when statusCode 0 was the broker's own per-CSR timeout (SWC_ERR_TIMEOUT),
+  // true when statusCode 0 was the broker's own per-CSR timeout (CORR_ERR_TIMEOUT),
   // NOT a connection failure. § 6.3.5: a single exclusive/redirect source that fails
   // to respond in time → 504 Gateway Timeout (vs 502 for any other reason).
   bool              timedOut;
@@ -361,7 +361,7 @@ typedef struct LdDistOpGroup
 // For perRi=true, multiple entries may share a csr (one per matching RegistrationInfo).
 // For perRi=false, exactly one entry per surviving csr (riP=NULL).
 //
-// Returns count of entries; *entriesPP points into swRest.kalloc (request arena).
+// Returns count of entries; *entriesPP points into corRest.kalloc (request arena).
 extern int ldDistOpEntriesBuild(
     const LdDistOpGroup  groupV[],
     int                  groupCount,         // 3 (write) or 4 (read with auxiliary)
@@ -379,7 +379,7 @@ extern int ldDistOpEntriesBuild(
 extern void ldDistOpEntriesPerform(
     LdDistOpEntry*       entries,
     int                  count,
-    SwRestVerb           verb,
+    CorRestVerb           verb,
     const char*          ownAlias);
 
 
@@ -403,4 +403,4 @@ extern void ldDistOpEntriesPerform(
 //
 extern int ldDistOpLoopReap(LdDistOpEntry* entries, int count);
 
-#endif  // SWNGSILD_LDDISTOP_H_
+#endif  // CORNGSILD_LDDISTOP_H_

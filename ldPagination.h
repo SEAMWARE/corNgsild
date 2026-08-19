@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDPAGINATION_H_
-#define SWNGSILD_LDPAGINATION_H_
+#ifndef CORNGSILD_LDPAGINATION_H_
+#define CORNGSILD_LDPAGINATION_H_
 
 //
 // FILE            ldPagination.h
@@ -47,4 +47,4 @@ extern void ldPaginationLinkHeader(bool hasMore);
 //
 extern void ldTemporalPaginationLinkHeader(bool hasMore, int pageLimit);
 
-#endif  // SWNGSILD_LDPAGINATION_H_
+#endif  // CORNGSILD_LDPAGINATION_H_

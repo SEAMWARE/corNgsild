@@ -12,21 +12,21 @@
 #include "kbase/kLibLog.h"                             // KLOG_T
 #include "kalloc/KAlloc.h"                             // KAlloc
 
-#include "swRest/swRest.h"                              // swRest
+#include "corRest/corRest.h"                              // corRest
 #include "kjson/KjNode.h"                               // KjNode
 #include "kjson/kjLookup.h"                             // kjLookup
 #include "kjson/kjBuilder.h"                            // kjChildRemove
 
-#include "swNgsild/LdOp.h"                               // LdOp
-#include "swNgsild/LdCheck.h"                            // OBJECT_CHECK, STRING_CHECK, ...
-#include "swNgsild/LdVocab.h"                            // LD_VOCAB_*
-#include "swNgsild/ldTypes.h"                            // ldOpToString
-#include "swNgsild/ldError.h"                            // ldError
-#include "swNgsild/ldAttrTypeDetect.h"                   // ldAttrTypeDetect
-#include "swNgsild/ldCheckAttribute.h"                   // ldCheckAttribute
-#include "swNgsild/ldIsEntityKeyword.h"                   // ldIsEntityKeyword
-#include "swNgsild/ldCheckEntity.h"                      // Own interface
-#include "swNgsild/ldTraceLevels.h"                      // LdTCheckEnt
+#include "corNgsild/LdOp.h"                               // LdOp
+#include "corNgsild/LdCheck.h"                            // OBJECT_CHECK, STRING_CHECK, ...
+#include "corNgsild/LdVocab.h"                            // LD_VOCAB_*
+#include "corNgsild/ldTypes.h"                            // ldOpToString
+#include "corNgsild/ldError.h"                            // ldError
+#include "corNgsild/ldAttrTypeDetect.h"                   // ldAttrTypeDetect
+#include "corNgsild/ldCheckAttribute.h"                   // ldCheckAttribute
+#include "corNgsild/ldIsEntityKeyword.h"                   // ldIsEntityKeyword
+#include "corNgsild/ldCheckEntity.h"                      // Own interface
+#include "corNgsild/ldTraceLevels.h"                      // LdTCheckEnt
 
 
 
@@ -175,12 +175,12 @@ bool ldCheckEntity(KjNode* entityP, LdOp op, KjNode* dbEntityP, KAlloc* faP)
     // id (the ETSI test suite and some clients do), but if it doesn't
     // match the URL id the request is ambiguous about which entity to
     // mutate — reject only that case.
-    if (isUpdateOp(op) && swRest.in.wildcard[0] != NULL &&
-        strcmp(idNodeP->value.s, swRest.in.wildcard[0]) != 0)
+    if (isUpdateOp(op) && corRest.in.wildcard[0] != NULL &&
+        strcmp(idNodeP->value.s, corRest.in.wildcard[0]) != 0)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Entity Id Mismatch",
               "Entity 'id' in body ('%s') does not match URL ('%s')",
-              idNodeP->value.s, swRest.in.wildcard[0]);
+              idNodeP->value.s, corRest.in.wildcard[0]);
       return false;
     }
   }

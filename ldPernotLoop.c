@@ -21,22 +21,22 @@
 #include "kjson/kjBufferCreate.h"                      // kjBufferCreate (+ Kjson type)
 #include "kjson/kjLookup.h"                            // kjLookup
 
-#include "swRest/SwRestState.h"                        // swRest (for thread-local init)
-#include "swRest/swRestClient.h"                       // SwRestClientRequest, swRestClientSend
+#include "corRest/CorRestState.h"                        // corRest (for thread-local init)
+#include "corRest/corRestClient.h"                       // CorRestClientRequest, corRestClientSend
 
-#include "swJsonld/swldCompactTree.h"                  // swldCompactTree, swldCompactTreeWith
-#include "swJsonld/swldDownload.h"                     // swldContextFromUrl
-#include "swJsonld/swldInit.h"                         // swldCoreContext, SwldContext
-#include "swJsonld/SwldContext.h"                      // SwldContext
+#include "corJsonld/corLdCompactTree.h"                  // corLdCompactTree, corLdCompactTreeWith
+#include "corJsonld/corLdDownload.h"                     // corLdContextFromUrl
+#include "corJsonld/corLdInit.h"                         // corLdCoreContext, CorLdContext
+#include "corJsonld/CorLdContext.h"                      // CorLdContext
 
-#include "swNgsild/SwNgsild.h"                         // ldDefaultCooldownNs
-#include "swNgsild/LdVocab.h"                          // LD_VOCAB_*
-#include "swNgsild/LdPernotCache.h"                    // LdPernotCache, LdPernotItem
-#include "swNgsild/ldLinkedEntitiesHook.h"             // ldLinkedEntitiesHookInvoke
-#include "swNgsild/ldEntityToApi.h"                    // ldEntityToApi
-#include "swNgsild/ldStripSysAttrs.h"                  // ldStripSysAttrs
-#include "swNgsild/ldPeriodicLoop.h"                   // ldPeriodicLoopRegister
-#include "swNgsild/ldPernotLoop.h"                     // Own interface
+#include "corNgsild/CorNgsild.h"                         // ldDefaultCooldownNs
+#include "corNgsild/LdVocab.h"                          // LD_VOCAB_*
+#include "corNgsild/LdPernotCache.h"                    // LdPernotCache, LdPernotItem
+#include "corNgsild/ldLinkedEntitiesHook.h"             // ldLinkedEntitiesHookInvoke
+#include "corNgsild/ldEntityToApi.h"                    // ldEntityToApi
+#include "corNgsild/ldStripSysAttrs.h"                  // ldStripSysAttrs
+#include "corNgsild/ldPeriodicLoop.h"                   // ldPeriodicLoopRegister
+#include "corNgsild/ldPernotLoop.h"                     // Own interface
 
 
 
@@ -86,7 +86,7 @@ static bool pernotSendNotification(LdPernotItem* itemP, KjNode* entityArray, KAl
     return false;
 
   // Build the notification tree in the per-tick engine arena (kaP) — this runs
-  // on the periodic-dispatch thread where swRest.kjsonP is not our arena. kaP is
+  // on the periodic-dispatch thread where corRest.kjsonP is not our arena. kaP is
   // reset by the engine after the tick, freeing the whole tree.
   Kjson   kjBuf;
   Kjson*  kjP = kjBufferCreate(&kjBuf, kaP);
@@ -129,13 +129,13 @@ static bool pernotSendNotification(LdPernotItem* itemP, KjNode* entityArray, KAl
   // their short names — otherwise notifications ship expanded IRIs as
   // keys (046_02_01). Falls back to core if the URL can't be resolved.
   {
-    SwldContext* notifCtx = NULL;
+    CorLdContext* notifCtx = NULL;
     if (itemP->contextUrl != NULL)
-      notifCtx = swldContextFromUrl(itemP->contextUrl, kaP);
+      notifCtx = corLdContextFromUrl(itemP->contextUrl, kaP);
     if (notifCtx != NULL)
-      swldCompactTreeWith(notification, notifCtx);
+      corLdCompactTreeWith(notification, notifCtx);
     else
-      swldCompactTree(notification);
+      corLdCompactTree(notification);
   }
 
   // Render to JSON
@@ -144,21 +144,21 @@ static bool pernotSendNotification(LdPernotItem* itemP, KjNode* entityArray, KAl
   kjFastRender(notification, body);
 
   // Send via HTTP
-  SwRestClientRequest  req;
-  SwRestClientResponse resp;
+  CorRestClientRequest  req;
+  CorRestClientResponse resp;
 
-  swRestClientRequestInit(&req, SwVerbPost, itemP->endpointUri, kaP);
-  swRestClientRequestHeader(&req, "Content-Type", "application/json");
+  corRestClientRequestInit(&req, CorVerbPost, itemP->endpointUri, kaP);
+  corRestClientRequestHeader(&req, "Content-Type", "application/json");
 
   // Link header with @context
-  SwldContext* ctxP = swldCoreContext();
+  CorLdContext* ctxP = corLdCoreContext();
   if (ctxP != NULL && ctxP->url != NULL)
   {
     char linkBuf[512];
     snprintf(linkBuf, sizeof(linkBuf),
              "<%s>; rel=\"http://www.w3.org/ns/json-ld#context\"; type=\"application/ld+json\"",
              itemP->contextUrl ? itemP->contextUrl : ctxP->url);
-    swRestClientRequestHeader(&req, "Link", linkBuf);
+    corRestClientRequestHeader(&req, "Link", linkBuf);
   }
 
   // § 5.2.15 endpoint.receiverInfo — emit each {key,value} as a request header.
@@ -173,17 +173,17 @@ static bool pernotSendNotification(LdPernotItem* itemP, KjNode* entityArray, KAl
       KjNode* vP = kjLookup(kvP, "value");
       if (kP == NULL || kP->type != KjString || vP == NULL || vP->type != KjString) continue;
       if (strcmp(vP->value.s, "urn:ngsi-ld:request") == 0) continue;
-      swRestClientRequestHeader(&req, kP->value.s, vP->value.s);
+      corRestClientRequestHeader(&req, kP->value.s, vP->value.s);
     }
   }
 
-  swRestClientRequestBody(&req, body, strlen(body));
+  corRestClientRequestBody(&req, body, strlen(body));
   // § 5.2.15 endpoint.timeout — per-sub override; default 10s
   int reqTmoMs = (itemP->timeoutMs > 0) ? itemP->timeoutMs : 10000;
-  swRestClientRequestTimeout(&req, 5000, reqTmoMs);
+  corRestClientRequestTimeout(&req, 5000, reqTmoMs);
 
-  int rc = swRestClientSend(&req, &resp);
-  swRestClientResponseCleanup(&resp);
+  int rc = corRestClientSend(&req, &resp);
+  corRestClientResponseCleanup(&resp);
 
   if (rc == 0 && resp.statusCode >= 200 && resp.statusCode < 300)
     return true;

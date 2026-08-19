@@ -18,9 +18,9 @@
 #include "kjson/kjFree.h"                                // kjFree
 #include "kjson/kjBuilder.h"                             // kjString, kjChildAdd
 
-#include "swRest/swRest.h"                               // swRest
-#include "swNgsild/LdVocab.h"                            // LD_VOCAB_*
-#include "swNgsild/LdSnapshotCache.h"                    // Own interface
+#include "corRest/corRest.h"                               // corRest
+#include "corNgsild/LdVocab.h"                            // LD_VOCAB_*
+#include "corNgsild/LdSnapshotCache.h"                    // Own interface
 
 
 
@@ -105,12 +105,12 @@ LdSnapshotCacheItem* ldSnapshotCacheItemAdd(LdSnapshotCache* cacheP, KjNode* sna
                       ? (int) fieldAsLong(itemP->tree, "snapshotPriority", 5L)
                       : 5;
 
-  itemP->createdAt  = swRest.requestStartTime;
-  itemP->modifiedAt = swRest.requestStartTime;
-  itemP->lastUsedAt = swRest.requestStartTime;
+  itemP->createdAt  = corRest.requestStartTime;
+  itemP->modifiedAt = corRest.requestStartTime;
+  itemP->lastUsedAt = corRest.requestStartTime;
 
   // expiresAt computed by caller; default to 1h from now.
-  itemP->expiresAt  = swRest.requestStartTime + 3600ULL * 1000000000ULL;
+  itemP->expiresAt  = corRest.requestStartTime + 3600ULL * 1000000000ULL;
 
   // Monotonic per-tenant sequence — used to name the snap-tenant DB
   // (see snapshotTenantCreate). Reload at boot bumps nextSnapSeq to

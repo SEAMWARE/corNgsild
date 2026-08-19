@@ -1,8 +1,8 @@
-#ifndef SWNGSILD_SWNGSILD_STATE_H_
-#define SWNGSILD_SWNGSILD_STATE_H_
+#ifndef CORNGSILD_STATE_H_
+#define CORNGSILD_STATE_H_
 
 //
-// FILE            SwNgsild.h
+// FILE            CorNgsild.h
 //
 // AUTHOR          Ken Zangelin
 //
@@ -14,18 +14,18 @@
 
 #include "kjson/KjNode.h"                              // KjNode
 
-#include "swRest/SwRestState.h"                        // swRest (per-conn userData binding)
-#include "swJsonld/SwldContext.h"                     // SwldContext
-#include "swNgsild/LdFormat.h"                           // LdFormat
-#include "swNgsild/LdGeoRel.h"                           // LdGeoRel
-#include "swNgsild/LdOrder.h"                            // LdOrderTerm
-#include "swNgsild/LdQ.h"                               // LdQNode
-#include "swNgsild/LdScopeExpr.h"                        // LdScopeExpr
-#include "swNgsild/LdTypeExpr.h"                         // LdTypeExpr
-#include "swNgsild/ldCsrSubNotify.h"                     // CsrSubPending (per-conn deferred cache)
-#include "swNgsild/ldSubscriptionNotify.h"              // LdNotifyPendingEntry (per-conn deferred cache)
-#include "swNgsild/LdSubCache.h"                         // LdSubCache (notify pending cache pointer)
-#include "swNgsild/ldRegCache.h"                         // ProbePending, PROBE_PENDING_MAX (per-conn)
+#include "corRest/CorRestState.h"                        // corRest (per-conn userData binding)
+#include "corJsonld/CorLdContext.h"                     // CorLdContext
+#include "corNgsild/LdFormat.h"                           // LdFormat
+#include "corNgsild/LdGeoRel.h"                           // LdGeoRel
+#include "corNgsild/LdOrder.h"                            // LdOrderTerm
+#include "corNgsild/LdQ.h"                               // LdQNode
+#include "corNgsild/LdScopeExpr.h"                        // LdScopeExpr
+#include "corNgsild/LdTypeExpr.h"                         // LdTypeExpr
+#include "corNgsild/ldCsrSubNotify.h"                     // CsrSubPending (per-conn deferred cache)
+#include "corNgsild/ldSubscriptionNotify.h"              // LdNotifyPendingEntry (per-conn deferred cache)
+#include "corNgsild/LdSubCache.h"                         // LdSubCache (notify pending cache pointer)
+#include "corNgsild/ldRegCache.h"                         // ProbePending, PROBE_PENDING_MAX (per-conn)
 
 
 
@@ -49,9 +49,9 @@ typedef struct LdExpiredEntity
 
 // -----------------------------------------------------------------------------
 //
-// SwNgsild - per-request NGSI-LD state (thread-local)
+// CorNgsild - per-request NGSI-LD state (thread-local)
 //
-typedef struct SwNgsild
+typedef struct CorNgsild
 {
   // URL parameters — string values + derived arrays
   char*   id;
@@ -197,10 +197,10 @@ typedef struct SwNgsild
 
   // @context (set in parseHook)
   bool              contextError;
-  SwldContext*       contextP;
+  CorLdContext*       contextP;
   const char*        userContextUrl;  // URL from Link header or default context (NULL if none)
   KjNode*            userContextBody; // Pointer to the in-body @context node, captured BEFORE
-                                      // swldExpandTree strips it from the tree. Set when the
+                                      // corLdExpandTree strips it from the tree. Set when the
                                       // user supplied an @context array or inline-object body
                                       // form; NULL for a single-URL or absent @context. Used
                                       // by postSubscriptions to auto-populate jsonldContext —
@@ -228,12 +228,12 @@ typedef struct SwNgsild
   bool    rawResponse;  // true => renderHook skips ldEntityToApi (used for subscription responses)
   bool    entityMapOnly; // true => GET|POST /entityMaps: query + return the EntityMap (not entities)
 
-  // Tenant (resolved in preServiceHook, opaque to swNgsild)
+  // Tenant (resolved in preServiceHook, opaque to corNgsild)
   void*  tenantP;
 
   // Inc6c — per-connection deferred caches (were static __thread in their .c
   // files). Drained by the post-response hook; the realloc'd buffers are freed
-  // in swNgsildStateFree when the connection's state is released.
+  // in corNgsildStateFree when the connection's state is released.
   CsrSubPending*         csrPendingV;        // ldCsrSubNotify.c
   int                    csrPendingN;
   int                    csrPendingCap;
@@ -257,29 +257,29 @@ typedef struct SwNgsild
   void*                  troeQTail;
   int                    troeQCount;
 
-} SwNgsild;
+} CorNgsild;
 
 
 
 // -----------------------------------------------------------------------------
 //
-// swNgsild - per-request NGSI-LD state, reached through the per-connection
-// swRest.userData slot (allocated/freed by the swRest userData hooks, see
-// swNgsildStateCreate/Free). Background threads — and any path before a
+// corNgsild - per-request NGSI-LD state, reached through the per-connection
+// corRest.userData slot (allocated/freed by the corRest userData hooks, see
+// corNgsildStateCreate/Free). Background threads — and any path before a
 // connection's userData is bound — fall back to a per-thread object, so every
 // access stays crash-proof. Holding this per-CONNECTION (not __thread) is what
 // makes processing a request off the I/O thread safe: the worker binds the
-// connection's swRest (and thus its swNgsild) regardless of which thread runs.
+// connection's corRest (and thus its corNgsild) regardless of which thread runs.
 //
-extern __thread SwNgsild swNgsildFallback;
+extern __thread CorNgsild corNgsildFallback;
 
-static inline SwNgsild* swNgsildBind(void)
+static inline CorNgsild* corNgsildBind(void)
 {
-  SwNgsild* p = (SwNgsild*) swRest.userData;
-  return (p != NULL) ? p : &swNgsildFallback;
+  CorNgsild* p = (CorNgsild*) corRest.userData;
+  return (p != NULL) ? p : &corNgsildFallback;
 }
 
-#define swNgsild (*swNgsildBind())
+#define corNgsild (*corNgsildBind())
 
 
 
@@ -379,7 +379,7 @@ extern KjNode* ldContextSourceExtras;
 
 // -----------------------------------------------------------------------------
 //
-// ldParamHook - callback for swRest param validation
+// ldParamHook - callback for corRest param validation
 //
 extern void ldParamHook(const char* name, const char* value);
 
@@ -391,4 +391,4 @@ extern void ldParamHook(const char* name, const char* value);
 //
 extern void ldContextResolve(void);
 
-#endif  // SWNGSILD_SWNGSILD_STATE_H_
+#endif  // CORNGSILD_STATE_H_

@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDQ_H_
-#define SWNGSILD_LDQ_H_
+#ifndef CORNGSILD_LDQ_H_
+#define CORNGSILD_LDQ_H_
 
 //
 // FILE            LdQ.h
@@ -149,4 +149,4 @@ typedef struct LdQNode
   int linkedDepth;
 } LdQNode;
 
-#endif  // SWNGSILD_LDQ_H_
+#endif  // CORNGSILD_LDQ_H_

@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDTOGEOJSON_H_
-#define SWNGSILD_LDTOGEOJSON_H_
+#ifndef CORNGSILD_LDTOGEOJSON_H_
+#define CORNGSILD_LDTOGEOJSON_H_
 
 //
 // FILE            ldToGeoJson.h
@@ -13,4 +13,4 @@
 
 extern void ldToGeoJson(KjNode** treePP, const char* geometryProperty, Kjson* kjsonP);
 
-#endif  // SWNGSILD_LDTOGEOJSON_H_
+#endif  // CORNGSILD_LDTOGEOJSON_H_

@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDENTITYTOAPI_H_
-#define SWNGSILD_LDENTITYTOAPI_H_
+#ifndef CORNGSILD_LDENTITYTOAPI_H_
+#define CORNGSILD_LDENTITYTOAPI_H_
 
 //
 // FILE            ldEntityToApi.h
@@ -24,4 +24,4 @@
 //
 extern void ldEntityToApi(KjNode* entityP, KAlloc* faP);
 
-#endif  // SWNGSILD_LDENTITYTOAPI_H_
+#endif  // CORNGSILD_LDENTITYTOAPI_H_

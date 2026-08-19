@@ -10,7 +10,7 @@
 #include <stddef.h>                                   // NULL
 #include <time.h>                                     // nanosleep
 
-#include "swNgsild/ldStatsFlushLoop.h"                // Own interface
+#include "corNgsild/ldStatsFlushLoop.h"                // Own interface
 
 
 

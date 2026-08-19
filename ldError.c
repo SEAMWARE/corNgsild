@@ -13,10 +13,10 @@
 #include "kbase/kLibLog.h"                      // kLogFunction
 #include "kjson/KjNode.h"                       // KjNode
 #include "kjson/kjBuilder.h"                    // kjObject, kjString, kjChildAdd
-#include "swRest/swRest.h"                      // swRest
+#include "corRest/corRest.h"                      // corRest
 
-#include "swNgsild/SwNgsild.h"                   // swNgsild (geoConflictAttr)
-#include "swNgsild/LdProblem.h"                  // LD_ERROR_CONFLICT
+#include "corNgsild/CorNgsild.h"                   // corNgsild (geoConflictAttr)
+#include "corNgsild/LdProblem.h"                  // LD_ERROR_CONFLICT
 
 #include "ldError.h"                              // Own interface
 
@@ -38,21 +38,21 @@ void ldErrorFunction
   ...
 )
 {
-  swRest.out.httpStatusCode = status;
-  swRest.out.problemType   = type;
-  swRest.out.problemTitle  = title;
+  corRest.out.httpStatusCode = status;
+  corRest.out.problemType   = type;
+  corRest.out.problemTitle  = title;
 
   va_list ap;
 
   va_start(ap, fmt);
-  vsnprintf(swRest.out.problemDetail, sizeof(swRest.out.problemDetail), fmt, ap);
+  vsnprintf(corRest.out.problemDetail, sizeof(corRest.out.problemDetail), fmt, ap);
   va_end(ap);
 
   //
   // Log the error at the caller's location
   //
   if (kLogFunction != NULL)
-    kLogFunction(1, 0, fileName, lineNo, functionName, "%d %s: %s", status, title, swRest.out.problemDetail);
+    kLogFunction(1, 0, fileName, lineNo, functionName, "%d %s: %s", status, title, corRest.out.problemDetail);
 }
 
 
@@ -66,10 +66,10 @@ void ldErrorExtraString(const char* name, const char* value)
   if (value == NULL)
     return;
 
-  if (swRest.out.problemExtras == NULL)
-    swRest.out.problemExtras = kjObject(swRest.kjsonP, NULL);
+  if (corRest.out.problemExtras == NULL)
+    corRest.out.problemExtras = kjObject(corRest.kjsonP, NULL);
 
-  kjChildAdd(swRest.out.problemExtras, kjString(swRest.kjsonP, name, value));
+  kjChildAdd(corRest.out.problemExtras, kjString(corRest.kjsonP, name, value));
 }
 
 
@@ -80,10 +80,10 @@ void ldErrorExtraString(const char* name, const char* value)
 //
 void ldErrorExtraInt(const char* name, int value)
 {
-  if (swRest.out.problemExtras == NULL)
-    swRest.out.problemExtras = kjObject(swRest.kjsonP, NULL);
+  if (corRest.out.problemExtras == NULL)
+    corRest.out.problemExtras = kjObject(corRest.kjsonP, NULL);
 
-  kjChildAdd(swRest.out.problemExtras, kjInteger(swRest.kjsonP, name, value));
+  kjChildAdd(corRest.out.problemExtras, kjInteger(corRest.kjsonP, name, value));
 }
 
 
@@ -94,7 +94,7 @@ void ldErrorExtraInt(const char* name, int value)
 //
 void ldGeoTypeConflict(void)
 {
-  const char* attrName = (swNgsild.geoConflictAttr != NULL) ? swNgsild.geoConflictAttr : "the Attribute";
+  const char* attrName = (corNgsild.geoConflictAttr != NULL) ? corNgsild.geoConflictAttr : "the Attribute";
 
   //
   // § 5.2.6.4 ties no Attribute name to a single type — the same name may be a
@@ -110,5 +110,5 @@ void ldGeoTypeConflict(void)
           "attribute '%s' is already in use with a conflicting Attribute type in this tenant "
           "(a GeoProperty and another type cannot share one Attribute name here)", attrName);
 
-  ldErrorExtraString("attributeName", swNgsild.geoConflictAttr);
+  ldErrorExtraString("attributeName", corNgsild.geoConflictAttr);
 }

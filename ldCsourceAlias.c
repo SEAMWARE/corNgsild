@@ -11,10 +11,10 @@
 
 #include "kalloc/KAlloc.h"                           // KAlloc
 #include "kalloc/kaAlloc.h"                          // kaAlloc
-#include "swRest/SwRestKeyValue.h"                   // SwRestKeyValue
-#include "swNgsild/SwNgsild.h"                       // ldCsourceAliasBase
+#include "corRest/CorRestKeyValue.h"                   // CorRestKeyValue
+#include "corNgsild/CorNgsild.h"                       // ldCsourceAliasBase
 
-#include "swNgsild/ldCsourceAlias.h"                 // Own interface
+#include "corNgsild/ldCsourceAlias.h"                 // Own interface
 
 
 
@@ -83,7 +83,7 @@ static bool viaEntryMatchesAlias(const char* entry, int entryLen, const char* al
 //
 // ldViaHasAlias -
 //
-bool ldViaHasAlias(SwRestKeyValue* httpHeaderV, int httpHeaderCount, const char* alias)
+bool ldViaHasAlias(CorRestKeyValue* httpHeaderV, int httpHeaderCount, const char* alias)
 {
   if (alias == NULL || httpHeaderV == NULL || httpHeaderCount == 0)
     return false;

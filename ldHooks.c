@@ -15,33 +15,33 @@
 #include "kjson/kjLookup.h"                             // kjLookup
 #include "kjson/kjBuilder.h"                        // kjChildRemove, kjChildAdd
 #include "kjson/kjNodeDecouple.h"                   // kjNodeDecouple
-#include "swRest/swRest.h"                             // swRest
-#include "swRest/SwRestService.h"                      // SwRestService.ldOp
-#include "swJsonld/swldInit.h"                             // swldCoreContext
-#include "swJsonld/swldExpandTree.h"                       // swldExpandTree
-#include "swJsonld/swldCompactTree.h"                      // swldCompactTree, swldCompactTreeWith
-#include "swJsonld/swldDownload.h"                         // swldContextFromUrl
+#include "corRest/corRest.h"                             // corRest
+#include "corRest/CorRestService.h"                      // CorRestService.ldOp
+#include "corJsonld/corLdInit.h"                             // corLdCoreContext
+#include "corJsonld/corLdExpandTree.h"                       // corLdExpandTree
+#include "corJsonld/corLdCompactTree.h"                      // corLdCompactTree, corLdCompactTreeWith
+#include "corJsonld/corLdDownload.h"                         // corLdContextFromUrl
 
-#include "swNgsild/ldContextHost.h"                      // ldContextHostVolatile
-#include "swNgsild/LdProblem.h"                          // LD_ERROR_*
-#include "swNgsild/LdVocab.h"                            // LD_VOCAB_*
-#include "swNgsild/LdOp.h"                               // LdOpRetrieveEntity, LdOpQueryEntities
-#include "swNgsild/SwNgsild.h"                           // swNgsild, ldParamHook
-#include "swNgsild/ldError.h"                            // ldError
-#include "swNgsild/ldEntityToApi.h"                      // ldEntityToApi
-#include "swNgsild/ldNameContentCheck.h"                 // ldCheckNamesAndContent
-#include "swNgsild/ldPickOmit.h"                         // ldPickOmit
-#include "swNgsild/ldToTemporalValues.h"                 // ldToTemporalValues
-#include "swNgsild/ldToAggregatedValues.h"               // ldToAggregatedValues, ldIso8601DurationParse
-#include "swNgsild/ldToGeoJson.h"                        // ldToGeoJson
-#include "swNgsild/ldStripSysAttrs.h"                    // ldStripSysAttrs
-#include "swNgsild/ldScopeMatch.h"                        // ldScopeCanonicalize
-#include "swNgsild/ldLangReduce.h"                       // ldLangReduce
-#include "swNgsild/ldCsrSubNotify.h"                  // ldCsrSubPendingDiscard
-#include "swRest/SwRestIn.h"                      // swAcceptParse, SwMimeType
-#include "swNgsild/ldRender.h"                           // ldToSimplified, ldToConcise
-#include "swNgsild/LdNormalizeInput.h"                    // ldNormalizeInput
-#include "swNgsild/ldHooks.h"                            // Own interface
+#include "corNgsild/ldContextHost.h"                      // ldContextHostVolatile
+#include "corNgsild/LdProblem.h"                          // LD_ERROR_*
+#include "corNgsild/LdVocab.h"                            // LD_VOCAB_*
+#include "corNgsild/LdOp.h"                               // LdOpRetrieveEntity, LdOpQueryEntities
+#include "corNgsild/CorNgsild.h"                           // corNgsild, ldParamHook
+#include "corNgsild/ldError.h"                            // ldError
+#include "corNgsild/ldEntityToApi.h"                      // ldEntityToApi
+#include "corNgsild/ldNameContentCheck.h"                 // ldCheckNamesAndContent
+#include "corNgsild/ldPickOmit.h"                         // ldPickOmit
+#include "corNgsild/ldToTemporalValues.h"                 // ldToTemporalValues
+#include "corNgsild/ldToAggregatedValues.h"               // ldToAggregatedValues, ldIso8601DurationParse
+#include "corNgsild/ldToGeoJson.h"                        // ldToGeoJson
+#include "corNgsild/ldStripSysAttrs.h"                    // ldStripSysAttrs
+#include "corNgsild/ldScopeMatch.h"                        // ldScopeCanonicalize
+#include "corNgsild/ldLangReduce.h"                       // ldLangReduce
+#include "corNgsild/ldCsrSubNotify.h"                  // ldCsrSubPendingDiscard
+#include "corRest/CorRestIn.h"                      // corAcceptParse, CorMimeType
+#include "corNgsild/ldRender.h"                           // ldToSimplified, ldToConcise
+#include "corNgsild/LdNormalizeInput.h"                    // ldNormalizeInput
+#include "corNgsild/ldHooks.h"                            // Own interface
 
 
 
@@ -49,18 +49,18 @@
 //
 // ldPreDispatchHook - reset per-request NGSI-LD state at the start of dispatch
 //
-// Runs as swRest's pre-dispatch hook (the start of the atomic final callback),
-// not at first-byte. swNgsild is __thread; resetting it here — rather than at
+// Runs as corRest's pre-dispatch hook (the start of the atomic final callback),
+// not at first-byte. corNgsild is __thread; resetting it here — rather than at
 // request-start — means its reset, population (param/parse hooks) and reads all
 // happen inside the one non-yielding dispatch, so another connection's request
-// interleaved on this pool thread can't leave stale swNgsild behind. No
-// post-response code reads swNgsild, so the dispatch window is the full extent.
+// interleaved on this pool thread can't leave stale corNgsild behind. No
+// post-response code reads corNgsild, so the dispatch window is the full extent.
 //
 static void ldPreDispatchHook(void)
 {
-  memset(&swNgsild, 0, sizeof(swNgsild));
+  memset(&corNgsild, 0, sizeof(corNgsild));
   ldCsrSubPendingDiscard();
-  swNgsild.limit = 20;
+  corNgsild.limit = 20;
 }
 
 
@@ -68,13 +68,13 @@ static void ldPreDispatchHook(void)
 // -----------------------------------------------------------------------------
 //
 // preExpandCheckCsrEntityTypes - reject empty-string `type` in CSR
-// information[].entities[] BEFORE swldExpandTree runs.
+// information[].entities[] BEFORE corLdExpandTree runs.
 //
 // JSON-LD @vocab expansion turns "" into the vocab prefix IRI, which
 // then sails past the post-expansion validator's empty-string check.
 // Catching this here, on the raw tree, avoids that whole loop.
 //
-// On reject: ldError raised + swNgsild.contextError set; caller
+// On reject: ldError raised + corNgsild.contextError set; caller
 // returns immediately. Returns true if a rejection was raised.
 //
 static bool preExpandCheckCsrEntityTypes(KjNode* bodyP)
@@ -136,7 +136,7 @@ static bool preExpandCheckCsrEntityTypes(KjNode* bodyP)
 // -----------------------------------------------------------------------------
 //
 // preExpandCheckEntityType - reject an empty-string entity `type` on one entity
-// object BEFORE swldExpandTree runs.
+// object BEFORE corLdExpandTree runs.
 //
 // JSON-LD @vocab expansion turns "" into the bare vocab-prefix IRI, which is no
 // longer empty by the time the post-expansion validator (ldCheckEntity) runs —
@@ -215,7 +215,7 @@ static bool preExpandCheckEntityTypes(KjNode* bodyP)
 //
 // ldFindEmbeddedAtContext - scan tree for any embedded @context child
 //
-// Called AFTER swldExpandTree has already stripped the @context from the
+// Called AFTER corLdExpandTree has already stripped the @context from the
 // permitted positions (root of an object body, first-level of each array
 // element). Anything left with the name "@context" is embedded and must
 // be rejected per § 4.5.1 / § 5.5.7.
@@ -348,20 +348,20 @@ static bool checkRawInputTree(KjNode* nodeP, bool checkEmpty)
 // and the HTTP binding binds it to ?format=simplified, with the deprecated
 // ?options=keyValues as the alternative spelling and format taking precedence.
 //
-// Read straight off the raw parameter list rather than from swNgsild.format:
-// swRest runs the payload-parse hook BEFORE it validates URL parameters and
-// calls the param hook (swRestInit.c — parse at ~542, params at ~650), so
-// swNgsild.format is still LdFormatNone while the body is being normalized.
+// Read straight off the raw parameter list rather than from corNgsild.format:
+// corRest runs the payload-parse hook BEFORE it validates URL parameters and
+// calls the param hook (corRestInit.c — parse at ~542, params at ~650), so
+// corNgsild.format is still LdFormatNone while the body is being normalized.
 // The array itself is populated by then; only its interpretation comes later.
 //
 static bool simplifiedBodyDeclared(void)
 {
   const char* options = NULL;
 
-  for (int ix = 0; ix < swRest.in.uriParamCount; ix++)
+  for (int ix = 0; ix < corRest.in.uriParamCount; ix++)
   {
-    const char* key = swRest.in.uriParamV[ix].key;
-    const char* val = swRest.in.uriParamV[ix].value;
+    const char* key = corRest.in.uriParamV[ix].key;
+    const char* val = corRest.in.uriParamV[ix].value;
 
     if (val == NULL)
       continue;
@@ -411,8 +411,8 @@ static void ldParseHook(void)
   // payload and must not be expanded. The service routine will read the
   // body as-is.
   //
-  if ((swRest.in.urlPath != NULL) &&
-      (strncmp(swRest.in.urlPath, "/ngsi-ld/v1/jsonldContexts", 26) == 0))
+  if ((corRest.in.urlPath != NULL) &&
+      (strncmp(corRest.in.urlPath, "/ngsi-ld/v1/jsonldContexts", 26) == 0))
   {
     return;
   }
@@ -425,15 +425,15 @@ static void ldParseHook(void)
   // context, which ldUrlParams set before this hook. Identified by the route's
   // trailing "/value" literal suffix.
   //
-  if ((swRest.serviceP != NULL) &&
-      (swRest.serviceP->matchAfterLastWildcardLen > 0) &&
-      (strcmp(swRest.serviceP->matchAfterLastWildcard, "/value") == 0))
+  if ((corRest.serviceP != NULL) &&
+      (corRest.serviceP->matchAfterLastWildcardLen > 0) &&
+      (strcmp(corRest.serviceP->matchAfterLastWildcard, "/value") == 0))
   {
     return;
   }
 
-  KjNode* atCtx    = kjLookup(swRest.in.requestTree, "@context");
-  char*   ct       = swRest.in.contentType;
+  KjNode* atCtx    = kjLookup(corRest.in.requestTree, "@context");
+  char*   ct       = corRest.in.contentType;
   bool    isLdJson = (ct != NULL && strncasecmp(ct, "application/ld+json", 19) == 0);
 
   //
@@ -444,27 +444,27 @@ static void ldParseHook(void)
   // spec-doubts #15 — the ETSI text doesn't spell this out, but it
   // matches established NGSI-LD listing behaviour.
   //
-  bool isArrayBody = (swRest.in.requestTree != NULL &&
-                      swRest.in.requestTree->type == KjArray);
+  bool isArrayBody = (corRest.in.requestTree != NULL &&
+                      corRest.in.requestTree->type == KjArray);
 
   // Per-element check policy:
   //   non-batch  → whole request 400 (one missing @context = whole body bad)
   //   batch      → per-entity error in batchPreErrors, batch handler folds
   //                them into its errors[] (§ 6.14.3.1 multi-status response)
-  uint64_t ldOp = (swRest.serviceP != NULL) ? swRest.serviceP->ldOp : 0;
+  uint64_t ldOp = (corRest.serviceP != NULL) ? corRest.serviceP->ldOp : 0;
   bool     isBatchOp = (ldOp & LD_OP_GROUP_BATCH) != 0;
 
   // @graph: a JSON-LD keyword we do not act on — remove it (no error) so it does
   // not linger in the stored entity. Top-level and per batch-array element.
-  if (swRest.in.requestTree->type == KjObject)
+  if (corRest.in.requestTree->type == KjObject)
   {
-    KjNode* g = kjLookup(swRest.in.requestTree, "@graph");
+    KjNode* g = kjLookup(corRest.in.requestTree, "@graph");
     if (g != NULL)
-      kjChildRemove(swRest.in.requestTree, g);
+      kjChildRemove(corRest.in.requestTree, g);
   }
   else if (isArrayBody)
   {
-    for (KjNode* elemP = swRest.in.requestTree->value.firstChildP; elemP != NULL; elemP = elemP->next)
+    for (KjNode* elemP = corRest.in.requestTree->value.firstChildP; elemP != NULL; elemP = elemP->next)
     {
       if (elemP->type != KjObject)
         continue;
@@ -483,7 +483,7 @@ static void ldParseHook(void)
     uint64_t snapshotOps = LdOpCreateSnapshot | LdOpCloneSnapshot | LdOpUpdateSnapshot |
                            LdOpRetrieveSnapshot | LdOpDeleteSnapshot | LdOpPurgeSnapshots;
     bool     checkEmpty  = ((ldOp & snapshotOps) == 0);
-    if (checkRawInputTree(swRest.in.requestTree, checkEmpty) == false)
+    if (checkRawInputTree(corRest.in.requestTree, checkEmpty) == false)
       return;
   }
 
@@ -506,27 +506,27 @@ static void ldParseHook(void)
   // service via options.features.entityArrayBody. Batch delete (id strings) and
   // batch query (a Query object) are not entity arrays and so are exempt.
   //
-  bool isEntityArrayOp = (swRest.serviceP != NULL &&
-                          swRest.serviceP->options.features.entityArrayBody);
+  bool isEntityArrayOp = (corRest.serviceP != NULL &&
+                          corRest.serviceP->options.features.entityArrayBody);
 
   if (isLdJson)
   {
     // A json-ld#context Link header is never allowed with application/ld+json.
-    for (int i = 0; i < swRest.in.httpHeaderCount; i++)
+    for (int i = 0; i < corRest.in.httpHeaderCount; i++)
     {
-      if (strcasecmp(swRest.in.httpHeaderV[i].key, "Link") == 0 &&
-          strstr(swRest.in.httpHeaderV[i].value, "json-ld#context") != NULL)
+      if (strcasecmp(corRest.in.httpHeaderV[i].key, "Link") == 0 &&
+          strstr(corRest.in.httpHeaderV[i].value, "json-ld#context") != NULL)
       {
         ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Conflicting @context",
                 "both @context in body and Link header not allowed with application/ld+json");
-        swNgsild.contextError = true;
+        corNgsild.contextError = true;
         return;
       }
     }
 
     if (isArrayBody && isEntityArrayOp)
     {
-      for (KjNode* elemP = swRest.in.requestTree->value.firstChildP; elemP != NULL; elemP = elemP->next)
+      for (KjNode* elemP = corRest.in.requestTree->value.firstChildP; elemP != NULL; elemP = elemP->next)
       {
         if (elemP->type != KjObject)
           continue;
@@ -534,7 +534,7 @@ static void ldParseHook(void)
         {
           ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Missing @context",
                   "every entity of an application/ld+json array body must carry an @context member");
-          swNgsild.contextError = true;
+          corNgsild.contextError = true;
           return;
         }
       }
@@ -543,7 +543,7 @@ static void ldParseHook(void)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Missing @context",
               "@context is mandatory for Content-Type application/ld+json");
-      swNgsild.contextError = true;
+      corNgsild.contextError = true;
       return;
     }
   }
@@ -551,7 +551,7 @@ static void ldParseHook(void)
   {
     if (isArrayBody && isEntityArrayOp)
     {
-      for (KjNode* elemP = swRest.in.requestTree->value.firstChildP; elemP != NULL; elemP = elemP->next)
+      for (KjNode* elemP = corRest.in.requestTree->value.firstChildP; elemP != NULL; elemP = elemP->next)
       {
         if (elemP->type != KjObject)
           continue;
@@ -559,7 +559,7 @@ static void ldParseHook(void)
         {
           ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Unexpected @context",
                   "@context in body not allowed for Content-Type application/json");
-          swNgsild.contextError = true;
+          corNgsild.contextError = true;
           return;
         }
       }
@@ -568,7 +568,7 @@ static void ldParseHook(void)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Unexpected @context",
               "@context in body not allowed for Content-Type application/json");
-      swNgsild.contextError = true;
+      corNgsild.contextError = true;
       return;
     }
   }
@@ -576,23 +576,23 @@ static void ldParseHook(void)
   //
   // For application/json: resolve @context from Link header or default user
   // context. For a single-object body the URL is injected as an @context
-  // child of the tree root — swldExpandTree picks it up. For an array body
-  // (batch op) JSON has no root to attach it to, so set swNgsild.contextP
-  // directly; swldExpandTree uses that as the per-element fallback when an
+  // child of the tree root — corLdExpandTree picks it up. For an array body
+  // (batch op) JSON has no root to attach it to, so set corNgsild.contextP
+  // directly; corLdExpandTree uses that as the per-element fallback when an
   // element carries no @context of its own (003_04_01).
   //
-  if (!isLdJson && swRest.in.requestTree != NULL)
+  if (!isLdJson && corRest.in.requestTree != NULL)
   {
     const char* contextUrl = NULL;
 
     // Check Link header for context URL
-    for (int i = 0; i < swRest.in.httpHeaderCount; i++)
+    for (int i = 0; i < corRest.in.httpHeaderCount; i++)
     {
-      if (strcasecmp(swRest.in.httpHeaderV[i].key, "Link") == 0 &&
-          strstr(swRest.in.httpHeaderV[i].value, "json-ld#context") != NULL)
+      if (strcasecmp(corRest.in.httpHeaderV[i].key, "Link") == 0 &&
+          strstr(corRest.in.httpHeaderV[i].value, "json-ld#context") != NULL)
       {
         // Extract URL from: <URL>; rel="..."; type="..."
-        char* v = swRest.in.httpHeaderV[i].value;
+        char* v = corRest.in.httpHeaderV[i].value;
 
         if (v[0] == '<')
         {
@@ -601,7 +601,7 @@ static void ldParseHook(void)
           if (end != NULL)
           {
             int   len = end - (v + 1);
-            char* url = kaAlloc(&swRest.kalloc, len + 1);
+            char* url = kaAlloc(&corRest.kalloc, len + 1);
 
             memcpy(url, v + 1, len);
             url[len] = '\0';
@@ -618,19 +618,19 @@ static void ldParseHook(void)
 
     if (contextUrl != NULL)
     {
-      swNgsild.userContextUrl = contextUrl;
+      corNgsild.userContextUrl = contextUrl;
 
       if (!isArrayBody)
       {
-        // Single-object body: inject @context so swldExpandTree picks it up.
-        KjNode* ctxNode = kjString(swRest.kjsonP, "@context", contextUrl);
-        kjChildAdd(swRest.in.requestTree, ctxNode);
+        // Single-object body: inject @context so corLdExpandTree picks it up.
+        KjNode* ctxNode = kjString(corRest.kjsonP, "@context", contextUrl);
+        kjChildAdd(corRest.in.requestTree, ctxNode);
       }
       else
       {
         // Array body (batch op): can't inject at the root. Pre-resolve so
-        // swldExpandTree uses it as the per-element fallback.
-        swNgsild.contextP = swldContextFromUrl(contextUrl, &swRest.kalloc);
+        // corLdExpandTree uses it as the per-element fallback.
+        corNgsild.contextP = corLdContextFromUrl(contextUrl, &corRest.kalloc);
       }
     }
   }
@@ -649,9 +649,9 @@ static void ldParseHook(void)
   const char* recordLabel     = NULL;
   KjNode*     typeP           = NULL;
   KjNode*     typePrevP       = NULL;
-  if (swRest.in.urlPath != NULL && swRest.in.requestTree != NULL && swRest.in.requestTree->type == KjObject)
+  if (corRest.in.urlPath != NULL && corRest.in.requestTree != NULL && corRest.in.requestTree->type == KjObject)
   {
-    const char* p = swRest.in.urlPath;
+    const char* p = corRest.in.urlPath;
     if      (strncmp(p, "/ngsi-ld/v1/subscriptions",         25) == 0) { recordTypeValue = "Subscription";              recordLabel = "Subscription"; }
     else if (strncmp(p, "/ngsi-ld/v1/csourceRegistrations",  32) == 0) { recordTypeValue = "ContextSourceRegistration"; recordLabel = "Registration"; }
     else if (strncmp(p, "/ngsi-ld/v1/csourceSubscriptions",  32) == 0) { recordTypeValue = "Subscription";              recordLabel = "Subscription"; }
@@ -659,13 +659,13 @@ static void ldParseHook(void)
     if (recordTypeValue != NULL)
     {
       KjNode* prev = NULL;
-      for (KjNode* c = swRest.in.requestTree->value.firstChildP; c != NULL; c = c->next)
+      for (KjNode* c = corRest.in.requestTree->value.firstChildP; c != NULL; c = c->next)
       {
         if (c->name != NULL && strcmp(c->name, "type") == 0) { typeP = c; typePrevP = prev; break; }
         prev = c;
       }
-      bool isCreate = (swRest.in.verb == SwVerbPost);
-      bool isUpdate = (swRest.in.verb == SwVerbPatch);
+      bool isCreate = (corRest.in.verb == CorVerbPost);
+      bool isUpdate = (corRest.in.verb == CorVerbPatch);
 
       // Update / PATCH: the spec doesn't forbid the body from carrying
       // type — only forbids changing it. ETSI 029_05_*/06_*/07_*/08_*/
@@ -678,7 +678,7 @@ static void ldParseHook(void)
       if (isCreate && typeP == NULL)
       {
         ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Missing Type", "%s 'type' is mandatory for create", recordLabel);
-        swNgsild.contextError = true;
+        corNgsild.contextError = true;
         return;
       }
       if (typeP != NULL)
@@ -686,10 +686,10 @@ static void ldParseHook(void)
         if (typeP->type != KjString || strcmp(typeP->value.s, recordTypeValue) != 0)
         {
           ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Type", "%s 'type' must be '%s'", recordLabel, recordTypeValue);
-          swNgsild.contextError = true;
+          corNgsild.contextError = true;
           return;
         }
-        kjNodeDecouple(swRest.in.requestTree, typeP, typePrevP);
+        kjNodeDecouple(corRest.in.requestTree, typeP, typePrevP);
       }
     }
   }
@@ -699,9 +699,9 @@ static void ldParseHook(void)
   // past the post-expansion validator.
   if (recordTypeValue != NULL && strcmp(recordTypeValue, "ContextSourceRegistration") == 0)
   {
-    if (preExpandCheckCsrEntityTypes(swRest.in.requestTree))
+    if (preExpandCheckCsrEntityTypes(corRest.in.requestTree))
     {
-      swNgsild.contextError = true;
+      corNgsild.contextError = true;
       return;
     }
   }
@@ -713,34 +713,34 @@ static void ldParseHook(void)
   {
     // urlPath is post-wildcard-stripping; the service pattern is the only
     // reliable way to spot attribute-fragment routes ("/ngsi-ld/v1/entities/*/attrs/*").
-    bool isAttrFragmentRoute = (swRest.serviceP != NULL
-                                && swRest.serviceP->url != NULL
-                                && strstr(swRest.serviceP->url, "/attrs/") != NULL);
-    bool isEntityPayloadPath = (swRest.in.urlPath != NULL
-                                && strncmp(swRest.in.urlPath, "/ngsi-ld/v1/entities", 20) == 0
+    bool isAttrFragmentRoute = (corRest.serviceP != NULL
+                                && corRest.serviceP->url != NULL
+                                && strstr(corRest.serviceP->url, "/attrs/") != NULL);
+    bool isEntityPayloadPath = (corRest.in.urlPath != NULL
+                                && strncmp(corRest.in.urlPath, "/ngsi-ld/v1/entities", 20) == 0
                                 && !isAttrFragmentRoute);
-    bool isEntityBatchPath   = (swRest.in.urlPath != NULL
-                                && strncmp(swRest.in.urlPath, "/ngsi-ld/v1/entityOperations/", 29) == 0);
+    bool isEntityBatchPath   = (corRest.in.urlPath != NULL
+                                && strncmp(corRest.in.urlPath, "/ngsi-ld/v1/entityOperations/", 29) == 0);
     if (isEntityPayloadPath || isEntityBatchPath)
     {
-      if (!ldCheckNamesAndContent(swRest.in.requestTree))
+      if (!ldCheckNamesAndContent(corRest.in.requestTree))
       {
-        swNgsild.contextError = true;
+        corNgsild.contextError = true;
         return;
       }
 
       // Empty-string entity type — must be caught pre-expansion (@vocab would
       // otherwise launder "" into the bare-prefix IRI and slip past ldCheckEntity).
-      if (preExpandCheckEntityTypes(swRest.in.requestTree))
+      if (preExpandCheckEntityTypes(corRest.in.requestTree))
       {
-        swNgsild.contextError = true;
+        corNgsild.contextError = true;
         return;
       }
     }
   }
 
   // § 5.2.2 / § 6.3.4 — pre-resolve every URL referenced by an in-body
-  // @context. swldExpandTree silently falls back to the broker's core
+  // @context. corLdExpandTree silently falls back to the broker's core
   // context when a download fails; without this check that produces a
   // (wrongly-)successful 201 with the entity stored under the default
   // context. ETSI 043_01_* expects 504 LdContextNotAvailable for an
@@ -757,14 +757,14 @@ static void ldParseHook(void)
       KjNode* node = itemArr[ai];
       if (node->type == KjString)
       {
-        if (swldContextFromUrl(node->value.s, &swRest.kalloc) == NULL)
+        if (corLdContextFromUrl(node->value.s, &corRest.kalloc) == NULL)
           offendingUrl = node->value.s;
       }
       else if (node->type == KjArray)
       {
         for (KjNode* c = node->value.firstChildP; c != NULL; c = c->next)
         {
-          if (c->type == KjString && swldContextFromUrl(c->value.s, &swRest.kalloc) == NULL)
+          if (c->type == KjString && corLdContextFromUrl(c->value.s, &corRest.kalloc) == NULL)
           { offendingUrl = c->value.s; break; }
         }
       }
@@ -779,12 +779,12 @@ static void ldParseHook(void)
       // ProblemDetails - "unable to retrieve" would replace an answer the
       // client can act on with one it cannot.
       //
-      if (swNgsild.contextError == true)
+      if (corNgsild.contextError == true)
         return;
 
       ldError(504, LD_ERROR_LD_CONTEXT_NOT_AVAILABLE, "Context Not Available",
               "unable to retrieve @context from '%s'", offendingUrl);
-      swNgsild.contextError = true;
+      corNgsild.contextError = true;
       return;
     }
   }
@@ -797,7 +797,7 @@ static void ldParseHook(void)
   if (isArrayBody && isBatchOp)
   {
     KjNode* prev = NULL;
-    KjNode* elemP = swRest.in.requestTree->value.firstChildP;
+    KjNode* elemP = corRest.in.requestTree->value.firstChildP;
     while (elemP != NULL)
     {
       KjNode* nextP = elemP->next;
@@ -807,38 +807,38 @@ static void ldParseHook(void)
         const char* badUrl = NULL;
         if (elemCtx != NULL && elemCtx->type == KjString)
         {
-          if (swldContextFromUrl(elemCtx->value.s, &swRest.kalloc) == NULL)
+          if (corLdContextFromUrl(elemCtx->value.s, &corRest.kalloc) == NULL)
             badUrl = elemCtx->value.s;
         }
         else if (elemCtx != NULL && elemCtx->type == KjArray)
         {
           for (KjNode* c = elemCtx->value.firstChildP; c != NULL; c = c->next)
           {
-            if (c->type == KjString && swldContextFromUrl(c->value.s, &swRest.kalloc) == NULL)
+            if (c->type == KjString && corLdContextFromUrl(c->value.s, &corRest.kalloc) == NULL)
             { badUrl = c->value.s; break; }
           }
         }
         if (badUrl != NULL)
         {
-          if (swNgsild.batchPreErrors == NULL)
-            swNgsild.batchPreErrors = kjArray(swRest.kjsonP, NULL);
+          if (corNgsild.batchPreErrors == NULL)
+            corNgsild.batchPreErrors = kjArray(corRest.kjsonP, NULL);
 
           const char* eid = "";
           KjNode* idP = kjLookup(elemP, "id");
           if (idP != NULL && idP->type == KjString) eid = idP->value.s;
 
-          KjNode* entry = kjObject(swRest.kjsonP, NULL);
-          kjChildAdd(entry, kjString(swRest.kjsonP, "entityId", eid));
-          KjNode* errObj = kjObject(swRest.kjsonP, "error");
-          kjChildAdd(errObj, kjString(swRest.kjsonP, "type",   LD_ERROR_LD_CONTEXT_NOT_AVAILABLE));
-          kjChildAdd(errObj, kjString(swRest.kjsonP, "title",  "Context Not Available"));
+          KjNode* entry = kjObject(corRest.kjsonP, NULL);
+          kjChildAdd(entry, kjString(corRest.kjsonP, "entityId", eid));
+          KjNode* errObj = kjObject(corRest.kjsonP, "error");
+          kjChildAdd(errObj, kjString(corRest.kjsonP, "type",   LD_ERROR_LD_CONTEXT_NOT_AVAILABLE));
+          kjChildAdd(errObj, kjString(corRest.kjsonP, "title",  "Context Not Available"));
           char detail[512];
           snprintf(detail, sizeof(detail), "unable to retrieve @context from '%s'", badUrl);
-          kjChildAdd(errObj, kjString(swRest.kjsonP, "detail", detail));
+          kjChildAdd(errObj, kjString(corRest.kjsonP, "detail", detail));
           kjChildAdd(entry, errObj);
-          kjChildAdd(swNgsild.batchPreErrors, entry);
+          kjChildAdd(corNgsild.batchPreErrors, entry);
 
-          kjNodeDecouple(swRest.in.requestTree, elemP, prev);
+          kjNodeDecouple(corRest.in.requestTree, elemP, prev);
         }
         else
         {
@@ -853,7 +853,7 @@ static void ldParseHook(void)
     }
   }
 
-  // Capture the raw in-body @context node BEFORE swldExpandTree strips
+  // Capture the raw in-body @context node BEFORE corLdExpandTree strips
   // it. § 5.5.5 / § 5.8.1.4: a Subscription with an inline-array or
   // inline-object @context becomes an ImplicitlyCreated @context whose
   // served URL is the subscription's `jsonldContext`. postSubscriptions
@@ -861,7 +861,7 @@ static void ldParseHook(void)
   // @context already carries its own URL, so we don't need to capture
   // anything for that case.
   if (atCtx != NULL && (atCtx->type == KjArray || atCtx->type == KjObject))
-    swNgsild.userContextBody = atCtx;
+    corNgsild.userContextBody = atCtx;
 
   // § 4.17 — for Subscription bodies, an entities[].type may carry a
   // type-selection expression like "(Building|Tower)". JSON-LD's
@@ -879,7 +879,7 @@ static void ldParseHook(void)
   int typeExprNodeN = 0;
   if (recordTypeValue != NULL && strcmp(recordTypeValue, "Subscription") == 0)
   {
-    KjNode* entitiesP = kjLookup(swRest.in.requestTree, "entities");
+    KjNode* entitiesP = kjLookup(corRest.in.requestTree, "entities");
     if (entitiesP != NULL && entitiesP->type == KjArray)
     {
       for (KjNode* selP = entitiesP->value.firstChildP;
@@ -911,12 +911,12 @@ static void ldParseHook(void)
     }
   }
 
-  // ldUrlParams.c has already set swNgsild.contextP from the Link header
-  // (or to the core context if no Link). swldExpandTree uses that as the
+  // ldUrlParams.c has already set corNgsild.contextP from the Link header
+  // (or to the core context if no Link). corLdExpandTree uses that as the
   // base context; an in-body @context overrides it for the body subtree
   // and becomes the new effective context (returned and chained back
-  // into swNgsild.contextP).
-  swNgsild.contextP = swldExpandTree(swRest.in.requestTree, swNgsild.contextP, &swRest.kalloc);
+  // into corNgsild.contextP).
+  corNgsild.contextP = corLdExpandTree(corRest.in.requestTree, corNgsild.contextP, &corRest.kalloc);
 
   // Reattach the decoupled type-selection expressions at their
   // original positions inside each selector object.
@@ -949,15 +949,15 @@ static void ldParseHook(void)
   {
     if (typePrevP == NULL)
     {
-      typeP->next = swRest.in.requestTree->value.firstChildP;
-      swRest.in.requestTree->value.firstChildP = typeP;
-      if (swRest.in.requestTree->lastChild == NULL) swRest.in.requestTree->lastChild = typeP;
+      typeP->next = corRest.in.requestTree->value.firstChildP;
+      corRest.in.requestTree->value.firstChildP = typeP;
+      if (corRest.in.requestTree->lastChild == NULL) corRest.in.requestTree->lastChild = typeP;
     }
     else
     {
       typeP->next = typePrevP->next;
       typePrevP->next = typeP;
-      if (typePrevP == swRest.in.requestTree->lastChild) swRest.in.requestTree->lastChild = typeP;
+      if (typePrevP == corRest.in.requestTree->lastChild) corRest.in.requestTree->lastChild = typeP;
     }
   }
 
@@ -967,20 +967,20 @@ static void ldParseHook(void)
   // shall not contain JSON-LD Scoped Contexts — they could rebind Core
   // terms (type, value, observedAt, ...) and corrupt the data model.
   //
-  // swldExpandTree has already removed the PERMITTED @contexts (root of an
+  // corLdExpandTree has already removed the PERMITTED @contexts (root of an
   // object body, first-level of each array element). If anything named
   // @context remains anywhere in the tree it's embedded → 400.
   //
-  if (swRest.in.requestTree != NULL)
+  if (corRest.in.requestTree != NULL)
   {
-    KjNode* offender = ldFindEmbeddedAtContext(swRest.in.requestTree);
+    KjNode* offender = ldFindEmbeddedAtContext(corRest.in.requestTree);
     if (offender != NULL)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Embedded @context",
               "@context is only allowed at the top of an entity (root for an object body, "
               "first-level of each element for a batch array) — embedding it inside an "
               "attribute, sub-attribute, or value is forbidden by § 4.5.1 / § 5.5.7");
-      swNgsild.contextError = true;
+      corNgsild.contextError = true;
       return;
     }
   }
@@ -988,13 +988,13 @@ static void ldParseHook(void)
   // If a user context URL was provided but expansion fell back to core context, the download failed.
   // Exception: when the user-provided URL IS the core context URL (e.g. inter-broker
   // notifications carrying the core context Link), resolving to coreP is correct, not a failure.
-  if (swNgsild.userContextUrl != NULL)
+  if (corNgsild.userContextUrl != NULL)
   {
-    SwldContext* coreP = swldCoreContext();
+    CorLdContext* coreP = corLdCoreContext();
     bool userUrlIsCore = (coreP != NULL && coreP->url != NULL
-                          && strcmp(swNgsild.userContextUrl, coreP->url) == 0);
+                          && strcmp(corNgsild.userContextUrl, coreP->url) == 0);
 
-    if ((swNgsild.contextP == NULL || swNgsild.contextP == coreP) && !userUrlIsCore)
+    if ((corNgsild.contextP == NULL || corNgsild.contextP == coreP) && !userUrlIsCore)
     {
       //
       // Unless the JSON-LD layer has already said something more precise. It
@@ -1003,12 +1003,12 @@ static void ldParseHook(void)
       // ProblemDetails - "unable to retrieve" would replace an answer the
       // client can act on with one it cannot.
       //
-      if (swNgsild.contextError == true)
+      if (corNgsild.contextError == true)
         return;
 
       ldError(504, LD_ERROR_LD_CONTEXT_NOT_AVAILABLE, "Context Not Available",
-              "unable to retrieve @context from '%s'", swNgsild.userContextUrl);
-      swNgsild.contextError = true;
+              "unable to retrieve @context from '%s'", corNgsild.userContextUrl);
+      corNgsild.contextError = true;
       return;
     }
   }
@@ -1022,18 +1022,18 @@ static void ldParseHook(void)
   // never reaches the normalize block). Doing it here — not inside
   // ldNormalizeInput — is the single point that covers them all.
   //
-  if (swRest.in.requestTree != NULL && swRest.in.urlPath != NULL
-      && (strncmp(swRest.in.urlPath, "/ngsi-ld/v1/entities",         20) == 0
-          || strncmp(swRest.in.urlPath, "/ngsi-ld/v1/entityOperations", 28) == 0))
-    ldStripSysAttrs(swRest.in.requestTree);
+  if (corRest.in.requestTree != NULL && corRest.in.urlPath != NULL
+      && (strncmp(corRest.in.urlPath, "/ngsi-ld/v1/entities",         20) == 0
+          || strncmp(corRest.in.urlPath, "/ngsi-ld/v1/entityOperations", 28) == 0))
+    ldStripSysAttrs(corRest.in.requestTree);
 
   //
   // Normalize input: convert simplified/concise NGSI-LD to normalized format.
   // Only applies to entity payloads — subscription and registration payloads
   // are passed through as-is.
   //
-  bool isEntityPayload = (swRest.in.urlPath != NULL
-                          && strncmp(swRest.in.urlPath, "/ngsi-ld/v1/entities", 20) == 0);
+  bool isEntityPayload = (corRest.in.urlPath != NULL
+                          && strncmp(corRest.in.urlPath, "/ngsi-ld/v1/entities", 20) == 0);
 
   //
   // PATCH/PUT/DELETE on /entities/{id}/attrs/{attrId} carry an attribute
@@ -1041,14 +1041,14 @@ static void ldParseHook(void)
   // entity (and wrapping its scalar children as simplified attributes)
   // would corrupt the payload.
   //
-  // swRest.in.urlPath has had its wildcard suffix stripped by the router
+  // corRest.in.urlPath has had its wildcard suffix stripped by the router
   // (e.g. "/ngsi-ld/v1/entities/urn:V/attrs/isParked" → "/ngsi-ld/v1/entities/urn:V"),
   // so checking it for "/attrs/" misses every attribute-fragment route.
   // Use the matched service's pattern URL — that one keeps the full shape
   // including wildcards, e.g. "/ngsi-ld/v1/entities/*/attrs/*".
-  bool isAttrFragmentUrl = (swRest.serviceP != NULL
-                            && swRest.serviceP->url != NULL
-                            && strstr(swRest.serviceP->url, "/attrs/") != NULL);
+  bool isAttrFragmentUrl = (corRest.serviceP != NULL
+                            && corRest.serviceP->url != NULL
+                            && strstr(corRest.serviceP->url, "/attrs/") != NULL);
 
   //
   // § 5.2.7 — the leading '/' of a Scope is optional: it is there, it is just implicit.
@@ -1060,11 +1060,11 @@ static void ldParseHook(void)
   // An attribute fragment is not an Entity - a member named "scope" there is a
   // sub-attribute of the addressed Attribute, and none of the broker's business.
   //
-  if (swRest.in.requestTree != NULL && swRest.in.urlPath != NULL && !isAttrFragmentUrl
+  if (corRest.in.requestTree != NULL && corRest.in.urlPath != NULL && !isAttrFragmentUrl
       && (isEntityPayload
-          || strncmp(swRest.in.urlPath, "/ngsi-ld/v1/entityOperations",     28) == 0
-          || strncmp(swRest.in.urlPath, "/ngsi-ld/v1/csourceRegistrations", 32) == 0))
-    ldScopeCanonicalize(swRest.in.requestTree, &swRest.kalloc);
+          || strncmp(corRest.in.urlPath, "/ngsi-ld/v1/entityOperations",     28) == 0
+          || strncmp(corRest.in.urlPath, "/ngsi-ld/v1/csourceRegistrations", 32) == 0))
+    ldScopeCanonicalize(corRest.in.requestTree, &corRest.kalloc);
 
   if (isEntityPayload && !isAttrFragmentUrl)
   {
@@ -1077,7 +1077,7 @@ static void ldParseHook(void)
     // attribute is overwritten wholesale — so simplified input must be fully
     // normalized (scalars/objects wrapped as Properties); leaving a scalar raw
     // made ldApiEntityToDbModel silently drop it. Hence mergeMode only for merge.
-    bool mergeMode = (swRest.serviceP != NULL) && (swRest.serviceP->ldOp == LdOpMergeEntity);
+    bool mergeMode = (corRest.serviceP != NULL) && (corRest.serviceP->ldOp == LdOpMergeEntity);
 
     //
     // The HTTP binding: "when a merge operation applies to an existing Attribute the
@@ -1088,7 +1088,7 @@ static void ldParseHook(void)
     //
     bool simplified = mergeMode && simplifiedBodyDeclared();
 
-    ldNormalizeInput(swRest.in.requestTree, &swRest.kalloc, mergeMode, simplified);
+    ldNormalizeInput(corRest.in.requestTree, &corRest.kalloc, mergeMode, simplified);
   }
 }
 
@@ -1179,12 +1179,12 @@ static void filterDatasetId(KjNode* entityP, char** datasetIdV)
 //
 bool ldAcceptPrecondition(void)
 {
-  SwMimeType acceptType   = swAcceptParse(swRest.in.accept);
-  uint64_t   ldOp         = (swRest.serviceP != NULL) ? swRest.serviceP->ldOp : 0;
+  CorMimeType acceptType   = corAcceptParse(corRest.in.accept);
+  uint64_t   ldOp         = (corRest.serviceP != NULL) ? corRest.serviceP->ldOp : 0;
   bool       entityReadOp = (ldOp & (LdOpRetrieveEntity | LdOpQueryEntities | LdOpBatchQuery)) != 0;
 
-  if (acceptType == SwMimeNone ||
-      (acceptType == SwMimeGeoJson && !entityReadOp))
+  if (acceptType == CorMimeNone ||
+      (acceptType == CorMimeGeoJson && !entityReadOp))
   {
     ldError(406, LD_ERROR_INVALID_REQUEST, "Not Acceptable",
             "supported response media types: application/json, application/ld+json%s",
@@ -1212,18 +1212,18 @@ static void ldRenderHook(void)
   // plain ProblemDetails of that status: a lone exclusive-registration Conflict
   // (→ 409), or several uniform 404s. Any success, or mixed error statuses, is
   // a genuine partial result and stays 207. (ETSI-agreed; the spec is silent on
-  // the flattening, so we match what the test suite demands.) Reuse swRest's
+  // the flattening, so we match what the test suite demands.) Reuse corRest's
   // flat-error builder by handing it problemType/Title/Detail + clearing the tree.
   //
   // NOT for the /entityOperations batch ops: a batch always answers 207 with a
   // per-entity BatchOperationResult, even for a single failing entity — only the
   // single-entity distop writes (create/append/update/delete/...) flatten.
   //
-  if ((swRest.out.httpStatusCode == 207) && (swRest.out.problemType == NULL) && (swRest.out.responseTree != NULL) &&
-      (swRest.serviceP != NULL) && ((swRest.serviceP->ldOp & LD_OP_GROUP_BATCH) == 0))
+  if ((corRest.out.httpStatusCode == 207) && (corRest.out.problemType == NULL) && (corRest.out.responseTree != NULL) &&
+      (corRest.serviceP != NULL) && ((corRest.serviceP->ldOp & LD_OP_GROUP_BATCH) == 0))
   {
-    KjNode* successP = kjLookup(swRest.out.responseTree, "success");
-    KjNode* errorsP  = kjLookup(swRest.out.responseTree, "errors");
+    KjNode* successP = kjLookup(corRest.out.responseTree, "success");
+    KjNode* errorsP  = kjLookup(corRest.out.responseTree, "errors");
 
     if ((successP != NULL) && (successP->type == KjArray) && (successP->value.firstChildP == NULL) &&
         (errorsP  != NULL) && (errorsP->type  == KjArray) && (errorsP->value.firstChildP  != NULL))
@@ -1256,12 +1256,12 @@ static void ldRenderHook(void)
         KjNode* titleP  = kjLookup(errObjP, "title");
         KjNode* detailP = kjLookup(errObjP, "detail");
 
-        swRest.out.problemType    = ((typeP  != NULL) && (typeP->type  == KjString)) ? typeP->value.s  : NULL;
-        swRest.out.problemTitle   = ((titleP != NULL) && (titleP->type == KjString)) ? titleP->value.s : NULL;
+        corRest.out.problemType    = ((typeP  != NULL) && (typeP->type  == KjString)) ? typeP->value.s  : NULL;
+        corRest.out.problemTitle   = ((titleP != NULL) && (titleP->type == KjString)) ? titleP->value.s : NULL;
         if ((detailP != NULL) && (detailP->type == KjString))
-          snprintf(swRest.out.problemDetail, sizeof(swRest.out.problemDetail), "%s", detailP->value.s);
-        swRest.out.httpStatusCode = status;
-        swRest.out.responseTree   = NULL;
+          snprintf(corRest.out.problemDetail, sizeof(corRest.out.problemDetail), "%s", detailP->value.s);
+        corRest.out.httpStatusCode = status;
+        corRest.out.responseTree   = NULL;
       }
     }
   }
@@ -1271,25 +1271,25 @@ static void ldRenderHook(void)
   // ResourceNotFound only because a loop-blocked exclusive/redirect
   // registration is the sole holder of the data is really 508 Loop Detected —
   // the entity wasn't "not found", it's unreachable through the loop.
-  // ldDistOpLoopReap set swNgsild.loopBlocked508 when it dropped such a forward.
+  // ldDistOpLoopReap set corNgsild.loopBlocked508 when it dropped such a forward.
   //
-  if (swNgsild.loopBlocked508 &&
-      (swRest.out.httpStatusCode == 404) &&
-      (swRest.out.problemType != NULL) &&
-      (strcmp(swRest.out.problemType, LD_ERROR_RESOURCE_NOT_FOUND) == 0))
+  if (corNgsild.loopBlocked508 &&
+      (corRest.out.httpStatusCode == 404) &&
+      (corRest.out.problemType != NULL) &&
+      (strcmp(corRest.out.problemType, LD_ERROR_RESOURCE_NOT_FOUND) == 0))
   {
-    swRest.out.httpStatusCode = 508;
-    swRest.out.problemType    = LD_ERROR_LOOP_DETECTED;
-    swRest.out.problemTitle   = "Loop Detected";
-    snprintf(swRest.out.problemDetail, sizeof(swRest.out.problemDetail), "%s",
+    corRest.out.httpStatusCode = 508;
+    corRest.out.problemType    = LD_ERROR_LOOP_DETECTED;
+    corRest.out.problemTitle   = "Loop Detected";
+    snprintf(corRest.out.problemDetail, sizeof(corRest.out.problemDetail), "%s",
              "distributed operation loop detected: the data is held by an exclusive/redirect "
              "registration that resolves back to this broker");
   }
 
   // Bail out of body formatting on error — the response is a
-  // ProblemDetails JSON object built by swRest from problemType /
+  // ProblemDetails JSON object built by corRest from problemType /
   // problemTitle / problemDetail; nothing for us to compact.
-  if (swRest.out.problemType != NULL)
+  if (corRest.out.problemType != NULL)
     return;
 
   // § 6.2.3 — an error response that returns a payload, or a partial success
@@ -1302,30 +1302,30 @@ static void ldRenderHook(void)
   // force the media type and skip ALL of the context machinery below
   // (compaction, an inline @context, and the Link header): the body is already
   // FQN and any of those would (re)introduce a context that must not be there.
-  if ((swRest.out.httpStatusCode == 207) || (swRest.out.httpStatusCode >= 400))
+  if ((corRest.out.httpStatusCode == 207) || (corRest.out.httpStatusCode >= 400))
   {
-    swRest.out.contentType = (char*) swMimeString(SwMimeJson);
+    corRest.out.contentType = (char*) corMimeString(CorMimeJson);
     return;
   }
 
-  KjNode* treeP = swRest.out.responseTree;
+  KjNode* treeP = corRest.out.responseTree;
 
   //
   // Entity-specific transforms (skip for rawResponse, e.g. subscription responses)
   //
-  if (!swNgsild.rawResponse)
+  if (!corNgsild.rawResponse)
   {
     // Apply datasetId filtering on storage-format tree (before ldEntityToApi)
-    if (swNgsild.datasetIdV != NULL)
+    if (corNgsild.datasetIdV != NULL)
     {
       if (treeP != NULL && treeP->type == KjArray)
       {
         for (KjNode* itemP = treeP->value.firstChildP; itemP != NULL; itemP = itemP->next)
-          filterDatasetId(itemP, swNgsild.datasetIdV);
+          filterDatasetId(itemP, corNgsild.datasetIdV);
       }
       else
       {
-        filterDatasetId(treeP, swNgsild.datasetIdV);
+        filterDatasetId(treeP, corNgsild.datasetIdV);
       }
     }
 
@@ -1333,58 +1333,58 @@ static void ldRenderHook(void)
     if (treeP != NULL && treeP->type == KjArray)
     {
       for (KjNode* itemP = treeP->value.firstChildP; itemP != NULL; itemP = itemP->next)
-        ldEntityToApi(itemP, &swRest.kalloc);
+        ldEntityToApi(itemP, &corRest.kalloc);
     }
     else
     {
-      ldEntityToApi(treeP, &swRest.kalloc);
+      ldEntityToApi(treeP, &corRest.kalloc);
     }
 
-    if (swNgsild.sysAttrs == false)
-      ldStripSysAttrs(swRest.out.responseTree);
+    if (corNgsild.sysAttrs == false)
+      ldStripSysAttrs(corRest.out.responseTree);
 
     // Apply lang reduction BEFORE format simplification — the simplification
     // strips the LanguageProperty wrapper, leaving the languageMap dict.
     // Reducing afterwards would have nothing to reduce.
-    if (swNgsild.lang != NULL)
+    if (corNgsild.lang != NULL)
     {
       if (treeP != NULL && treeP->type == KjArray)
       {
         for (KjNode* itemP = treeP->value.firstChildP; itemP != NULL; itemP = itemP->next)
-          ldLangReduce(itemP, swNgsild.lang, &swRest.kalloc);
+          ldLangReduce(itemP, corNgsild.lang, &corRest.kalloc);
       }
       else
       {
-        ldLangReduce(treeP, swNgsild.lang, &swRest.kalloc);
+        ldLangReduce(treeP, corNgsild.lang, &corRest.kalloc);
       }
     }
 
     // Apply representation format (simplified/concise/normalized)
-    if (swNgsild.format == LdFormatSimplified || swNgsild.format == LdFormatConcise)
+    if (corNgsild.format == LdFormatSimplified || corNgsild.format == LdFormatConcise)
     {
-      void (*formatFn)(KjNode*, KAlloc*) = (swNgsild.format == LdFormatSimplified) ? (void(*)(KjNode*, KAlloc*)) ldToSimplified : (void(*)(KjNode*, KAlloc*)) ldToConcise;
+      void (*formatFn)(KjNode*, KAlloc*) = (corNgsild.format == LdFormatSimplified) ? (void(*)(KjNode*, KAlloc*)) ldToSimplified : (void(*)(KjNode*, KAlloc*)) ldToConcise;
 
       if (treeP != NULL && treeP->type == KjArray)
       {
         for (KjNode* itemP = treeP->value.firstChildP; itemP != NULL; itemP = itemP->next)
-          formatFn(itemP, &swRest.kalloc);
+          formatFn(itemP, &corRest.kalloc);
       }
       else
       {
-        formatFn(treeP, &swRest.kalloc);
+        formatFn(treeP, &corRest.kalloc);
       }
     }
 
     // § 4.5.8: simplified temporal representation. Runs after ldEntityToApi
     // (which is a no-op on temporal trees — attrs are KjArrays, skipped) so
     // the resulting object-shaped attrs aren't re-mangled by ldEntityToApi.
-    if (swNgsild.format == LdFormatTemporalValues)
-      ldToTemporalValues(treeP, swNgsild.timeproperty, swRest.kjsonP, &swRest.kalloc);
+    if (corNgsild.format == LdFormatTemporalValues)
+      ldToTemporalValues(treeP, corNgsild.timeproperty, corRest.kjsonP, &corRest.kalloc);
 
     // § 4.5.20: aggregated temporal representation. Numeric Property only
     // for now. Same renderHook position as temporalValues — runs after
     // ldEntityToApi so the bucketed-object attrs aren't re-mangled.
-    if (swNgsild.format == LdFormatAggregatedValues && swNgsild.aggrMethodsV != NULL)
+    if (corNgsild.format == LdFormatAggregatedValues && corNgsild.aggrMethodsV != NULL)
     {
       // § 5.3.2.7: aggrPeriodDuration absent, or any spelling of zero, means a
       // single bucket over the whole [timeAt, endTimeAt) window - an all-zero
@@ -1392,62 +1392,62 @@ static void ldRenderHook(void)
       // param was parsed (ldUrlParams), so the parse cannot fail here; ignoring
       // the return keeps the zero default if it somehow did.
       LdDuration period = { 0, 0 };
-      if (swNgsild.aggrPeriodDuration != NULL)
-        ldIso8601DurationParse(swNgsild.aggrPeriodDuration, &period);
-      uint64_t startNs  = swNgsild.timeAtNs;       // 0 → ldToAggregatedValues uses earliest sample seen
-      uint64_t endNs    = swNgsild.endTimeAtNs;    // 0 → ldToAggregatedValues uses latest sample seen
-      ldToAggregatedValues(treeP, swNgsild.aggrMethodsV, period.months, period.ns, startNs, endNs,
-                           swNgsild.timeproperty, swRest.kjsonP, &swRest.kalloc);
+      if (corNgsild.aggrPeriodDuration != NULL)
+        ldIso8601DurationParse(corNgsild.aggrPeriodDuration, &period);
+      uint64_t startNs  = corNgsild.timeAtNs;       // 0 → ldToAggregatedValues uses earliest sample seen
+      uint64_t endNs    = corNgsild.endTimeAtNs;    // 0 → ldToAggregatedValues uses latest sample seen
+      ldToAggregatedValues(treeP, corNgsild.aggrMethodsV, period.months, period.ns, startNs, endNs,
+                           corNgsild.timeproperty, corRest.kjsonP, &corRest.kalloc);
     }
   }
 
   // § 6.3.4 Accept negotiation already ran at the top of this hook —
   // here we only need the GeoJSON branch decision for the format
   // path (the unacceptable-Accept case has already returned).
-  SwMimeType acceptType    = swAcceptParse(swRest.in.accept);
-  bool         acceptGeoJson = (acceptType == SwMimeGeoJson);
+  CorMimeType acceptType    = corAcceptParse(corRest.in.accept);
+  bool         acceptGeoJson = (acceptType == CorMimeGeoJson);
   if (acceptGeoJson && treeP != NULL)
   {
-    ldToGeoJson(&swRest.out.responseTree, swNgsild.geometryProperty, swRest.kjsonP);
-    treeP = swRest.out.responseTree;
-    swRest.out.contentType = (char*) swMimeString(SwMimeGeoJson);
+    ldToGeoJson(&corRest.out.responseTree, corNgsild.geometryProperty, corRest.kjsonP);
+    treeP = corRest.out.responseTree;
+    corRest.out.contentType = (char*) corMimeString(CorMimeGeoJson);
   }
 
   // Resolve the response context. Honors (in order):
-  //   - body @context already parsed into swNgsild.contextP (ld+json POSTs),
-  //   - Link header URL captured into swNgsild.userContextUrl
+  //   - body @context already parsed into corNgsild.contextP (ld+json POSTs),
+  //   - Link header URL captured into corNgsild.userContextUrl
   //     (json POSTs/PATCHes — captured by ldParseHook when a body is present),
   //   - Link header parsed here (json GETs / DELETEs — no body, so the
   //     parse hook never ran the URL-capture branch),
   //   - core context (last-resort).
   // The same context is used both to compact the response and to advertise
   // it via Link / inline @context further below.
-  SwldContext* respCtxP = NULL;
-  if (swNgsild.contextP != NULL)
+  CorLdContext* respCtxP = NULL;
+  if (corNgsild.contextP != NULL)
   {
-    respCtxP = swNgsild.contextP;
+    respCtxP = corNgsild.contextP;
     if (respCtxP->url == NULL && respCtxP->isArray && respCtxP->contexts == 1
         && respCtxP->contextV != NULL && respCtxP->contextV[0] != NULL)
       respCtxP = respCtxP->contextV[0];
   }
   if (respCtxP == NULL || respCtxP->url == NULL)
   {
-    const char* linkUrl = swNgsild.userContextUrl;
+    const char* linkUrl = corNgsild.userContextUrl;
     if (linkUrl == NULL)
     {
-      for (int i = 0; i < swRest.in.httpHeaderCount; i++)
+      for (int i = 0; i < corRest.in.httpHeaderCount; i++)
       {
-        if (strcasecmp(swRest.in.httpHeaderV[i].key, "Link") == 0 &&
-            strstr(swRest.in.httpHeaderV[i].value, "json-ld#context") != NULL)
+        if (strcasecmp(corRest.in.httpHeaderV[i].key, "Link") == 0 &&
+            strstr(corRest.in.httpHeaderV[i].value, "json-ld#context") != NULL)
         {
-          char* v = swRest.in.httpHeaderV[i].value;
+          char* v = corRest.in.httpHeaderV[i].value;
           if (v[0] == '<')
           {
             char* end = strchr(v + 1, '>');
             if (end != NULL)
             {
               int   len = end - (v + 1);
-              char* url = kaAlloc(&swRest.kalloc, len + 1);
+              char* url = kaAlloc(&corRest.kalloc, len + 1);
               memcpy(url, v + 1, len);
               url[len] = '\0';
               linkUrl = url;
@@ -1458,21 +1458,21 @@ static void ldRenderHook(void)
       }
     }
     if (linkUrl != NULL)
-      respCtxP = swldContextFromUrl(linkUrl, &swRest.kalloc);
+      respCtxP = corLdContextFromUrl(linkUrl, &corRest.kalloc);
   }
   // Default user @context (§ 4 / § 8.2.3): no body/Link context on this
   // request → compact the response in, and advertise it via, the broker-
   // configured default user context so a naked-json client can decode the
   // short names. Core still wins term-by-term.
   if (respCtxP == NULL && ldDefaultContextUrl != NULL)
-    respCtxP = swldContextFromUrl(ldDefaultContextUrl, &swRest.kalloc);
+    respCtxP = corLdContextFromUrl(ldDefaultContextUrl, &corRest.kalloc);
   if (respCtxP == NULL)
-    respCtxP = swldCoreContext();
+    respCtxP = corLdCoreContext();
 
   if (respCtxP != NULL)
-    swldCompactTreeWith(swRest.out.responseTree, respCtxP);
+    corLdCompactTreeWith(corRest.out.responseTree, respCtxP);
   else
-    swldCompactTree(swRest.out.responseTree);
+    corLdCompactTree(corRest.out.responseTree);
 
   // (lang reduction now happens earlier — before format simplification)
 
@@ -1484,12 +1484,12 @@ static void ldRenderHook(void)
   // A 201 Created body is either empty or an array of created entity ids
   // (entityOperations) — never compacted terms — so there is no response
   // @context to advertise, neither inline nor via a Link header.
-  if (swRest.out.httpStatusCode == 201)
+  if (corRest.out.httpStatusCode == 201)
     return;
 
-  SwldContext* ctxP   = respCtxP;
+  CorLdContext* ctxP   = respCtxP;
   const char*  ctxUrl = (ctxP != NULL) ? ctxP->url : NULL;
-  bool         acceptLdJson = (acceptType == SwMimeLdJson);
+  bool         acceptLdJson = (acceptType == CorMimeLdJson);
 
   // The response is compacted in the request's vocabulary (above), so the
   // @context it speaks must be referenceable — but a Link header carries a
@@ -1497,10 +1497,10 @@ static void ldRenderHook(void)
   // as a one-shot served context so json responses get a resolvable Link
   // and ld+json bodies a resolvable @context. Without this the response
   // would carry compacted short names with no way to expand them.
-  if (ctxUrl == NULL && ctxP != NULL && ctxP != swldCoreContext() &&
-      swNgsild.userContextBody != NULL)
+  if (ctxUrl == NULL && ctxP != NULL && ctxP != corLdCoreContext() &&
+      corNgsild.userContextBody != NULL)
   {
-    SwldContext* hostedP = ldContextHostVolatile(swNgsild.userContextBody);
+    CorLdContext* hostedP = ldContextHostVolatile(corNgsild.userContextBody);
     if (hostedP != NULL)
       ctxUrl = hostedP->url;
   }
@@ -1512,11 +1512,11 @@ static void ldRenderHook(void)
   //     "body=ld+json" → in the body (mirrors ld+json, no Link); "body=json"
   //     → omitted from the body and served via the Link header (mirrors json).
   bool preferBodyJson = false;
-  for (int hi = 0; hi < swRest.in.httpHeaderCount; hi++)
+  for (int hi = 0; hi < corRest.in.httpHeaderCount; hi++)
   {
-    if (strcasecmp(swRest.in.httpHeaderV[hi].key, "Prefer") == 0)
+    if (strcasecmp(corRest.in.httpHeaderV[hi].key, "Prefer") == 0)
     {
-      const char* p = strstr(swRest.in.httpHeaderV[hi].value, "body=");
+      const char* p = strstr(corRest.in.httpHeaderV[hi].value, "body=");
       if (p != NULL && strncmp(p + 5, "json", 4) == 0 &&
           (p[9] == 0 || p[9] == ';' || p[9] == ' ' || p[9] == ','))
         preferBodyJson = true;
@@ -1534,19 +1534,19 @@ static void ldRenderHook(void)
       {
         if (itemP->type == KjObject)
         {
-          KjNode* ctxNode = kjString(swRest.kjsonP, "@context", ctxUrl);
+          KjNode* ctxNode = kjString(corRest.kjsonP, "@context", ctxUrl);
           kjChildAdd(itemP, ctxNode);
         }
       }
     }
     else if (treeP->type == KjObject)
     {
-      KjNode* ctxNode = kjString(swRest.kjsonP, "@context", ctxUrl);
+      KjNode* ctxNode = kjString(corRest.kjsonP, "@context", ctxUrl);
       kjChildAdd(treeP, ctxNode);
     }
 
     if (acceptLdJson)
-      swRest.out.contentType = (char*) swMimeString(SwMimeLdJson);
+      corRest.out.contentType = (char*) corMimeString(CorMimeLdJson);
     // (geo+json content-type was already set above when ldToGeoJson ran)
   }
 
@@ -1560,17 +1560,17 @@ static void ldRenderHook(void)
     // pagination relations (031_02_*, 041_03_*, 046_14_01).
     static const char suffix[] = ">; rel=\"http://www.w3.org/ns/json-ld#context\"; type=\"application/ld+json\"";
     int               linkLen  = 1 + strlen(ctxUrl) + (sizeof(suffix) - 1) + 1;
-    char*             linkBuf  = kaAlloc(&swRest.kalloc, linkLen);
+    char*             linkBuf  = kaAlloc(&corRest.kalloc, linkLen);
 
     strcpy(linkBuf, "<");
     strcat(linkBuf, ctxUrl);
     strcat(linkBuf, suffix);
 
-    SwRestKeyValue* hV = swRest.out.headerV;
-    int ix = swRest.out.headerCount;
+    CorRestKeyValue* hV = corRest.out.headerV;
+    int ix = corRest.out.headerCount;
     hV[ix].key   = "Link";
     hV[ix].value = linkBuf;
-    swRest.out.headerCount = ix + 1;
+    corRest.out.headerCount = ix + 1;
   }
 }
 
@@ -1578,25 +1578,25 @@ static void ldRenderHook(void)
 
 // -----------------------------------------------------------------------------
 //
-// swNgsildStateCreate / swNgsildStateFree - per-connection swNgsild lifecycle
+// corNgsildStateCreate / corNgsildStateFree - per-connection corNgsild lifecycle
 //
-// Registered as swRest's userData hooks: swRest creates one SwNgsild per
-// connection (stored in swRest.userData) and frees it when the connection's
-// state is released. The swNgsild macro (SwNgsild.h) reaches it through
-// swRest.userData, so the live NGSI-LD state follows the connection rather than
+// Registered as corRest's userData hooks: corRest creates one CorNgsild per
+// connection (stored in corRest.userData) and frees it when the connection's
+// state is released. The corNgsild macro (CorNgsild.h) reaches it through
+// corRest.userData, so the live NGSI-LD state follows the connection rather than
 // the thread — required once a request can be processed off the I/O thread.
 //
-static void* swNgsildStateCreate(void)
+static void* corNgsildStateCreate(void)
 {
-  SwNgsild* p = (SwNgsild*) malloc(sizeof(SwNgsild));
+  CorNgsild* p = (CorNgsild*) malloc(sizeof(CorNgsild));
   if (p != NULL)
-    memset(p, 0, sizeof(SwNgsild));
+    memset(p, 0, sizeof(CorNgsild));
   return p;
 }
 
-static void swNgsildStateFree(void* p)
+static void corNgsildStateFree(void* p)
 {
-  SwNgsild* sn = (SwNgsild*) p;
+  CorNgsild* sn = (CorNgsild*) p;
   if (sn == NULL)
     return;
 
@@ -1616,13 +1616,13 @@ static void swNgsildStateFree(void* p)
 
 // -----------------------------------------------------------------------------
 //
-// ldHooksRegister - register all NGSI-LD hooks with swRest
+// ldHooksRegister - register all NGSI-LD hooks with corRest
 //
 void ldHooksRegister(void)
 {
-  swRestSetPreDispatchHook(ldPreDispatchHook);
-  swRestSetPayloadParseHook(ldParseHook);
-  swRestSetPayloadRenderHook(ldRenderHook);
-  swRestSetParamHook(ldParamHook);
-  swRestSetUserDataHooks(swNgsildStateCreate, swNgsildStateFree);
+  corRestSetPreDispatchHook(ldPreDispatchHook);
+  corRestSetPayloadParseHook(ldParseHook);
+  corRestSetPayloadRenderHook(ldRenderHook);
+  corRestSetParamHook(ldParamHook);
+  corRestSetUserDataHooks(corNgsildStateCreate, corNgsildStateFree);
 }

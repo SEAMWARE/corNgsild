@@ -1,5 +1,5 @@
-#ifndef SW_NGSILD_LD_STATS_FLUSH_LOOP_H
-#define SW_NGSILD_LD_STATS_FLUSH_LOOP_H
+#ifndef COR_NGSILD_LD_STATS_FLUSH_LOOP_H
+#define COR_NGSILD_LD_STATS_FLUSH_LOOP_H
 
 //
 // FILE            ldStatsFlushLoop.h
@@ -44,4 +44,4 @@ extern void ldStatsFlushLoopStart(int intervalSec, LdStatsFlushAllFn flushFn);
 //
 extern void ldStatsFlushLoopStop(void);
 
-#endif  // SW_NGSILD_LD_STATS_FLUSH_LOOP_H
+#endif  // COR_NGSILD_LD_STATS_FLUSH_LOOP_H

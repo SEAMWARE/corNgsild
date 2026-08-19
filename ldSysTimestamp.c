@@ -10,14 +10,14 @@
 #include <string.h>                                      // strcmp, strcpy, strlen
 #include <time.h>                                        // gmtime_r, strftime
 
-#include "swRest/swRest.h"                            // swRest
+#include "corRest/corRest.h"                            // corRest
 #include "kalloc/KAlloc.h"                             // KAlloc
 #include "kalloc/kaAlloc.h"                            // kaAlloc
 #include "kjson/KjNode.h"                               // KjNode
 #include "kjson/kjBuilder.h"                              // kjInteger, kjChildAdd
 #include "kjson/kjLookup.h"                              // kjLookup
-#include "swNgsild/LdVocab.h"                            // LD_VOCAB_CREATED_AT, LD_VOCAB_MODIFIED_AT
-#include "swNgsild/ldSysTimestamp.h"                     // Own interface
+#include "corNgsild/LdVocab.h"                            // LD_VOCAB_CREATED_AT, LD_VOCAB_MODIFIED_AT
+#include "corNgsild/ldSysTimestamp.h"                     // Own interface
 
 
 
@@ -106,10 +106,10 @@ void ldSysTimestampCreate(KjNode* treeP)
   if (treeP == NULL || treeP->type != KjObject)
     return;
 
-  long long now = (long long) swRest.requestStartTime;
+  long long now = (long long) corRest.requestStartTime;
 
-  kjChildAdd(treeP, kjInteger(swRest.kjsonP, LD_VOCAB_CREATED_AT,  now));
-  kjChildAdd(treeP, kjInteger(swRest.kjsonP, LD_VOCAB_MODIFIED_AT, now));
+  kjChildAdd(treeP, kjInteger(corRest.kjsonP, LD_VOCAB_CREATED_AT,  now));
+  kjChildAdd(treeP, kjInteger(corRest.kjsonP, LD_VOCAB_MODIFIED_AT, now));
 }
 
 
@@ -123,7 +123,7 @@ void ldSysTimestampModify(KjNode* treeP)
   if (treeP == NULL || treeP->type != KjObject)
     return;
 
-  long long now  = (long long) swRest.requestStartTime;
+  long long now  = (long long) corRest.requestStartTime;
   KjNode*   modP = kjLookup(treeP, LD_VOCAB_MODIFIED_AT);
 
   if (modP != NULL)
@@ -132,5 +132,5 @@ void ldSysTimestampModify(KjNode* treeP)
     modP->value.i = now;
   }
   else
-    kjChildAdd(treeP, kjInteger(swRest.kjsonP, LD_VOCAB_MODIFIED_AT, now));
+    kjChildAdd(treeP, kjInteger(corRest.kjsonP, LD_VOCAB_MODIFIED_AT, now));
 }

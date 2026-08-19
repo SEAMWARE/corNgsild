@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDSNAPSHOTNOTIFY_H_
-#define SWNGSILD_LDSNAPSHOTNOTIFY_H_
+#ifndef CORNGSILD_LDSNAPSHOTNOTIFY_H_
+#define CORNGSILD_LDSNAPSHOTNOTIFY_H_
 
 //
 // FILE            ldSnapshotNotify.h
@@ -17,7 +17,7 @@
 // No-op when the Snapshot's `endpoint` member is unset.
 //
 #include <stdbool.h>                                     // bool
-#include "swNgsild/LdSnapshotCache.h"                    // LdSnapshotCacheItem
+#include "corNgsild/LdSnapshotCache.h"                    // LdSnapshotCacheItem
 
 
 // -----------------------------------------------------------------------------
@@ -31,4 +31,4 @@
 //
 extern void ldSnapshotNotify(LdSnapshotCacheItem* itemP, bool deleted);
 
-#endif  // SWNGSILD_LDSNAPSHOTNOTIFY_H_
+#endif  // CORNGSILD_LDSNAPSHOTNOTIFY_H_

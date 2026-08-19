@@ -12,12 +12,12 @@
 #include "kalloc/KAlloc.h"                             // kaAlloc
 #include "kalloc/kaAlloc.h"                            // kaAlloc
 #include "kalloc/kaStrdup.h"                            // kaStrdup
-#include "swJsonld/swldExpand.h"                           // swldExpand
+#include "corJsonld/corLdExpand.h"                           // corLdExpand
 
-#include "swNgsild/LdProblem.h"                          // LD_ERROR_BAD_REQUEST_DATA
-#include "swNgsild/SwNgsild.h"                           // swNgsild
-#include "swNgsild/ldError.h"                            // ldError
-#include "swNgsild/LdTypeExpr.h"                         // Own interface
+#include "corNgsild/LdProblem.h"                          // LD_ERROR_BAD_REQUEST_DATA
+#include "corNgsild/CorNgsild.h"                           // corNgsild
+#include "corNgsild/ldError.h"                            // ldError
+#include "corNgsild/LdTypeExpr.h"                         // Own interface
 
 
 
@@ -50,11 +50,11 @@ static char* memStrdup(KAlloc* kaP, const char* s)
 //
 static char* expandType(const char* name, KAlloc* kaP)
 {
-  char* expanded = swldExpand(swNgsild.contextP, name, kaP, NULL, NULL);
+  char* expanded = corLdExpand(corNgsild.contextP, name, kaP, NULL, NULL);
 
   if (expanded != NULL)
   {
-    // swldExpand uses kaP; if we're in malloc-mode (kaP == NULL) the
+    // corLdExpand uses kaP; if we're in malloc-mode (kaP == NULL) the
     // returned pointer wouldn't survive a request boundary. Re-strdup
     // it on the heap so the tree is fully malloc-owned.
     return (kaP != NULL) ? expanded : strdup(expanded);

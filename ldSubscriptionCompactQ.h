@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDSUBSCRIPTIONCOMPACTQ_H_
-#define SWNGSILD_LDSUBSCRIPTIONCOMPACTQ_H_
+#ifndef CORNGSILD_LDSUBSCRIPTIONCOMPACTQ_H_
+#define CORNGSILD_LDSUBSCRIPTIONCOMPACTQ_H_
 
 //
 // FILE            ldSubscriptionCompactQ.h
@@ -15,8 +15,8 @@
 //
 #include "kalloc/KAlloc.h"                             // KAlloc
 #include "kjson/KjNode.h"                              // KjNode
-#include "swJsonld/SwldContext.h"                      // SwldContext
-#include "swNgsild/LdQ.h"                              // LdQNode
+#include "corJsonld/CorLdContext.h"                      // CorLdContext
+#include "corNgsild/LdQ.h"                              // LdQNode
 
 
 
@@ -29,6 +29,6 @@
 // contextP:  @context to compact against (NULL = URL-encode all attr IRIs)
 // allocP:    allocator for the compacted string
 //
-extern void ldSubscriptionCompactQ(KjNode* subP, LdQNode* qExpr, SwldContext* contextP, KAlloc* allocP);
+extern void ldSubscriptionCompactQ(KjNode* subP, LdQNode* qExpr, CorLdContext* contextP, KAlloc* allocP);
 
-#endif  // SWNGSILD_LDSUBSCRIPTIONCOMPACTQ_H_
+#endif  // CORNGSILD_LDSUBSCRIPTIONCOMPACTQ_H_

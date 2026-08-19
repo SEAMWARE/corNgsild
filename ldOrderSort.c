@@ -12,15 +12,15 @@
 #include <stdlib.h>                                    // qsort
 #include <string.h>                                    // strcmp, strcasecmp
 
-#ifdef SW_WITH_ICU
+#ifdef COR_WITH_ICU
 #include <unicode/ucol.h>                              // UCollator, ucol_open, ucol_strcollUTF8
 #endif
 
 #include "kjson/KjNode.h"                              // KjNode, KjObject, KjArray
 #include "kjson/kjLookup.h"                            // kjLookup
 
-#include "swNgsild/LdOrder.h"                          // LdOrderTerm, LdOrderDir
-#include "swNgsild/ldOrderSort.h"                      // Own interface
+#include "corNgsild/LdOrder.h"                          // LdOrderTerm, LdOrderDir
+#include "corNgsild/ldOrderSort.h"                      // Own interface
 
 
 
@@ -28,7 +28,7 @@
 static __thread LdOrderTerm* sortTerms;
 static __thread int          sortTermCount;
 
-#ifdef SW_WITH_ICU
+#ifdef COR_WITH_ICU
 // Per-sort ICU collator, opened once in ldOrderSort and read by the comparator
 // (opening one per comparison would be catastrophic inside qsort).
 static __thread UCollator*   sortCollatorP;
@@ -51,7 +51,7 @@ static __thread UCollator*   sortCollatorP;
 //
 static int strCollate(const char* a, const char* b)
 {
-#ifdef SW_WITH_ICU
+#ifdef COR_WITH_ICU
   if (sortCollatorP != NULL)
   {
     UErrorCode        ec = U_ZERO_ERROR;
@@ -398,7 +398,7 @@ void ldOrderSort(KjNode* arrayP, LdOrderTerm* terms, int termCount, const char* 
   sortTerms     = terms;
   sortTermCount = termCount;
 
-#ifdef SW_WITH_ICU
+#ifdef COR_WITH_ICU
   // Open one collator for the whole sort: the requested collation= locale, or
   // "" for the § 7.6.2.1 root order. ICU falls back to root for an unknown tag
   // (best-effort), so an unsupported collation is never an error. On failure
@@ -413,7 +413,7 @@ void ldOrderSort(KjNode* arrayP, LdOrderTerm* terms, int termCount, const char* 
 
   qsort(ptrV, count, sizeof(KjNode*), entityCompare);
 
-#ifdef SW_WITH_ICU
+#ifdef COR_WITH_ICU
   if (sortCollatorP != NULL)
   {
     ucol_close(sortCollatorP);

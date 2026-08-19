@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LD_IS_ENTITY_KEYWORD_H_
-#define SWNGSILD_LD_IS_ENTITY_KEYWORD_H_
+#ifndef CORNGSILD_LD_IS_ENTITY_KEYWORD_H_
+#define CORNGSILD_LD_IS_ENTITY_KEYWORD_H_
 
 //
 // FILE            ldIsEntityKeyword.h
@@ -11,7 +11,7 @@
 #include <stdbool.h>
 #include <string.h>
 
-#include "swNgsild/LdVocab.h"
+#include "corNgsild/LdVocab.h"
 
 
 
@@ -56,4 +56,4 @@ static inline bool ldIsNotAttributeName(const char* name)
   return ldIsEntityKeyword(name);
 }
 
-#endif  // SWNGSILD_LD_IS_ENTITY_KEYWORD_H_
+#endif  // CORNGSILD_LD_IS_ENTITY_KEYWORD_H_

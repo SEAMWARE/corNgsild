@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDPARAMS_H_
-#define SWNGSILD_LDPARAMS_H_
+#ifndef CORNGSILD_LDPARAMS_H_
+#define CORNGSILD_LDPARAMS_H_
 
 //
 // FILE            ldParams.h
@@ -11,7 +11,7 @@
 //
 #include <stdint.h>                                      // uint64_t
 
-#include "swRest/swRest.h"                             // SwRestParam
+#include "corRest/corRest.h"                             // CorRestParam
 
 
 
@@ -397,14 +397,14 @@
 //
 // ldParamRegistryV - parameter name-to-bit registry (NULL-terminated)
 //
-extern SwRestParam ldParamRegistryV[];
+extern CorRestParam ldParamRegistryV[];
 
 
 
 // -----------------------------------------------------------------------------
 //
-// ldParamsInit - register all NGSI-LD URL parameters with swRest
+// ldParamsInit - register all NGSI-LD URL parameters with corRest
 //
 extern bool ldParamsInit(void);
 
-#endif  // SWNGSILD_LDPARAMS_H_
+#endif  // CORNGSILD_LDPARAMS_H_

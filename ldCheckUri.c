@@ -8,9 +8,9 @@
 #include <stdbool.h>                                     // bool
 #include <stddef.h>                                      // NULL
 
-#include "swNgsild/LdProblem.h"                          // LD_ERROR_*
-#include "swNgsild/ldError.h"                            // ldError
-#include "swNgsild/ldCheckUri.h"                         // Own interface
+#include "corNgsild/LdProblem.h"                          // LD_ERROR_*
+#include "corNgsild/ldError.h"                            // ldError
+#include "corNgsild/ldCheckUri.h"                         // Own interface
 
 
 

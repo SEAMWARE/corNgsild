@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDHOOKS_H_
-#define SWNGSILD_LDHOOKS_H_
+#ifndef CORNGSILD_LDHOOKS_H_
+#define CORNGSILD_LDHOOKS_H_
 
 //
 // FILE            ldHooks.h
@@ -14,7 +14,7 @@
 
 // -----------------------------------------------------------------------------
 //
-// ldHooksRegister - register all NGSI-LD hooks with swRest
+// ldHooksRegister - register all NGSI-LD hooks with corRest
 //
 // Registers requestStart, parse, render, and param hooks.
 // Called from ldInit().
@@ -34,4 +34,4 @@ extern void ldHooksRegister(void);
 //
 extern bool ldAcceptPrecondition(void);
 
-#endif  // SWNGSILD_LDHOOKS_H_
+#endif  // CORNGSILD_LDHOOKS_H_

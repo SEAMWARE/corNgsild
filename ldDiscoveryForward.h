@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LD_DISCOVERY_FORWARD_H_
-#define SWNGSILD_LD_DISCOVERY_FORWARD_H_
+#ifndef CORNGSILD_LD_DISCOVERY_FORWARD_H_
+#define CORNGSILD_LD_DISCOVERY_FORWARD_H_
 //
 // FILE            ldDiscoveryForward.h
 //
@@ -9,7 +9,7 @@
 //
 #include <stdbool.h>
 #include "kjson/KjNode.h"
-#include "swNgsild/LdRegCache.h"
+#include "corNgsild/LdRegCache.h"
 
 //
 // ldDiscoveryShouldForward - true if the current request's hop budget

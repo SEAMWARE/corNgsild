@@ -9,17 +9,17 @@
 #include <stdio.h>                                       // snprintf
 #include <string.h>                                      // strcmp, strchr
 
-#include "swRest/swRest.h"                               // swRest
-#include "swRest/SwRestService.h"                        // SwRestService.ldOp
-#include "swNgsild/SwNgsild.h"                           // swNgsild
-#include "swNgsild/LdOp.h"                               // LdOpQueryEntities, LdOpQueryTemporal, LdOpBatchQuery
-#include "swNgsild/ldParams.h"                           // LD_PARAM_GEOREL, LD_PARAM_GEOMETRY, ...
-#include "swNgsild/LdProblem.h"                          // LD_ERROR_*
-#include "swNgsild/ldError.h"                            // ldError
-#include "swNgsild/ldCheckGeo.h"                         // ldCheckGeoQuery
-#include "swRest/SwRestIn.h"                      // swAcceptParse, SwMimeGeoJson
+#include "corRest/corRest.h"                               // corRest
+#include "corRest/CorRestService.h"                        // CorRestService.ldOp
+#include "corNgsild/CorNgsild.h"                           // corNgsild
+#include "corNgsild/LdOp.h"                               // LdOpQueryEntities, LdOpQueryTemporal, LdOpBatchQuery
+#include "corNgsild/ldParams.h"                           // LD_PARAM_GEOREL, LD_PARAM_GEOMETRY, ...
+#include "corNgsild/LdProblem.h"                          // LD_ERROR_*
+#include "corNgsild/ldError.h"                            // ldError
+#include "corNgsild/ldCheckGeo.h"                         // ldCheckGeoQuery
+#include "corRest/CorRestIn.h"                      // corAcceptParse, CorMimeGeoJson
 
-#include "swNgsild/ldParamsValidate.h"                   // Own interface
+#include "corNgsild/ldParamsValidate.h"                   // Own interface
 
 
 
@@ -27,7 +27,7 @@
 //
 // looksLikeUri -
 //
-// Cheap shape check shared with the path-segment validator (swRest):
+// Cheap shape check shared with the path-segment validator (corRest):
 // must contain a non-leading colon followed by something, no whitespace.
 //
 static bool looksLikeUri(const char* s)
@@ -63,7 +63,7 @@ static bool nameInArray(const char* name, char** arr)
 bool ldParamsValidate(void)
 {
   // limit=0 is only valid when count=true (NGSI-LD spec clause 6.3.10)
-  if (swNgsild.limit == 0 && swNgsild.count == false)
+  if (corNgsild.limit == 0 && corNgsild.count == false)
   {
     ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid request", "limit=0 is only valid when count=true");
     return true;
@@ -71,7 +71,7 @@ bool ldParamsValidate(void)
 
   // § 6.4.7.3: firstN paginates ascending, lastN descending — both at
   // once is contradictory.
-  if (swNgsild.firstN > 0 && swNgsild.lastN > 0)
+  if (corNgsild.firstN > 0 && corNgsild.lastN > 0)
   {
     ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid request",
             "?firstN= and ?lastN= cannot be combined (ascending vs descending temporal pagination)");
@@ -80,14 +80,14 @@ bool ldParamsValidate(void)
 
   // § 4.21: pick and omit are alternative projections — listing the same
   // entity member in both is contradictory and shall be 400.
-  if (swNgsild.pickV != NULL && swNgsild.omitV != NULL)
+  if (corNgsild.pickV != NULL && corNgsild.omitV != NULL)
   {
-    for (int i = 0; swNgsild.pickV[i] != NULL; i++)
+    for (int i = 0; corNgsild.pickV[i] != NULL; i++)
     {
-      if (nameInArray(swNgsild.pickV[i], swNgsild.omitV))
+      if (nameInArray(corNgsild.pickV[i], corNgsild.omitV))
       {
         ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid request",
-                "'%s' appears in both pick and omit", swNgsild.pickV[i]);
+                "'%s' appears in both pick and omit", corNgsild.pickV[i]);
         return true;
       }
     }
@@ -95,7 +95,7 @@ bool ldParamsValidate(void)
 
   // § 6.3.20 / § 5.10.2: `attrs` is a deprecated synonym for pick. Mixing
   // it with either pick or omit is contradictory.
-  if (swNgsild.attrs != NULL && (swNgsild.pick != NULL || swNgsild.omit != NULL))
+  if (corNgsild.attrs != NULL && (corNgsild.pick != NULL || corNgsild.omit != NULL))
   {
     ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid request",
             "?attrs= cannot be combined with ?pick= or ?omit=");
@@ -104,14 +104,14 @@ bool ldParamsValidate(void)
 
   // ?id= URL param: each entry shall be a valid URI (§ 5.7.2.6 wording
   // applied to the array form).
-  if (swNgsild.idV != NULL)
+  if (corNgsild.idV != NULL)
   {
-    for (int i = 0; swNgsild.idV[i] != NULL; i++)
+    for (int i = 0; corNgsild.idV[i] != NULL; i++)
     {
-      if (!looksLikeUri(swNgsild.idV[i]))
+      if (!looksLikeUri(corNgsild.idV[i]))
       {
         ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid request",
-                "'?id': '%s' is not a valid URI", swNgsild.idV[i]);
+                "'?id': '%s' is not a valid URI", corNgsild.idV[i]);
         return true;
       }
     }
@@ -121,11 +121,11 @@ bool ldParamsValidate(void)
   // id/type/scope/@context are not attribute names — passing them in
   // ?attrs= is BadRequestData. (?pick allows them; that's a different
   // language by design.)
-  if (swNgsild.attrsV != NULL)
+  if (corNgsild.attrsV != NULL)
   {
-    for (int i = 0; swNgsild.attrsV[i] != NULL; i++)
+    for (int i = 0; corNgsild.attrsV[i] != NULL; i++)
     {
-      const char* a = swNgsild.attrsV[i];
+      const char* a = corNgsild.attrsV[i];
       if (strcmp(a, "id")       == 0 ||
           strcmp(a, "type")     == 0 ||
           strcmp(a, "scope")    == 0 ||
@@ -150,12 +150,12 @@ bool ldParamsValidate(void)
   // received-params bitmask (was it given?), not the parsed pointer — so a
   // given-but-rejected param still counts as present (and the 400 gate above
   // keeps its specific message).
-  if (swRest.out.httpStatusCode < 400)
+  if (corRest.out.httpStatusCode < 400)
   {
-    bool hasGeorel      = (swRest.in.uriParamMask & LD_PARAM_GEOREL)      != 0;
-    bool hasGeometry    = (swRest.in.uriParamMask & LD_PARAM_GEOMETRY)    != 0;
-    bool hasCoordinates = (swRest.in.uriParamMask & LD_PARAM_COORDINATES) != 0;
-    bool hasGeoproperty = (swRest.in.uriParamMask & LD_PARAM_GEOPROPERTY) != 0;
+    bool hasGeorel      = (corRest.in.uriParamMask & LD_PARAM_GEOREL)      != 0;
+    bool hasGeometry    = (corRest.in.uriParamMask & LD_PARAM_GEOMETRY)    != 0;
+    bool hasCoordinates = (corRest.in.uriParamMask & LD_PARAM_COORDINATES) != 0;
+    bool hasGeoproperty = (corRest.in.uriParamMask & LD_PARAM_GEOPROPERTY) != 0;
 
     if (hasGeorel || hasGeometry || hasCoordinates)
     {
@@ -185,9 +185,9 @@ bool ldParamsValidate(void)
   // checks we apply to entity GeoProperty values, so an invalid query
   // polygon surfaces as 400 BadRequestData here instead of as a 500 from
   // the DB layer (mongo's 2dsphere is strict about edge crossings).
-  if (swNgsild.geometry != NULL && swNgsild.coordinates != NULL)
+  if (corNgsild.geometry != NULL && corNgsild.coordinates != NULL)
   {
-    if (!ldCheckGeoQuery(swNgsild.geometry, swNgsild.coordinates))
+    if (!ldCheckGeoQuery(corNgsild.geometry, corNgsild.coordinates))
       return true;
   }
 
@@ -197,13 +197,13 @@ bool ldParamsValidate(void)
   // surfaces as a 500 leaking the raw $geoWithin error from the DB layer.
   // Gated on no prior error so a bad geometry/coordinates value (rejected
   // earlier in ldUrlParams) keeps its own, more specific message.
-  if (swRest.out.httpStatusCode < 400 &&
-      swNgsild.geoRel != NULL && swNgsild.geoRel->rel == LdGeoWithin && swNgsild.geometry != NULL)
+  if (corRest.out.httpStatusCode < 400 &&
+      corNgsild.geoRel != NULL && corNgsild.geoRel->rel == LdGeoWithin && corNgsild.geometry != NULL)
   {
-    if (strcmp(swNgsild.geometry, "Polygon") != 0 && strcmp(swNgsild.geometry, "MultiPolygon") != 0)
+    if (strcmp(corNgsild.geometry, "Polygon") != 0 && strcmp(corNgsild.geometry, "MultiPolygon") != 0)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid geo-query",
-              "georel 'within' requires a Polygon or MultiPolygon reference geometry (got '%s')", swNgsild.geometry);
+              "georel 'within' requires a Polygon or MultiPolygon reference geometry (got '%s')", corNgsild.geometry);
       return true;
     }
   }
@@ -212,9 +212,9 @@ bool ldParamsValidate(void)
   // GeoProperty whose value becomes the GeoJSON "geometry" field, so it is
   // only meaningful when the response is GeoJSON. If it is supplied with any
   // other Accept it shall be rejected as 400 BadRequestData.
-  if (swRest.out.httpStatusCode < 400 &&
-      swNgsild.geometryProperty != NULL &&
-      swAcceptParse(swRest.in.accept) != SwMimeGeoJson)
+  if (corRest.out.httpStatusCode < 400 &&
+      corNgsild.geometryProperty != NULL &&
+      corAcceptParse(corRest.in.accept) != CorMimeGeoJson)
   {
     ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid request",
             "geometryProperty is only valid with Accept: application/geo+json");
@@ -235,20 +235,20 @@ bool ldParamsValidate(void)
   // URL-param query verbs (GET /entities, GET /temporal/entities).
   // The POST body-based variants (POST /entityOperations/query and
   // POST /temporal/entityOperations/query) carry their selectors in
-  // the body, which the parse hook can't translate to swNgsild fields
+  // the body, which the parse hook can't translate to corNgsild fields
   // — that happens in the service routine, after this validate hook.
   // Without the verb gate, body-based queries would falsely 400 here.
-  uint64_t op = (swRest.serviceP != NULL) ? swRest.serviceP->ldOp : 0;
+  uint64_t op = (corRest.serviceP != NULL) ? corRest.serviceP->ldOp : 0;
   if ((op & (LdOpQueryEntities | LdOpQueryTemporal)) &&
-      swRest.in.verb == SwVerbGet &&
-      swNgsild.entityMapId == NULL)
+      corRest.in.verb == CorVerbGet &&
+      corNgsild.entityMapId == NULL)
   {
-    bool haveSelector = (swNgsild.type != NULL)
-                     || (swNgsild.attrs != NULL)
-                     || (swNgsild.q != NULL)
-                     || (swNgsild.georel != NULL && swNgsild.geometry != NULL && swNgsild.coordinates != NULL)
-                     || (swNgsild.scopeQ != NULL)
-                     || (swNgsild.local == true);
+    bool haveSelector = (corNgsild.type != NULL)
+                     || (corNgsild.attrs != NULL)
+                     || (corNgsild.q != NULL)
+                     || (corNgsild.georel != NULL && corNgsild.geometry != NULL && corNgsild.coordinates != NULL)
+                     || (corNgsild.scopeQ != NULL)
+                     || (corNgsild.local == true);
     if (!haveSelector)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid request",

@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDSNAPSHOTCACHE_H_
-#define SWNGSILD_LDSNAPSHOTCACHE_H_
+#ifndef CORNGSILD_LDSNAPSHOTCACHE_H_
+#define CORNGSILD_LDSNAPSHOTCACHE_H_
 
 //
 // FILE            LdSnapshotCache.h
@@ -95,4 +95,4 @@ extern LdSnapshotCacheItem*  ldSnapshotCacheItemLookup(LdSnapshotCache* cacheP,
 extern bool                  ldSnapshotCacheItemDelete(LdSnapshotCache* cacheP,
                                                        const char*      id);
 
-#endif  // SWNGSILD_LDSNAPSHOTCACHE_H_
+#endif  // CORNGSILD_LDSNAPSHOTCACHE_H_

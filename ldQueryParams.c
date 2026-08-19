@@ -12,11 +12,11 @@
 #include "kalloc/KAlloc.h"                           // kaAlloc
 #include "kalloc/kaAlloc.h"                            // kaAlloc
 #include "kalloc/kaStrdup.h"                          // kaStrdup
-#include "swRest/swRest.h"                           // swRest
-#include "swJsonld/swldExpand.h"                         // swldExpand
+#include "corRest/corRest.h"                           // corRest
+#include "corJsonld/corLdExpand.h"                         // corLdExpand
 
-#include "swNgsild/SwNgsild.h"                         // swNgsild
-#include "swNgsild/ldQueryParams.h"                    // Own interface
+#include "corNgsild/CorNgsild.h"                         // corNgsild
+#include "corNgsild/ldQueryParams.h"                    // Own interface
 
 
 
@@ -26,10 +26,10 @@
 //
 char* ldQueryParamValue(const char* name)
 {
-  for (int ix = 0; ix < swRest.in.uriParamCount; ix++)
+  for (int ix = 0; ix < corRest.in.uriParamCount; ix++)
   {
-    if (strcmp(swRest.in.uriParamV[ix].key, name) == 0)
-      return swRest.in.uriParamV[ix].value;
+    if (strcmp(corRest.in.uriParamV[ix].key, name) == 0)
+      return corRest.in.uriParamV[ix].value;
   }
 
   return NULL;
@@ -105,7 +105,7 @@ char** ldParamExpandV(char** srcV, KAlloc* faP)
 
   for (int ix = 0; ix < count; ix++)
   {
-    char* expanded = swldExpand(swNgsild.contextP, srcV[ix], faP, NULL, NULL);
+    char* expanded = corLdExpand(corNgsild.contextP, srcV[ix], faP, NULL, NULL);
     result[ix] = (expanded != NULL) ? expanded : kaStrdup(faP, srcV[ix]);
   }
 

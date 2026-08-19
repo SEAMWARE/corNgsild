@@ -7,7 +7,7 @@
 // 
 //
 #include <stdbool.h>                                     // bool
-#include "swRest/swRest.h"                            // swRest
+#include "corRest/corRest.h"                            // corRest
 #include <string.h>                                      // strcmp
 
 #include "kbase/kLibLog.h"                             // KLOG_T
@@ -16,13 +16,13 @@
 #include "kjson/kjBuilder.h"                             // kjString
 #include "kjson/kjLookup.h"                              // kjLookup
 
-#include "swNgsild/LdAttrType.h"                         // LdAttrType
-#include "swNgsild/LdVocab.h"                            // LD_VOCAB_*
-#include "swNgsild/ldTypes.h"                            // ldAttrTypeToString
-#include "swNgsild/ldAttrTypeDetect.h"                   // ldAttrTypeDetect
-#include "swNgsild/ldIsEntityKeyword.h"                   // ldIsEntityKeyword
-#include "swNgsild/ldRender.h"                           // Own interface
-#include "swNgsild/ldTraceLevels.h"                      // LdTRender
+#include "corNgsild/LdAttrType.h"                         // LdAttrType
+#include "corNgsild/LdVocab.h"                            // LD_VOCAB_*
+#include "corNgsild/ldTypes.h"                            // ldAttrTypeToString
+#include "corNgsild/ldAttrTypeDetect.h"                   // ldAttrTypeDetect
+#include "corNgsild/ldIsEntityKeyword.h"                   // ldIsEntityKeyword
+#include "corNgsild/ldRender.h"                           // Own interface
+#include "corNgsild/ldTraceLevels.h"                      // LdTRender
 
 
 
@@ -109,7 +109,7 @@ static void attrToNormalized(KjNode* attrP, KAlloc* faP)
   // Add "type" if missing
   if (hasType == false)
   {
-    KjNode* typeNodeP = kjString(swRest.kjsonP, "type", ldAttrTypeToString(attrType));
+    KjNode* typeNodeP = kjString(corRest.kjsonP, "type", ldAttrTypeToString(attrType));
     if (typeNodeP != NULL)
     {
       // Insert at the beginning

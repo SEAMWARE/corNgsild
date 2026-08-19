@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDNOTIFYSTATSHOOK_H_
-#define SWNGSILD_LDNOTIFYSTATSHOOK_H_
+#ifndef CORNGSILD_LDNOTIFYSTATSHOOK_H_
+#define CORNGSILD_LDNOTIFYSTATSHOOK_H_
 
 //
 // FILE            ldNotifyStatsHook.h
@@ -10,7 +10,7 @@
 //
 // Optional callback fired each time a notification is POSTed — for
 // the broker's metrics layer (Prometheus counters, etc.) to bump a
-// success / failure counter without swNgsild depending on it.
+// success / failure counter without corNgsild depending on it.
 //
 // csrSub == true  → CSR-subscription notification (§ 5.11)
 // csrSub == false → entity-subscription notification (§ 5.8)
@@ -27,4 +27,4 @@ typedef void (*LdNotifyStatsHook)(bool csrSub, bool success);
 extern void ldNotifyStatsHookSet(LdNotifyStatsHook fn);
 extern void ldNotifyStatsHookInvoke(bool csrSub, bool success);
 
-#endif  // SWNGSILD_LDNOTIFYSTATSHOOK_H_
+#endif  // CORNGSILD_LDNOTIFYSTATSHOOK_H_

@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDCHECKSUBSCRIPTION_H_
-#define SWNGSILD_LDCHECKSUBSCRIPTION_H_
+#ifndef CORNGSILD_LDCHECKSUBSCRIPTION_H_
+#define CORNGSILD_LDCHECKSUBSCRIPTION_H_
 
 //
 // FILE            ldCheckSubscription.h
@@ -13,8 +13,8 @@
 
 #include "kalloc/KAlloc.h"                             // KAlloc
 #include "kjson/KjNode.h"                               // KjNode
-#include "swNgsild/LdOp.h"                               // LdOp
-#include "swNgsild/LdFormat.h"                           // LdFormat
+#include "corNgsild/LdOp.h"                               // LdOp
+#include "corNgsild/LdFormat.h"                           // LdFormat
 
 
 
@@ -36,9 +36,9 @@ extern bool ldCheckSubscription(KjNode* subP, LdOp op, bool merged, LdFormat* no
 // -----------------------------------------------------------------------------
 //
 // ldSubEntityTypeExprsRelease - free the per-request entity-type-expr scratch
-// (per-thread swNgsild side-channel). Called from the broker's post-response
+// (per-thread corNgsild side-channel). Called from the broker's post-response
 // hook so the buffer is released per request rather than leaked at thread exit.
 //
 extern void ldSubEntityTypeExprsRelease(void);
 
-#endif  // SWNGSILD_LDCHECKSUBSCRIPTION_H_
+#endif  // CORNGSILD_LDCHECKSUBSCRIPTION_H_

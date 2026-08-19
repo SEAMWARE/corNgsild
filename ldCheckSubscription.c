@@ -24,22 +24,22 @@
 #include "kjson/kjRender.h"                            // kjFastRender
 #include "kjson/kjRenderSize.h"                        // kjFastRenderSize
 
-#include "swNgsild/LdOp.h"                               // LdOp
-#include "swNgsild/SwNgsild.h"                           // swNgsild
-#include "swNgsild/LdTypeExpr.h"                         // ldTypeExprParse, ldTypeExprFree
-#include "swNgsild/LdCheck.h"                            // OBJECT_CHECK, STRING_CHECK, ...
-#include "swNgsild/LdVocab.h"                            // LD_VOCAB_*
-#include "swNgsild/LdGeoRel.h"                            // ldGeoRelParse
-#include "swNgsild/LdScopeExpr.h"                         // ldScopeExprParse
-#include "swNgsild/ldSubscriptionNotify.h"               // ldTriggerFromString
-#include "swNgsild/ldQParse.h"                           // ldQParse
-#include "swNgsild/ldCheckGeo.h"                          // ldCheckGeoQuery
-#include "swNgsild/ldTypes.h"                            // ldOpToString
-#include "swNgsild/ldError.h"                            // ldError
-#include "swRest/SwRestIn.h"                      // swAcceptParse, SwMimeType
-#include "swNgsild/ldCheckSubscription.h"                // Own interface
-#include "swNgsild/ldConformanceDowngrade.h"             // ldConformanceParse
-#include "swNgsild/ldTraceLevels.h"                      // LdTCheckSub
+#include "corNgsild/LdOp.h"                               // LdOp
+#include "corNgsild/CorNgsild.h"                           // corNgsild
+#include "corNgsild/LdTypeExpr.h"                         // ldTypeExprParse, ldTypeExprFree
+#include "corNgsild/LdCheck.h"                            // OBJECT_CHECK, STRING_CHECK, ...
+#include "corNgsild/LdVocab.h"                            // LD_VOCAB_*
+#include "corNgsild/LdGeoRel.h"                            // ldGeoRelParse
+#include "corNgsild/LdScopeExpr.h"                         // ldScopeExprParse
+#include "corNgsild/ldSubscriptionNotify.h"               // ldTriggerFromString
+#include "corNgsild/ldQParse.h"                           // ldQParse
+#include "corNgsild/ldCheckGeo.h"                          // ldCheckGeoQuery
+#include "corNgsild/ldTypes.h"                            // ldOpToString
+#include "corNgsild/ldError.h"                            // ldError
+#include "corRest/CorRestIn.h"                      // corAcceptParse, CorMimeType
+#include "corNgsild/ldCheckSubscription.h"                // Own interface
+#include "corNgsild/ldConformanceDowngrade.h"             // ldConformanceParse
+#include "corNgsild/ldTraceLevels.h"                      // LdTCheckSub
 
 
 
@@ -110,7 +110,7 @@ static bool checkNotifierInfo(KjNode* niP)
 // (TS 104-176 § 6.5.2: a "custom" header that shall adhere to RFC 7230).
 // receiverInfo must not carry headers the broker itself manages — doing so
 // yields a duplicate/conflicting header and an RFC-7230-invalid notification.
-// The spec is silent on the remedy; swBroker rejects with 400 (spec-doubt #100):
+// The spec is silent on the remedy; coraine rejects with 400 (spec-doubt #100):
 //   - Content-Length / Date / Transfer-Encoding / Host        → 400 (always)
 //   - Content-Type that isn't a notif media type, or conflicts
 //     with endpoint.accept                                     → 400
@@ -128,11 +128,11 @@ static bool checkReceiverInfo(KjNode* riP, KjNode* acceptP)
   ARRAY_CHECK(riP, "Invalid Subscription", "'notification.endpoint.receiverInfo' must be an array");
 
   bool         acceptPresent = (acceptP != NULL && acceptP->type == KjString);
-  SwMimeType acceptType    = acceptPresent ? swAcceptParse(acceptP->value.s) : SwMimeJson;
+  CorMimeType acceptType    = acceptPresent ? corAcceptParse(acceptP->value.s) : CorMimeJson;
 
   // Effective media type for the notification body: endpoint.accept if present,
   // else a (literal, valid) receiverInfo Content-Type, else application/json.
-  SwMimeType effectiveType = acceptType;
+  CorMimeType effectiveType = acceptType;
   if (!acceptPresent)
   {
     for (KjNode* kvP = riP->value.firstChildP; kvP != NULL; kvP = kvP->next)
@@ -143,8 +143,8 @@ static bool checkReceiverInfo(KjNode* riP, KjNode* acceptP)
       if (kP == NULL || kP->type != KjString || vP == NULL || vP->type != KjString) continue;
       if ((strcasecmp(kP->value.s, "Content-Type") == 0) && (strcmp(vP->value.s, "urn:ngsi-ld:request") != 0))
       {
-        SwMimeType ct = swAcceptParse(vP->value.s);
-        if (ct != SwMimeNone)
+        CorMimeType ct = corAcceptParse(vP->value.s);
+        if (ct != CorMimeNone)
           effectiveType = ct;
         break;
       }
@@ -194,13 +194,13 @@ static bool checkReceiverInfo(KjNode* riP, KjNode* acceptP)
                 "'notification.endpoint.receiverInfo' Content-Type cannot use 'urn:ngsi-ld:request'");
         return false;
       }
-      if (swAcceptParse(val) == SwMimeNone)
+      if (corAcceptParse(val) == CorMimeNone)
       {
         ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
                 "'notification.endpoint.receiverInfo' Content-Type must be application/json, application/ld+json or application/geo+json");
         return false;
       }
-      if (acceptPresent && (swAcceptParse(val) != acceptType))
+      if (acceptPresent && (corAcceptParse(val) != acceptType))
       {
         ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
                 "'notification.endpoint.receiverInfo' Content-Type conflicts with 'notification.endpoint.accept'");
@@ -218,7 +218,7 @@ static bool checkReceiverInfo(KjNode* riP, KjNode* acceptP)
                 "'notification.endpoint.receiverInfo' Link cannot use 'urn:ngsi-ld:request'");
         return false;
       }
-      if ((strstr(val, "json-ld#context") != NULL) && (effectiveType == SwMimeLdJson))
+      if ((strstr(val, "json-ld#context") != NULL) && (effectiveType == CorMimeLdJson))
       {
         ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
                 "'notification.endpoint.receiverInfo' @context Link conflicts with application/ld+json (the @context is carried in the body)");
@@ -228,7 +228,7 @@ static bool checkReceiverInfo(KjNode* riP, KjNode* acceptP)
 
     // Prefer — § 6.5.2 uses it ONLY to steer the geo+json @context placement
     // (body=json vs body=ld+json); it is meaningless for json / ld+json.
-    if ((strcasecmp(key, "Prefer") == 0) && (effectiveType != SwMimeGeoJson))
+    if ((strcasecmp(key, "Prefer") == 0) && (effectiveType != CorMimeGeoJson))
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
               "'notification.endpoint.receiverInfo' Prefer is only valid with application/geo+json");
@@ -276,8 +276,8 @@ static bool checkEndpoint(KjNode* endpointP, bool complete)
       // application/ld+json or application/geo+json. An unsupported MIME type is
       // invalid input — reject it here rather than silently absorbing a body
       // format the notification machinery can't honour.
-      SwMimeType acceptType = swMimeTypeParse(childP->value.s);
-      if (acceptType != SwMimeJson && acceptType != SwMimeLdJson && acceptType != SwMimeGeoJson)
+      CorMimeType acceptType = corMimeTypeParse(childP->value.s);
+      if (acceptType != CorMimeJson && acceptType != CorMimeLdJson && acceptType != CorMimeGeoJson)
       {
         ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
                 "'notification.endpoint.accept' must be one of 'application/json', 'application/ld+json' or 'application/geo+json'");
@@ -514,7 +514,7 @@ static bool checkNotification(KjNode* notifP, bool complete, bool merged, LdForm
 // ldSubEntityTypeExprsRelease - free the per-request entity-type-expr scratch
 //
 // checkEntitiesArray parses one LdTypeExpr per "entities" entry into the
-// per-thread swNgsild.subEntityTypeExprsV side-channel; ldSubCacheItemAdd then
+// per-thread corNgsild.subEntityTypeExprsV side-channel; ldSubCacheItemAdd then
 // TRANSFERS each to its cache item (zeroing the slot). Whatever is left (the
 // container array, plus any untransferred expr) must be released. Previously
 // this happened only on the NEXT checkEntitiesArray call, so the last buffer
@@ -523,15 +523,15 @@ static bool checkNotification(KjNode* notifP, bool complete, bool merged, LdForm
 //
 void ldSubEntityTypeExprsRelease(void)
 {
-  if (swNgsild.subEntityTypeExprsV == NULL)
+  if (corNgsild.subEntityTypeExprsV == NULL)
     return;
 
-  for (int i = 0; i < swNgsild.subEntityTypeExprsN; i++)
-    ldTypeExprFree(swNgsild.subEntityTypeExprsV[i]);
+  for (int i = 0; i < corNgsild.subEntityTypeExprsN; i++)
+    ldTypeExprFree(corNgsild.subEntityTypeExprsV[i]);
 
-  free(swNgsild.subEntityTypeExprsV);
-  swNgsild.subEntityTypeExprsV = NULL;
-  swNgsild.subEntityTypeExprsN = 0;
+  free(corNgsild.subEntityTypeExprsV);
+  corNgsild.subEntityTypeExprsV = NULL;
+  corNgsild.subEntityTypeExprsN = 0;
 }
 
 
@@ -546,7 +546,7 @@ static bool checkEntitiesArray(KjNode* entitiesP)
   EMPTY_ARRAY_CHECK(entitiesP, "'entities' must not be empty");
 
   // § 4.17 — parse each entities[].type into a malloc-allocated
-  // LdTypeExpr and stash on swNgsild for the sub-cache to claim.
+  // LdTypeExpr and stash on corNgsild for the sub-cache to claim.
   // Allocate the side-channel sized to the array length; one slot
   // per entry, NULL slot = no type field. Old contents (e.g. left
   // over from a previous request on the same thread) are released
@@ -558,8 +558,8 @@ static bool checkEntitiesArray(KjNode* entitiesP)
   ldSubEntityTypeExprsRelease();   // drop any leftover from a prior request on this thread
   if (entCount > 0)
   {
-    swNgsild.subEntityTypeExprsV = (LdTypeExpr**) calloc(entCount, sizeof(LdTypeExpr*));
-    swNgsild.subEntityTypeExprsN = entCount;
+    corNgsild.subEntityTypeExprsV = (LdTypeExpr**) calloc(entCount, sizeof(LdTypeExpr*));
+    corNgsild.subEntityTypeExprsN = entCount;
   }
 
   int entIx = 0;
@@ -587,7 +587,7 @@ static bool checkEntitiesArray(KjNode* entitiesP)
         // The raw "*" stays in the subscription tree for round-trip on GET.
         if (strcmp(fieldP->value.s, "*") == 0)
         {
-          swNgsild.subEntityTypeExprsV[entIx] = NULL;
+          corNgsild.subEntityTypeExprsV[entIx] = NULL;
         }
         else
         {
@@ -596,7 +596,7 @@ static bool checkEntitiesArray(KjNode* entitiesP)
           LdTypeExpr* expr = ldTypeExprParse(fieldP->value.s, NULL);
           if (expr == NULL)
             return false;  // ldError already set inside the parser
-          swNgsild.subEntityTypeExprsV[entIx] = expr;
+          corNgsild.subEntityTypeExprsV[entIx] = expr;
         }
       }
       else if (strcmp(fieldP->name, "id") == 0)
@@ -1012,7 +1012,7 @@ bool ldCheckSubscription(KjNode* subP, LdOp op, bool merged, LdFormat* notifForm
 
   //
   // `type` is validated AND stripped by ldParseHook for these URLs — see
-  // swNgsild.fixedTypeRecord. Nothing to check here.
+  // corNgsild.fixedTypeRecord. Nothing to check here.
   //
   (void) typeP;
 
@@ -1036,7 +1036,7 @@ bool ldCheckSubscription(KjNode* subP, LdOp op, bool merged, LdFormat* notifForm
   //
   // PATCH bodies that include id are tolerated when the id matches the
   // URL — but we don't have the URL id here without weaving in
-  // swRest.in.wildcard[0]. For now keep the strict reject on update
+  // corRest.in.wildcard[0]. For now keep the strict reject on update
   // (matches prior behaviour); ETSI 029 doesn't exercise this path.
   //
   if ((op == LdOpUpdateSubscription || op == LdOpUpdateCsourceSubscription) && idP != NULL)

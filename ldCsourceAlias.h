@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDCSOURCEALIAS_H_
-#define SWNGSILD_LDCSOURCEALIAS_H_
+#ifndef CORNGSILD_LDCSOURCEALIAS_H_
+#define CORNGSILD_LDCSOURCEALIAS_H_
 
 //
 // FILE            ldCsourceAlias.h
@@ -17,7 +17,7 @@
 #include <stdbool.h>                                 // bool
 
 #include "kalloc/KAlloc.h"                           // KAlloc
-#include "swRest/SwRestKeyValue.h"                   // SwRestKeyValue
+#include "corRest/CorRestKeyValue.h"                   // CorRestKeyValue
 
 
 
@@ -45,6 +45,6 @@ extern const char* ldCsourceAliasForTenant(const char* tenant, KAlloc* kaP);
 // Substring matching would false-positive across tenant suffixes
 // ("cb-alias" inside "cb-alias:tA").
 //
-extern bool ldViaHasAlias(SwRestKeyValue* httpHeaderV, int httpHeaderCount, const char* alias);
+extern bool ldViaHasAlias(CorRestKeyValue* httpHeaderV, int httpHeaderCount, const char* alias);
 
-#endif  // SWNGSILD_LDCSOURCEALIAS_H_
+#endif  // CORNGSILD_LDCSOURCEALIAS_H_

@@ -7,7 +7,7 @@
 //
 #include <stddef.h>                                 // NULL
 
-#include "swNgsild/ldNotifyStatsHook.h"             // Own interface
+#include "corNgsild/ldNotifyStatsHook.h"             // Own interface
 
 
 

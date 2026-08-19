@@ -14,8 +14,8 @@
 #include "kjson/KjNode.h"                               // KjNode
 #include "kjson/kjLookup.h"                             // kjLookup
 
-#include "swNgsild/LdVocab.h"                           // LD_VOCAB_SCOPE, LD_VOCAB_NGSILD_NULL
-#include "swNgsild/ldScopeMatch.h"                      // Own interface
+#include "corNgsild/LdVocab.h"                           // LD_VOCAB_SCOPE, LD_VOCAB_NGSILD_NULL
+#include "corNgsild/ldScopeMatch.h"                      // Own interface
 
 
 

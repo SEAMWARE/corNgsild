@@ -5,15 +5,15 @@
 //
 // Copyright 2026 Seamware
 //
-#ifndef SWNGSILD_LDNOTIFYDEFER_H_
-#define SWNGSILD_LDNOTIFYDEFER_H_
+#ifndef CORNGSILD_LDNOTIFYDEFER_H_
+#define CORNGSILD_LDNOTIFYDEFER_H_
 
 #include <stdint.h>                              // uint64_t
 
 #include "kjson/KjNode.h"                        // KjNode
-#include "swNgsild/ldSubCache.h"                 // LdSubCache
-#include "swNgsild/ldSubscriptionNotify.h"       // LdNotifyOp, LdNotifyPendingEntry
-#include "swNgsild/ldEntityMerge.h"              // LdMergeReport
+#include "corNgsild/ldSubCache.h"                 // LdSubCache
+#include "corNgsild/ldSubscriptionNotify.h"       // LdNotifyOp, LdNotifyPendingEntry
+#include "corNgsild/ldEntityMerge.h"              // LdMergeReport
 
 
 
@@ -27,7 +27,7 @@
 // instance, in order.
 //
 // The queue is drained post-response by ldNotifyDispatchPending() — wired
-// from main via swRestSetPostResponseHook().
+// from main via corRestSetPostResponseHook().
 //
 // entityP must stay valid until dispatch. Both the request arena and the
 // tenant's entity store satisfy that; the referenced LdMergeReport is
@@ -65,4 +65,4 @@ extern void ldNotifyDeferDelete(LdSubCache* cacheP,
 //
 extern void ldNotifyDispatchPending(void);
 
-#endif  // SWNGSILD_LDNOTIFYDEFER_H_
+#endif  // CORNGSILD_LDNOTIFYDEFER_H_

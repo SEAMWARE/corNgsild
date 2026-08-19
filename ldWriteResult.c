@@ -11,14 +11,14 @@
 #include "kjson/kjBuilder.h"                            // kjObject, kjString, kjChildAdd, kjChildRemove
 #include "kjson/kjLookup.h"                             // kjLookup
 
-#include "swRest/SwRestState.h"                         // swRest
+#include "corRest/CorRestState.h"                         // corRest
 
-#include "swJsonld/swldInit.h"                          // swldCoreContext
+#include "corJsonld/corLdInit.h"                          // corLdCoreContext
 
-#include "swNgsild/ldIsEntityKeyword.h"                 // ldIsEntityKeyword
-#include "swNgsild/ldDistOp.h"                          // ldDistOpForwardFailureReason
+#include "corNgsild/ldIsEntityKeyword.h"                 // ldIsEntityKeyword
+#include "corNgsild/ldDistOp.h"                          // ldDistOpForwardFailureReason
 
-#include "swNgsild/ldWriteResult.h"                     // Own interface
+#include "corNgsild/ldWriteResult.h"                     // Own interface
 
 
 
@@ -40,7 +40,7 @@ void ldWriteResultUpdatedAdd(KjNode* updatedP, const char* attrName)
     if ((p->type == KjString) && (strcmp(p->value.s, attrName) == 0))
       return;
 
-  kjChildAdd(updatedP, kjString(swRest.kjsonP, NULL, attrName));
+  kjChildAdd(updatedP, kjString(corRest.kjsonP, NULL, attrName));
 }
 
 
@@ -52,14 +52,14 @@ void ldWriteResultUpdatedAdd(KjNode* updatedP, const char* attrName)
 void ldWriteResultNotUpdatedAdd(KjNode* notUpdatedP, const char* attrName,
                                 const char* reason, const char* regId, int statusCode)
 {
-  KjNode* entry = kjObject(swRest.kjsonP, NULL);
+  KjNode* entry = kjObject(corRest.kjsonP, NULL);
 
-  kjChildAdd(entry, kjString(swRest.kjsonP, "attributeName", attrName));
-  kjChildAdd(entry, kjString(swRest.kjsonP, "reason",         reason));
+  kjChildAdd(entry, kjString(corRest.kjsonP, "attributeName", attrName));
+  kjChildAdd(entry, kjString(corRest.kjsonP, "reason",         reason));
   if (regId != NULL)
-    kjChildAdd(entry, kjString(swRest.kjsonP, "registrationId", regId));
+    kjChildAdd(entry, kjString(corRest.kjsonP, "registrationId", regId));
   if (statusCode > 0)
-    kjChildAdd(entry, kjInteger(swRest.kjsonP, "statusCode", statusCode));
+    kjChildAdd(entry, kjInteger(corRest.kjsonP, "statusCode", statusCode));
 
   kjChildAdd(notUpdatedP, entry);
 }
@@ -175,7 +175,7 @@ static bool mergeRemoteUpdateResult(LdWriteResult* wrP, const char* regId, KjNod
       if (e->type == KjObject)
       {
         if (kjLookup(e, "registrationId") == NULL)
-          kjChildAdd(e, kjString(swRest.kjsonP, "registrationId", regId));
+          kjChildAdd(e, kjString(corRest.kjsonP, "registrationId", regId));
         kjChildRemove(nu, e);
         kjChildAdd(wrP->notUpdatedP, e);
       }

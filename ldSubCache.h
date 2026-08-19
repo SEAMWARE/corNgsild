@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDSUBCACHE_OPS_H_
-#define SWNGSILD_LDSUBCACHE_OPS_H_
+#ifndef CORNGSILD_LDSUBCACHE_OPS_H_
+#define CORNGSILD_LDSUBCACHE_OPS_H_
 
 //
 // FILE            ldSubCache.h
@@ -10,7 +10,7 @@
 //
 // Subscription cache operations.
 //
-#include "swNgsild/LdSubCache.h"                      // LdSubCache, LdSubCacheItem
+#include "corNgsild/LdSubCache.h"                      // LdSubCache, LdSubCacheItem
 
 
 
@@ -85,4 +85,4 @@ extern void ldSubCacheRelease(LdSubCache* cacheP);
 //
 extern void ldSubCacheSubordinatesFree(LdSubSubordinate* head);
 
-#endif  // SWNGSILD_LDSUBCACHE_OPS_H_
+#endif  // CORNGSILD_LDSUBCACHE_OPS_H_

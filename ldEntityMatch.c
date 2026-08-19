@@ -15,12 +15,12 @@
 #include "kjson/KjNode.h"                             // KjNode
 #include "kjson/kjLookup.h"                           // kjLookup
 
-#include "swNgsild/LdQ.h"                              // LdQNode, LdQTerm
-#include "swNgsild/LdVocab.h"                         // LD_VOCAB_*
-#include "swNgsild/LdScopeExpr.h"                     // LdScopeExpr
-#include "swNgsild/LdTypeExpr.h"                      // LdTypeExpr
-#include "swNgsild/ldScopeMatch.h"                     // ldScopePatternMatch
-#include "swNgsild/ldEntityMatch.h"                    // Own interface
+#include "corNgsild/LdQ.h"                              // LdQNode, LdQTerm
+#include "corNgsild/LdVocab.h"                         // LD_VOCAB_*
+#include "corNgsild/LdScopeExpr.h"                     // LdScopeExpr
+#include "corNgsild/LdTypeExpr.h"                      // LdTypeExpr
+#include "corNgsild/ldScopeMatch.h"                     // ldScopePatternMatch
+#include "corNgsild/ldEntityMatch.h"                    // Own interface
 
 
 

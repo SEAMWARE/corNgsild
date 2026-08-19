@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LD_BATCH_ERRORS_H_
-#define SWNGSILD_LD_BATCH_ERRORS_H_
+#ifndef CORNGSILD_LD_BATCH_ERRORS_H_
+#define CORNGSILD_LD_BATCH_ERRORS_H_
 
 //
 // FILE            LdBatchErrors.h
@@ -116,4 +116,4 @@ extern int ldBatchErrorListSingleStatus(const LdBatchErrorList* listP);
 extern KjNode* ldBatchErrorListFirstAsProblemDetails(const LdBatchErrorList* listP,
                                                      Kjson*                  kjsonP);
 
-#endif  // SWNGSILD_LD_BATCH_ERRORS_H_
+#endif  // CORNGSILD_LD_BATCH_ERRORS_H_

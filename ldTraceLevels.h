@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDTRACELEVELS_H_
-#define SWNGSILD_LDTRACELEVELS_H_
+#ifndef CORNGSILD_LDTRACELEVELS_H_
+#define CORNGSILD_LDTRACELEVELS_H_
 
 //
 // FILE            ldTraceLevels.h
@@ -10,7 +10,7 @@
 // 
 //
 //
-// Trace levels for swNgsild (range 200-399)
+// Trace levels for corNgsild (range 200-399)
 //
 #define LdTInit       200   // Library initialization
 #define LdTTypes      201   // Type conversions
@@ -48,4 +48,4 @@
 
 #define LdTExpiry        240  // transient Entity — lazily removed after a read found it expired
 
-#endif  // SWNGSILD_LDTRACELEVELS_H_
+#endif  // CORNGSILD_LDTRACELEVELS_H_

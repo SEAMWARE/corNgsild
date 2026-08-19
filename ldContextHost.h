@@ -9,7 +9,7 @@
 #define LD_CONTEXT_HOST_H
 
 #include "kjson/KjNode.h"                              // KjNode
-#include "swJsonld/SwldContext.h"                      // SwldContext
+#include "corJsonld/CorLdContext.h"                      // CorLdContext
 
 
 
@@ -31,17 +31,17 @@
 //
 // Host an inline / multi-element user @context as a one-shot served context
 // so a Link header (response or distop forward) can reference it by URL. The
-// returned SwldContext has ->url set to the served URL and carries the full
-// expansion / compaction maps (so the same pointer drives swldCompactTreeWith
+// returned CorLdContext has ->url set to the served URL and carries the full
+// expansion / compaction maps (so the same pointer drives corLdCompactTreeWith
 // and the Link header consistently). Never persisted to the DB; served with
 // Cache-Control: no-store, dropped after the first GET, reaped at expiresAt
 // if never fetched.
 //
 // ctxBody is the in-body @context node (object or array) — typically
-// swNgsild.userContextBody. Returns NULL on failure (caller falls back to
+// corNgsild.userContextBody. Returns NULL on failure (caller falls back to
 // the core context).
 //
-extern SwldContext* ldContextHostVolatile(KjNode* ctxBody);
+extern CorLdContext* ldContextHostVolatile(KjNode* ctxBody);
 
 
 

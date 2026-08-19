@@ -21,25 +21,25 @@
 
 #include "kalloc/kaAlloc.h"                            // kaAlloc
 #include "ktrace/kTrace.h"                             // KT_T
-#include "swRest/SwRestState.h"                        // swRest
-#include "swRest/SwRestKeyValue.h"                     // SwRestKeyValue
-#include "swRest/SwRestVerb.h"                         // SwVerbGet, SwVerbDelete
-#include "swRest/swRestClient.h"                       // swRestClientMulti*
-#include "swRest/swRestInit.h"                          // swRestProcessInProcess (self-forward)
+#include "corRest/CorRestState.h"                        // corRest
+#include "corRest/CorRestKeyValue.h"                     // CorRestKeyValue
+#include "corRest/CorRestVerb.h"                         // CorVerbGet, CorVerbDelete
+#include "corRest/corRestClient.h"                       // corRestClientMulti*
+#include "corRest/corRestInit.h"                          // corRestProcessInProcess (self-forward)
 
-#include "swNgsild/LdForwarding.h"                     // LdForwardRequest, LdForwardResponse, LdForwardingPlugin
-#include "swNgsild/ldForwarding.h"                     // ldForwardingForEndpoint
-#include "swNgsild/LdRegCache.h"                       // LdRegCacheItem
-#include "swNgsild/ldRegCache.h"                       // ldRegOpSupported
-#include "swNgsild/swNgsild.h"                         // LD_ERROR_CONFLICT
-#include "swNgsild/ldCsourceAlias.h"                   // ldViaHasAlias
-#include "swNgsild/ldRequestSubstitute.h"              // ldRequestSubstitute
-#include "swJsonld/SwldContext.h"                      // SwldContext (forwardCtxP->url for Link header)
-#include "swJsonld/swldInit.h"                         // swldCoreContext
-#include "swJsonld/swldDownload.h"                     // swldIsCoreContextUrl
-#include "swNgsild/ldContextHost.h"                    // ldContextHostVolatile
-#include "swNgsild/ldTraceLevels.h"                    // LdTForwardResp
-#include "swNgsild/ldDistOp.h"                         // Own interface
+#include "corNgsild/LdForwarding.h"                     // LdForwardRequest, LdForwardResponse, LdForwardingPlugin
+#include "corNgsild/ldForwarding.h"                     // ldForwardingForEndpoint
+#include "corNgsild/LdRegCache.h"                       // LdRegCacheItem
+#include "corNgsild/ldRegCache.h"                       // ldRegOpSupported
+#include "corNgsild/corNgsild.h"                         // LD_ERROR_CONFLICT
+#include "corNgsild/ldCsourceAlias.h"                   // ldViaHasAlias
+#include "corNgsild/ldRequestSubstitute.h"              // ldRequestSubstitute
+#include "corJsonld/CorLdContext.h"                      // CorLdContext (forwardCtxP->url for Link header)
+#include "corJsonld/corLdInit.h"                         // corLdCoreContext
+#include "corJsonld/corLdDownload.h"                     // corLdIsCoreContextUrl
+#include "corNgsild/ldContextHost.h"                    // ldContextHostVolatile
+#include "corNgsild/ldTraceLevels.h"                    // LdTForwardResp
+#include "corNgsild/ldDistOp.h"                         // Own interface
 
 
 
@@ -57,11 +57,11 @@ static const char* ldForwardTenant(const char* csrTenant)
   if ((csrTenant != NULL) && (csrTenant[0] != 0))
     return csrTenant;
 
-  for (int i = 0; i < swRest.in.httpHeaderCount; i++)
+  for (int i = 0; i < corRest.in.httpHeaderCount; i++)
   {
-    if ((swRest.in.httpHeaderV[i].key != NULL) &&
-        (strcasecmp(swRest.in.httpHeaderV[i].key, "NGSILD-Tenant") == 0))
-      return swRest.in.httpHeaderV[i].value;
+    if ((corRest.in.httpHeaderV[i].key != NULL) &&
+        (strcasecmp(corRest.in.httpHeaderV[i].key, "NGSILD-Tenant") == 0))
+      return corRest.in.httpHeaderV[i].value;
   }
 
   return NULL;
@@ -96,7 +96,7 @@ static const char* ldCsrAliasForForward(LdRegCacheItem* csr)
 
   int   aliasLen  = strlen(csr->csourceAlias);
   int   tenantLen = strlen(tenant);
-  char* scopedP   = (char*) kaAlloc(&swRest.kalloc, aliasLen + 1 + tenantLen + 1);
+  char* scopedP   = (char*) kaAlloc(&corRest.kalloc, aliasLen + 1 + tenantLen + 1);
 
   strcpy(scopedP, csr->csourceAlias);
   scopedP[aliasLen] = ':';
@@ -116,7 +116,7 @@ bool ldDistOpLoopDetected(const char* ownAlias)
   if (ownAlias == NULL)
     return false;
 
-  return ldViaHasAlias(swRest.in.httpHeaderV, swRest.in.httpHeaderCount, ownAlias);
+  return ldViaHasAlias(corRest.in.httpHeaderV, corRest.in.httpHeaderCount, ownAlias);
 }
 
 
@@ -146,7 +146,7 @@ bool ldDistOpCsrWouldLoop(LdRegCacheItem* csr, const char* ownAlias)
   }
 
   // Pointing at a broker we've already transited
-  if (ldViaHasAlias(swRest.in.httpHeaderV, swRest.in.httpHeaderCount, alias))
+  if (ldViaHasAlias(corRest.in.httpHeaderV, corRest.in.httpHeaderCount, alias))
   {
     KT_T(LdTRegMatch, "%s: matched, but NOT forwarded to: loop — '%s' is already in the inbound Via",
          regId, alias);
@@ -166,9 +166,9 @@ bool ldDistOpCsrWouldLoop(LdRegCacheItem* csr, const char* ownAlias)
 // forward. GET / DELETE / HEAD have no body, so Content-Type is omitted
 // unless the CSR's contextSourceInfo explicitly sets one.
 //
-static bool verbHasBody(SwRestVerb verb)
+static bool verbHasBody(CorRestVerb verb)
 {
-  return (verb != SwVerbGet && verb != SwVerbDelete);
+  return (verb != CorVerbGet && verb != CorVerbDelete);
 }
 
 
@@ -197,19 +197,19 @@ static bool verbHasBody(SwRestVerb verb)
 //     (§ 4.3.6.5: Content-Length, Host, NGSILD-Tenant, and the TODO
 //     keys jsonldContext + ngsildConformance).
 //
-static SwRestKeyValue* buildHeaders(SwRestVerb     verb,
+static CorRestKeyValue* buildHeaders(CorRestVerb     verb,
                                     const char*    ownAlias,
                                     const char*    csrTenant,
                                     char**         csrInfoKV,
-                                    SwldContext*   forwardCtxP,
+                                    CorLdContext*   forwardCtxP,
                                     int*           hcP)
 {
   bool wantBody = verbHasBody(verb);
 
   int viaIn = 0;
-  for (int i = 0; i < swRest.in.httpHeaderCount; i++)
-    if (swRest.in.httpHeaderV[i].key != NULL &&
-        strcasecmp(swRest.in.httpHeaderV[i].key, "Via") == 0)
+  for (int i = 0; i < corRest.in.httpHeaderCount; i++)
+    if (corRest.in.httpHeaderV[i].key != NULL &&
+        strcasecmp(corRest.in.httpHeaderV[i].key, "Via") == 0)
       viaIn++;
 
   int csiCount = 0;
@@ -217,7 +217,7 @@ static SwRestKeyValue* buildHeaders(SwRestVerb     verb,
     for (int i = 0; csrInfoKV[i] != NULL; i += 2) csiCount++;
 
   int cap = viaIn + 6 + csiCount;   // Content-Type + Accept + Link + NGSILD-Volatile-Context + own Via + NGSILD-Tenant + info[]
-  SwRestKeyValue* hv = (SwRestKeyValue*) kaAlloc(&swRest.kalloc, cap * sizeof(SwRestKeyValue));
+  CorRestKeyValue* hv = (CorRestKeyValue*) kaAlloc(&corRest.kalloc, cap * sizeof(CorRestKeyValue));
   int hc = 0;
 
   const char* csiContentType   = NULL;
@@ -270,7 +270,7 @@ static SwRestKeyValue* buildHeaders(SwRestVerb     verb,
     const char* suffix  = ">; rel=\"http://www.w3.org/ns/json-ld#context\"; type=\"application/ld+json\"";
     int   urlLen = strlen(url);
     int   sufLen = strlen(suffix);
-    char* linkVal = (char*) kaAlloc(&swRest.kalloc, 1 + urlLen + sufLen + 1);
+    char* linkVal = (char*) kaAlloc(&corRest.kalloc, 1 + urlLen + sufLen + 1);
     linkVal[0] = '<';
     strcpy(linkVal + 1, url);
     strcpy(linkVal + 1 + urlLen, suffix);
@@ -293,19 +293,19 @@ static SwRestKeyValue* buildHeaders(SwRestVerb     verb,
   // Always send an explicit Accept. Per § 6.2.2 a receiver SHALL assume application/json
   // when no Accept header is present, so sending none is spec-legal — but a non-conformant
   // peer may 406 an Accept-less request. Send it explicitly (the CSR's contextSourceInfo
-  // accept if declared, else application/json — what swBroker wants back anyway) to protect
+  // accept if declared, else application/json — what coraine wants back anyway) to protect
   // ourselves against such misbehaving peers. Interop hardening, not a spec requirement.
   hv[hc].key   = (char*) "Accept";
   hv[hc].value = (char*) ((csiAccept != NULL) ? csiAccept : "application/json");
   hc++;
 
-  for (int i = 0; i < swRest.in.httpHeaderCount; i++)
+  for (int i = 0; i < corRest.in.httpHeaderCount; i++)
   {
-    if (swRest.in.httpHeaderV[i].key != NULL &&
-        strcasecmp(swRest.in.httpHeaderV[i].key, "Via") == 0)
+    if (corRest.in.httpHeaderV[i].key != NULL &&
+        strcasecmp(corRest.in.httpHeaderV[i].key, "Via") == 0)
     {
       hv[hc].key   = (char*) "Via";
-      hv[hc].value = swRest.in.httpHeaderV[i].value;
+      hv[hc].value = corRest.in.httpHeaderV[i].value;
       hc++;
     }
   }
@@ -313,7 +313,7 @@ static SwRestKeyValue* buildHeaders(SwRestVerb     verb,
   if (ownAlias != NULL)
   {
     int   aliasLen = strlen(ownAlias);
-    char* viaVal   = (char*) kaAlloc(&swRest.kalloc, 4 + aliasLen + 1);
+    char* viaVal   = (char*) kaAlloc(&corRest.kalloc, 4 + aliasLen + 1);
     strcpy(viaVal, "1.1 ");
     strcpy(viaVal + 4, ownAlias);
     hv[hc].key   = (char*) "Via";
@@ -378,15 +378,15 @@ static SwRestKeyValue* buildHeaders(SwRestVerb     verb,
 // (inline object, or multi-element array): the Link header needs a URL, so
 // we mint a one-shot hosted context and forward in that vocabulary.
 //
-static SwldContext* forwardHostOrCore(void)
+static CorLdContext* forwardHostOrCore(void)
 {
-  if (swNgsild.userContextBody != NULL)
+  if (corNgsild.userContextBody != NULL)
   {
-    SwldContext* hostedP = ldContextHostVolatile(swNgsild.userContextBody);
+    CorLdContext* hostedP = ldContextHostVolatile(corNgsild.userContextBody);
     if (hostedP != NULL)
       return hostedP;
   }
-  return swldCoreContext();
+  return corLdCoreContext();
 }
 
 
@@ -405,15 +405,15 @@ static SwldContext* forwardHostOrCore(void)
 //   3. Core context — the client sent only core (nothing to preserve).
 //
 // Body compaction and the Link header MUST use the same context — emission
-// sites call this and pass the result to swldCompactTreeWith; buildHeaders
+// sites call this and pass the result to corLdCompactTreeWith; buildHeaders
 // gets the same pointer so the Link URL matches the body's short names.
 //
-SwldContext* ldDistOpForwardContext(LdRegCacheItem* csr)
+CorLdContext* ldDistOpForwardContext(LdRegCacheItem* csr)
 {
-  if (csr->forwardCtxP != swldCoreContext())
+  if (csr->forwardCtxP != corLdCoreContext())
     return csr->forwardCtxP;
 
-  SwldContext* ctxP = swNgsild.contextP;
+  CorLdContext* ctxP = corNgsild.contextP;
 
   // Resolve an in-body @context array to its USER part. Nearly every
   // real request carries ["<user-ctx>", "<core-ctx>"] — often an OLD
@@ -427,20 +427,20 @@ SwldContext* ldDistOpForwardContext(LdRegCacheItem* csr)
   //     an inline object or multi-element array.
   while (ctxP != NULL && ctxP->isArray)
   {
-    SwldContext* soleP = NULL;
+    CorLdContext* soleP = NULL;
     int          users = 0;
 
     for (int i = 0; i < ctxP->contexts; i++)
     {
-      SwldContext* eP = ctxP->contextV[i];
+      CorLdContext* eP = ctxP->contextV[i];
       if (eP == NULL)                                        continue;
-      if (eP->url != NULL && swldIsCoreContextUrl(eP->url))  continue;
+      if (eP->url != NULL && corLdIsCoreContextUrl(eP->url))  continue;
       users++;
       soleP = eP;
     }
 
     if (users == 0)
-      return swldCoreContext();         // client really sent only core
+      return corLdCoreContext();         // client really sent only core
     if (users == 1)
     {
       ctxP = soleP;                     // unwrap, keep walking
@@ -462,7 +462,7 @@ SwldContext* ldDistOpForwardContext(LdRegCacheItem* csr)
 // ldDistOpSendReceive -
 //
 int ldDistOpSendReceive(LdRegCacheItem*  csr,
-                        SwRestVerb       verb,
+                        CorRestVerb       verb,
                         const char*      url,
                         const char*      body,
                         int              bodyLen,
@@ -580,14 +580,14 @@ bool ldDistOpCsrInCooldown(LdRegCacheItem* csr)
 // Each aspect has its own trace level so they can be enabled independently.
 // URL params are emitted one line per param (the '?' query string of 'url').
 //
-static void distOpTraceRequest(SwRestVerb verb, const char* url, SwRestKeyValue* hv, int hc, const char* body, int bodyLen)
+static void distOpTraceRequest(CorRestVerb verb, const char* url, CorRestKeyValue* hv, int hc, const char* body, int bodyLen)
 {
   if (url == NULL)
     return;
 
   const char* q = strchr(url, '?');
   int         pathLen = (q != NULL) ? (int)(q - url) : (int) strlen(url);
-  KT_T(LdTFwdReq, "forward request: %s %.*s", swRestVerbToString(verb), pathLen, url);
+  KT_T(LdTFwdReq, "forward request: %s %.*s", corRestVerbToString(verb), pathLen, url);
 
   if (q != NULL)
   {
@@ -615,7 +615,7 @@ static void distOpTraceRequest(SwRestVerb verb, const char* url, SwRestKeyValue*
 // distOpTraceResponse - trace a forwarded request's response line + headers.
 // (The response body is traced by distOpBodyParse, before it is tokenized.)
 //
-static void distOpTraceResponse(int statusCode, SwRestKeyValue* hv, int hc)
+static void distOpTraceResponse(int statusCode, CorRestKeyValue* hv, int hc)
 {
   KT_T(LdTFwdRes, "forward response: status %d", statusCode);
   for (int i = 0; i < hc; i++)
@@ -625,12 +625,12 @@ static void distOpTraceResponse(int statusCode, SwRestKeyValue* hv, int hc)
 
 
 int ldDistOpSendReceiveEx(LdRegCacheItem*  csr,
-                          SwRestVerb       verb,
+                          CorRestVerb       verb,
                           const char*      url,
                           const char*      body,
                           int              bodyLen,
                           const char*      ownAlias,
-                          SwRestKeyValue*  extraHeaderV,
+                          CorRestKeyValue*  extraHeaderV,
                           int              extraHeaderCount,
                           const char**     errorDetailPP,
                           char**           responseBodyPP,
@@ -649,12 +649,12 @@ int ldDistOpSendReceiveEx(LdRegCacheItem*  csr,
   }
 
   int             hc = 0;
-  SwRestKeyValue* hv = buildHeaders(verb, ownAlias, csr->tenant, csr->contextSourceInfoKV, ldDistOpForwardContext(csr), &hc);
+  CorRestKeyValue* hv = buildHeaders(verb, ownAlias, csr->tenant, csr->contextSourceInfoKV, ldDistOpForwardContext(csr), &hc);
 
   // Append optional extra headers (e.g. NGSILD-EntityMap for entity-map distops)
   if (extraHeaderV != NULL && extraHeaderCount > 0)
   {
-    SwRestKeyValue* merged = (SwRestKeyValue*) kaAlloc(&swRest.kalloc, (hc + extraHeaderCount) * sizeof(SwRestKeyValue));
+    CorRestKeyValue* merged = (CorRestKeyValue*) kaAlloc(&corRest.kalloc, (hc + extraHeaderCount) * sizeof(CorRestKeyValue));
     for (int i = 0; i < hc; i++) merged[i] = hv[i];
     for (int i = 0; i < extraHeaderCount; i++) merged[hc + i] = extraHeaderV[i];
     hv = merged;
@@ -685,7 +685,7 @@ int ldDistOpSendReceiveEx(LdRegCacheItem*  csr,
   resp.headerCount     = 0;
   resp.body            = NULL;
   resp.bodyLen         = 0;
-  resp.allocP          = &swRest.kalloc;
+  resp.allocP          = &corRest.kalloc;
   resp.error           = 0;
   resp.errorDetail[0]  = 0;
 
@@ -697,7 +697,7 @@ int ldDistOpSendReceiveEx(LdRegCacheItem*  csr,
     // Self-forward short-circuit (Inc5b): the endpoint is this broker. Run the
     // request in-process rather than opening a socket back to ourselves (which
     // stalls the epoll pool thread — the self-forward stall).
-    int sc = swRestProcessInProcess(verb, forwardPath(url), hv, hc, body, req.bodyLen,
+    int sc = corRestProcessInProcess(verb, forwardPath(url), hv, hc, body, req.bodyLen,
                          resp.allocP, &resp.body, &resp.bodyLen,
                          &resp.headerV, &resp.headerCount);
     if (sc < 0)
@@ -729,7 +729,7 @@ int ldDistOpSendReceiveEx(LdRegCacheItem*  csr,
 
     if (errorDetailPP != NULL && resp.errorDetail[0] != 0)
     {
-      char* d = (char*) kaAlloc(&swRest.kalloc, strlen(resp.errorDetail) + 1);
+      char* d = (char*) kaAlloc(&corRest.kalloc, strlen(resp.errorDetail) + 1);
       strcpy(d, resp.errorDetail);
       *errorDetailPP = d;
     }
@@ -757,7 +757,7 @@ int ldDistOpSendReceiveEx(LdRegCacheItem*  csr,
 // ldDistOpSend - thin wrapper when the caller doesn't need the response body
 //
 int ldDistOpSend(LdRegCacheItem*  csr,
-                 SwRestVerb       verb,
+                 CorRestVerb       verb,
                  const char*      url,
                  const char*      body,
                  int              bodyLen,
@@ -779,7 +779,7 @@ int ldDistOpSend(LdRegCacheItem*  csr,
 // header (rel="http://www.w3.org/ns/json-ld#context"). Returns the URL copied
 // into the request kalloc, or NULL when the response carried no such Link.
 //
-static const char* responseContextLink(SwRestKeyValue* headerV, int headerCount)
+static const char* responseContextLink(CorRestKeyValue* headerV, int headerCount)
 {
   for (int h = 0; h < headerCount; h++)
   {
@@ -793,7 +793,7 @@ static const char* responseContextLink(SwRestKeyValue* headerV, int headerCount)
     if (end == NULL)                                                     continue;
 
     int   len = (int) (end - (v + 1));
-    char* url = (char*) kaAlloc(&swRest.kalloc, len + 1);
+    char* url = (char*) kaAlloc(&corRest.kalloc, len + 1);
     if (url == NULL)                                                     return NULL;
     memcpy(url, v + 1, len);
     url[len] = 0;
@@ -827,7 +827,7 @@ static void distOpBodyParse(LdDistOpBatchResult* rP)
   KT_T(LdTFwdResBody, "forward response body (status %d, %d bytes): %.*s",
        rP->statusCode, rP->responseBodyLen, rP->responseBodyLen, rP->responseBody);
 
-  rP->responseTree = kjParse(swRest.kjsonP, rP->responseBody);
+  rP->responseTree = kjParse(corRest.kjsonP, rP->responseBody);
 
   if ((rP->responseTree == NULL) && (rP->statusCode >= 200) && (rP->statusCode < 300))
   {
@@ -918,7 +918,7 @@ char* ldDistOpWarnings(LdDistOpBatchItem* itemV, LdDistOpBatchResult* resultV, i
     int  wvLen  = snprintf(wv, sizeof(wv), "%d %s \"%s\"", code, authority, warnText);
     int  sepLen = (acc != NULL) ? 2 : 0;                       // ", " between warn-values
 
-    char* nacc = (char*) kaAlloc(&swRest.kalloc, accLen + sepLen + wvLen + 1);
+    char* nacc = (char*) kaAlloc(&corRest.kalloc, accLen + sepLen + wvLen + 1);
     if (nacc == NULL)
       return acc;
 
@@ -942,27 +942,27 @@ char* ldDistOpWarnings(LdDistOpBatchItem* itemV, LdDistOpBatchResult* resultV, i
 //
 // ldDistOpSendMulti -
 //
-// Fan out N CSR forwards concurrently over swRestClientMulti. The per-CSR
+// Fan out N CSR forwards concurrently over corRestClientMulti. The per-CSR
 // timeout (§ 5.2.34) caps each request individually inside the multi engine;
 // the engine itself runs with the max of all CSR timeouts so no single CSR
 // stalls peers. Bypasses the LdForwardingPlugin abstraction — HTTP is the
-// only transport that exists. A future non-HTTP plugin (swBin, MQTT) would
+// only transport that exists. A future non-HTTP plugin (corBin, MQTT) would
 // need its own batched fan-out.
 //
 int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
                       int                    itemCount,
-                      SwRestVerb             verb,
+                      CorRestVerb             verb,
                       const char*            ownAlias,
                       LdDistOpBatchResult*   resultV)
 {
   if (itemCount <= 0)
     return 0;
 
-  SwRestClientMulti* multi = swRestClientMultiCreate(itemCount);
+  CorRestClientMulti* multi = corRestClientMultiCreate(itemCount);
   if (multi == NULL)
   {
     for (int i = 0; i < itemCount; i++)
-      resultV[i].errorDetail = "swRestClientMultiCreate failed";
+      resultV[i].errorDetail = "corRestClientMultiCreate failed";
     return -1;
   }
 
@@ -976,21 +976,21 @@ int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
     if (t > batchTimeoutMs) batchTimeoutMs = t;
   }
   if (batchTimeoutMs <= 0)
-    batchTimeoutMs = swRestClientDefaultRequestTimeoutMs;
+    batchTimeoutMs = corRestClientDefaultRequestTimeoutMs;
 
   // Add every item. Failed adds (capacity exhausted, bad input) get
   // statusCode == 0 + errorDetail filled and skipped at perform time.
   // Self-targeted items (endpoint == this broker) are NOT added to the socket
   // multi-engine; they run in-process after the perform (addIndex == -2). Their
-  // headers are built here — while swNgsild is still intact — and stashed for
-  // the in-process call, because running it now would reset swNgsild mid-loop
+  // headers are built here — while corNgsild is still intact — and stashed for
+  // the in-process call, because running it now would reset corNgsild mid-loop
   // and corrupt buildHeaders for the remaining socket items.
   int addedCount = 0;
-  int* addIndex = (int*) kaAlloc(&swRest.kalloc, itemCount * sizeof(int));
+  int* addIndex = (int*) kaAlloc(&corRest.kalloc, itemCount * sizeof(int));
   for (int i = 0; i < itemCount; i++) addIndex[i] = -1;
   memset(resultV, 0, itemCount * sizeof(LdDistOpBatchResult));
-  SwRestKeyValue** selfHv = (SwRestKeyValue**) kaAlloc(&swRest.kalloc, itemCount * sizeof(SwRestKeyValue*));
-  int*             selfHc = (int*) kaAlloc(&swRest.kalloc, itemCount * sizeof(int));
+  CorRestKeyValue** selfHv = (CorRestKeyValue**) kaAlloc(&corRest.kalloc, itemCount * sizeof(CorRestKeyValue*));
+  int*             selfHc = (int*) kaAlloc(&corRest.kalloc, itemCount * sizeof(int));
 
   for (int i = 0; i < itemCount; i++)
   {
@@ -1003,10 +1003,10 @@ int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
       continue;
     }
 
-    SwRestVerb itemVerb = itemV[i].hasVerb ? itemV[i].verb : verb;
+    CorRestVerb itemVerb = itemV[i].hasVerb ? itemV[i].verb : verb;
 
     int             hc = 0;
-    SwRestKeyValue* hv = buildHeaders(itemVerb, ownAlias, csr->tenant, csr->contextSourceInfoKV, ldDistOpForwardContext(csr), &hc);
+    CorRestKeyValue* hv = buildHeaders(itemVerb, ownAlias, csr->tenant, csr->contextSourceInfoKV, ldDistOpForwardContext(csr), &hc);
 
     distOpTraceRequest(itemVerb, itemV[i].url, hv, hc, itemV[i].body, itemV[i].bodyLen);
 
@@ -1018,17 +1018,17 @@ int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
       continue;
     }
 
-    int idx = swRestClientMultiAdd(multi,
+    int idx = corRestClientMultiAdd(multi,
                                    itemVerb,
                                    itemV[i].url,
                                    hv, hc,
                                    itemV[i].body, itemV[i].bodyLen,
-                                   &swRest.kalloc,
+                                   &corRest.kalloc,
                                    NULL);
     if (idx < 0)
     {
       resultV[i].statusCode  = 0;
-      resultV[i].errorDetail = "swRestClientMultiAdd failed";
+      resultV[i].errorDetail = "corRestClientMultiAdd failed";
       continue;
     }
 
@@ -1037,7 +1037,7 @@ int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
   }
 
   if (addedCount > 0)
-    swRestClientMultiPerform(multi, batchTimeoutMs);
+    corRestClientMultiPerform(multi, batchTimeoutMs);
 
   struct timespec ts;
   clock_gettime(CLOCK_REALTIME, &ts);
@@ -1051,15 +1051,15 @@ int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
     if (idx == -2)
     {
       // Self-forward: run in-process now (after the socket batch was built and
-      // performed, so swNgsild was intact for the socket items' headers).
-      SwRestVerb      itemVerb = itemV[i].hasVerb ? itemV[i].verb : verb;
+      // performed, so corNgsild was intact for the socket items' headers).
+      CorRestVerb      itemVerb = itemV[i].hasVerb ? itemV[i].verb : verb;
       char*           respBody = NULL;
       int             respBodyLen = 0;
-      SwRestKeyValue* respHdrV = NULL;
+      CorRestKeyValue* respHdrV = NULL;
       int             respHdrCount = 0;
 
-      int sc = swRestProcessInProcess(itemVerb, forwardPath(itemV[i].url), selfHv[i], selfHc[i],
-                           itemV[i].body, itemV[i].bodyLen, &swRest.kalloc,
+      int sc = corRestProcessInProcess(itemVerb, forwardPath(itemV[i].url), selfHv[i], selfHc[i],
+                           itemV[i].body, itemV[i].bodyLen, &corRest.kalloc,
                            &respBody, &respBodyLen, &respHdrV, &respHdrCount);
 
       csr->timesSent++;
@@ -1098,7 +1098,7 @@ int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
       continue;
     }
 
-    SwRestClientResponse* resp = swRestClientMultiResponse(multi, idx);
+    CorRestClientResponse* resp = corRestClientMultiResponse(multi, idx);
     csr->timesSent++;
 
     if (resp == NULL || resp->error != 0)
@@ -1106,10 +1106,10 @@ int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
       csr->timesFailed++;
       csr->lastFailure = nowNs;
       resultV[i].statusCode = 0;
-      resultV[i].timedOut   = (resp != NULL) && (resp->error == SWC_ERR_TIMEOUT);
+      resultV[i].timedOut   = (resp != NULL) && (resp->error == CORR_ERR_TIMEOUT);
       if (resp != NULL && resp->errorDetail[0] != 0)
       {
-        char* d = (char*) kaAlloc(&swRest.kalloc, strlen(resp->errorDetail) + 1);
+        char* d = (char*) kaAlloc(&corRest.kalloc, strlen(resp->errorDetail) + 1);
         strcpy(d, resp->errorDetail);
         resultV[i].errorDetail = d;
       }
@@ -1119,13 +1119,13 @@ int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
     }
 
     // resp->body points into the multi engine's per-connection read buffer,
-    // which swRestClientMultiDestroy frees. Copy into the request kalloc so
+    // which corRestClientMultiDestroy frees. Copy into the request kalloc so
     // the caller can keep using it after destroy.
     resultV[i].statusCode      = resp->statusCode;
     resultV[i].responseBodyLen = resp->bodyLen;
     if (resp->body != NULL && resp->bodyLen > 0)
     {
-      char* bodyCopy = (char*) kaAlloc(&swRest.kalloc, resp->bodyLen + 1);
+      char* bodyCopy = (char*) kaAlloc(&corRest.kalloc, resp->bodyLen + 1);
       memcpy(bodyCopy, resp->body, resp->bodyLen);
       bodyCopy[resp->bodyLen] = 0;
       resultV[i].responseBody = bodyCopy;
@@ -1149,7 +1149,7 @@ int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
     }
   }
 
-  swRestClientMultiDestroy(multi);
+  corRestClientMultiDestroy(multi);
   return 0;
 }
 
@@ -1170,18 +1170,18 @@ void ldDistOpBatchErrorAdd(KjNode*      errorsArrayP,
   if (errorsArrayP == NULL)
     return;
 
-  KjNode* entry = kjObject(swRest.kjsonP, NULL);
-  kjChildAdd(entry, kjString(swRest.kjsonP, "entityId", entityId));
+  KjNode* entry = kjObject(corRest.kjsonP, NULL);
+  kjChildAdd(entry, kjString(corRest.kjsonP, "entityId", entityId));
 
-  KjNode* pd = kjObject(swRest.kjsonP, "error");
-  kjChildAdd(pd, kjString (swRest.kjsonP, "type",   errorType));
-  kjChildAdd(pd, kjString (swRest.kjsonP, "title",  errorTitle));
-  kjChildAdd(pd, kjInteger(swRest.kjsonP, "status", statusCode));
-  kjChildAdd(pd, kjString (swRest.kjsonP, "detail", errorDetail));
+  KjNode* pd = kjObject(corRest.kjsonP, "error");
+  kjChildAdd(pd, kjString (corRest.kjsonP, "type",   errorType));
+  kjChildAdd(pd, kjString (corRest.kjsonP, "title",  errorTitle));
+  kjChildAdd(pd, kjInteger(corRest.kjsonP, "status", statusCode));
+  kjChildAdd(pd, kjString (corRest.kjsonP, "detail", errorDetail));
   kjChildAdd(entry, pd);
 
   if (regId != NULL)
-    kjChildAdd(entry, kjString(swRest.kjsonP, "registrationId", regId));
+    kjChildAdd(entry, kjString(corRest.kjsonP, "registrationId", regId));
 
   kjChildAdd(errorsArrayP, entry);
 }
@@ -1281,15 +1281,15 @@ KjNode* ldBatchErrorAsProblemDetails(KjNode* errorsArrayP)
   if (errP == NULL || errP->type != KjObject)
     return NULL;
 
-  KjNode* pd = kjObject(swRest.kjsonP, NULL);
+  KjNode* pd = kjObject(corRest.kjsonP, NULL);
 
   // type / title — clone from the first error so the body looks like a
   // standalone ProblemDetails. Drop "detail" (the per-entity detail strings
   // become noise once we collapse — title alone is clear).
   KjNode* typeP  = kjLookup(errP, "type");
   KjNode* titleP = kjLookup(errP, "title");
-  if (typeP  != NULL) kjChildAdd(pd, kjClone(swRest.kjsonP, typeP));
-  if (titleP != NULL) kjChildAdd(pd, kjClone(swRest.kjsonP, titleP));
+  if (typeP  != NULL) kjChildAdd(pd, kjClone(corRest.kjsonP, typeP));
+  if (titleP != NULL) kjChildAdd(pd, kjClone(corRest.kjsonP, titleP));
 
   // entityId(s) — extension field (anticipated ETSI ProblemDetails extension).
   int n = 0;
@@ -1299,16 +1299,16 @@ KjNode* ldBatchErrorAsProblemDetails(KjNode* errorsArrayP)
   {
     KjNode* idP = kjLookup(first, "entityId");
     if (idP != NULL && idP->type == KjString)
-      kjChildAdd(pd, kjString(swRest.kjsonP, "entityId", idP->value.s));
+      kjChildAdd(pd, kjString(corRest.kjsonP, "entityId", idP->value.s));
   }
   else
   {
-    KjNode* idsArr = kjArray(swRest.kjsonP, "entityIds");
+    KjNode* idsArr = kjArray(corRest.kjsonP, "entityIds");
     for (KjNode* e = errorsArrayP->value.firstChildP; e != NULL; e = e->next)
     {
       KjNode* idP = kjLookup(e, "entityId");
       if (idP != NULL && idP->type == KjString)
-        kjChildAdd(idsArr, kjString(swRest.kjsonP, NULL, idP->value.s));
+        kjChildAdd(idsArr, kjString(corRest.kjsonP, NULL, idP->value.s));
     }
     kjChildAdd(pd, idsArr);
   }
@@ -1399,7 +1399,7 @@ int ldDistOpEntriesBuild(const LdDistOpGroup  groupV[],
   LdDistOpEntry* entries = NULL;
   if (capacity > 0)
   {
-    entries = (LdDistOpEntry*) kaAlloc(&swRest.kalloc, capacity * sizeof(LdDistOpEntry));
+    entries = (LdDistOpEntry*) kaAlloc(&corRest.kalloc, capacity * sizeof(LdDistOpEntry));
     memset(entries, 0, capacity * sizeof(LdDistOpEntry));
   }
   int count = 0;
@@ -1487,7 +1487,7 @@ int ldDistOpLoopReap(LdDistOpEntry* entries, int count)
       // caller's terminal 404 into 508 (§ 6.3.18). Inclusive loop-blocks are
       // silent: the local copy still serves them.
       if (entries[i].errorMode)
-        swNgsild.loopBlocked508 = true;
+        corNgsild.loopBlocked508 = true;
       continue;   // loop-blocked — never forwarded
     }
 
@@ -1508,13 +1508,13 @@ int ldDistOpLoopReap(LdDistOpEntry* entries, int count)
 //
 void ldDistOpEntriesPerform(LdDistOpEntry* entries,
                             int            count,
-                            SwRestVerb     verb,
+                            CorRestVerb     verb,
                             const char*    ownAlias)
 {
   if (count <= 0) return;
 
-  LdDistOpBatchItem*   items   = (LdDistOpBatchItem*)   kaAlloc(&swRest.kalloc, count * sizeof(LdDistOpBatchItem));
-  LdDistOpBatchResult* results = (LdDistOpBatchResult*) kaAlloc(&swRest.kalloc, count * sizeof(LdDistOpBatchResult));
+  LdDistOpBatchItem*   items   = (LdDistOpBatchItem*)   kaAlloc(&corRest.kalloc, count * sizeof(LdDistOpBatchItem));
+  LdDistOpBatchResult* results = (LdDistOpBatchResult*) kaAlloc(&corRest.kalloc, count * sizeof(LdDistOpBatchResult));
   memset(results, 0, count * sizeof(LdDistOpBatchResult));
 
   for (int i = 0; i < count; i++)

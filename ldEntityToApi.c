@@ -10,18 +10,18 @@
 #include <stdio.h>                                       // snprintf
 #include <string.h>                                      // strcmp
 #include <time.h>                                        // gmtime_r, strftime
-#include "swRest/swRest.h"                            // swRest
+#include "corRest/corRest.h"                            // corRest
 
 #include "kalloc/KAlloc.h"                             // KAlloc
 #include "kalloc/kaAlloc.h"                            // kaAlloc
 #include "kjson/KjNode.h"                               // KjNode
 #include "kjson/kjBuilder.h"                              // kjArray
 #include "kjson/kjChildReplace.h"                       // kjChildReplace
-#include "swNgsild/LdVocab.h"                            // LD_VOCAB_DATASET_ID, LD_VOCAB_SCOPE
-#include "swNgsild/ldTypes.h"                            // ldAttrTypeFromString, ldValueKeyForType
+#include "corNgsild/LdVocab.h"                            // LD_VOCAB_DATASET_ID, LD_VOCAB_SCOPE
+#include "corNgsild/ldTypes.h"                            // ldAttrTypeFromString, ldValueKeyForType
 
-#include "swNgsild/ldIsEntityKeyword.h"                   // ldIsEntityKeyword
-#include "swNgsild/ldEntityToApi.h"                      // Own interface
+#include "corNgsild/ldIsEntityKeyword.h"                   // ldIsEntityKeyword
+#include "corNgsild/ldEntityToApi.h"                      // Own interface
 
 
 
@@ -285,7 +285,7 @@ void ldEntityToApi(KjNode* entityP, KAlloc* faP)
       // If the key is not "@none", add datasetId back to the instance
       if (instP->name != NULL && strcmp(instP->name, "@none") != 0)
       {
-        KjNode* dsNodeP = kjString(swRest.kjsonP, LD_VOCAB_DATASET_ID, instP->name);
+        KjNode* dsNodeP = kjString(corRest.kjsonP, LD_VOCAB_DATASET_ID, instP->name);
         kjChildAdd(instP, dsNodeP);
       }
 
@@ -300,7 +300,7 @@ void ldEntityToApi(KjNode* entityP, KAlloc* faP)
     else if (nInstances > 1)
     {
       // Multiple instances — build array
-      KjNode* arrayP = kjArray(swRest.kjsonP, childP->name);
+      KjNode* arrayP = kjArray(corRest.kjsonP, childP->name);
 
       KjNode* instP = childP->value.firstChildP;
       while (instP != NULL)
@@ -313,7 +313,7 @@ void ldEntityToApi(KjNode* entityP, KAlloc* faP)
         // Add datasetId back for named instances (not @none)
         if (instP->type == KjObject && instP->name != NULL && strcmp(instP->name, "@none") != 0)
         {
-          KjNode* dsNodeP = kjString(swRest.kjsonP, LD_VOCAB_DATASET_ID, instP->name);
+          KjNode* dsNodeP = kjString(corRest.kjsonP, LD_VOCAB_DATASET_ID, instP->name);
           kjChildAdd(instP, dsNodeP);
         }
 

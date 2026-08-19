@@ -13,11 +13,11 @@
 #include "kjson/kjLookup.h"                           // kjLookup
 #include "kjson/kjClone.h"                            // kjClone
 #include "kjson/kjFree.h"                             // kjFree
-#include "swRest/swRest.h"                            // swRest (request-scoped allocator for the report)
+#include "corRest/corRest.h"                            // corRest (request-scoped allocator for the report)
 
-#include "swNgsild/LdVocab.h"                         // LD_VOCAB_*
-#include "swNgsild/ldEntityAttrsSet.h"                // Own interface
-#include "swNgsild/ldIsEntityKeyword.h"                   // ldIsNotAttributeName
+#include "corNgsild/LdVocab.h"                         // LD_VOCAB_*
+#include "corNgsild/ldEntityAttrsSet.h"                // Own interface
+#include "corNgsild/ldIsEntityKeyword.h"                   // ldIsNotAttributeName
 
 
 
@@ -133,7 +133,7 @@ static void stampCreatedAtIfMissing(KjNode* objP, uint64_t ts, Kjson* allocP)
 //
 // Matches LdMergeReport's shape (used by subscription matcher): each
 // record is a KjObject with "attr", "reason", and optional "preValue".
-// Report nodes live on the request-scoped allocator (swRest.kjsonP).
+// Report nodes live on the request-scoped allocator (corRest.kjsonP).
 //
 static void addReportEntry(LdMergeReport* reportP, const char* attrName,
                            const char* reason, KjNode* preValue)
@@ -142,14 +142,14 @@ static void addReportEntry(LdMergeReport* reportP, const char* attrName,
     return;
 
   if (reportP->changes == NULL)
-    reportP->changes = kjArray(swRest.kjsonP, "changes");
+    reportP->changes = kjArray(corRest.kjsonP, "changes");
 
-  KjNode* entry = kjObject(swRest.kjsonP, NULL);
-  kjChildAdd(entry, kjString(swRest.kjsonP, "attr",   attrName));
-  kjChildAdd(entry, kjString(swRest.kjsonP, "reason", reason));
+  KjNode* entry = kjObject(corRest.kjsonP, NULL);
+  kjChildAdd(entry, kjString(corRest.kjsonP, "attr",   attrName));
+  kjChildAdd(entry, kjString(corRest.kjsonP, "reason", reason));
   if (preValue != NULL)
   {
-    KjNode* clone = kjClone(swRest.kjsonP, preValue);
+    KjNode* clone = kjClone(corRest.kjsonP, preValue);
     clone->name = (char*) "preValue";
     kjChildAdd(entry, clone);
   }
@@ -428,7 +428,7 @@ void ldEntityAttrsSet(KjNode* target, KjNode* fragment,
       KjNode* tAttrP = kjLookup(target, fAttrP->name);
       if (tAttrP != NULL)
       {
-        KjNode* preClone = (reportP != NULL) ? kjClone(swRest.kjsonP, tAttrP) : NULL;
+        KjNode* preClone = (reportP != NULL) ? kjClone(corRest.kjsonP, tAttrP) : NULL;
         removeChild(target, tAttrP, targetAllocP);
         addReportEntry(reportP, fAttrP->name, "attributeDeleted", preClone);
         anyChange = true;
@@ -466,7 +466,7 @@ void ldEntityAttrsSet(KjNode* target, KjNode* fragment,
     //
     KjNode* preClone = NULL;
     if (reportP != NULL)
-      preClone = kjClone(swRest.kjsonP, tAttrP);
+      preClone = kjClone(corRest.kjsonP, tAttrP);
 
     KjNode* fInstP = fAttrP->value.firstChildP;
     while (fInstP != NULL)

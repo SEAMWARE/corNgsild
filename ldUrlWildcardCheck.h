@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LD_URL_WILDCARD_CHECK_H_
-#define SWNGSILD_LD_URL_WILDCARD_CHECK_H_
+#ifndef CORNGSILD_LD_URL_WILDCARD_CHECK_H_
+#define CORNGSILD_LD_URL_WILDCARD_CHECK_H_
 
 //
 // FILE            ldUrlWildcardCheck.h
@@ -10,7 +10,7 @@
 //
 // Per-route wildcard validation, split in two:
 //
-//   * ldUrlWildcardOptionsInit(service)  — invoked once per SwRestService at
+//   * ldUrlWildcardOptionsInit(service)  — invoked once per CorRestService at
 //     init time. Walks the URL pattern and stores per-slot validation bits
 //     in service->options. Cached for the lifetime of the process.
 //   * ldUrlWildcardCheck()               — pre-service hook. Reads the
@@ -18,14 +18,14 @@
 //     incoming request. No URL re-scanning per request.
 //
 // The slot-validation flags live in the `wildcards` group of
-// SwRestService.options (a SwRestServiceOptions bit-struct, see swRest).
+// CorRestService.options (a CorRestServiceOptions bit-struct, see corRest).
 //
 
 #include <stdbool.h>
 
-#include "swRest/SwRestService.h"
+#include "corRest/CorRestService.h"
 
-extern void ldUrlWildcardOptionsInit(SwRestService* service);
+extern void ldUrlWildcardOptionsInit(CorRestService* service);
 extern bool ldUrlWildcardCheck(void);
 
-#endif  // SWNGSILD_LD_URL_WILDCARD_CHECK_H_
+#endif  // CORNGSILD_LD_URL_WILDCARD_CHECK_H_

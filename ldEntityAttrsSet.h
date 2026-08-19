@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDENTITYATTRSSET_H_
-#define SWNGSILD_LDENTITYATTRSSET_H_
+#ifndef CORNGSILD_LDENTITYATTRSSET_H_
+#define CORNGSILD_LDENTITYATTRSSET_H_
 
 //
 // FILE            ldEntityAttrsSet.h
@@ -34,7 +34,7 @@
 #include "kjson/KjNode.h"                             // KjNode
 #include "kjson/kjson.h"                              // Kjson
 
-#include "swNgsild/ldEntityMerge.h"                   // LdMergeReport
+#include "corNgsild/ldEntityMerge.h"                   // LdMergeReport
 
 
 
@@ -58,4 +58,4 @@ extern void ldEntityAttrsSet(KjNode*         target,
                              LdMergeReport*  reportP,
                              Kjson*          targetAllocP);
 
-#endif  // SWNGSILD_LDENTITYATTRSSET_H_
+#endif  // CORNGSILD_LDENTITYATTRSSET_H_

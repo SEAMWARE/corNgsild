@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDENTITYFRAGMENT_H_
-#define SWNGSILD_LDENTITYFRAGMENT_H_
+#ifndef CORNGSILD_LDENTITYFRAGMENT_H_
+#define CORNGSILD_LDENTITYFRAGMENT_H_
 
 //
 // FILE            ldEntityFragment.h
@@ -20,7 +20,7 @@
 #include <stdbool.h>                                   // bool
 
 #include "kjson/KjNode.h"                              // KjNode, Kjson
-#include "swNgsild/LdRegCache.h"                       // LdRegInfo
+#include "corNgsild/LdRegCache.h"                       // LdRegInfo
 
 
 
@@ -58,4 +58,4 @@ extern KjNode* ldEntityFragmentForInfo(KjNode*     entityP,
                                        Kjson*      kjP,
                                        bool        detach);
 
-#endif  // SWNGSILD_LDENTITYFRAGMENT_H_
+#endif  // CORNGSILD_LDENTITYFRAGMENT_H_

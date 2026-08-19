@@ -18,10 +18,10 @@
 #include "kjson/kjLookup.h"                            // kjLookup
 #include "kjson/kjBuilder.h"                           // kjInteger, kjString, kjChildAdd, kjChildRemove
 
-#include "swRest/SwRestState.h"                        // swRest (kjsonP — the per-request render arena)
-#include "swNgsild/LdVocab.h"                          // LD_VOCAB_NOTIFICATION
-#include "swNgsild/LdSubCache.h"                       // LdSubCacheItem
-#include "swNgsild/ldSubscriptionCounters.h"           // Own interface
+#include "corRest/CorRestState.h"                        // corRest (kjsonP — the per-request render arena)
+#include "corNgsild/LdVocab.h"                          // LD_VOCAB_NOTIFICATION
+#include "corNgsild/LdSubCache.h"                       // LdSubCacheItem
+#include "corNgsild/ldSubscriptionCounters.h"           // Own interface
 
 
 
@@ -99,27 +99,27 @@ void ldSubscriptionCountersInject(KjNode* subP, LdSubCacheItem* itemP)
 
   char isoBuf[64];
 
-  kjChildAdd(notifP, kjInteger(swRest.kjsonP, "timesSent", itemP->timesSent));
+  kjChildAdd(notifP, kjInteger(corRest.kjsonP, "timesSent", itemP->timesSent));
 
   if (itemP->timesFailed > 0)
-    kjChildAdd(notifP, kjInteger(swRest.kjsonP, "timesFailed", itemP->timesFailed));
+    kjChildAdd(notifP, kjInteger(corRest.kjsonP, "timesFailed", itemP->timesFailed));
 
   if (itemP->lastNotification > 0)
   {
     nsToIso(itemP->lastNotification, isoBuf, sizeof(isoBuf));
-    kjChildAdd(notifP, kjString(swRest.kjsonP, "lastNotification", isoBuf));
+    kjChildAdd(notifP, kjString(corRest.kjsonP, "lastNotification", isoBuf));
   }
 
   if (itemP->lastSuccess > 0)
   {
     nsToIso(itemP->lastSuccess, isoBuf, sizeof(isoBuf));
-    kjChildAdd(notifP, kjString(swRest.kjsonP, "lastSuccess", isoBuf));
+    kjChildAdd(notifP, kjString(corRest.kjsonP, "lastSuccess", isoBuf));
   }
 
   if (itemP->lastFailure > 0)
   {
     nsToIso(itemP->lastFailure, isoBuf, sizeof(isoBuf));
-    kjChildAdd(notifP, kjString(swRest.kjsonP, "lastFailure", isoBuf));
+    kjChildAdd(notifP, kjString(corRest.kjsonP, "lastFailure", isoBuf));
   }
 
   // notification.status (§ 5.2.14.2): "ok" if the most recent attempt
@@ -131,7 +131,7 @@ void ldSubscriptionCountersInject(KjNode* subP, LdSubCacheItem* itemP)
   const char* statusStr = "ok";
   if (itemP->lastFailure > itemP->lastSuccess)
     statusStr = "failed";
-  kjChildAdd(notifP, kjString(swRest.kjsonP, "status", (char*) statusStr));
+  kjChildAdd(notifP, kjString(corRest.kjsonP, "status", (char*) statusStr));
 }
 
 
@@ -158,31 +158,31 @@ void ldPernotCountersInject(KjNode* subP, LdPernotItem* itemP)
 
   char isoBuf[64];
 
-  kjChildAdd(notifP, kjInteger(swRest.kjsonP, "timesSent", itemP->timesSent));
+  kjChildAdd(notifP, kjInteger(corRest.kjsonP, "timesSent", itemP->timesSent));
 
   if (itemP->timesFailed > 0)
-    kjChildAdd(notifP, kjInteger(swRest.kjsonP, "timesFailed", itemP->timesFailed));
+    kjChildAdd(notifP, kjInteger(corRest.kjsonP, "timesFailed", itemP->timesFailed));
 
   if (itemP->lastNotification > 0)
   {
     nsToIso(itemP->lastNotification, isoBuf, sizeof(isoBuf));
-    kjChildAdd(notifP, kjString(swRest.kjsonP, "lastNotification", isoBuf));
+    kjChildAdd(notifP, kjString(corRest.kjsonP, "lastNotification", isoBuf));
   }
 
   if (itemP->lastSuccess > 0)
   {
     nsToIso(itemP->lastSuccess, isoBuf, sizeof(isoBuf));
-    kjChildAdd(notifP, kjString(swRest.kjsonP, "lastSuccess", isoBuf));
+    kjChildAdd(notifP, kjString(corRest.kjsonP, "lastSuccess", isoBuf));
   }
 
   if (itemP->lastFailure > 0)
   {
     nsToIso(itemP->lastFailure, isoBuf, sizeof(isoBuf));
-    kjChildAdd(notifP, kjString(swRest.kjsonP, "lastFailure", isoBuf));
+    kjChildAdd(notifP, kjString(corRest.kjsonP, "lastFailure", isoBuf));
   }
 
   const char* statusStr = "ok";
   if (itemP->lastFailure > itemP->lastSuccess)
     statusStr = "failed";
-  kjChildAdd(notifP, kjString(swRest.kjsonP, "status", (char*) statusStr));
+  kjChildAdd(notifP, kjString(corRest.kjsonP, "status", (char*) statusStr));
 }

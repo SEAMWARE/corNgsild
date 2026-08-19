@@ -19,18 +19,18 @@
 #include "kjson/kjLookup.h"                            // kjLookup
 
 #include "kalloc/KAlloc.h"                              // KAlloc
-#include "swJsonld/swldExpand.h"                       // swldExpand, swldAlreadyExpanded
-#include "swJsonld/swldDownload.h"                     // swldContextFromUrl
-#include "swJsonld/swldInit.h"                         // swldCoreContext
-#include "swNgsild/LdVocab.h"                          // LD_VOCAB_*
-#include "swNgsild/LdRegCache.h"                       // LdRegCache, LdRegCacheItem
+#include "corJsonld/corLdExpand.h"                       // corLdExpand, corLdAlreadyExpanded
+#include "corJsonld/corLdDownload.h"                     // corLdContextFromUrl
+#include "corJsonld/corLdInit.h"                         // corLdCoreContext
+#include "corNgsild/LdVocab.h"                          // LD_VOCAB_*
+#include "corNgsild/LdRegCache.h"                       // LdRegCache, LdRegCacheItem
 #include "ktrace/kTrace.h"                              // KT_T
-#include "swNgsild/ldTraceLevels.h"                     // LdTRegMatch
-#include "swNgsild/SwNgsild.h"                          // swNgsild (per-conn probePending cache)
-#include "swNgsild/ldCheckDateTime.h"                  // ldIsoToNanoseconds
-#include "swNgsild/ldScopeMatch.h"                     // ldScopePatternMatch
-#include "swNgsild/ldProbeSourceIdentity.h"            // ldProbeSourceIdentity
-#include "swNgsild/ldRegCache.h"                       // Own interface
+#include "corNgsild/ldTraceLevels.h"                     // LdTRegMatch
+#include "corNgsild/CorNgsild.h"                          // corNgsild (per-conn probePending cache)
+#include "corNgsild/ldCheckDateTime.h"                  // ldIsoToNanoseconds
+#include "corNgsild/ldScopeMatch.h"                     // ldScopePatternMatch
+#include "corNgsild/ldProbeSourceIdentity.h"            // ldProbeSourceIdentity
+#include "corNgsild/ldRegCache.h"                       // Own interface
 
 
 
@@ -53,25 +53,25 @@
 // either NULL (probe not done: Via-based detection covers them) or the
 // complete alias.
 //
-// Inc6c — the probe queue lives in the per-connection swNgsild
+// Inc6c — the probe queue lives in the per-connection corNgsild
 // (probePendingV[PROBE_PENDING_MAX] / probePendingN); strdup'd regIds are freed
 // when drained below (post-response hook).
 //
 static void probePendingAdd(LdRegCache* cacheP, LdRegCacheItem* itemP)
 {
-  if (swNgsild.probePendingN >= PROBE_PENDING_MAX || itemP->regId == NULL)
+  if (corNgsild.probePendingN >= PROBE_PENDING_MAX || itemP->regId == NULL)
     return;  // skip the probe — csourceAlias stays NULL, Via detection covers
 
-  swNgsild.probePendingV[swNgsild.probePendingN].cacheP = cacheP;
-  swNgsild.probePendingV[swNgsild.probePendingN].regId  = strdup(itemP->regId);
-  swNgsild.probePendingN++;
+  corNgsild.probePendingV[corNgsild.probePendingN].cacheP = cacheP;
+  corNgsild.probePendingV[corNgsild.probePendingN].regId  = strdup(itemP->regId);
+  corNgsild.probePendingN++;
 }
 
 void ldRegCacheProbePending(void)
 {
-  for (int i = 0; i < swNgsild.probePendingN; i++)
+  for (int i = 0; i < corNgsild.probePendingN; i++)
   {
-    LdRegCache* cacheP = swNgsild.probePendingV[i].cacheP;
+    LdRegCache* cacheP = corNgsild.probePendingV[i].cacheP;
 
     // Pin the item under the rdlock so a concurrent CSR remove (which frees
     // under the wrlock) can't free it out from under the probe + field writes
@@ -81,7 +81,7 @@ void ldRegCacheProbePending(void)
     // once refCount hits 0), so it stays valid here. The slow source-identity
     // probe runs OUTSIDE the lock (pin, not lock, guards the item).
     ldRegCacheRdLock(cacheP);
-    LdRegCacheItem* itemP = ldRegCacheItemLookup(cacheP, swNgsild.probePendingV[i].regId);
+    LdRegCacheItem* itemP = ldRegCacheItemLookup(cacheP, corNgsild.probePendingV[i].regId);
     if (itemP != NULL)
       ldRegCacheItemPin(itemP);
     ldRegCacheUnlock(cacheP);
@@ -95,9 +95,9 @@ void ldRegCacheProbePending(void)
     if (itemP != NULL)
       ldRegCacheItemUnpin(itemP);
 
-    free(swNgsild.probePendingV[i].regId);
+    free(corNgsild.probePendingV[i].regId);
   }
-  swNgsild.probePendingN = 0;
+  corNgsild.probePendingN = 0;
 }
 
 
@@ -246,9 +246,9 @@ static char** stringArrayExtract(KjNode* arrP)
 //
 // attrIRIArrayExtract - like stringArrayExtract, but vocab-expands each entry
 //
-// swldExpandTree intentionally does NOT perform @type:@vocab/@type:@id value
+// corLdExpandTree intentionally does NOT perform @type:@vocab/@type:@id value
 // coercion (that would silently launder sketchy user input past validators
-// that run post-expansion — see swldExpandTree.c's comment). So values
+// that run post-expansion — see corLdExpandTree.c's comment). So values
 // inside arrays like propertyNames / relationshipNames stay short after
 // parseHook. Downstream matching against entity attribute names (which
 // ARE stored fully-expanded) needs the IRI form, so we expand here at
@@ -262,9 +262,9 @@ static char** attrIRIArrayExtract(KjNode* arrP, KAlloc* allocP)
 
   for (int i = 0; v[i] != NULL; i++)
   {
-    if (swldAlreadyExpanded(v[i]) == false)
+    if (corLdAlreadyExpanded(v[i]) == false)
     {
-      char* expanded = swldExpand(NULL, v[i], allocP, NULL, NULL);
+      char* expanded = corLdExpand(NULL, v[i], allocP, NULL, NULL);
       if (expanded != NULL)
         v[i] = expanded;
     }
@@ -591,7 +591,7 @@ LdRegCacheItem* ldRegCacheItemAdd(LdRegCache* cacheP, KjNode* regTree, KAlloc* k
     probePendingAdd(cacheP, itemP);
 
   // Geo coverage borrowed pointers — § 5.2.9. Match-time filtering
-  // requires GEOS integration into swNgsild; tracked as a gap.
+  // requires GEOS integration into corNgsild; tracked as a gap.
   itemP->locationP         = kjLookup(itemP->regTree, "location");
   itemP->observationSpaceP = kjLookup(itemP->regTree, "observationSpace");
   itemP->operationSpaceP   = kjLookup(itemP->regTree, "operationSpace");
@@ -685,7 +685,7 @@ LdRegCacheItem* ldRegCacheItemAdd(LdRegCache* cacheP, KjNode* regTree, KAlloc* k
   //      binding").
   //   2) Core context (always present, neutral, never lies about a CSR's
   //      vocabulary).
-  // Never NULL — emission sites can `swldCompact(forwardCtxP, iri)`
+  // Never NULL — emission sites can `corLdCompact(forwardCtxP, iri)`
   // unconditionally and get back the short alias if available, or the
   // expanded IRI unchanged otherwise (then URL-encoded on the way out).
   itemP->forwardCtxP = NULL;
@@ -695,13 +695,13 @@ LdRegCacheItem* ldRegCacheItemAdd(LdRegCache* cacheP, KjNode* regTree, KAlloc* k
     {
       if (strcasecmp(itemP->contextSourceInfoKV[i], "jsonldContext") == 0)
       {
-        itemP->forwardCtxP = swldContextFromUrl(itemP->contextSourceInfoKV[i + 1], kaP);
+        itemP->forwardCtxP = corLdContextFromUrl(itemP->contextSourceInfoKV[i + 1], kaP);
         break;
       }
     }
   }
   if (itemP->forwardCtxP == NULL)
-    itemP->forwardCtxP = swldCoreContext();
+    itemP->forwardCtxP = corLdCoreContext();
 
   // expiresAt
   KjNode* expiresP = kjLookup(itemP->regTree, LD_VOCAB_EXPIRES_AT);

@@ -14,19 +14,19 @@
 #include "kalloc/KAlloc.h"                             // KAlloc
 #include "kjson/KjNode.h"                               // KjNode
 #include "kjson/kjLookup.h"                             // kjLookup
-#include "swJsonld/swldExpand.h"                        // swldValueObjectIs, swldValueObjectCheck
+#include "corJsonld/corLdExpand.h"                        // corLdValueObjectIs, corLdValueObjectCheck
 
-#include "swNgsild/LdAttrType.h"                         // LdAttrType
-#include "swNgsild/LdOp.h"                               // LdOp
-#include "swNgsild/LdCheck.h"                            // STRING_CHECK, URI_CHECK, ...
-#include "swNgsild/LdVocab.h"                            // LD_VOCAB_*
-#include "swNgsild/ldTypes.h"                            // ldAttrTypeToString
-#include "swNgsild/ldAttrTypeDetect.h"                   // ldAttrTypeDetect
-#include "swNgsild/ldError.h"                            // ldError
-#include "swNgsild/ldInit.h"                             // ldTypedValueCheck
-#include "swNgsild/ldCheckGeo.h"                         // ldCheckGeo
-#include "swNgsild/ldCheckAttribute.h"                   // Own interface
-#include "swNgsild/ldTraceLevels.h"                      // LdTCheckAttr
+#include "corNgsild/LdAttrType.h"                         // LdAttrType
+#include "corNgsild/LdOp.h"                               // LdOp
+#include "corNgsild/LdCheck.h"                            // STRING_CHECK, URI_CHECK, ...
+#include "corNgsild/LdVocab.h"                            // LD_VOCAB_*
+#include "corNgsild/ldTypes.h"                            // ldAttrTypeToString
+#include "corNgsild/ldAttrTypeDetect.h"                   // ldAttrTypeDetect
+#include "corNgsild/ldError.h"                            // ldError
+#include "corNgsild/ldInit.h"                             // ldTypedValueCheck
+#include "corNgsild/ldCheckGeo.h"                         // ldCheckGeo
+#include "corNgsild/ldCheckAttribute.h"                   // Own interface
+#include "corNgsild/ldTraceLevels.h"                      // LdTCheckAttr
 
 
 
@@ -650,12 +650,12 @@ bool ldCheckAttribute(KjNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc*
 
   case LdAttrProperty:
     // A Property value may be a JSON-LD typed value { "@type":…, "@value":… }.
-    // swJsonld owns its structural rules; NGSI-LD owns the datatype semantics
+    // corJsonld owns its structural rules; NGSI-LD owns the datatype semantics
     // (e.g. @type:DateTime ⇒ @value must be a valid ISO 8601 DateTime).
-    if ((valueNodeP->type == KjObject) && swldValueObjectIs(valueNodeP))
+    if ((valueNodeP->type == KjObject) && corLdValueObjectIs(valueNodeP))
     {
       char* detail = NULL;
-      if (swldValueObjectCheck(valueNodeP, &detail) == false)
+      if (corLdValueObjectCheck(valueNodeP, &detail) == false)
       {
         ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Value Object", "Attribute '%s': %s", attrP->name, detail);
         return false;

@@ -6,20 +6,20 @@
 // Copyright 2026 Seamware
 // 
 //
-// Operates on COMPACTED trees (after swldCompactTree), so all names are
+// Operates on COMPACTED trees (after corLdCompactTree), so all names are
 // short-form: "languageMap", "value", "type", "lang", "observedAt", etc.
 //
 #include <stdbool.h>                                     // bool
 #include <string.h>                                      // strcmp
-#include "swRest/swRest.h"                            // swRest
+#include "corRest/corRest.h"                            // corRest
 
 #include "kalloc/KAlloc.h"                             // KAlloc
 #include "kjson/KjNode.h"                               // KjNode
 #include "kjson/kjBuilder.h"                             // kjString
 #include "kjson/kjChildReplace.h"                       // kjChildReplace
 
-#include "swNgsild/ldIsEntityKeyword.h"                   // ldIsEntityKeyword
-#include "swNgsild/ldLangReduce.h"                       // Own interface
+#include "corNgsild/ldIsEntityKeyword.h"                   // ldIsEntityKeyword
+#include "corNgsild/ldLangReduce.h"                       // Own interface
 
 
 
@@ -105,7 +105,7 @@ static void attrLangReduce(KjNode* attrP, const char* lang, KAlloc* faP)
       const char* chosenLang = matchP->name;
 
       // Create "value" node with the matched value
-      KjNode* valueP = kjString(swRest.kjsonP, "value", matchP->value.s);
+      KjNode* valueP = kjString(corRest.kjsonP, "value", matchP->value.s);
       valueP->type = matchP->type;
       if (matchP->type != KjString)
         valueP->value = matchP->value;
@@ -118,7 +118,7 @@ static void attrLangReduce(KjNode* attrP, const char* lang, KAlloc* faP)
         typeP->value.s = (char*) "Property";
 
       // Add "lang" sub-property with the chosen language tag
-      KjNode* langNodeP = kjString(swRest.kjsonP, "lang", chosenLang);
+      KjNode* langNodeP = kjString(corRest.kjsonP, "lang", chosenLang);
       kjChildAdd(attrP, langNodeP);
     }
   }

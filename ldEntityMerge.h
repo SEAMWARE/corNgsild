@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDENTITYMERGE_H_
-#define SWNGSILD_LDENTITYMERGE_H_
+#ifndef CORNGSILD_LDENTITYMERGE_H_
+#define CORNGSILD_LDENTITYMERGE_H_
 
 //
 // FILE            ldEntityMerge.h
@@ -70,14 +70,14 @@ typedef struct LdMergeReport
 // reportP:        out-param. Non-NULL — the function fills changes as described
 //                 on LdMergeReport. Caller allocates the struct; the changes
 //                 array and the cloned preValue subtrees are allocated from the
-//                 request-scoped kjson arena (swRest.kjsonP) since the report is
+//                 request-scoped kjson arena (corRest.kjsonP) since the report is
 //                 consumed within the same request.
 // ts:             epoch-nanoseconds timestamp to stamp onto modifiedAt for
 //                 touched entity/attribute/sub-attribute containers.
 // targetAllocP:   kjson allocator for any node newly grafted into target. Must
 //                 match target's lifetime — for an in-memory (malloc-backed)
 //                 store pass NULL; for a request-scoped buffer pass
-//                 swRest.kjsonP.
+//                 corRest.kjsonP.
 //
 // Returns true on success, false on semantic error (ldError set by callee).
 //
@@ -125,4 +125,4 @@ extern bool ldEntityFragmentApply(KjNode*         target,
 //
 extern void ldEntityReplaceReport(KjNode* oldEntityP, KjNode* newEntityP, LdMergeReport* reportP);
 
-#endif  // SWNGSILD_LDENTITYMERGE_H_
+#endif  // CORNGSILD_LDENTITYMERGE_H_

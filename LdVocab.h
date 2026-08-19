@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDVOCAB_H_
-#define SWNGSILD_LDVOCAB_H_
+#ifndef CORNGSILD_LDVOCAB_H_
+#define CORNGSILD_LDVOCAB_H_
 
 //
 // FILE            LdVocab.h
@@ -14,7 +14,7 @@
 // "Core-context shortcut"), terms defined in the NGSI-LD core context
 // stay as their *short* form everywhere — in the parsed tree after
 // expand, in the in-memory cache, in the persisted DB row, and on the
-// wire. The expand step in swJsonld already enforces this; the macros
+// wire. The expand step in corJsonld already enforces this; the macros
 // below are the single source of truth callers compare against.
 //
 // "id" and "type" are NOT here — they map to JSON-LD @id/@type which
@@ -91,4 +91,4 @@
 #define LD_VOCAB_INFORMATION       "information"
 #define LD_VOCAB_MODE              "mode"
 
-#endif  // SWNGSILD_LDVOCAB_H_
+#endif  // CORNGSILD_LDVOCAB_H_

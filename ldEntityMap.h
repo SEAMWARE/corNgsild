@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDENTITYMAP_OPS_H_
-#define SWNGSILD_LDENTITYMAP_OPS_H_
+#ifndef CORNGSILD_LDENTITYMAP_OPS_H_
+#define CORNGSILD_LDENTITYMAP_OPS_H_
 
 //
 // FILE            ldEntityMap.h
@@ -9,7 +9,7 @@
 // Copyright 2026 Seamware
 //
 #include "kjson/KjNode.h"                              // KjNode
-#include "swNgsild/LdEntityMap.h"                      // LdEntityMap, LdEntityMapStore
+#include "corNgsild/LdEntityMap.h"                      // LdEntityMap, LdEntityMapStore
 
 
 
@@ -51,4 +51,4 @@ extern KjNode* ldEntityMapToTree(LdEntityMap* mapP);
 // ldEntityMapPurgeExpired - remove all expired maps from the store
 extern void ldEntityMapPurgeExpired(LdEntityMapStore* storeP);
 
-#endif  // SWNGSILD_LDENTITYMAP_OPS_H_
+#endif  // CORNGSILD_LDENTITYMAP_OPS_H_

@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDCONFORMANCEDOWNGRADE_H_
-#define SWNGSILD_LDCONFORMANCEDOWNGRADE_H_
+#ifndef CORNGSILD_LDCONFORMANCEDOWNGRADE_H_
+#define CORNGSILD_LDCONFORMANCEDOWNGRADE_H_
 
 //
 // FILE            ldConformanceDowngrade.h
@@ -55,4 +55,4 @@ extern void ldConformanceDowngrade(KjNode* treeP, short targetMajor, short targe
 
 
 
-#endif  // SWNGSILD_LDCONFORMANCEDOWNGRADE_H_
+#endif  // CORNGSILD_LDCONFORMANCEDOWNGRADE_H_

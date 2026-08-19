@@ -15,15 +15,15 @@
 #include "kjson/kjBuilder.h"                             // kjObject
 #include "kjson/kjChildReplace.h"                       // kjChildReplace
 #include "kjson/kjLookup.h"                             // kjLookup
-#include "swRest/swRest.h"                             // swRest
+#include "corRest/corRest.h"                             // corRest
 
-#include "swJsonld/swldExpand.h"                          // KJF_ATTR_TERM
-#include "swNgsild/LdVocab.h"                            // LD_VOCAB_*
-#include "swNgsild/LdAttrType.h"                         // LdAttrType, LdAttrGeoProperty
-#include "swNgsild/ldAttrTypeDetect.h"                   // ldAttrTypeDetect
-#include "swNgsild/ldIsEntityKeyword.h"                   // ldIsEntityKeyword
-#include "swNgsild/ldCheckDateTime.h"                    // ldIsoToNanoseconds
-#include "swNgsild/ldApiEntityToDbModel.h"               // Own interface
+#include "corJsonld/corLdExpand.h"                          // KJF_ATTR_TERM
+#include "corNgsild/LdVocab.h"                            // LD_VOCAB_*
+#include "corNgsild/LdAttrType.h"                         // LdAttrType, LdAttrGeoProperty
+#include "corNgsild/ldAttrTypeDetect.h"                   // ldAttrTypeDetect
+#include "corNgsild/ldIsEntityKeyword.h"                   // ldIsEntityKeyword
+#include "corNgsild/ldCheckDateTime.h"                    // ldIsoToNanoseconds
+#include "corNgsild/ldApiEntityToDbModel.h"               // Own interface
 
 
 
@@ -162,8 +162,8 @@ static void normalizeValueKey(KjNode* attrP)
 //
 static void timestampSet(KjNode* objP, uint64_t createdAt, uint64_t modifiedAt, KAlloc* faP)
 {
-  kjChildAdd(objP, kjInteger(swRest.kjsonP, LD_VOCAB_CREATED_AT,  (long long) createdAt));
-  kjChildAdd(objP, kjInteger(swRest.kjsonP, LD_VOCAB_MODIFIED_AT, (long long) modifiedAt));
+  kjChildAdd(objP, kjInteger(corRest.kjsonP, LD_VOCAB_CREATED_AT,  (long long) createdAt));
+  kjChildAdd(objP, kjInteger(corRest.kjsonP, LD_VOCAB_MODIFIED_AT, (long long) modifiedAt));
 }
 
 
@@ -194,7 +194,7 @@ static const char* extractDatasetId(KjNode* attrP)
 // isCoreAttrTerm - is this node a structural attribute member (NOT a sub-attribute)?
 //
 // KJF_ATTR_TERM is classified once at core-context load and copied onto each node
-// during swldExpandTree (and stamped on the structural keys ldNormalizeInput
+// during corLdExpandTree (and stamped on the structural keys ldNormalizeInput
 // creates). A single bit test instead of a strcmp chain.
 //
 static bool isCoreAttrTerm(const KjNode* nodeP)
@@ -257,7 +257,7 @@ static KjNode* wrapSingleAttr(KjNode* attrP, uint64_t ts, KAlloc* faP)
   attrToDbModel(attrP, ts, faP);
 
   // Create wrapper object with same name as the attribute
-  KjNode* wrapperP = kjObject(swRest.kjsonP, attrP->name);
+  KjNode* wrapperP = kjObject(corRest.kjsonP, attrP->name);
 
   // Move attrP into the wrapper as a child keyed by datasetId
   // Keep attrP->next intact — kjChildReplace needs it to link wrapperP to the next sibling
@@ -298,7 +298,7 @@ static KjNode* wrapMultiAttr(KjNode* arrayP, uint64_t ts, KAlloc* faP)
   if (arrayP->value.firstChildP != NULL && arrayP->value.firstChildP->type != KjObject)
     return NULL;
 
-  KjNode* wrapperP = kjObject(swRest.kjsonP, arrayP->name);
+  KjNode* wrapperP = kjObject(corRest.kjsonP, arrayP->name);
 
   // Move each array element into the wrapper, keyed by its datasetId
   KjNode* instP = arrayP->value.firstChildP;
@@ -332,7 +332,7 @@ void ldApiEntityToDbModel(KjNode* entityP, KAlloc* faP, int64_t createdAt)
   if (entityP == NULL || entityP->type != KjObject)
     return;
 
-  uint64_t ts = swRest.requestStartTime;
+  uint64_t ts = corRest.requestStartTime;
 
   KjNode* childP = entityP->value.firstChildP;
 

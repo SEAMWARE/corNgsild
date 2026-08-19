@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDGEOREL_H_
-#define SWNGSILD_LDGEOREL_H_
+#ifndef CORNGSILD_LDGEOREL_H_
+#define CORNGSILD_LDGEOREL_H_
 
 //
 // FILE            LdGeoRel.h
@@ -50,4 +50,4 @@ typedef struct LdGeoRel
 //
 extern LdGeoRel* ldGeoRelParse(const char* georelStr, KAlloc* faP);
 
-#endif  // SWNGSILD_LDGEOREL_H_
+#endif  // CORNGSILD_LDGEOREL_H_

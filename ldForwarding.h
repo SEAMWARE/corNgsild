@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDFORWARDING_OPS_H_
-#define SWNGSILD_LDFORWARDING_OPS_H_
+#ifndef CORNGSILD_LDFORWARDING_OPS_H_
+#define CORNGSILD_LDFORWARDING_OPS_H_
 
 //
 // FILE            ldForwarding.h
@@ -14,7 +14,7 @@
 //
 #include <stdbool.h>                                   // bool
 
-#include "swNgsild/LdForwarding.h"                     // LdForwardingPlugin
+#include "corNgsild/LdForwarding.h"                     // LdForwardingPlugin
 
 
 
@@ -50,4 +50,4 @@ extern const LdForwardingPlugin* ldForwardingForScheme(const char* scheme);
 //
 extern const LdForwardingPlugin* ldForwardingForEndpoint(const char* endpoint);
 
-#endif  // SWNGSILD_LDFORWARDING_OPS_H_
+#endif  // CORNGSILD_LDFORWARDING_OPS_H_

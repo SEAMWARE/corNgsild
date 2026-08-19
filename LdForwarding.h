@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDFORWARDING_H_
-#define SWNGSILD_LDFORWARDING_H_
+#ifndef CORNGSILD_LDFORWARDING_H_
+#define CORNGSILD_LDFORWARDING_H_
 
 //
 // FILE            LdForwarding.h
@@ -9,22 +9,22 @@
 // Copyright 2026 Seamware
 //
 // Generic forwarding-transport abstraction for distributed operations
-// (NGSI-LD § 4.3.6). The dispatcher in swNgsild builds an
+// (NGSI-LD § 4.3.6). The dispatcher in corNgsild builds an
 // LdForwardRequest, looks up the plugin matching the endpoint URL's
 // scheme, and calls send(). HTTP is the default transport (built into
-// swBroker); future transports (e.g. a binary RPC scheme like
-// "swBin://host:port") plug in by registering for their own scheme.
+// coraine); future transports (e.g. a binary RPC scheme like
+// "corBin://host:port") plug in by registering for their own scheme.
 //
-// The interface is deliberately transport-agnostic: SwRestVerb /
-// SwRestKeyValue are reused as semantic carriers (verb = create/read/
+// The interface is deliberately transport-agnostic: CorRestVerb /
+// CorRestKeyValue are reused as semantic carriers (verb = create/read/
 // update/delete-shaped op, key-value = string headers), but no
 // HTTP-specific field leaks across the boundary.
 //
 #include <stdbool.h>                                   // bool
 
 #include "kalloc/KAlloc.h"                             // KAlloc
-#include "swRest/SwRestVerb.h"                         // SwRestVerb
-#include "swRest/SwRestKeyValue.h"                     // SwRestKeyValue
+#include "corRest/CorRestVerb.h"                         // CorRestVerb
+#include "corRest/CorRestKeyValue.h"                     // CorRestKeyValue
 
 
 
@@ -34,9 +34,9 @@
 //
 typedef struct LdForwardRequest
 {
-  const char*      endpoint;          // full URL incl. scheme (http://h/p, swBin://h:p, ...)
-  SwRestVerb       verb;              // semantic op shape (GET/POST/PATCH/PUT/DELETE)
-  SwRestKeyValue*  headerV;           // outbound headers (Via, NGSILD-Tenant, contextSourceInfo-derived, ...)
+  const char*      endpoint;          // full URL incl. scheme (http://h/p, corBin://h:p, ...)
+  CorRestVerb       verb;              // semantic op shape (GET/POST/PATCH/PUT/DELETE)
+  CorRestKeyValue*  headerV;           // outbound headers (Via, NGSILD-Tenant, contextSourceInfo-derived, ...)
   int              headerCount;
   const char*      body;              // request body (NULL for GET / DELETE)
   int              bodyLen;
@@ -57,7 +57,7 @@ typedef struct LdForwardRequest
 typedef struct LdForwardResponse
 {
   int              statusCode;        // HTTP-style status (200/201/204/400/404/500/...)
-  SwRestKeyValue*  headerV;           // borrowed into allocP
+  CorRestKeyValue*  headerV;           // borrowed into allocP
   int              headerCount;
   char*            body;              // borrowed into allocP
   int              bodyLen;
@@ -89,9 +89,9 @@ typedef int (*LdForwardSendFunc)(LdForwardRequest* req, LdForwardResponse* resp)
 //
 typedef struct LdForwardingPlugin
 {
-  const char*         alias;        // short name, "http" / "swBin" — for diagnostics
+  const char*         alias;        // short name, "http" / "corBin" — for diagnostics
   const char* const*  schemes;      // NULL-terminated list of URL schemes
   LdForwardSendFunc   send;
 } LdForwardingPlugin;
 
-#endif  // SWNGSILD_LDFORWARDING_H_
+#endif  // CORNGSILD_LDFORWARDING_H_

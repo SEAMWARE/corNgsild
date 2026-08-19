@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LD_STRIP_AT_CONTEXT_H_
-#define SWNGSILD_LD_STRIP_AT_CONTEXT_H_
+#ifndef CORNGSILD_LD_STRIP_AT_CONTEXT_H_
+#define CORNGSILD_LD_STRIP_AT_CONTEXT_H_
 
 //
 // FILE            ldStripAtContext.h
@@ -20,7 +20,7 @@
 // Intended for distop response bodies: we parse the peer's reply, then
 // strip any @context in it before the tree flows into our handling.
 // Request-side @context stripping happens at the HTTP ingress
-// (swldExpandTree); this helper is the symmetrical cleanup for the other
+// (corLdExpandTree); this helper is the symmetrical cleanup for the other
 // direction — a peer might echo @context inline and we don't want it
 // sneaking into our stored or rendered state.
 //
@@ -29,4 +29,4 @@
 //
 extern void ldStripAtContext(KjNode* treeP);
 
-#endif  // SWNGSILD_LD_STRIP_AT_CONTEXT_H_
+#endif  // CORNGSILD_LD_STRIP_AT_CONTEXT_H_

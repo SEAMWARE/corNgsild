@@ -12,9 +12,9 @@
 #include "kalloc/kaAlloc.h"                            // kaAlloc
 #include "kalloc/kaStrdup.h"                            // kaStrdup
 
-#include "swNgsild/LdProblem.h"                          // LD_ERROR_BAD_REQUEST_DATA
-#include "swNgsild/ldError.h"                            // ldError
-#include "swNgsild/LdScopeExpr.h"                        // Own interface
+#include "corNgsild/LdProblem.h"                          // LD_ERROR_BAD_REQUEST_DATA
+#include "corNgsild/ldError.h"                            // ldError
+#include "corNgsild/LdScopeExpr.h"                        // Own interface
 
 
 

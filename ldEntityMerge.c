@@ -14,8 +14,8 @@
 // Two allocators are threaded through the merge:
 //   targetAllocP  — used for any node grafted into the target entity. Must
 //                   match the target's lifetime (NULL for malloc-backed
-//                   stores, swRest.kjsonP for a request-scoped buffer).
-//   swRest.kjsonP — used for the merge report (per-attribute change records
+//                   stores, corRest.kjsonP for a request-scoped buffer).
+//   corRest.kjsonP — used for the merge report (per-attribute change records
 //                   with cloned preValue subtrees). The report is always
 //                   consumed within the same request.
 //
@@ -28,20 +28,20 @@
 #include "kjson/kjClone.h"                            // kjClone
 #include "kjson/kjLookup.h"                           // kjLookup
 #include "kjson/kjChildReplace.h"                     // kjChildReplace
-#include "swRest/swRest.h"                            // swRest
+#include "corRest/corRest.h"                            // corRest
 
-#include "swJsonld/swldExpand.h"                      // swldExpand
-#include "swJsonld/swldInit.h"                        // swldCoreContext
+#include "corJsonld/corLdExpand.h"                      // corLdExpand
+#include "corJsonld/corLdInit.h"                        // corLdCoreContext
 
-#include "swNgsild/LdVocab.h"                         // LD_VOCAB_*
-#include "swNgsild/LdAttrType.h"                      // LdAttrType, LdAttr*
-#include "swNgsild/ldAttrTypeDetect.h"                // ldAttrTypeDetect
-#include "swNgsild/ldTypes.h"                         // ldAttrTypeFromString, ldAttrTypeToString
-#include "swNgsild/ldError.h"                         // ldError
-#include "swNgsild/LdProblem.h"                       // LD_ERROR_*
-#include "swNgsild/SwNgsild.h"                        // swNgsild (lang, observedAtNs)
-#include "swNgsild/ldIsEntityKeyword.h"               // ldIsEntityKeyword
-#include "swNgsild/ldEntityMerge.h"                   // Own interface
+#include "corNgsild/LdVocab.h"                         // LD_VOCAB_*
+#include "corNgsild/LdAttrType.h"                      // LdAttrType, LdAttr*
+#include "corNgsild/ldAttrTypeDetect.h"                // ldAttrTypeDetect
+#include "corNgsild/ldTypes.h"                         // ldAttrTypeFromString, ldAttrTypeToString
+#include "corNgsild/ldError.h"                         // ldError
+#include "corNgsild/LdProblem.h"                       // LD_ERROR_*
+#include "corNgsild/CorNgsild.h"                        // corNgsild (lang, observedAtNs)
+#include "corNgsild/ldIsEntityKeyword.h"               // ldIsEntityKeyword
+#include "corNgsild/ldEntityMerge.h"                   // Own interface
 
 
 
@@ -277,7 +277,7 @@ static KjNode* buildInstanceFromScalar(const char* attrName,
 
   case LdAttrLanguageProperty:
   {
-    if (swNgsild.lang == NULL || swNgsild.lang[0] == 0)
+    if (corNgsild.lang == NULL || corNgsild.lang[0] == 0)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Missing lang",
               "simplified value for LanguageProperty '%s' requires the 'lang' URL parameter", attrName);
@@ -320,14 +320,14 @@ static KjNode* buildInstanceFromScalar(const char* attrName,
       {
         for (KjNode* langP = targetValue->value.firstChildP; langP != NULL; langP = langP->next)
         {
-          if (langP->name != NULL && strcmp(langP->name, swNgsild.lang) == 0)
+          if (langP->name != NULL && strcmp(langP->name, corNgsild.lang) == 0)
             continue;  // skip — will be overwritten by the URL-param entry below
           kjChildAdd(languageMap, kjClone(targetAllocP, langP));
         }
       }
     }
     KjNode* langEntryP = kjClone(targetAllocP, fragScalar);
-    langEntryP->name = (char*) swNgsild.lang;
+    langEntryP->name = (char*) corNgsild.lang;
     kjChildAdd(languageMap, langEntryP);
     kjChildAdd(inst, languageMap);
     break;
@@ -344,14 +344,14 @@ static KjNode* buildInstanceFromScalar(const char* attrName,
 
     //
     // A vocab is stored @vocab-EXPANDED ("go" → ".../default-context/go"): the core
-    // context types the "vocab" term as @type:@vocab, so swldExpandTree expands it
-    // wherever it appears under that key, and swldCompactTree compacts it back on
+    // context types the "vocab" term as @type:@vocab, so corLdExpandTree expands it
+    // wherever it appears under that key, and corLdCompactTree compacts it back on
     // the way out. A bare scalar never sat under a "vocab" key, so it arrives here
     // unexpanded and has to be expanded by hand — otherwise the same term written
     // simplified and written concise would be two different values in the database.
     //
-    SwldContext* ctxP     = (swNgsild.contextP != NULL) ? swNgsild.contextP : swldCoreContext();
-    const char*  vocabIri = swldExpand(ctxP, fragScalar->value.s, &swRest.kalloc, NULL, NULL);
+    CorLdContext* ctxP     = (corNgsild.contextP != NULL) ? corNgsild.contextP : corLdCoreContext();
+    const char*  vocabIri = corLdExpand(ctxP, fragScalar->value.s, &corRest.kalloc, NULL, NULL);
 
     kjChildAdd(inst, kjString(targetAllocP, "type", "VocabProperty"));
     kjChildAdd(inst, kjString(targetAllocP, "value", (char*) ((vocabIri != NULL) ? vocabIri : fragScalar->value.s)));
@@ -488,11 +488,11 @@ static void reportAdd(LdMergeReport* reportP, const char* attrName, const char* 
     return;
 
   if (reportP->changes == NULL)
-    reportP->changes = kjArray(swRest.kjsonP, NULL);
+    reportP->changes = kjArray(corRest.kjsonP, NULL);
 
-  KjNode* rec = kjObject(swRest.kjsonP, NULL);
-  kjChildAdd(rec, kjString(swRest.kjsonP, "attr",   attrName));
-  kjChildAdd(rec, kjString(swRest.kjsonP, "reason", reason));
+  KjNode* rec = kjObject(corRest.kjsonP, NULL);
+  kjChildAdd(rec, kjString(corRest.kjsonP, "attr",   attrName));
+  kjChildAdd(rec, kjString(corRest.kjsonP, "reason", reason));
   if (preClone != NULL)
   {
     preClone->name = (char*) "preValue";
@@ -532,7 +532,7 @@ void ldEntityReplaceReport(KjNode* oldEntityP, KjNode* newEntityP, LdMergeReport
     if (oAttrP == NULL)
       reportAdd(reportP, nAttrP->name, "attributeCreated", NULL);
     else
-      reportAdd(reportP, nAttrP->name, "attributeModified", kjClone(swRest.kjsonP, oAttrP));
+      reportAdd(reportP, nAttrP->name, "attributeModified", kjClone(corRest.kjsonP, oAttrP));
   }
 
   // old not in new → attributeDeleted
@@ -542,7 +542,7 @@ void ldEntityReplaceReport(KjNode* oldEntityP, KjNode* newEntityP, LdMergeReport
       continue;
 
     if (kjLookup(newEntityP, oAttrP->name) == NULL)
-      reportAdd(reportP, oAttrP->name, "attributeDeleted", kjClone(swRest.kjsonP, oAttrP));
+      reportAdd(reportP, oAttrP->name, "attributeDeleted", kjClone(corRest.kjsonP, oAttrP));
   }
 }
 
@@ -990,7 +990,7 @@ static bool mergeApply(KjNode*        target,
     {
       if (tAttr != NULL)
       {
-        KjNode* preClone = kjClone(swRest.kjsonP, tAttr);
+        KjNode* preClone = kjClone(corRest.kjsonP, tAttr);
         kjChildRemove(target, tAttr);
         reportAdd(reportP, name, "attributeDeleted", preClone);
         entityMutated = true;
@@ -1026,8 +1026,8 @@ static bool mergeApply(KjNode*        target,
     // If the URL has ?observedAt=... inject that timestamp into any fragment
     // instance whose target instance previously had observedAt but where the
     // fragment itself does not.
-    if (swNgsild.observedAtNs != 0 && tAttr != NULL)
-      injectObservedAtIfNeeded(tAttr, fragWrapper, swNgsild.observedAtNs, targetAllocP);
+    if (corNgsild.observedAtNs != 0 && tAttr != NULL)
+      injectObservedAtIfNeeded(tAttr, fragWrapper, corNgsild.observedAtNs, targetAllocP);
 
     if (tAttr == NULL)
     {
@@ -1046,7 +1046,7 @@ static bool mergeApply(KjNode*        target,
       if (!validateNoTypeChange(name, tAttr, fragWrapper))
         return false;
 
-      KjNode* preClone = kjClone(swRest.kjsonP, tAttr);
+      KjNode* preClone = kjClone(corRest.kjsonP, tAttr);
       if (mergeAttrWrapper(tAttr, fragWrapper, ts, targetAllocP, deepValueMerge))
       {
         // mergeAttrWrapper may have stripped instances whose primary value

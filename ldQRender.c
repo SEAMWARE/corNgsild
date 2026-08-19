@@ -13,13 +13,13 @@
 
 #include "kalloc/KAlloc.h"                             // KAlloc
 #include "kalloc/kaAlloc.h"                            // kaAlloc
-#include "swJsonld/SwldContext.h"                      // SwldContext
-#include "swJsonld/swldCompact.h"                      // swldCompact
-#include "swJsonld/swldExpand.h"                       // swldAlreadyExpanded
+#include "corJsonld/CorLdContext.h"                      // CorLdContext
+#include "corJsonld/corLdCompact.h"                      // corLdCompact
+#include "corJsonld/corLdExpand.h"                       // corLdAlreadyExpanded
 
-#include "swNgsild/LdQ.h"                              // LdQNode, LdQTerm
-#include "swNgsild/ldSysTimestamp.h"                   // ldSysTimestampToIso
-#include "swNgsild/ldQRender.h"                        // Own interface
+#include "corNgsild/LdQ.h"                              // LdQNode, LdQTerm
+#include "corNgsild/ldSysTimestamp.h"                   // ldSysTimestampToIso
+#include "corNgsild/ldQRender.h"                        // Own interface
 
 
 
@@ -87,7 +87,7 @@ static char* urlEncode(const char* s, KAlloc* allocP, bool qGrammarOnly)
 //
 // ldCompactOrEncode - compact an IRI against the @context, URL-encode if uncompactable
 //
-const char* ldCompactOrEncode(const char* iri, SwldContext* contextP, KAlloc* allocP, bool qGrammarOnly)
+const char* ldCompactOrEncode(const char* iri, CorLdContext* contextP, KAlloc* allocP, bool qGrammarOnly)
 {
   // No context — internal storage mode: return the raw IRI unchanged.
   // URL-encoding is only needed for API responses where the consumer
@@ -95,13 +95,13 @@ const char* ldCompactOrEncode(const char* iri, SwldContext* contextP, KAlloc* al
   if (contextP == NULL)
     return iri;
 
-  const char* compacted = swldCompact(contextP, iri);
+  const char* compacted = corLdCompact(contextP, iri);
 
-  // swldCompact's contract: returns a different pointer for an actual short
+  // corLdCompact's contract: returns a different pointer for an actual short
   // term, returns iri unchanged otherwise. Belt-and-suspenders, also reject
   // any result that is itself still an IRI (urn:, http://, https://) — a
-  // future swldCompact change that re-emits an IRI form mustn't slip past.
-  if (compacted != NULL && compacted != iri && swldAlreadyExpanded(compacted) == false)
+  // future corLdCompact change that re-emits an IRI form mustn't slip past.
+  if (compacted != NULL && compacted != iri && corLdAlreadyExpanded(compacted) == false)
     return compacted;
 
   // Can't compact — percent-encode the IRI. In a response body only the
@@ -136,7 +136,7 @@ static const char* opToString(LdQOperator op)
 
 
 // Forward declaration
-static int renderNode(LdQNode* nodeP, SwldContext* contextP, KAlloc* allocP, char* buf, int bufSize, bool qGrammarOnly);
+static int renderNode(LdQNode* nodeP, CorLdContext* contextP, KAlloc* allocP, char* buf, int bufSize, bool qGrammarOnly);
 
 
 
@@ -144,7 +144,7 @@ static int renderNode(LdQNode* nodeP, SwldContext* contextP, KAlloc* allocP, cha
 //
 // renderTerm - render a single term
 //
-static int renderTerm(LdQTerm* term, SwldContext* contextP, KAlloc* allocP, char* buf, int bufSize, bool qGrammarOnly)
+static int renderTerm(LdQTerm* term, CorLdContext* contextP, KAlloc* allocP, char* buf, int bufSize, bool qGrammarOnly)
 {
   const char* attr = ldCompactOrEncode(term->attr, contextP, allocP, qGrammarOnly);
   const char* op   = opToString(term->op);
@@ -268,7 +268,7 @@ static int renderTerm(LdQTerm* term, SwldContext* contextP, KAlloc* allocP, char
 //
 // renderNode - recursively render a node
 //
-static int renderNode(LdQNode* nodeP, SwldContext* contextP, KAlloc* allocP, char* buf, int bufSize, bool qGrammarOnly)
+static int renderNode(LdQNode* nodeP, CorLdContext* contextP, KAlloc* allocP, char* buf, int bufSize, bool qGrammarOnly)
 {
   if (nodeP == NULL)
     return 0;
@@ -332,7 +332,7 @@ static int renderNode(LdQNode* nodeP, SwldContext* contextP, KAlloc* allocP, cha
 //
 // ldQRender -
 //
-char* ldQRender(LdQNode* nodeP, SwldContext* contextP, KAlloc* allocP, bool qGrammarOnly)
+char* ldQRender(LdQNode* nodeP, CorLdContext* contextP, KAlloc* allocP, bool qGrammarOnly)
 {
   if (nodeP == NULL)
     return NULL;

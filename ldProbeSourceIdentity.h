@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LD_PROBE_SOURCE_IDENTITY_H_
-#define SWNGSILD_LD_PROBE_SOURCE_IDENTITY_H_
+#ifndef CORNGSILD_LD_PROBE_SOURCE_IDENTITY_H_
+#define CORNGSILD_LD_PROBE_SOURCE_IDENTITY_H_
 
 //
 // FILE            ldProbeSourceIdentity.h
@@ -38,4 +38,4 @@ extern char* ldProbeSourceIdentity(const char* endpoint,
                                    const char* tenant,
                                    int         timeoutMs);
 
-#endif  // SWNGSILD_LD_PROBE_SOURCE_IDENTITY_H_
+#endif  // CORNGSILD_LD_PROBE_SOURCE_IDENTITY_H_

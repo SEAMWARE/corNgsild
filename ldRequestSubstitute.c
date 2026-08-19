@@ -8,9 +8,9 @@
 #include <stddef.h>                                     // NULL
 #include <string.h>                                     // strcmp, strcasecmp
 
-#include "swRest/SwRestState.h"                         // swRest
+#include "corRest/CorRestState.h"                         // corRest
 
-#include "swNgsild/ldRequestSubstitute.h"               // Own interface
+#include "corNgsild/ldRequestSubstitute.h"               // Own interface
 
 
 
@@ -26,11 +26,11 @@ const char* ldRequestSubstitute(const char* key, const char* value)
   if (key == NULL)
     return NULL;
 
-  for (int i = 0; i < swRest.in.httpHeaderCount; i++)
+  for (int i = 0; i < corRest.in.httpHeaderCount; i++)
   {
-    if (swRest.in.httpHeaderV[i].key != NULL &&
-        strcasecmp(swRest.in.httpHeaderV[i].key, key) == 0)
-      return swRest.in.httpHeaderV[i].value;
+    if (corRest.in.httpHeaderV[i].key != NULL &&
+        strcasecmp(corRest.in.httpHeaderV[i].key, key) == 0)
+      return corRest.in.httpHeaderV[i].value;
   }
 
   return NULL;

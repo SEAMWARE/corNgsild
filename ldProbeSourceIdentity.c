@@ -18,14 +18,14 @@
 #include "kjson/KjNode.h"                               // KjNode
 #include "kjson/kjParse.h"                              // kjParse
 #include "kjson/kjLookup.h"                             // kjLookup
-#include "swRest/SwRestKeyValue.h"                      // SwRestKeyValue
-#include "swRest/SwRestVerb.h"                          // SwVerbGet
+#include "corRest/CorRestKeyValue.h"                      // CorRestKeyValue
+#include "corRest/CorRestVerb.h"                          // CorVerbGet
 
-#include "swNgsild/LdForwarding.h"                      // LdForwardRequest, LdForwardResponse, LdForwardingPlugin
-#include "swNgsild/ldForwarding.h"                      // ldForwardingForEndpoint
-#include "swNgsild/ldStripAtContext.h"                  // ldStripAtContext
+#include "corNgsild/LdForwarding.h"                      // LdForwardRequest, LdForwardResponse, LdForwardingPlugin
+#include "corNgsild/ldForwarding.h"                      // ldForwardingForEndpoint
+#include "corNgsild/ldStripAtContext.h"                  // ldStripAtContext
 
-#include "swNgsild/ldProbeSourceIdentity.h"             // Own interface
+#include "corNgsild/ldProbeSourceIdentity.h"             // Own interface
 
 
 
@@ -65,7 +65,7 @@ char* ldProbeSourceIdentity(const char* endpoint, const char* tenant, int timeou
   // Headers: NGSILD-Tenant (if non-default) so the response's alias is
   // the tenant-scoped one we care about.
   //
-  SwRestKeyValue headerV[2];
+  CorRestKeyValue headerV[2];
   int            headerCount = 0;
   if (tenant != NULL && tenant[0] != 0)
   {
@@ -86,7 +86,7 @@ char* ldProbeSourceIdentity(const char* endpoint, const char* tenant, int timeou
   LdForwardResponse resp;
 
   req.endpoint         = urlBuf;
-  req.verb             = SwVerbGet;
+  req.verb             = CorVerbGet;
   req.headerV          = (headerCount > 0) ? headerV : NULL;
   req.headerCount      = headerCount;
   req.body             = NULL;

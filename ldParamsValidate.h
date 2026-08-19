@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDPARAMSVALIDATE_H_
-#define SWNGSILD_LDPARAMSVALIDATE_H_
+#ifndef CORNGSILD_LDPARAMSVALIDATE_H_
+#define CORNGSILD_LDPARAMSVALIDATE_H_
 
 //
 // FILE            ldParamsValidate.h
@@ -18,4 +18,4 @@
 //
 extern bool ldParamsValidate(void);
 
-#endif  // SWNGSILD_LDPARAMSVALIDATE_H_
+#endif  // CORNGSILD_LDPARAMSVALIDATE_H_

@@ -30,9 +30,9 @@
 #include "kjson/kjRender.h"                             // kjFastRender
 #include "kjson/kjRenderSize.h"                         // kjFastRenderSize
 
-#include "swNgsild/ldIsEntityKeyword.h"                  // ldIsEntityKeyword
-#include "swNgsild/ldCheckDateTime.h"                    // ldIsoToNanoseconds
-#include "swNgsild/ldToAggregatedValues.h"               // Own interface
+#include "corNgsild/ldIsEntityKeyword.h"                  // ldIsEntityKeyword
+#include "corNgsild/ldCheckDateTime.h"                    // ldIsoToNanoseconds
+#include "corNgsild/ldToAggregatedValues.h"               // Own interface
 
 
 

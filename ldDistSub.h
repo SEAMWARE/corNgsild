@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDDISTSUB_H_
-#define SWNGSILD_LDDISTSUB_H_
+#ifndef CORNGSILD_LDDISTSUB_H_
+#define CORNGSILD_LDDISTSUB_H_
 
 //
 // FILE            ldDistSub.h
@@ -21,8 +21,8 @@
 // us in its own reg-cache won't forward back to us.
 //
 #include "kjson/KjNode.h"                              // KjNode
-#include "swNgsild/LdSubCache.h"                       // LdSubCache, LdSubCacheItem
-#include "swNgsild/LdRegCache.h"                       // LdRegCache
+#include "corNgsild/LdSubCache.h"                       // LdSubCache, LdSubCacheItem
+#include "corNgsild/LdRegCache.h"                       // LdRegCache
 
 
 
@@ -31,8 +31,8 @@
 // LdDistSubPersistFunc - callback to persist a sub's subordinate list
 //
 // Invoked by the helpers below whenever an LdSubCacheItem.subordinateP
-// list is mutated. The implementation lives in swBroker (where db.* is
-// reachable); swNgsild just calls back when the in-memory state changes.
+// list is mutated. The implementation lives in coraine (where db.* is
+// reachable); corNgsild just calls back when the in-memory state changes.
 //
 // userData is the cookie the helpers carry through.
 //
@@ -173,4 +173,4 @@ extern int ldDistSubOnRegDelete(LdSubCache*          subCacheP,
                                 LdDistSubPersistFunc persistFunc,
                                 void*                persistUserData);
 
-#endif  // SWNGSILD_LDDISTSUB_H_
+#endif  // CORNGSILD_LDDISTSUB_H_

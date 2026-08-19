@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDLANGREDUCE_H_
-#define SWNGSILD_LDLANGREDUCE_H_
+#ifndef CORNGSILD_LDLANGREDUCE_H_
+#define CORNGSILD_LDLANGREDUCE_H_
 
 //
 // FILE            ldLangReduce.h
@@ -20,4 +20,4 @@
 //
 extern void ldLangReduce(KjNode* entityP, const char* lang, KAlloc* faP);
 
-#endif  // SWNGSILD_LDLANGREDUCE_H_
+#endif  // CORNGSILD_LDLANGREDUCE_H_

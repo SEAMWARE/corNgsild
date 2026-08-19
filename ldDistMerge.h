@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDDISTMERGE_H_
-#define SWNGSILD_LDDISTMERGE_H_
+#ifndef CORNGSILD_LDDISTMERGE_H_
+#define CORNGSILD_LDDISTMERGE_H_
 
 //
 // FILE            ldDistMerge.h
@@ -102,4 +102,4 @@ extern void ldDistExpiresAtReconcile(KjNode* destP, KjNode* srcP);
 //
 extern void ldDistScopeMerge(KjNode* destP, KjNode* srcP, Kjson* allocP);
 
-#endif  // SWNGSILD_LDDISTMERGE_H_
+#endif  // CORNGSILD_LDDISTMERGE_H_

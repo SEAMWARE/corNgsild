@@ -7,7 +7,7 @@
 // 
 //
 #include <string.h>                                      // strcmp
-#include "swRest/swRest.h"                            // swRest
+#include "corRest/corRest.h"                            // corRest
 
 #include "kalloc/KAlloc.h"                             // KAlloc
 #include "kjson/KjNode.h"                               // KjNode
@@ -15,10 +15,10 @@
 #include "kjson/kjBuilder.h"                             // kjString
 #include "kjson/kjBuilder.h"                           // kjChildAdd
 #include "kjson/kjChildReplace.h"                       // kjChildReplace
-#include "swNgsild/LdVocab.h"                            // LD_VOCAB_DATASET_ID, LD_VOCAB_SCOPE
-#include "swNgsild/ldTypes.h"                            // ldAttrTypeFromString, ldValueKeyForType
+#include "corNgsild/LdVocab.h"                            // LD_VOCAB_DATASET_ID, LD_VOCAB_SCOPE
+#include "corNgsild/ldTypes.h"                            // ldAttrTypeFromString, ldValueKeyForType
 
-#include "swNgsild/ldEntityToApi.h"                      // Own interface
+#include "corNgsild/ldEntityToApi.h"                      // Own interface
 
 
 
@@ -148,7 +148,7 @@ void ldEntityToApi(KjNode* entityP, KAlloc* faP)
       // If the key is not "@none", add datasetId back to the instance
       if (strcmp(instP->name, "@none") != 0)
       {
-        KjNode* dsNodeP = kjString(swRest.kjsonP, LD_VOCAB_DATASET_ID, instP->name);
+        KjNode* dsNodeP = kjString(corRest.kjsonP, LD_VOCAB_DATASET_ID, instP->name);
         kjChildAdd(instP, dsNodeP);
       }
 
@@ -163,7 +163,7 @@ void ldEntityToApi(KjNode* entityP, KAlloc* faP)
     else if (nInstances > 1)
     {
       // Multiple instances — build array
-      KjNode* arrayP = kjArray(swRest.kjsonP, childP->name);
+      KjNode* arrayP = kjArray(corRest.kjsonP, childP->name);
 
       KjNode* instP = childP->value.firstChildP;
       while (instP != NULL)
@@ -176,7 +176,7 @@ void ldEntityToApi(KjNode* entityP, KAlloc* faP)
         // Add datasetId back for named instances (not @none)
         if (strcmp(instP->name, "@none") != 0)
         {
-          KjNode* dsNodeP = kjString(swRest.kjsonP, LD_VOCAB_DATASET_ID, instP->name);
+          KjNode* dsNodeP = kjString(corRest.kjsonP, LD_VOCAB_DATASET_ID, instP->name);
           kjChildAdd(instP, dsNodeP);
         }
 

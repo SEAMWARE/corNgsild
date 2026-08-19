@@ -14,7 +14,7 @@
 // Normalized:  "speed": { "type": "Property", ... }   -> unchanged
 //
 #include <stdbool.h>                                     // bool
-#include "swRest/swRest.h"                            // swRest
+#include "corRest/corRest.h"                            // corRest
 #include <string.h>                                      // strcmp
 
 #include "kalloc/KAlloc.h"                             // KAlloc
@@ -24,11 +24,11 @@
 #include "kjson/kjBuilder.h"                           // kjChildAdd
 #include "kjson/kjChildReplace.h"                       // kjChildReplace
 
-#include "swNgsild/LdVocab.h"                            // LD_VOCAB_*
-#include "swNgsild/LdAttrType.h"                         // LdAttrType
-#include "swNgsild/ldTypes.h"                             // ldAttrTypeToString
-#include "swNgsild/ldAttrTypeDetect.h"                   // ldAttrTypeDetect
-#include "swNgsild/LdNormalizeInput.h"                   // Own interface
+#include "corNgsild/LdVocab.h"                            // LD_VOCAB_*
+#include "corNgsild/LdAttrType.h"                         // LdAttrType
+#include "corNgsild/ldTypes.h"                             // ldAttrTypeToString
+#include "corNgsild/ldAttrTypeDetect.h"                   // ldAttrTypeDetect
+#include "corNgsild/LdNormalizeInput.h"                   // Own interface
 
 
 
@@ -194,7 +194,7 @@ static bool hasExplicitAttrType(KjNode* objP)
 //
 static void addTypeField(KjNode* attrP, const char* typeName, KAlloc* faP)
 {
-  KjNode* typeNodeP = kjString(swRest.kjsonP, "type", typeName);
+  KjNode* typeNodeP = kjString(corRest.kjsonP, "type", typeName);
   if (typeNodeP != NULL)
   {
     typeNodeP->next = attrP->value.firstChildP;
@@ -213,7 +213,7 @@ static void addTypeField(KjNode* attrP, const char* typeName, KAlloc* faP)
 //
 static void wrapAsProperty(KjNode* entityP, KjNode* childP, KAlloc* faP)
 {
-  KjNode* wrapperP = kjObject(swRest.kjsonP, childP->name);
+  KjNode* wrapperP = kjObject(corRest.kjsonP, childP->name);
   if (wrapperP == NULL)
     return;
 
@@ -242,7 +242,7 @@ static void wrapAsProperty(KjNode* entityP, KjNode* childP, KAlloc* faP)
 //
 static void wrapAsGeoProperty(KjNode* entityP, KjNode* childP, KAlloc* faP)
 {
-  KjNode* wrapperP = kjObject(swRest.kjsonP, childP->name);
+  KjNode* wrapperP = kjObject(corRest.kjsonP, childP->name);
   if (wrapperP == NULL)
     return;
 

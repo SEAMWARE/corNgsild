@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDTOTEMPORALVALUES_H_
-#define SWNGSILD_LDTOTEMPORALVALUES_H_
+#ifndef CORNGSILD_LDTOTEMPORALVALUES_H_
+#define CORNGSILD_LDTOTEMPORALVALUES_H_
 
 //
 // FILE            ldToTemporalValues.h
@@ -36,4 +36,4 @@
 //
 extern void ldToTemporalValues(KjNode* treeP, const char* timeProp, Kjson* kjsonP, KAlloc* faP);
 
-#endif  // SWNGSILD_LDTOTEMPORALVALUES_H_
+#endif  // CORNGSILD_LDTOTEMPORALVALUES_H_

@@ -13,9 +13,9 @@
 #include "kjson/KjNode.h"                           // KjNode
 #include "kjson/kjBuilder.h"                    // kjChildRemove
 
-#include "swNgsild/ldIsEntityKeyword.h"          // ldIsEntityKeyword
-#include "swNgsild/SwNgsild.h"                   // swNgsild (geometryPropertyExpanded)
-#include "swNgsild/ldPickOmit.h"                     // Own interface
+#include "corNgsild/ldIsEntityKeyword.h"          // ldIsEntityKeyword
+#include "corNgsild/CorNgsild.h"                   // corNgsild (geometryPropertyExpanded)
+#include "corNgsild/ldPickOmit.h"                     // Own interface
 
 
 
@@ -29,8 +29,8 @@
 //
 static bool isGeoJsonProtected(const char* name)
 {
-  return (swNgsild.geometryPropertyExpanded != NULL && name != NULL &&
-          strcmp(name, swNgsild.geometryPropertyExpanded) == 0);
+  return (corNgsild.geometryPropertyExpanded != NULL && name != NULL &&
+          strcmp(name, corNgsild.geometryPropertyExpanded) == 0);
 }
 
 

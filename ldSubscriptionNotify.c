@@ -31,36 +31,36 @@
 #include "kjson/kjRenderSize.h"                        // kjFastRenderSize
 #include "kjson/kjRender.h"                            // kjFastRender
 
-#include "swRest/SwRestState.h"                        // swRest
-#include "swRest/swRestClient.h"                       // SwRestClientRequest, etc.
-#include "swJsonld/swldCompactTree.h"                  // swldCompactTree, swldCompactTreeWith
-#include "swJsonld/swldDownload.h"                     // swldContextFromUrl
+#include "corRest/CorRestState.h"                        // corRest
+#include "corRest/corRestClient.h"                       // CorRestClientRequest, etc.
+#include "corJsonld/corLdCompactTree.h"                  // corLdCompactTree, corLdCompactTreeWith
+#include "corJsonld/corLdDownload.h"                     // corLdContextFromUrl
 
-#include "swNgsild/ldTraceLevels.h"                    // LdTNotif*
-#include "swNgsild/ldTypes.h"                          // ldFormatToString
-#include "swNgsild/LdVocab.h"                          // LD_VOCAB_*
-#include "swNgsild/SwNgsild.h"                         // swNgsild
-#include "swNgsild/LdSubCache.h"                       // LdSubCache, LdSubCacheItem
-#include "swNgsild/ldSubCache.h"                       // ldSubCacheRdLock, ldSubCacheItemPin, ...
-#include "swNgsild/ldEntityToApi.h"                    // ldEntityToApi
-#include "swNgsild/ldIsEntityKeyword.h"                // ldIsEntityKeyword
-#include "swNgsild/ldStripSysAttrs.h"                  // ldStripSysAttrs
-#include "swNgsild/ldEntityMatch.h"                    // ldEntityMatchQ
-#include "swNgsild/ldToGeoJson.h"                     // ldToGeoJson
-#include "swNgsild/ldConformanceDowngrade.h"          // ldConformanceDowngrade
-#include "swNgsild/ldEntityMerge.h"                    // LdMergeReport
-#include "swJsonld/swldInit.h"                          // swldCoreContext
-#include "swJsonld/SwldContext.h"                       // SwldContext
-#include "swNgsild/ldRender.h"                          // ldToConcise, ldToSimplified
-#include "swNgsild/ldPickOmit.h"                       // ldPickOmit
-#include "swNgsild/ldLangReduce.h"                     // ldLangReduce
-#include "swNgsild/ldNotifyStatsHook.h"                // ldNotifyStatsHookInvoke
-#include "swNgsild/ldRequestSubstitute.h"              // ldRequestSubstitute
-#include "swNgsild/ldLinkedEntitiesHook.h"             // ldLinkedEntitiesHookInvoke
-#include "swNgsild/ldMqttNotify.h"                     // ldIsMqttUri, ldMqttNotify
-#include "swNgsild/ldThrottleDirty.h"                  // ldThrottleDirtyUpsert/Drain/EntriesFree
-#include "swNgsild/ldPeriodicLoop.h"                   // ldPeriodicLoopRegister
-#include "swNgsild/ldSubscriptionNotify.h"             // Own interface
+#include "corNgsild/ldTraceLevels.h"                    // LdTNotif*
+#include "corNgsild/ldTypes.h"                          // ldFormatToString
+#include "corNgsild/LdVocab.h"                          // LD_VOCAB_*
+#include "corNgsild/CorNgsild.h"                         // corNgsild
+#include "corNgsild/LdSubCache.h"                       // LdSubCache, LdSubCacheItem
+#include "corNgsild/ldSubCache.h"                       // ldSubCacheRdLock, ldSubCacheItemPin, ...
+#include "corNgsild/ldEntityToApi.h"                    // ldEntityToApi
+#include "corNgsild/ldIsEntityKeyword.h"                // ldIsEntityKeyword
+#include "corNgsild/ldStripSysAttrs.h"                  // ldStripSysAttrs
+#include "corNgsild/ldEntityMatch.h"                    // ldEntityMatchQ
+#include "corNgsild/ldToGeoJson.h"                     // ldToGeoJson
+#include "corNgsild/ldConformanceDowngrade.h"          // ldConformanceDowngrade
+#include "corNgsild/ldEntityMerge.h"                    // LdMergeReport
+#include "corJsonld/corLdInit.h"                          // corLdCoreContext
+#include "corJsonld/CorLdContext.h"                       // CorLdContext
+#include "corNgsild/ldRender.h"                          // ldToConcise, ldToSimplified
+#include "corNgsild/ldPickOmit.h"                       // ldPickOmit
+#include "corNgsild/ldLangReduce.h"                     // ldLangReduce
+#include "corNgsild/ldNotifyStatsHook.h"                // ldNotifyStatsHookInvoke
+#include "corNgsild/ldRequestSubstitute.h"              // ldRequestSubstitute
+#include "corNgsild/ldLinkedEntitiesHook.h"             // ldLinkedEntitiesHookInvoke
+#include "corNgsild/ldMqttNotify.h"                     // ldIsMqttUri, ldMqttNotify
+#include "corNgsild/ldThrottleDirty.h"                  // ldThrottleDirtyUpsert/Drain/EntriesFree
+#include "corNgsild/ldPeriodicLoop.h"                   // ldPeriodicLoopRegister
+#include "corNgsild/ldSubscriptionNotify.h"             // Own interface
 
 
 
@@ -313,19 +313,19 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
   //
   if (op == LdNotifyEntityDelete)
   {
-    KjNode* out = kjObject(swRest.kjsonP, NULL);
+    KjNode* out = kjObject(corRest.kjsonP, NULL);
 
     KjNode* srcId   = kjLookup(entityP, "id");
     KjNode* srcType = kjLookup(entityP, "type");
-    if (srcId   != NULL) kjChildAdd(out, kjClone(swRest.kjsonP, srcId));
-    if (srcType != NULL) kjChildAdd(out, kjClone(swRest.kjsonP, srcType));
+    if (srcId   != NULL) kjChildAdd(out, kjClone(corRest.kjsonP, srcId));
+    if (srcType != NULL) kjChildAdd(out, kjClone(corRest.kjsonP, srcType));
 
     char     deletedIso[48];
     deletedIso[0] = 0;
     if (deletedAtNs != 0)
     {
       nsToIsoLocal(deletedAtNs, deletedIso, sizeof(deletedIso));
-      kjChildAdd(out, kjString(swRest.kjsonP, "deletedAt", deletedIso));
+      kjChildAdd(out, kjString(corRest.kjsonP, "deletedAt", deletedIso));
     }
 
     if (itemP->sysAttrs)
@@ -340,18 +340,18 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
       {
         char iso[48];
         nsToIsoLocal((uint64_t) srcCreated->value.i, iso, sizeof(iso));
-        kjChildAdd(out, kjString(swRest.kjsonP, LD_VOCAB_CREATED_AT, iso));
+        kjChildAdd(out, kjString(corRest.kjsonP, LD_VOCAB_CREATED_AT, iso));
       }
       else if (srcCreated != NULL)
-        kjChildAdd(out, kjClone(swRest.kjsonP, srcCreated));
+        kjChildAdd(out, kjClone(corRest.kjsonP, srcCreated));
       if (srcModified != NULL && srcModified->type == KjInt)
       {
         char iso[48];
         nsToIsoLocal((uint64_t) srcModified->value.i, iso, sizeof(iso));
-        kjChildAdd(out, kjString(swRest.kjsonP, LD_VOCAB_MODIFIED_AT, iso));
+        kjChildAdd(out, kjString(corRest.kjsonP, LD_VOCAB_MODIFIED_AT, iso));
       }
       else if (srcModified != NULL)
-        kjChildAdd(out, kjClone(swRest.kjsonP, srcModified));
+        kjChildAdd(out, kjClone(corRest.kjsonP, srcModified));
     }
 
     int triggerMask = (itemP->triggerMask != 0) ? itemP->triggerMask : LD_TRIGGER_DEFAULT;
@@ -387,8 +387,8 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
             typeStr = tNodeP->value.s;
         }
 
-        KjNode* nullAttr = kjObject(swRest.kjsonP, attrP->name);
-        kjChildAdd(nullAttr, kjString(swRest.kjsonP, "type", typeStr));
+        KjNode* nullAttr = kjObject(corRest.kjsonP, attrP->name);
+        kjChildAdd(nullAttr, kjString(corRest.kjsonP, "type", typeStr));
         // Entity-delete fixtures (ETSI 046_37) want the bare null marker
         // even for LanguageProperty (`"languageMap": "urn:ngsi-ld:null"`),
         // matching § 5.8.6's bare form. The attribute-delete branch above
@@ -409,7 +409,7 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
           else if (typeStr[4] == 'R') primaryKey = "objectList";   // ListRelationship
           break;
         }
-        kjChildAdd(nullAttr, kjString(swRest.kjsonP, primaryKey, LD_VOCAB_NGSILD_NULL));
+        kjChildAdd(nullAttr, kjString(corRest.kjsonP, primaryKey, LD_VOCAB_NGSILD_NULL));
 
         if (itemP->sysAttrs && anyInstP != NULL && anyInstP->type == KjObject)
         {
@@ -424,20 +424,20 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
           {
             char iso[48];
             nsToIsoLocal((uint64_t) aCreated->value.i, iso, sizeof(iso));
-            kjChildAdd(nullAttr, kjString(swRest.kjsonP, LD_VOCAB_CREATED_AT, iso));
+            kjChildAdd(nullAttr, kjString(corRest.kjsonP, LD_VOCAB_CREATED_AT, iso));
           }
           else if (aCreated != NULL)
-            kjChildAdd(nullAttr, kjClone(swRest.kjsonP, aCreated));
+            kjChildAdd(nullAttr, kjClone(corRest.kjsonP, aCreated));
           if (aModified != NULL && aModified->type == KjInt)
           {
             char iso[48];
             nsToIsoLocal((uint64_t) aModified->value.i, iso, sizeof(iso));
-            kjChildAdd(nullAttr, kjString(swRest.kjsonP, LD_VOCAB_MODIFIED_AT, iso));
+            kjChildAdd(nullAttr, kjString(corRest.kjsonP, LD_VOCAB_MODIFIED_AT, iso));
           }
           else if (aModified != NULL)
-            kjChildAdd(nullAttr, kjClone(swRest.kjsonP, aModified));
+            kjChildAdd(nullAttr, kjClone(corRest.kjsonP, aModified));
           if (deletedIso[0] != 0)
-            kjChildAdd(nullAttr, kjString(swRest.kjsonP, "deletedAt", deletedIso));
+            kjChildAdd(nullAttr, kjString(corRest.kjsonP, "deletedAt", deletedIso));
         }
 
         // showChanges (§ 5.8.6 / § 5.2.14.1): on entity-delete, every
@@ -462,7 +462,7 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
               else if (typeStr[4] == 'R') prevKey = "previousObjectList";   // ListRelationship
               break;
             }
-            KjNode* prev = kjClone(swRest.kjsonP, preVal);
+            KjNode* prev = kjClone(corRest.kjsonP, preVal);
             prev->name = (char*) prevKey;
             kjChildAdd(nullAttr, prev);
           }
@@ -475,7 +475,7 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
     return out;
   }
 
-  KjNode* entityClone = kjClone(swRest.kjsonP, entityP);
+  KjNode* entityClone = kjClone(corRest.kjsonP, entityP);
 
   //
   // Attribute-delete markers (§ 5.8.6): for every attributeDeleted change
@@ -545,23 +545,23 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
       }
 
       // Build the deleted-instance node: { type, value/lmap=null, [deletedAt] }.
-      KjNode* inst = kjObject(swRest.kjsonP, NULL);
-      kjChildAdd(inst, kjString(swRest.kjsonP, "type", typeStr));
+      KjNode* inst = kjObject(corRest.kjsonP, NULL);
+      kjChildAdd(inst, kjString(corRest.kjsonP, "type", typeStr));
       // Per § 5.8.6, LanguageProperty deletion uses `languageMap:
       // {"@none": "urn:ngsi-ld:null"}`, not the bare null marker. All
       // other types put the null marker directly as the value.
       if (strcmp(typeStr, "LanguageProperty") == 0)
       {
-        KjNode* lmap = kjObject(swRest.kjsonP, "value");
-        kjChildAdd(lmap, kjString(swRest.kjsonP, "@none", LD_VOCAB_NGSILD_NULL));
+        KjNode* lmap = kjObject(corRest.kjsonP, "value");
+        kjChildAdd(lmap, kjString(corRest.kjsonP, "@none", LD_VOCAB_NGSILD_NULL));
         kjChildAdd(inst, lmap);
       }
       else
       {
-        kjChildAdd(inst, kjString(swRest.kjsonP, "value", LD_VOCAB_NGSILD_NULL));
+        kjChildAdd(inst, kjString(corRest.kjsonP, "value", LD_VOCAB_NGSILD_NULL));
       }
       if (itemP->sysAttrs == true && deletedNs != 0)
-        kjChildAdd(inst, kjInteger(swRest.kjsonP, LD_VOCAB_DELETED_AT, deletedNs));
+        kjChildAdd(inst, kjInteger(corRest.kjsonP, LD_VOCAB_DELETED_AT, deletedNs));
 
       if (dsKeysP != NULL)
       {
@@ -574,12 +574,12 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
           if (keyP->type != KjString)
             continue;
 
-          KjNode* marker = kjClone(swRest.kjsonP, inst);
+          KjNode* marker = kjClone(corRest.kjsonP, inst);
           marker->name   = keyP->value.s;
 
           if (existingAttr == NULL)
           {
-            existingAttr = kjObject(swRest.kjsonP, attrP->value.s);
+            existingAttr = kjObject(corRest.kjsonP, attrP->value.s);
             kjChildAdd(entityClone, existingAttr);
           }
           kjChildAdd(existingAttr, marker);
@@ -590,7 +590,7 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
         // Whole-attribute deletion reported without instance detail (batch
         // and merge paths): a single @none instance carrying the marker.
         inst->name = (char*) "@none";
-        KjNode* wrapper = kjObject(swRest.kjsonP, attrP->value.s);
+        KjNode* wrapper = kjObject(corRest.kjsonP, attrP->value.s);
         kjChildAdd(wrapper, inst);
         kjChildAdd(entityClone, wrapper);
       }
@@ -646,7 +646,7 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
     }
   }
 
-  ldEntityToApi(entityClone, &swRest.kalloc);
+  ldEntityToApi(entityClone, &corRest.kalloc);
   if (!itemP->sysAttrs)
     ldStripSysAttrs(entityClone);
 
@@ -702,13 +702,13 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
       {
         // attribute was deleted from entity — add a minimal wrapper
         // carrying only the previousX marker so showChanges sees it.
-        attrOutP = kjObject(swRest.kjsonP, attrNameP->value.s);
+        attrOutP = kjObject(corRest.kjsonP, attrNameP->value.s);
         kjChildAdd(entityClone, attrOutP);
-        if (preType != NULL) kjChildAdd(attrOutP, kjClone(swRest.kjsonP, preType));
+        if (preType != NULL) kjChildAdd(attrOutP, kjClone(corRest.kjsonP, preType));
       }
       if (attrOutP->type != KjObject) continue;
 
-      KjNode* c = kjClone(swRest.kjsonP, preVal);
+      KjNode* c = kjClone(corRest.kjsonP, preVal);
       c->name = (char*) prevKey;
       kjChildAdd(attrOutP, c);
     }
@@ -752,7 +752,7 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
   // Subscription-level lang (§ 4.15) — collapse LanguageMap attrs to the
   // selected language before format conversion.
   if (itemP->lang != NULL && itemP->lang[0] != 0)
-    ldLangReduce(entityClone, itemP->lang, &swRest.kalloc);
+    ldLangReduce(entityClone, itemP->lang, &corRest.kalloc);
 
   // Format conversion is deferred to notificationSendMany — it has to run
   // AFTER the linked-entity hook attaches `entity` to Relationship
@@ -779,20 +779,20 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   if (itemP->lastFailure > 0)
   {
     uint64_t cool = (itemP->cooldownNs != 0) ? itemP->cooldownNs : ldDefaultCooldownNs;
-    if (itemP->lastFailure + cool > swRest.requestStartTime)
+    if (itemP->lastFailure + cool > corRest.requestStartTime)
       return;
   }
 
   char isoTimeBuf[64];
   isoNow(isoTimeBuf, sizeof(isoTimeBuf));
 
-  KjNode* notification = kjObject(swRest.kjsonP, NULL);
-  kjChildAdd(notification, kjString(swRest.kjsonP, "id",             notifIdGenerate()));
-  kjChildAdd(notification, kjString(swRest.kjsonP, "type",           "Notification"));
-  kjChildAdd(notification, kjString(swRest.kjsonP, "subscriptionId", itemP->subId));
-  kjChildAdd(notification, kjString(swRest.kjsonP, "notifiedAt",     isoTimeBuf));
+  KjNode* notification = kjObject(corRest.kjsonP, NULL);
+  kjChildAdd(notification, kjString(corRest.kjsonP, "id",             notifIdGenerate()));
+  kjChildAdd(notification, kjString(corRest.kjsonP, "type",           "Notification"));
+  kjChildAdd(notification, kjString(corRest.kjsonP, "subscriptionId", itemP->subId));
+  kjChildAdd(notification, kjString(corRest.kjsonP, "notifiedAt",     isoTimeBuf));
 
-  KjNode* dataArray = kjArray(swRest.kjsonP, "data");
+  KjNode* dataArray = kjArray(corRest.kjsonP, "data");
   for (int i = 0; i < n; i++)
     kjChildAdd(dataArray, buildNotifDataEntry(itemP, entries[i]));
   kjChildAdd(notification, dataArray);
@@ -803,7 +803,7 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   if (itemP->notifJoinActive)
   {
     int level = (itemP->notifJoinLevel > 0) ? itemP->notifJoinLevel : 1;
-    ldLinkedEntitiesHookInvoke(dataArray, itemP->notifJoin, level, itemP->sysAttrs, swNgsild.tenantP);
+    ldLinkedEntitiesHookInvoke(dataArray, itemP->notifJoin, level, itemP->sysAttrs, corNgsild.tenantP);
   }
 
   // Format conversion (deferred from buildNotifDataEntry so the linked-
@@ -823,9 +823,9 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
     for (KjNode* eP = dataArray->value.firstChildP; eP != NULL; eP = eP->next)
     {
       if (itemP->format == LdFormatSimplified)
-        ldToSimplified(eP, &swRest.kalloc);
+        ldToSimplified(eP, &corRest.kalloc);
       else if (itemP->format == LdFormatConcise)
-        ldToConcise(eP, &swRest.kalloc);
+        ldToConcise(eP, &corRest.kalloc);
     }
   }
 
@@ -833,13 +833,13 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   // Use the sub's jsonldContext when set so user-vocabulary terms (e.g.
   // "Building", "name") compact too — without it only core-context names
   // (id/type/...) collapse and the body ships as expanded IRIs.
-  SwldContext* notifCtx = NULL;
+  CorLdContext* notifCtx = NULL;
   if (itemP->contextUrl != NULL)
-    notifCtx = swldContextFromUrl(itemP->contextUrl, &swRest.kalloc);
+    notifCtx = corLdContextFromUrl(itemP->contextUrl, &corRest.kalloc);
   if (notifCtx != NULL)
-    swldCompactTreeWith(notification, notifCtx);
+    corLdCompactTreeWith(notification, notifCtx);
   else
-    swldCompactTree(notification);
+    corLdCompactTree(notification);
 
   // § 5.2.12 / § 4.3.6.8: backwards-compat downgrade of entity payloads
   // when the subscription requested an older NGSI-LD version.
@@ -847,15 +847,15 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   {
     KjNode* dataP = kjLookup(notification, "data");
     if (dataP != NULL)
-      ldConformanceDowngrade(dataP, itemP->conformanceMajor, itemP->conformanceMinor, swRest.kjsonP);
+      ldConformanceDowngrade(dataP, itemP->conformanceMajor, itemP->conformanceMinor, corRest.kjsonP);
   }
 
   // § 5.2.14: when endpoint.accept is application/geo+json, replace the
   // `data` array with a FeatureCollection. Each entity becomes a Feature
   // with id at the top level, geometry from the GeoProperty, and the rest
   // of the entity as `properties`.
-  bool acceptGeoJson = (itemP->endpointAccept == SwMimeGeoJson);
-  bool acceptLdJson  = (itemP->endpointAccept == SwMimeLdJson);
+  bool acceptGeoJson = (itemP->endpointAccept == CorMimeGeoJson);
+  bool acceptLdJson  = (itemP->endpointAccept == CorMimeLdJson);
 
   // ld+json notification body: per § 5.8.6 + § 6.3.5, each entity in data[]
   // (and the FeatureCollection / each Feature for geo+json — § 6.3.7) shall
@@ -896,7 +896,7 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
       for (KjNode* ep = dataP->value.firstChildP; ep != NULL; ep = ep->next)
       {
         if (ep->type == KjObject && kjLookup(ep, "@context") == NULL)
-          kjChildAdd(ep, kjString(swRest.kjsonP, "@context", itemP->contextUrl));
+          kjChildAdd(ep, kjString(corRest.kjsonP, "@context", itemP->contextUrl));
       }
     }
   }
@@ -907,7 +907,7 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
     if (oldDataP != NULL && oldDataP->type == KjArray)
     {
       KjNode* newDataP = oldDataP;
-      ldToGeoJson(&newDataP, NULL /* default "location" */, swRest.kjsonP);
+      ldToGeoJson(&newDataP, NULL /* default "location" */, corRest.kjsonP);
       if (newDataP != NULL && newDataP != oldDataP)
       {
         newDataP->name = (char*) "data";
@@ -918,7 +918,7 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
       // not copied into each Feature, and no Link header (see below).
       if (ctxInBody && itemP->contextUrl != NULL && newDataP != NULL &&
           newDataP->type == KjObject && kjLookup(newDataP, "@context") == NULL)
-        kjChildAdd(newDataP, kjString(swRest.kjsonP, "@context", itemP->contextUrl));
+        kjChildAdd(newDataP, kjString(corRest.kjsonP, "@context", itemP->contextUrl));
     }
   }
 
@@ -926,7 +926,7 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   // Render to JSON
   //
   int   bodySize = kjFastRenderSize(notification) + 1;
-  char* body     = (char*) kaAlloc(&swRest.kalloc, bodySize);
+  char* body     = (char*) kaAlloc(&corRest.kalloc, bodySize);
 
   kjFastRender(notification, body);
 
@@ -936,7 +936,7 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   const char* ctxUrl = itemP->contextUrl;
   if (ctxUrl == NULL)
   {
-    SwldContext* coreP = swldCoreContext();
+    CorLdContext* coreP = corLdCoreContext();
     if (coreP != NULL)
       ctxUrl = coreP->url;
   }
@@ -959,7 +959,7 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   //   application/geo+json → GeoJSON FeatureCollection (already converted above)
   //   default              → application/json (Link header carries @context)
   //
-  const char* contentType = swMimeString(itemP->endpointAccept);
+  const char* contentType = corMimeString(itemP->endpointAccept);
 
   //
   // MQTT delivery path (§ 7) — when endpoint.uri is mqtt[s]://...
@@ -973,13 +973,13 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
                            itemP->notifierInfo);
 
     itemP->timesSent       += 1;
-    itemP->lastNotification = swRest.requestStartTime;
+    itemP->lastNotification = corRest.requestStartTime;
     if (ok)
-      itemP->lastSuccess = swRest.requestStartTime;
+      itemP->lastSuccess = corRest.requestStartTime;
     else
     {
       itemP->timesFailed += 1;
-      itemP->lastFailure  = swRest.requestStartTime;
+      itemP->lastFailure  = corRest.requestStartTime;
     }
     ldNotifyStatsHookInvoke(false /*csrSub*/, ok);
     return;
@@ -988,23 +988,23 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   //
   // Send HTTP POST
   //
-  SwRestClientRequest  req;
-  SwRestClientResponse resp;
+  CorRestClientRequest  req;
+  CorRestClientResponse resp;
 
-  swRestClientRequestInit(&req, SwVerbPost, itemP->endpointUri, NULL);
-  swRestClientRequestHeader(&req, "Content-Type", contentType);
+  corRestClientRequestInit(&req, CorVerbPost, itemP->endpointUri, NULL);
+  corRestClientRequestHeader(&req, "Content-Type", contentType);
 
   // § 6.4.8 — a notification resulting from a subscription matched under a
   // non-default tenant carries the NGSILD-Tenant header (the same tenant the
   // consumer addressed); without it the entity ids in the body are ambiguous.
   // Taken from the triggering request (the change happened in the sub's tenant).
-  for (int i = 0; i < swRest.in.httpHeaderCount; i++)
+  for (int i = 0; i < corRest.in.httpHeaderCount; i++)
   {
-    if ((swRest.in.httpHeaderV[i].key != NULL) &&
-        (strcasecmp(swRest.in.httpHeaderV[i].key, "NGSILD-Tenant") == 0) &&
-        (swRest.in.httpHeaderV[i].value != NULL) && (swRest.in.httpHeaderV[i].value[0] != 0))
+    if ((corRest.in.httpHeaderV[i].key != NULL) &&
+        (strcasecmp(corRest.in.httpHeaderV[i].key, "NGSILD-Tenant") == 0) &&
+        (corRest.in.httpHeaderV[i].value != NULL) && (corRest.in.httpHeaderV[i].value[0] != 0))
     {
-      swRestClientRequestHeader(&req, "NGSILD-Tenant", swRest.in.httpHeaderV[i].value);
+      corRestClientRequestHeader(&req, "NGSILD-Tenant", corRest.in.httpHeaderV[i].value);
       break;
     }
   }
@@ -1015,14 +1015,14 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   // "keyValues" is normalised to "simplified". (Orion-LD extension carried from
   // Orion's Fiware-AttrsFormat; pending addition to TS 104-176.)
   if (itemP->format != LdFormatNone && itemP->format != LdFormatNormalized)
-    swRestClientRequestHeader(&req, "Ngsild-Attribute-Format", ldFormatToString(itemP->format));
+    corRestClientRequestHeader(&req, "Ngsild-Attribute-Format", ldFormatToString(itemP->format));
 
   // The Link header carries @context ONLY when it is not already in the body
   // (§ 5.8.6 / § 6.3.5): plain json, or geo+json with Prefer body=json. For
   // ld+json and default geo+json the @context is inline, so a Link would be a
   // duplicate (046_14_01 asserts its absence).
   if (linkBuf[0] != 0 && !ctxInBody)
-    swRestClientRequestHeader(&req, "Link", linkBuf);
+    corRestClientRequestHeader(&req, "Link", linkBuf);
 
   // § 5.2.15 endpoint.receiverInfo — emit each {key,value} as a request header
   if (itemP->receiverInfo != NULL && itemP->receiverInfo->type == KjArray)
@@ -1051,21 +1051,21 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
 
         const char* hv = ldRequestSubstitute(kP->value.s, vP->value.s);
         if (hv != NULL)
-          swRestClientRequestHeader(&req, kP->value.s, hv);
+          corRestClientRequestHeader(&req, kP->value.s, hv);
       }
     }
   }
 
-  swRestClientRequestBody(&req, body, strlen(body));
+  corRestClientRequestBody(&req, body, strlen(body));
   // § 5.2.15 endpoint.timeout — per-sub override; default 10s
   int reqTmoMs = (itemP->timeoutMs > 0) ? itemP->timeoutMs : 10000;
-  swRestClientRequestTimeout(&req, 5000, reqTmoMs);
+  corRestClientRequestTimeout(&req, 5000, reqTmoMs);
 
   // Trace the outgoing notification (each aspect on its own level).
   {
     const char* nq       = (req.url != NULL) ? strchr(req.url, '?') : NULL;
     int         nPathLen  = (nq != NULL) ? (int)(nq - req.url) : (req.url ? (int) strlen(req.url) : 0);
-    KT_T(LdTNotifReq, "notification request: %s %.*s", swRestVerbToString(req.verb), nPathLen, req.url ? req.url : "");
+    KT_T(LdTNotifReq, "notification request: %s %.*s", corRestVerbToString(req.verb), nPathLen, req.url ? req.url : "");
     for (const char* p = (nq != NULL) ? nq + 1 : NULL; p != NULL && *p != 0; )
     {
       const char* amp = strchr(p, '&');
@@ -1079,7 +1079,7 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
     KT_T(LdTNotifBody, "notification request body (%zu bytes): %s", strlen(body), body);
   }
 
-  swRestClientSend(&req, &resp);
+  corRestClientSend(&req, &resp);
 
   KT_T(LdTNotifRes, "notification response: status %d", resp.statusCode);
 
@@ -1087,18 +1087,18 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   // Update notification counters (use request timestamp, nanoseconds)
   //
   itemP->timesSent       += 1;
-  itemP->lastNotification = swRest.requestStartTime;
+  itemP->lastNotification = corRest.requestStartTime;
 
   bool ok = (resp.statusCode >= 200 && resp.statusCode < 300);
   if (ok)
-    itemP->lastSuccess = swRest.requestStartTime;
+    itemP->lastSuccess = corRest.requestStartTime;
   else
   {
     itemP->timesFailed += 1;
-    itemP->lastFailure  = swRest.requestStartTime;
+    itemP->lastFailure  = corRest.requestStartTime;
   }
 
-  swRestClientResponseCleanup(&resp);
+  corRestClientResponseCleanup(&resp);
   ldNotifyStatsHookInvoke(false /*csrSub*/, ok);
 }
 
@@ -1132,7 +1132,7 @@ void ldSubscriptionNotifyBatch(LdSubCache*           cacheP,
   int subCount = 0;
   for (LdSubCacheItem* c = cacheP->itemList; c != NULL; c = c->next)
     subCount++;
-  SendEntry* sendV = (subCount > 0) ? (SendEntry*) kaAlloc(&swRest.kalloc, subCount * sizeof(SendEntry)) : NULL;
+  SendEntry* sendV = (subCount > 0) ? (SendEntry*) kaAlloc(&corRest.kalloc, subCount * sizeof(SendEntry)) : NULL;
   int        sendN = 0;
 
   for (LdSubCacheItem* itemP = cacheP->itemList; itemP != NULL; itemP = itemP->next)
@@ -1143,7 +1143,7 @@ void ldSubscriptionNotifyBatch(LdSubCache*           cacheP,
     if (itemP->status == LdSubStatusPaused || itemP->status == LdSubStatusExpired)
       continue;
 
-    if (itemP->expiresAt > 0 && swRest.requestStartTime > itemP->expiresAt)
+    if (itemP->expiresAt > 0 && corRest.requestStartTime > itemP->expiresAt)
     {
       itemP->status = LdSubStatusExpired;
       continue;
@@ -1159,7 +1159,7 @@ void ldSubscriptionNotifyBatch(LdSubCache*           cacheP,
     //
     // Per-pending match pass
     //
-    LdNotifyPendingEntry** matched  = (LdNotifyPendingEntry**) kaAlloc(&swRest.kalloc, pendingN * sizeof(LdNotifyPendingEntry*));
+    LdNotifyPendingEntry** matched  = (LdNotifyPendingEntry**) kaAlloc(&corRest.kalloc, pendingN * sizeof(LdNotifyPendingEntry*));
     int                    matchedN = 0;
 
     for (int i = 0; i < pendingN; i++)
@@ -1268,7 +1268,7 @@ static void throttleFlushTick(void* ctx, uint64_t now, KAlloc* kaP)
   for (LdSubCacheItem* c = cacheP->itemList; c != NULL; c = c->next)
     subCount++;
 
-  LdSubCacheItem** dueV = (subCount > 0) ? (LdSubCacheItem**) kaAlloc(&swRest.kalloc, subCount * sizeof(LdSubCacheItem*)) : NULL;
+  LdSubCacheItem** dueV = (subCount > 0) ? (LdSubCacheItem**) kaAlloc(&corRest.kalloc, subCount * sizeof(LdSubCacheItem*)) : NULL;
   int              dueN = 0;
 
   for (LdSubCacheItem* itemP = cacheP->itemList; itemP != NULL && dueV != NULL; itemP = itemP->next)
@@ -1305,8 +1305,8 @@ static void throttleFlushTick(void* ctx, uint64_t now, KAlloc* kaP)
       continue;
     }
 
-    LdNotifyPendingEntry*  peArr  = (LdNotifyPendingEntry*)  kaAlloc(&swRest.kalloc, entriesN * sizeof(LdNotifyPendingEntry));
-    LdNotifyPendingEntry** pePtrs = (LdNotifyPendingEntry**) kaAlloc(&swRest.kalloc, entriesN * sizeof(LdNotifyPendingEntry*));
+    LdNotifyPendingEntry*  peArr  = (LdNotifyPendingEntry*)  kaAlloc(&corRest.kalloc, entriesN * sizeof(LdNotifyPendingEntry));
+    LdNotifyPendingEntry** pePtrs = (LdNotifyPendingEntry**) kaAlloc(&corRest.kalloc, entriesN * sizeof(LdNotifyPendingEntry*));
     int                    peN    = 0;
 
     for (int i = 0; i < entriesN; i++)
@@ -1324,7 +1324,7 @@ static void throttleFlushTick(void* ctx, uint64_t now, KAlloc* kaP)
       }
       else
       {
-        state = (throttleRetrieveFn != NULL) ? throttleRetrieveFn(e->entityId, &swRest.kalloc) : NULL;
+        state = (throttleRetrieveFn != NULL) ? throttleRetrieveFn(e->entityId, &corRest.kalloc) : NULL;
         if (state == NULL)             // vanished without a delete record — skip
           continue;
       }

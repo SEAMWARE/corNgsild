@@ -16,15 +16,15 @@
 #include <stdbool.h>                                     // bool
 #include <string.h>                                      // strcmp
 
-#include "swRest/SwRestState.h"                          // swRest
+#include "corRest/CorRestState.h"                          // corRest
 #include "kjson/KjNode.h"                                // KjNode
 #include "kjson/kjLookup.h"                              // kjLookup
 
-#include "swNgsild/swNgsild.h"                           // ldError, LD_ERROR_*
-#include "swNgsild/ldQParse.h"                           // ldQParse
-#include "swNgsild/ldCheckUri.h"                         // ldCheckUri
-#include "swNgsild/LdGeoRel.h"                           // ldGeoRelParse
-#include "swNgsild/ldPCheckQuery.h"                      // Own interface
+#include "corNgsild/corNgsild.h"                           // ldError, LD_ERROR_*
+#include "corNgsild/ldQParse.h"                           // ldQParse
+#include "corNgsild/ldCheckUri.h"                         // ldCheckUri
+#include "corNgsild/LdGeoRel.h"                           // ldGeoRelParse
+#include "corNgsild/ldPCheckQuery.h"                      // Own interface
 
 
 
@@ -212,9 +212,9 @@ static bool pCheckGeoQ(KjNode* geoQP)
 
   // georel syntax (near;maxDistance==N, within, ...) — ldGeoRelParse sets its
   // own ProblemDetails; add a fallback in case it returns NULL silently.
-  if (ldGeoRelParse(geoV[2].nodeP->value.s, &swRest.kalloc) == NULL)
+  if (ldGeoRelParse(geoV[2].nodeP->value.s, &corRest.kalloc) == NULL)
   {
-    if (swRest.out.problemType == NULL)
+    if (corRest.out.problemType == NULL)
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid georel", "%s", geoV[2].nodeP->value.s);
     return false;
   }
@@ -281,7 +281,7 @@ static bool pCheckAttrs(KjNode* attrsP)
 //
 bool pCheckQuery(void)
 {
-  KjNode* bodyP = swRest.in.requestTree;
+  KjNode* bodyP = corRest.in.requestTree;
 
   if (bodyP == NULL)                                     // dispatcher already 400s an empty POST body
     return true;
@@ -359,9 +359,9 @@ bool pCheckQuery(void)
   // its own ProblemDetails; add a fallback in case it returns NULL silently).
   if (qP != NULL)
   {
-    if (ldQParse(qP->value.s, &swRest.kalloc) == NULL)
+    if (ldQParse(qP->value.s, &corRest.kalloc) == NULL)
     {
-      if (swRest.out.problemType == NULL)
+      if (corRest.out.problemType == NULL)
         ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Parse Error in q-expression", "%s", qP->value.s);
       return false;
     }

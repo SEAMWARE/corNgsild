@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDQUERYPARAMS_H_
-#define SWNGSILD_LDQUERYPARAMS_H_
+#ifndef CORNGSILD_LDQUERYPARAMS_H_
+#define CORNGSILD_LDQUERYPARAMS_H_
 
 //
 // FILE            ldQueryParams.h
@@ -40,4 +40,4 @@ extern char** ldParamSplit(char* csv, KAlloc* faP);
 //
 extern char** ldParamExpandV(char** srcV, KAlloc* faP);
 
-#endif  // SWNGSILD_LDQUERYPARAMS_H_
+#endif  // CORNGSILD_LDQUERYPARAMS_H_

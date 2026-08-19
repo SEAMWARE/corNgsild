@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDATTRTYPEDETECT_H_
-#define SWNGSILD_LDATTRTYPEDETECT_H_
+#ifndef CORNGSILD_LDATTRTYPEDETECT_H_
+#define CORNGSILD_LDATTRTYPEDETECT_H_
 
 //
 // FILE            ldAttrTypeDetect.h
@@ -10,7 +10,7 @@
 // 
 //
 #include "kjson/KjNode.h"                               // KjNode
-#include "swNgsild/LdAttrType.h"                         // LdAttrType
+#include "corNgsild/LdAttrType.h"                         // LdAttrType
 
 
 
@@ -20,4 +20,4 @@
 //
 extern LdAttrType ldAttrTypeDetect(KjNode* attrP);
 
-#endif  // SWNGSILD_LDATTRTYPEDETECT_H_
+#endif  // CORNGSILD_LDATTRTYPEDETECT_H_

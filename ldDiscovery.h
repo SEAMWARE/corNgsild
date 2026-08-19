@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LD_DISCOVERY_H_
-#define SWNGSILD_LD_DISCOVERY_H_
+#ifndef CORNGSILD_LD_DISCOVERY_H_
+#define CORNGSILD_LD_DISCOVERY_H_
 //
 // FILE            ldDiscovery.h
 //
@@ -9,7 +9,7 @@
 //
 #include <stdbool.h>
 #include "kjson/KjNode.h"
-#include "swNgsild/LdRegCache.h"
+#include "corNgsild/LdRegCache.h"
 
 //
 // ldDiscoveryRegAugmentTypes / ldDiscoveryRegAugmentAttrs -

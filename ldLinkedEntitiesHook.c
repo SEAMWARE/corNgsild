@@ -7,7 +7,7 @@
 //
 #include <stddef.h>                                     // NULL
 
-#include "swNgsild/ldLinkedEntitiesHook.h"               // Own interface
+#include "corNgsild/ldLinkedEntitiesHook.h"               // Own interface
 
 
 

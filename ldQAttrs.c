@@ -11,8 +11,8 @@
 
 #include "kalloc/kaAlloc.h"                            // kaAlloc
 
-#include "swNgsild/LdQ.h"                              // LdQNode, LdQTerm
-#include "swNgsild/ldQAttrs.h"                         // Own interface
+#include "corNgsild/LdQ.h"                              // LdQNode, LdQTerm
+#include "corNgsild/ldQAttrs.h"                         // Own interface
 
 
 

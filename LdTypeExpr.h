@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDTYPEEXPR_H_
-#define SWNGSILD_LDTYPEEXPR_H_
+#ifndef CORNGSILD_LDTYPEEXPR_H_
+#define CORNGSILD_LDTYPEEXPR_H_
 
 //
 // FILE            LdTypeExpr.h
@@ -66,4 +66,4 @@ extern LdTypeExpr* ldTypeExprParse(const char* value, KAlloc* kaP);
 //
 extern void ldTypeExprFree(LdTypeExpr* expr);
 
-#endif  // SWNGSILD_LDTYPEEXPR_H_
+#endif  // CORNGSILD_LDTYPEEXPR_H_

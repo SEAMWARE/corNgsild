@@ -13,9 +13,9 @@
 #include "kjson/kjClone.h"                             // kjClone
 #include "kjson/kjLookup.h"                            // kjLookup
 
-#include "swNgsild/LdRegCache.h"                       // LdRegInfo
+#include "corNgsild/LdRegCache.h"                       // LdRegInfo
 
-#include "swNgsild/ldEntityFragment.h"                 // Own interface
+#include "corNgsild/ldEntityFragment.h"                 // Own interface
 
 
 

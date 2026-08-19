@@ -15,23 +15,23 @@
 #include "kalloc/KAlloc.h"                             // kaAlloc
 #include "kalloc/kaAlloc.h"                            // kaAlloc
 #include "kalloc/kaStrdup.h"                           // kaStrdup
-#include "swNgsild/LdProj.h"                              // LdProjItem, ldProjectionParse, ldProjectionTopLevelNames
-#include "swRest/swRest.h"                             // swRest
-#include "swJsonld/swldDownload.h"                         // swldContextFromUrl
-#include "swJsonld/swldExpand.h"                           // swldExpand
-#include "swJsonld/swldInit.h"                             // swldCoreContext
-#include "swNgsild/ldCheckDateTime.h"                    // ldCheckDateTime, ldIsoToNanoseconds
-#include "swNgsild/ldTypes.h"                            // ldFormatFromString
-#include "swNgsild/ldQueryParams.h"                      // ldParamSplit, ldParamExpandV
-#include "swNgsild/ldCheckUri.h"                         // ldCheckUri
-#include "swNgsild/ldQParse.h"                           // ldQParse
-#include "swNgsild/LdProblem.h"                          // LD_ERROR_BAD_REQUEST_DATA
-#include "swNgsild/ldError.h"                            // ldError
-#include "swNgsild/LdGeoRel.h"                           // ldGeoRelParse
-#include "swNgsild/LdScopeExpr.h"                        // ldScopeExprParse
-#include "swNgsild/LdTypeExpr.h"                         // ldTypeExprParse
-#include "swNgsild/ldToAggregatedValues.h"              // ldIso8601DurationParse, LdDuration
-#include "swNgsild/SwNgsild.h"                           // Own interface
+#include "corNgsild/LdProj.h"                              // LdProjItem, ldProjectionParse, ldProjectionTopLevelNames
+#include "corRest/corRest.h"                             // corRest
+#include "corJsonld/corLdDownload.h"                         // corLdContextFromUrl
+#include "corJsonld/corLdExpand.h"                           // corLdExpand
+#include "corJsonld/corLdInit.h"                             // corLdCoreContext
+#include "corNgsild/ldCheckDateTime.h"                    // ldCheckDateTime, ldIsoToNanoseconds
+#include "corNgsild/ldTypes.h"                            // ldFormatFromString
+#include "corNgsild/ldQueryParams.h"                      // ldParamSplit, ldParamExpandV
+#include "corNgsild/ldCheckUri.h"                         // ldCheckUri
+#include "corNgsild/ldQParse.h"                           // ldQParse
+#include "corNgsild/LdProblem.h"                          // LD_ERROR_BAD_REQUEST_DATA
+#include "corNgsild/ldError.h"                            // ldError
+#include "corNgsild/LdGeoRel.h"                           // ldGeoRelParse
+#include "corNgsild/LdScopeExpr.h"                        // ldScopeExprParse
+#include "corNgsild/LdTypeExpr.h"                         // ldTypeExprParse
+#include "corNgsild/ldToAggregatedValues.h"              // ldIso8601DurationParse, LdDuration
+#include "corNgsild/CorNgsild.h"                           // Own interface
 
 
 
@@ -71,11 +71,11 @@ KjNode*     ldContextSourceExtras = NULL;
 
 // -----------------------------------------------------------------------------
 //
-// swNgsildFallback - per-thread fallback used when no per-connection swNgsild
-// is bound (background threads, or before swRest.userData is set). The live
-// per-request state is per-connection (swRest.userData); see SwNgsild.h.
+// corNgsildFallback - per-thread fallback used when no per-connection corNgsild
+// is bound (background threads, or before corRest.userData is set). The live
+// per-request state is per-connection (corRest.userData); see CorNgsild.h.
 //
-__thread SwNgsild swNgsildFallback;
+__thread CorNgsild corNgsildFallback;
 
 
 
@@ -91,17 +91,17 @@ __thread SwNgsild swNgsildFallback;
 //
 void ldContextResolve(void)
 {
-  if (swNgsild.contextP != NULL)
+  if (corNgsild.contextP != NULL)
     return;
 
-  KAlloc* faP = &swRest.kalloc;
+  KAlloc* faP = &corRest.kalloc;
 
-  for (int i = 0; i < swRest.in.httpHeaderCount; i++)
+  for (int i = 0; i < corRest.in.httpHeaderCount; i++)
   {
-    if (strcasecmp(swRest.in.httpHeaderV[i].key, "Link") == 0 &&
-        strstr(swRest.in.httpHeaderV[i].value, "json-ld#context") != NULL)
+    if (strcasecmp(corRest.in.httpHeaderV[i].key, "Link") == 0 &&
+        strstr(corRest.in.httpHeaderV[i].value, "json-ld#context") != NULL)
     {
-      char* hdr   = swRest.in.httpHeaderV[i].value;
+      char* hdr   = corRest.in.httpHeaderV[i].value;
       char* start = strchr(hdr, '<');
       char* end   = (start != NULL) ? strchr(start, '>') : NULL;
 
@@ -109,7 +109,7 @@ void ldContextResolve(void)
       {
         start++;
         *end = 0;
-        swNgsild.contextP = swldContextFromUrl(start, faP);
+        corNgsild.contextP = corLdContextFromUrl(start, faP);
         *end = '>';
       }
 
@@ -121,11 +121,11 @@ void ldContextResolve(void)
   // its own (no Link header, no body), so fall back to the broker-configured
   // default user context before core. Core still wins term-by-term (it sits
   // last in the chain), so this only adds the user's terms, never overrides.
-  if (swNgsild.contextP == NULL && ldDefaultContextUrl != NULL)
-    swNgsild.contextP = swldContextFromUrl(ldDefaultContextUrl, faP);
+  if (corNgsild.contextP == NULL && ldDefaultContextUrl != NULL)
+    corNgsild.contextP = corLdContextFromUrl(ldDefaultContextUrl, faP);
 
-  if (swNgsild.contextP == NULL)
-    swNgsild.contextP = swldCoreContext();
+  if (corNgsild.contextP == NULL)
+    corNgsild.contextP = corLdCoreContext();
 }
 
 
@@ -190,11 +190,11 @@ static bool intParam(const char* name, const char* value, int* outP, int minVal)
 
 
 
-// ldParamHook - callback for swRest param validation
+// ldParamHook - callback for corRest param validation
 //
 void ldParamHook(const char* name, const char* value)
 {
-  KAlloc* faP = &swRest.kalloc;
+  KAlloc* faP = &corRest.kalloc;
 
   //
   // Lazy context resolution
@@ -206,13 +206,13 @@ void ldParamHook(const char* name, const char* value)
     // § 4.1 / § 5.7.2.4 — each id MUST be a URI. Reject up front
     // so the rest of the request doesn't quietly return an empty
     // result for "invalidUri".
-    swNgsild.id  = (char*) value;
-    swNgsild.idV = ldParamSplit((char*) value, faP);
-    if (swNgsild.idV != NULL)
+    corNgsild.id  = (char*) value;
+    corNgsild.idV = ldParamSplit((char*) value, faP);
+    if (corNgsild.idV != NULL)
     {
-      for (int i = 0; swNgsild.idV[i] != NULL; i++)
+      for (int i = 0; corNgsild.idV[i] != NULL; i++)
       {
-        const char* s     = swNgsild.idV[i];
+        const char* s     = corNgsild.idV[i];
         const char* colon = (s != NULL) ? strchr(s, ':') : NULL;
         bool ok = (s != NULL && s[0] != 0 && colon != NULL && colon != s && colon[1] != 0);
         if (ok)
@@ -246,40 +246,40 @@ void ldParamHook(const char* name, const char* value)
       return;
     }
     regfree(&re);
-    swNgsild.idPattern = (char*) value;
+    corNgsild.idPattern = (char*) value;
   }
   else if (strcmp(name, "type") == 0)
   {
-    swNgsild.type     = (char*) value;
-    swNgsild.typeExpr = ldTypeExprParse(value, faP);
+    corNgsild.type     = (char*) value;
+    corNgsild.typeExpr = ldTypeExprParse(value, faP);
 
     // For backward compat: if all groups are simple (single-type), populate flat typeV
-    if (swNgsild.typeExpr != NULL && swNgsild.typeExpr->isSimple)
+    if (corNgsild.typeExpr != NULL && corNgsild.typeExpr->isSimple)
     {
-      int n = swNgsild.typeExpr->groupCount;
+      int n = corNgsild.typeExpr->groupCount;
 
-      swNgsild.typeV = (char**) kaAlloc(faP, (n + 1) * sizeof(char*));
+      corNgsild.typeV = (char**) kaAlloc(faP, (n + 1) * sizeof(char*));
 
       for (int ix = 0; ix < n; ix++)
-        swNgsild.typeV[ix] = swNgsild.typeExpr->groupV[ix].typeV[0];
+        corNgsild.typeV[ix] = corNgsild.typeExpr->groupV[ix].typeV[0];
 
-      swNgsild.typeV[n] = NULL;
+      corNgsild.typeV[n] = NULL;
     }
   }
   else if (strcmp(name, "datasetId") == 0)
   {
-    swNgsild.datasetId  = (char*) value;
-    swNgsild.datasetIdV = ldParamSplit((char*) value, faP);
+    corNgsild.datasetId  = (char*) value;
+    corNgsild.datasetIdV = ldParamSplit((char*) value, faP);
 
     // § 4.5.5: a datasetId is a URI. The param may be a comma-list — every
     // value must be a valid URI (ldCheckUri raises the 400 on the first bad one).
     // The reserved keyword '@none' selects instances that have no datasetId
     // (§ 6.18.3.2 / § 6.19.3.1) and is exempt from the URI check.
-    for (int ix = 0; swNgsild.datasetIdV != NULL && swNgsild.datasetIdV[ix] != NULL; ix++)
+    for (int ix = 0; corNgsild.datasetIdV != NULL && corNgsild.datasetIdV[ix] != NULL; ix++)
     {
-      if (strcmp(swNgsild.datasetIdV[ix], "@none") == 0)
+      if (strcmp(corNgsild.datasetIdV[ix], "@none") == 0)
         continue;
-      if (ldCheckUri(swNgsild.datasetIdV[ix]) == false)
+      if (ldCheckUri(corNgsild.datasetIdV[ix]) == false)
         return;
     }
   }
@@ -291,77 +291,77 @@ void ldParamHook(const char* name, const char* value)
     // that still walks a flat array.
     const char* errMsg = NULL;
     char*       valCopy = kaStrdup(faP, value);   // parser writes NULs in-place
-    swNgsild.pick     = (char*) value;
-    swNgsild.pickTree = ldProjectionParse(valCopy, faP, &errMsg);
+    corNgsild.pick     = (char*) value;
+    corNgsild.pickTree = ldProjectionParse(valCopy, faP, &errMsg);
     if (errMsg != NULL)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Projection",
               "?pick=: %s", errMsg);
       return;
     }
-    swNgsild.pickV    = ldProjectionTopLevelNames(swNgsild.pickTree, faP, true);
+    corNgsild.pickV    = ldProjectionTopLevelNames(corNgsild.pickTree, faP, true);
   }
   else if (strcmp(name, "attrs") == 0)
   {
     // § 5.10.2 CSR Discovery honors `attrs` as a deprecated synonym for pick.
     // On other routes the bitmask LD_PARAMS_* gates whether attrs is allowed.
-    swNgsild.attrs  = (char*) value;
-    swNgsild.attrsV = ldParamSplit((char*) value, faP);
+    corNgsild.attrs  = (char*) value;
+    corNgsild.attrsV = ldParamSplit((char*) value, faP);
   }
   else if (strcmp(name, "omit") == 0)
   {
     const char* errMsg = NULL;
     char*       valCopy = kaStrdup(faP, value);
-    swNgsild.omit     = (char*) value;
-    swNgsild.omitTree = ldProjectionParse(valCopy, faP, &errMsg);
+    corNgsild.omit     = (char*) value;
+    corNgsild.omitTree = ldProjectionParse(valCopy, faP, &errMsg);
     if (errMsg != NULL)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Projection",
               "?omit=: %s", errMsg);
       return;
     }
-    swNgsild.omitV    = ldProjectionTopLevelNames(swNgsild.omitTree, faP, false);
+    corNgsild.omitV    = ldProjectionTopLevelNames(corNgsild.omitTree, faP, false);
   }
   else if (strcmp(name, "expandValues") == 0)
   {
-    swNgsild.expandValues  = (char*) value;
-    swNgsild.expandValuesV = ldParamSplit((char*) value, faP);  // NOT expanded — names used as-is during q-parse
+    corNgsild.expandValues  = (char*) value;
+    corNgsild.expandValuesV = ldParamSplit((char*) value, faP);  // NOT expanded — names used as-is during q-parse
   }
   else if (strcmp(name, "geometryProperty") == 0)
   {
-    swNgsild.geometryProperty = (char*) value;
+    corNgsild.geometryProperty = (char*) value;
   }
   else if (strcmp(name, "jsonKeys") == 0)
   {
-    swNgsild.jsonKeys  = (char*) value;
-    swNgsild.jsonKeysV = ldParamSplit((char*) value, faP);  // expanded later in ldExpandParams
+    corNgsild.jsonKeys  = (char*) value;
+    corNgsild.jsonKeysV = ldParamSplit((char*) value, faP);  // expanded later in ldExpandParams
   }
   else if (strcmp(name, "scopeQ") == 0)
   {
-    swNgsild.scopeQ    = (char*) value;
-    swNgsild.scopeExpr = ldScopeExprParse(value, faP);
+    corNgsild.scopeQ    = (char*) value;
+    corNgsild.scopeExpr = ldScopeExprParse(value, faP);
   }
   else if (strcmp(name, "limit") == 0)
   {
     // § 6.3.10: non-negative. limit=0 is valid only with count=true — that
     // cross-param dependency is checked in ldParamsValidate.
-    if (!intParam("limit", value, &swNgsild.limit, 0)) return;
+    if (!intParam("limit", value, &corNgsild.limit, 0)) return;
   }
   else if (strcmp(name, "lastN") == 0)
   {
-    if (!intParam("lastN", value, &swNgsild.lastN, 1)) return;
+    if (!intParam("lastN", value, &corNgsild.lastN, 1)) return;
   }
   else if (strcmp(name, "firstN") == 0)
   {
-    if (!intParam("firstN", value, &swNgsild.firstN, 1)) return;
+    if (!intParam("firstN", value, &corNgsild.firstN, 1)) return;
   }
   else if (strcmp(name, "offsetN") == 0)
   {
-    if (!intParam("offsetN", value, &swNgsild.offsetN, 0)) return;
+    if (!intParam("offsetN", value, &corNgsild.offsetN, 0)) return;
   }
   else if (strcmp(name, "offset") == 0)
   {
-    if (!intParam("offset", value, &swNgsild.offset, 0)) return;
+    if (!intParam("offset", value, &corNgsild.offset, 0)) return;
   }
   else if (strcmp(name, "format") == 0)
   {
@@ -372,8 +372,8 @@ void ldParamHook(const char* name, const char* value)
     // accepts temporalValues/aggregatedValues. Tightening this per endpoint
     // (reject them on non-temporal GETs) needs the service's options.features
     // and is tracked separately.
-    swNgsild.format = ldFormatFromString(value, /*temporal*/true);
-    if (swNgsild.format == LdFormatNone && value != NULL && value[0] != 0)
+    corNgsild.format = ldFormatFromString(value, /*temporal*/true);
+    if (corNgsild.format == LdFormatNone && value != NULL && value[0] != 0)
     {
       ldError(400, LD_ERROR_INVALID_REQUEST, "Invalid Request",
               "unknown 'format' value '%s' (expected: normalized, concise, "
@@ -383,51 +383,51 @@ void ldParamHook(const char* name, const char* value)
   }
   else if (strcmp(name, "count") == 0)
   {
-    if (!parseBool("count", value, &swNgsild.count)) return;
+    if (!parseBool("count", value, &corNgsild.count)) return;
   }
   else if (strcmp(name, "sysAttrs") == 0)
   {
-    if (!parseBool("sysAttrs", value, &swNgsild.sysAttrs)) return;
+    if (!parseBool("sysAttrs", value, &corNgsild.sysAttrs)) return;
   }
   else if (strcmp(name, "q") == 0)
   {
-    swNgsild.q     = (char*) value;
-    swNgsild.qExpr = ldQParse(value, faP);
+    corNgsild.q     = (char*) value;
+    corNgsild.qExpr = ldQParse(value, faP);
   }
   else if (strcmp(name, "csf") == 0)
   {
     // csf (Context Source Filter) is q-shaped — § 5.2.23 / § 7.2.3 — but it
     // selects Context Source REGISTRATIONS, not Entities. Its own field: a
     // request may carry both q and csf, and they filter different things.
-    swNgsild.csf     = (char*) value;
-    swNgsild.csfExpr = ldQParse(value, faP);
+    corNgsild.csf     = (char*) value;
+    corNgsild.csfExpr = ldQParse(value, faP);
   }
   else if (strcmp(name, "local") == 0)
   {
-    if (!parseBool("local", value, &swNgsild.local)) return;
+    if (!parseBool("local", value, &corNgsild.local)) return;
   }
   else if (strcmp(name, "noForward") == 0)
   {
-    if (!parseBool("noForward", value, &swNgsild.noForward)) return;
+    if (!parseBool("noForward", value, &corNgsild.noForward)) return;
   }
   else if (strcmp(name, "hops") == 0)
   {
     if (value != NULL)
     {
-      swNgsild.hops    = atoi(value);
-      swNgsild.hopsSet = true;
-      if (swNgsild.hops < 0) swNgsild.hops = 0;
+      corNgsild.hops    = atoi(value);
+      corNgsild.hopsSet = true;
+      if (corNgsild.hops < 0) corNgsild.hops = 0;
     }
   }
   else if (strcmp(name, "drop") == 0)
   {
     if (value != NULL)
-      swNgsild.dropV = ldParamSplit((char*) value, faP);
+      corNgsild.dropV = ldParamSplit((char*) value, faP);
   }
   else if (strcmp(name, "keep") == 0)
   {
     if (value != NULL)
-      swNgsild.keepV = ldParamSplit((char*) value, faP);
+      corNgsild.keepV = ldParamSplit((char*) value, faP);
   }
   else if (strcmp(name, "details") == 0)
   {
@@ -437,7 +437,7 @@ void ldParamHook(const char* name, const char* value)
               "'details' must be 'true' or 'false'");
       return;
     }
-    swNgsild.details = (strcmp(value, "true") == 0);
+    corNgsild.details = (strcmp(value, "true") == 0);
   }
   else if (strcmp(name, "deleteAll") == 0)
   {
@@ -446,19 +446,19 @@ void ldParamHook(const char* name, const char* value)
     // (Python requests with bool, Robot Framework ${True}) is the client's
     // bug — surfacing it as 400 here means it gets fixed instead of
     // silently behaving wrong.
-    if (!parseBool("deleteAll", value, &swNgsild.deleteAll)) return;
+    if (!parseBool("deleteAll", value, &corNgsild.deleteAll)) return;
   }
   else if (strcmp(name, "entityMap") == 0)
   {
     if (value != NULL && strcmp(value, "true") == 0)
-      swNgsild.entityMapCreate = true;
+      corNgsild.entityMapCreate = true;
     else if (value != NULL && value[0] != 0 && strcmp(value, "false") != 0)
-      swNgsild.entityMapId = (char*) value;   // URI of existing map
+      corNgsild.entityMapId = (char*) value;   // URI of existing map
   }
   else if (strcmp(name, "splitEntities") == 0)
   {
-    swNgsild.splitEntitiesSet = true;
-    if (!parseBool("splitEntities", value, &swNgsild.splitEntitiesVal)) return;
+    corNgsild.splitEntitiesSet = true;
+    if (!parseBool("splitEntities", value, &corNgsild.splitEntitiesVal)) return;
   }
   else if (strcmp(name, "kind") == 0)
   {
@@ -472,7 +472,7 @@ void ldParamHook(const char* name, const char* value)
               "'kind' must be 'Hosted', 'Cached' or 'ImplicitlyCreated'");
       return;
     }
-    swNgsild.kind = (char*) value;
+    corNgsild.kind = (char*) value;
   }
   else if (strcmp(name, "join") == 0)
   {
@@ -488,7 +488,7 @@ void ldParamHook(const char* name, const char* value)
               "'join' must be 'flat', 'inline' or '@none'");
       return;
     }
-    swNgsild.join = (char*) value;
+    corNgsild.join = (char*) value;
   }
   else if (strcmp(name, "joinLevel") == 0)
   {
@@ -505,7 +505,7 @@ void ldParamHook(const char* name, const char* value)
               "'joinLevel' must be a positive integer");
       return;
     }
-    swNgsild.joinLevel = n;
+    corNgsild.joinLevel = n;
   }
   else if (strcmp(name, "containedBy") == 0)
   {
@@ -518,18 +518,18 @@ void ldParamHook(const char* name, const char* value)
       return;
     }
 
-    swNgsild.containedByV = ldParamSplit((char*) value, faP);
+    corNgsild.containedByV = ldParamSplit((char*) value, faP);
 
     int n = 0;
-    if (swNgsild.containedByV != NULL)
-      while (swNgsild.containedByV[n] != NULL) n++;
+    if (corNgsild.containedByV != NULL)
+      while (corNgsild.containedByV[n] != NULL) n++;
     if (n == 0)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid request",
               "'containedBy' shall not be empty");
       return;
     }
-    swNgsild.containedByCount = n;
+    corNgsild.containedByCount = n;
   }
   else if (strcmp(name, "options") == 0)
   {
@@ -544,24 +544,24 @@ void ldParamHook(const char* name, const char* value)
     wrapped[len + 2] = '\0';
 
     // Format — only set if ?format= hasn't already set it
-    if (swNgsild.format == LdFormatNone)
+    if (corNgsild.format == LdFormatNone)
     {
-      if      (strstr(wrapped, ",keyValues,")        != NULL)  swNgsild.format = LdFormatSimplified;
-      else if (strstr(wrapped, ",simplified,")       != NULL)  swNgsild.format = LdFormatSimplified;
-      else if (strstr(wrapped, ",concise,")          != NULL)  swNgsild.format = LdFormatConcise;
-      else if (strstr(wrapped, ",normalized,")       != NULL)  swNgsild.format = LdFormatNormalized;
-      else if (strstr(wrapped, ",temporalValues,")   != NULL)  swNgsild.format = LdFormatTemporalValues;
-      else if (strstr(wrapped, ",aggregatedValues,") != NULL)  swNgsild.format = LdFormatAggregatedValues;
+      if      (strstr(wrapped, ",keyValues,")        != NULL)  corNgsild.format = LdFormatSimplified;
+      else if (strstr(wrapped, ",simplified,")       != NULL)  corNgsild.format = LdFormatSimplified;
+      else if (strstr(wrapped, ",concise,")          != NULL)  corNgsild.format = LdFormatConcise;
+      else if (strstr(wrapped, ",normalized,")       != NULL)  corNgsild.format = LdFormatNormalized;
+      else if (strstr(wrapped, ",temporalValues,")   != NULL)  corNgsild.format = LdFormatTemporalValues;
+      else if (strstr(wrapped, ",aggregatedValues,") != NULL)  corNgsild.format = LdFormatAggregatedValues;
     }
 
     if (strstr(wrapped, ",sysAttrs,") != NULL)
-      swNgsild.sysAttrs = true;
+      corNgsild.sysAttrs = true;
 
     if (strstr(wrapped, ",noOverwrite,") != NULL)
-      swNgsild.noOverwrite = true;
+      corNgsild.noOverwrite = true;
 
     if (strstr(wrapped, ",update,") != NULL)
-      swNgsild.upsertUpdate = true;
+      corNgsild.upsertUpdate = true;
 
     // § 6.3.18: validate every comma-separated token; an unknown one is
     // InvalidRequest, not silently ignored.
@@ -601,8 +601,8 @@ void ldParamHook(const char* name, const char* value)
   }
   else if (strcmp(name, "georel") == 0)
   {
-    swNgsild.georel = (char*) value;
-    swNgsild.geoRel = ldGeoRelParse(value, faP);
+    corNgsild.georel = (char*) value;
+    corNgsild.geoRel = ldGeoRelParse(value, faP);
   }
   else if (strcmp(name, "geometry") == 0)
   {
@@ -618,7 +618,7 @@ void ldParamHook(const char* name, const char* value)
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid geo-query", "unsupported geometry type: '%s'", value);
       return;
     }
-    swNgsild.geometry = (char*) value;
+    corNgsild.geometry = (char*) value;
   }
   else if (strcmp(name, "coordinates") == 0)
   {
@@ -632,11 +632,11 @@ void ldParamHook(const char* name, const char* value)
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid geo-query", "coordinates must be a JSON array");
       return;
     }
-    swNgsild.coordinates = (char*) value;
+    corNgsild.coordinates = (char*) value;
   }
   else if (strcmp(name, "geoproperty") == 0)
   {
-    swNgsild.geoproperty = (char*) value;  // expanded later in ldExpandParams
+    corNgsild.geoproperty = (char*) value;  // expanded later in ldExpandParams
   }
   else if (strcmp(name, "orderFrom") == 0)
   {
@@ -651,7 +651,7 @@ void ldParamHook(const char* name, const char* value)
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid orderBy", "orderFrom must be a JSON coordinates array");
       return;
     }
-    swNgsild.orderFrom = (char*) value;
+    corNgsild.orderFrom = (char*) value;
   }
   else if (strcmp(name, "orderGeometry") == 0)
   {
@@ -664,7 +664,7 @@ void ldParamHook(const char* name, const char* value)
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid orderBy", "unsupported orderGeometry type: '%s'", value);
       return;
     }
-    swNgsild.orderGeometry = (char*) value;
+    corNgsild.orderGeometry = (char*) value;
   }
   else if (strcmp(name, "timerel") == 0)
   {
@@ -674,7 +674,7 @@ void ldParamHook(const char* name, const char* value)
               "timerel must be 'before', 'after', or 'between' (got '%s')", value);
       return;
     }
-    swNgsild.timerel = (char*) value;
+    corNgsild.timerel = (char*) value;
   }
   else if (strcmp(name, "timeAt") == 0)
   {
@@ -684,8 +684,8 @@ void ldParamHook(const char* name, const char* value)
               "timeAt is not a valid ISO 8601 DateTime: '%s'", value);
       return;
     }
-    swNgsild.timeAt   = (char*) value;
-    swNgsild.timeAtNs = ldIsoToNanoseconds(value);
+    corNgsild.timeAt   = (char*) value;
+    corNgsild.timeAtNs = ldIsoToNanoseconds(value);
   }
   else if (strcmp(name, "endTimeAt") == 0)
   {
@@ -695,8 +695,8 @@ void ldParamHook(const char* name, const char* value)
               "endTimeAt is not a valid ISO 8601 DateTime: '%s'", value);
       return;
     }
-    swNgsild.endTimeAt   = (char*) value;
-    swNgsild.endTimeAtNs = ldIsoToNanoseconds(value);
+    corNgsild.endTimeAt   = (char*) value;
+    corNgsild.endTimeAtNs = ldIsoToNanoseconds(value);
   }
   else if (strcmp(name, "timeproperty") == 0)
   {
@@ -707,16 +707,16 @@ void ldParamHook(const char* name, const char* value)
               "timeproperty must be observedAt, createdAt, modifiedAt or deletedAt (got '%s')", value);
       return;
     }
-    swNgsild.timeproperty = (char*) value;
+    corNgsild.timeproperty = (char*) value;
   }
   else if (strcmp(name, "lang") == 0)
   {
-    swNgsild.lang = (char*) value;
+    corNgsild.lang = (char*) value;
   }
   else if (strcmp(name, "aggrMethods") == 0)
   {
-    swNgsild.aggrMethods  = (char*) value;
-    swNgsild.aggrMethodsV = ldParamSplit((char*) value, faP);
+    corNgsild.aggrMethods  = (char*) value;
+    corNgsild.aggrMethodsV = ldParamSplit((char*) value, faP);
   }
   else if (strcmp(name, "aggrPeriodDuration") == 0)
   {
@@ -729,7 +729,7 @@ void ldParamHook(const char* name, const char* value)
               "aggrPeriodDuration is not a valid ISO 8601 duration: '%s'", value);
       return;
     }
-    swNgsild.aggrPeriodDuration = (char*) value;
+    corNgsild.aggrPeriodDuration = (char*) value;
   }
   else if (strcmp(name, "observedAt") == 0)
   {
@@ -739,12 +739,12 @@ void ldParamHook(const char* name, const char* value)
               "observedAt query parameter is not a valid ISO 8601 DateTime: '%s'", value);
       return;
     }
-    swNgsild.observedAt   = (char*) value;
-    swNgsild.observedAtNs = ldIsoToNanoseconds(value);
+    corNgsild.observedAt   = (char*) value;
+    corNgsild.observedAtNs = ldIsoToNanoseconds(value);
   }
   else if (strcmp(name, "orderBy") == 0)
   {
-    swNgsild.orderBy = (char*) value;
+    corNgsild.orderBy = (char*) value;
 
     // Parse orderBy: "attr1;desc,attr2" → array of LdOrderTerm
     // Count terms first
@@ -817,11 +817,11 @@ void ldParamHook(const char* name, const char* value)
       ix++;
     }
 
-    swNgsild.orderByV     = terms;
-    swNgsild.orderByCount = ix;
+    corNgsild.orderByV     = terms;
+    corNgsild.orderByCount = ix;
   }
   else if (strcmp(name, "collation") == 0)
   {
-    swNgsild.collation = (char*) value;
+    corNgsild.collation = (char*) value;
   }
 }

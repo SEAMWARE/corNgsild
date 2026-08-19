@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LD_SYS_TIMESTAMP_H
-#define SWNGSILD_LD_SYS_TIMESTAMP_H
+#ifndef CORNGSILD_LD_SYS_TIMESTAMP_H
+#define CORNGSILD_LD_SYS_TIMESTAMP_H
 
 // -----------------------------------------------------------------------------
 //
@@ -53,4 +53,4 @@ extern void ldSysTimestampCreate(KjNode* treeP);
 //
 extern void ldSysTimestampModify(KjNode* treeP);
 
-#endif  // SWNGSILD_LD_SYS_TIMESTAMP_H
+#endif  // CORNGSILD_LD_SYS_TIMESTAMP_H

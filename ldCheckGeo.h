@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDCHECKGEO_H_
-#define SWNGSILD_LDCHECKGEO_H_
+#ifndef CORNGSILD_LDCHECKGEO_H_
+#define CORNGSILD_LDCHECKGEO_H_
 
 //
 // FILE            ldCheckGeo.h
@@ -41,4 +41,4 @@ extern bool ldCheckGeo(KjNode* geoValueP);
 //
 extern bool ldCheckGeoQuery(const char* geometry, const char* coordinates);
 
-#endif  // SWNGSILD_LDCHECKGEO_H_
+#endif  // CORNGSILD_LDCHECKGEO_H_

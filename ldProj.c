@@ -16,7 +16,7 @@
 #include <string.h>                                  // strcmp, memcpy
 
 #include "kalloc/kaAlloc.h"                          // kaAlloc, kaStrdup
-#include "swNgsild/LdProj.h"                         // Own interface
+#include "corNgsild/LdProj.h"                         // Own interface
 
 
 

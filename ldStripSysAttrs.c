@@ -11,9 +11,9 @@
 
 #include "kjson/KjNode.h"                             // KjNode
 #include "kjson/kjBuilder.h"                      // kjChildRemove
-#include "swNgsild/LdVocab.h"                          // LD_VOCAB_*
+#include "corNgsild/LdVocab.h"                          // LD_VOCAB_*
 
-#include "swNgsild/ldStripSysAttrs.h"                  // Own interface
+#include "corNgsild/ldStripSysAttrs.h"                  // Own interface
 
 
 

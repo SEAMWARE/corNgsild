@@ -1,30 +1,30 @@
-# swNgsild — NGSI-LD Validation & Format Conversion
+# corNgsild — NGSI-LD Validation & Format Conversion
 
-The NGSI-LD engine of the swBroker context broker: payload validation, the
+The NGSI-LD engine of the coraine context broker: payload validation, the
 normalized/concise/simplified format conversions, the query/scope/geo expression
 languages, the subscription & registration caches, entity merge/replace logic, and
 the distributed-operation (context-source) machinery. It sits on top of
-[`swRest`](../swRest) (transport) and [`swJsonld`](../swJsonld) (context handling)
+[`corRest`](../corRest) (transport) and [`corJsonld`](../corJsonld) (context handling)
 and targets **ETSI GS CIM 009 (NGSI-LD)**.
 
 - **Version:** post-0.2.0
 - **Language:** C
 - **License:** Copyright 2026 Seamware
 
-> swNgsild is a large library. This README is an orientation map — the feature
+> corNgsild is a large library. This README is an orientation map — the feature
 > areas and their main entry points — not an exhaustive function list. Each area's
 > header (`Ld*.h` / `ld*.h`) carries the detailed contract.
 
 ## Architecture
 
-The umbrella header exposes a thread-local per-request state struct, `SwNgsild`
-(see `SwNgsild.h`), holding the parsed URL parameters and their derived forms
+The umbrella header exposes a thread-local per-request state struct, `CorNgsild`
+(see `CorNgsild.h`), holding the parsed URL parameters and their derived forms
 (`id`/`idV`, `type`/`typeExpr`, `q`/`qExpr`, `scopeQ`/`scopeExpr`, `pick`/`pickTree`,
 `datasetId`, …). Service routines populate and read this state; the rest of the
 library is the set of operations performed against it.
 
 ```c
-#include "swNgsild/swNgsild.h"
+#include "corNgsild/corNgsild.h"
 ```
 
 ## Feature areas
@@ -89,21 +89,21 @@ subscription counters and stats flushing (`ldSubStatsFlush`, `ldStatsFlushLoop`)
 ## Building
 
 ```bash
-make            # build libswNgsild.a (+ .so)
+make            # build libcorNgsild.a (+ .so)
 make debug      # debug build
 make ci         # clean + install
 make di         # debug + install
 ```
 
-`libswNgsild.a` links statically into its consumers. Sibling repos must be present
+`libcorNgsild.a` links statically into its consumers. Sibling repos must be present
 (the build references `../<lib>/lib<lib>.a`).
 
 ## Dependencies
 
-Sibling sw-lib repos:
+Sibling Cor-Lib repos:
 
-- [`swRest`](../swRest) — REST server + HTTP client (transport)
-- [`swJsonld`](../swJsonld) — JSON-LD context expansion / compaction
+- [`corRest`](../corRest) — REST server + HTTP client (transport)
+- [`corJsonld`](../corJsonld) — JSON-LD context expansion / compaction
 
 Sibling k-lib repos:
 

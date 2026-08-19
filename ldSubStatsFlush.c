@@ -7,9 +7,9 @@
 //
 #include <stddef.h>                                    // NULL
 
-#include "swNgsild/LdSubCache.h"                       // LdSubCache, LdSubCacheItem
-#include "swNgsild/LdPernotCache.h"                    // LdPernotCache, LdPernotItem
-#include "swNgsild/ldSubStatsFlush.h"                  // Own interface
+#include "corNgsild/LdSubCache.h"                       // LdSubCache, LdSubCacheItem
+#include "corNgsild/LdPernotCache.h"                    // LdPernotCache, LdPernotItem
+#include "corNgsild/ldSubStatsFlush.h"                  // Own interface
 
 
 

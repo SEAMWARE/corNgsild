@@ -22,21 +22,21 @@
 #include "kjson/kjRender.h"                            // kjFastRender
 #include "kjson/kjRenderSize.h"                        // kjFastRenderSize
 
-#include "swNgsild/ldTypes.h"                          // ldFormatFromString
-#include "swRest/SwRestIn.h"                    // swAcceptParse
-#include "swNgsild/SwNgsild.h"                         // swNgsild (contextP)
-#include "swNgsild/LdVocab.h"                          // LD_VOCAB_*
-#include "swNgsild/LdSubCache.h"                       // LdSubCache, LdSubCacheItem
-#include "swNgsild/ldThrottleDirty.h"                  // ldThrottleDirtyFree
-#include "swNgsild/LdScopeExpr.h"                      // ldScopeExprParse
-#include "swNgsild/LdGeoRel.h"                         // ldGeoRelParse
-#include "swNgsild/LdTypeExpr.h"                       // ldTypeExprParse
-#include "swNgsild/ldCheckDateTime.h"                  // ldCheckDateTime
-#include "swJsonld/swldExpand.h"                       // swldExpand, swldAlreadyExpanded
-#include "swNgsild/ldSubscriptionNotify.h"              // ldTriggerFromString
-#include "swNgsild/ldConformanceDowngrade.h"            // ldConformanceParse
-#include "swNgsild/ldQParse.h"                         // ldQParse
-#include "swNgsild/ldSubCache.h"                       // Own interface
+#include "corNgsild/ldTypes.h"                          // ldFormatFromString
+#include "corRest/CorRestIn.h"                    // corAcceptParse
+#include "corNgsild/CorNgsild.h"                         // corNgsild (contextP)
+#include "corNgsild/LdVocab.h"                          // LD_VOCAB_*
+#include "corNgsild/LdSubCache.h"                       // LdSubCache, LdSubCacheItem
+#include "corNgsild/ldThrottleDirty.h"                  // ldThrottleDirtyFree
+#include "corNgsild/LdScopeExpr.h"                      // ldScopeExprParse
+#include "corNgsild/LdGeoRel.h"                         // ldGeoRelParse
+#include "corNgsild/LdTypeExpr.h"                       // ldTypeExprParse
+#include "corNgsild/ldCheckDateTime.h"                  // ldCheckDateTime
+#include "corJsonld/corLdExpand.h"                       // corLdExpand, corLdAlreadyExpanded
+#include "corNgsild/ldSubscriptionNotify.h"              // ldTriggerFromString
+#include "corNgsild/ldConformanceDowngrade.h"            // ldConformanceParse
+#include "corNgsild/ldQParse.h"                         // ldQParse
+#include "corNgsild/ldSubCache.h"                       // Own interface
 
 
 
@@ -53,8 +53,8 @@ static LdSubEntitySelector* entitySelectorsExtract(KjNode* entitiesP)
   LdSubEntitySelector* tail = NULL;
 
   // ldCheckSubscription has already parsed each entities[].type into a
-  // malloc-allocated LdTypeExpr and stashed it on swNgsild. Claim the
-  // tree here (zero the slot so swNgsildReset doesn't free-double).
+  // malloc-allocated LdTypeExpr and stashed it on corNgsild. Claim the
+  // tree here (zero the slot so corNgsildReset doesn't free-double).
   int selIx = 0;
   for (KjNode* selP = entitiesP->value.firstChildP; selP != NULL; selP = selP->next, selIx++)
   {
@@ -70,10 +70,10 @@ static LdSubEntitySelector* entitySelectorsExtract(KjNode* entitiesP)
     if (typeP != NULL && typeP->type == KjString)
     {
       esP->type = typeP->value.s;
-      if (swNgsild.subEntityTypeExprsV != NULL && selIx < swNgsild.subEntityTypeExprsN)
+      if (corNgsild.subEntityTypeExprsV != NULL && selIx < corNgsild.subEntityTypeExprsN)
       {
-        esP->typeExpr = swNgsild.subEntityTypeExprsV[selIx];
-        swNgsild.subEntityTypeExprsV[selIx] = NULL;
+        esP->typeExpr = corNgsild.subEntityTypeExprsV[selIx];
+        corNgsild.subEntityTypeExprsV[selIx] = NULL;
       }
     }
 
@@ -355,16 +355,16 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
 
   // Expand short names in watchedAttrsV — same motivation as notifAttrsV
   // below. JSON-LD value coercion on array entries is intentionally NOT
-  // applied by swldExpandTree, so the strings stay short after parseHook.
+  // applied by corLdExpandTree, so the strings stay short after parseHook.
   // Downstream match paths (entity-side notify, CSR-side notify) compare
   // against expanded IRIs, so expand once here at cache-ingest time.
   //
-  // Use the REQUEST's @context (swNgsild.contextP) — passing NULL would
+  // Use the REQUEST's @context (corNgsild.contextP) — passing NULL would
   // fall back to the broker's core context which doesn't define
-  // user-vocab terms like "name". For sub-create paths swNgsild.contextP
+  // user-vocab terms like "name". For sub-create paths corNgsild.contextP
   // is the @context the client supplied; for cache-reload at boot the
   // sub's persisted jsonldContext URL has already been resolved into
-  // swNgsild.contextP by the reload driver. Without this, ETSI 046_22_*
+  // corNgsild.contextP by the reload driver. Without this, ETSI 046_22_*
   // tests with watchedAttributes silently never match attributeDeleted
   // events because the cache stores "name" while the merge report carries
   // the IRI "https://ngsi-ld-test-suite/context#name".
@@ -372,15 +372,15 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
   {
     for (int i = 0; itemP->watchedAttrsV[i] != NULL; i++)
     {
-      if (!swldAlreadyExpanded(itemP->watchedAttrsV[i]))
-        itemP->watchedAttrsV[i] = swldExpand(swNgsild.contextP, itemP->watchedAttrsV[i],
+      if (!corLdAlreadyExpanded(itemP->watchedAttrsV[i]))
+        itemP->watchedAttrsV[i] = corLdExpand(corNgsild.contextP, itemP->watchedAttrsV[i],
                                              &cacheP->alloc, NULL, NULL);
     }
   }
 
   // Use pre-parsed tree if provided, otherwise parse from the stored expanded q-string.
-  // Note: ldQParse called here will re-expand attrs via swNgsild.contextP, but since
-  // the attrs are already expanded IRIs (contain "://"), swldExpand returns them unchanged.
+  // Note: ldQParse called here will re-expand attrs via corNgsild.contextP, but since
+  // the attrs are already expanded IRIs (contain "://"), corLdExpand returns them unchanged.
   if (qExpr != NULL)
   {
     itemP->qExpr = qExpr;
@@ -434,10 +434,10 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
     if (geopropP != NULL && geopropP->type == KjString)
     {
       // The value may be a short name (e.g. "location") — expand it
-      if (swldAlreadyExpanded(geopropP->value.s))
+      if (corLdAlreadyExpanded(geopropP->value.s))
         itemP->geoProperty = geopropP->value.s;
       else
-        itemP->geoProperty = swldExpand(NULL, geopropP->value.s, &cacheP->alloc, NULL, NULL);
+        itemP->geoProperty = corLdExpand(NULL, geopropP->value.s, &cacheP->alloc, NULL, NULL);
     }
     else
     {
@@ -487,7 +487,7 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
     acceptP = kjLookup(endpointP, "https://uri.etsi.org/ngsi-ld/accept");
     if (acceptP == NULL) acceptP = kjLookup(endpointP, "accept");
   }
-  itemP->endpointAccept = swAcceptParse((acceptP != NULL && acceptP->type == KjString) ? acceptP->value.s : NULL);
+  itemP->endpointAccept = corAcceptParse((acceptP != NULL && acceptP->type == KjString) ? acceptP->value.s : NULL);
 
   // A receiverInfo Content-Type acts as endpoint.accept when accept is absent
   // (validated consistent in ldCheckSubscription). It is then NOT re-emitted as
@@ -496,7 +496,7 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
   {
     const char* riCt = riHeaderValue(kjLookup(endpointP, "receiverInfo"), "Content-Type");
     if (riCt != NULL)
-      itemP->endpointAccept = swAcceptParse(riCt);
+      itemP->endpointAccept = corAcceptParse(riCt);
   }
 
   // § 5.2.12 / § 4.3.6.8 ngsildConformance — back-compat target version
@@ -556,8 +556,8 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
   {
     for (int i = 0; itemP->notifAttrsV[i] != NULL; i++)
     {
-      if (!swldAlreadyExpanded(itemP->notifAttrsV[i]))
-        itemP->notifAttrsV[i] = swldExpand(swNgsild.contextP, itemP->notifAttrsV[i],
+      if (!corLdAlreadyExpanded(itemP->notifAttrsV[i]))
+        itemP->notifAttrsV[i] = corLdExpand(corNgsild.contextP, itemP->notifAttrsV[i],
                                            &cacheP->alloc, NULL, NULL);
     }
   }
@@ -576,8 +576,8 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
     for (int i = 0; v[i] != NULL; i++)
     {
       if (strcmp(v[i], "id") == 0 || strcmp(v[i], "type") == 0 || strcmp(v[i], "scope") == 0) continue;
-      if (!swldAlreadyExpanded(v[i]))
-        v[i] = swldExpand(swNgsild.contextP, v[i], &cacheP->alloc, NULL, NULL);
+      if (!corLdAlreadyExpanded(v[i]))
+        v[i] = corLdExpand(corNgsild.contextP, v[i], &cacheP->alloc, NULL, NULL);
     }
   }
 

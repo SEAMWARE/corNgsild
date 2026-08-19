@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDQUERYBODY_H_
-#define SWNGSILD_LDQUERYBODY_H_
+#ifndef CORNGSILD_LDQUERYBODY_H_
+#define CORNGSILD_LDQUERYBODY_H_
 
 //
 // FILE            ldQueryBody.h
@@ -24,4 +24,4 @@
 
 extern bool ldQueryBodyToParams(KjNode* bodyP);
 
-#endif  // SWNGSILD_LDQUERYBODY_H_
+#endif  // CORNGSILD_LDQUERYBODY_H_

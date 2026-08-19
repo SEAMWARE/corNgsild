@@ -24,9 +24,9 @@
 #include "kjson/kjRender.h"                              // kjFastRender
 #include "kjson/kjRenderSize.h"                          // kjFastRenderSize
 
-#include "swRest/swRest.h"                               // swRest
+#include "corRest/corRest.h"                               // corRest
 
-#include "swNgsild/ldMqttNotify.h"                       // Own interface
+#include "corNgsild/ldMqttNotify.h"                       // Own interface
 
 
 static bool mqttInitDone = false;
@@ -97,7 +97,7 @@ bool ldIsMqttUri(const char* uri)
 // MqttUri - parsed components of an mqtt[s]:// URI.
 //
 // All `char*` fields point into a freshly-allocated buffer owned by
-// swRest.kalloc, so no separate frees are needed.
+// corRest.kalloc, so no separate frees are needed.
 //
 typedef struct MqttUri
 {
@@ -115,7 +115,7 @@ typedef struct MqttUri
 //
 // parseMqttUri - decompose an mqtt[s]://[u[:p]@]host[:port]/topic URI
 //
-// Returns true on success. Mutates a local copy in `swRest.kalloc`; the
+// Returns true on success. Mutates a local copy in `corRest.kalloc`; the
 // out fields point into that copy and stay valid for the request.
 //
 static bool parseMqttUri(const char* uri, MqttUri* out)
@@ -142,7 +142,7 @@ static bool parseMqttUri(const char* uri, MqttUri* out)
 
   // Working copy — we'll NUL-terminate components in place.
   int   len  = strlen(schemeEnd);
-  char* buf  = (char*) kaAlloc(&swRest.kalloc, len + 1);
+  char* buf  = (char*) kaAlloc(&corRest.kalloc, len + 1);
   memcpy(buf, schemeEnd, len + 1);
 
   // Split on the first '/' to separate authority from path/topic.
@@ -214,21 +214,21 @@ static const char* notifierInfoLookup(KjNode* arr, const char* key)
 //
 // buildMqttMessage - wrap notification body as { "metadata": {...}, "body": <notif> }
 //
-// Returns the rendered JSON string allocated from swRest.kalloc, or NULL.
+// Returns the rendered JSON string allocated from corRest.kalloc, or NULL.
 //
 static char* buildMqttMessage(const char* notifBodyJson,
                               const char* contentType,
                               const char* linkHeader,
                               KjNode*     receiverInfo)
 {
-  KjNode* root     = kjObject(swRest.kjsonP, NULL);
-  KjNode* metadata = kjObject(swRest.kjsonP, "metadata");
+  KjNode* root     = kjObject(corRest.kjsonP, NULL);
+  KjNode* metadata = kjObject(corRest.kjsonP, "metadata");
 
   if (contentType != NULL)
-    kjChildAdd(metadata, kjString(swRest.kjsonP, "Content-Type", (char*) contentType));
+    kjChildAdd(metadata, kjString(corRest.kjsonP, "Content-Type", (char*) contentType));
 
   if (linkHeader != NULL)
-    kjChildAdd(metadata, kjString(swRest.kjsonP, "Link", (char*) linkHeader));
+    kjChildAdd(metadata, kjString(corRest.kjsonP, "Link", (char*) linkHeader));
 
   // Copy receiverInfo entries into metadata as plain key/value strings.
   if (receiverInfo != NULL && receiverInfo->type == KjArray)
@@ -240,20 +240,20 @@ static char* buildMqttMessage(const char* notifBodyJson,
       KjNode* vP = kjLookup(kvP, "value");
       if (kP == NULL || kP->type != KjString) continue;
       if (vP == NULL || vP->type != KjString) continue;
-      kjChildAdd(metadata, kjString(swRest.kjsonP, kP->value.s, vP->value.s));
+      kjChildAdd(metadata, kjString(corRest.kjsonP, kP->value.s, vP->value.s));
     }
   }
 
   kjChildAdd(root, metadata);
 
   // body: parse the notification JSON and graft as a tree.
-  KjNode* bodyTree = kjParse(swRest.kjsonP, (char*) notifBodyJson);
+  KjNode* bodyTree = kjParse(corRest.kjsonP, (char*) notifBodyJson);
   if (bodyTree == NULL) return NULL;
   bodyTree->name = (char*) "body";
   kjChildAdd(root, bodyTree);
 
   int    sz  = kjFastRenderSize(root) + 1;
-  char*  buf = (char*) kaAlloc(&swRest.kalloc, sz);
+  char*  buf = (char*) kaAlloc(&corRest.kalloc, sz);
   kjFastRender(root, buf);
   return buf;
 }

@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDSUBCACHE_H_
-#define SWNGSILD_LDSUBCACHE_H_
+#ifndef CORNGSILD_LDSUBCACHE_H_
+#define CORNGSILD_LDSUBCACHE_H_
 
 //
 // FILE            LdSubCache.h
@@ -25,13 +25,13 @@
 #include "kalloc/KAlloc.h"                             // KAlloc
 #include "kjson/KjNode.h"                              // KjNode
 
-#include "swNgsild/LdFormat.h"                     // LdFormat
-#include "swRest/SwRestIn.h"                  // SwMimeType
-#include "swNgsild/LdSubStatus.h"                  // LdSubStatus
-#include "swNgsild/LdQ.h"                              // LdQNode
-#include "swNgsild/LdScopeExpr.h"                      // LdScopeExpr
-#include "swNgsild/LdGeoRel.h"                         // LdGeoRel
-#include "swNgsild/LdTypeExpr.h"                       // LdTypeExpr
+#include "corNgsild/LdFormat.h"                     // LdFormat
+#include "corRest/CorRestIn.h"                  // CorMimeType
+#include "corNgsild/LdSubStatus.h"                  // LdSubStatus
+#include "corNgsild/LdQ.h"                              // LdQNode
+#include "corNgsild/LdScopeExpr.h"                      // LdScopeExpr
+#include "corNgsild/LdGeoRel.h"                         // LdGeoRel
+#include "corNgsild/LdTypeExpr.h"                       // LdTypeExpr
 
 
 
@@ -142,7 +142,7 @@ typedef struct LdSubCacheItem
   // Subscription state (borrowed pointers into subTree)
   LdSubStatus               status;         // § 5.2.12 lifecycle (enum — wire form converted at parse/render)
   char*                     endpointUri;    // notification.endpoint.uri
-  SwMimeType              endpointAccept; // notification.endpoint.accept (§ 5.2.15) — SwMimeJson default
+  CorMimeType              endpointAccept; // notification.endpoint.accept (§ 5.2.15) — CorMimeJson default
   char*                     contextUrl;     // jsonldContext URL for notification compaction
   // ngsildConformance (§ 5.2.12 / § 4.3.6.8) — request notifications conformant
   // to an older NGSI-LD spec version. 0/0 = absent (no downgrade).
@@ -209,7 +209,7 @@ typedef struct LdSubCacheItem
 
 // -----------------------------------------------------------------------------
 //
-// LdGeoMatchFunc - callback for geo matching (avoids GEOS dependency in swNgsild)
+// LdGeoMatchFunc - callback for geo matching (avoids GEOS dependency in corNgsild)
 //
 // Used for both subscription notification matching and queryEntities post-assembly.
 //
@@ -239,4 +239,4 @@ typedef struct LdSubCache
   pthread_rwlock_t    lock;
 } LdSubCache;
 
-#endif  // SWNGSILD_LDSUBCACHE_H_
+#endif  // CORNGSILD_LDSUBCACHE_H_

@@ -17,18 +17,18 @@
 #include "kjson/kjRenderSize.h"                        // kjFastRenderSize
 #include "kjson/kjRender.h"                            // kjFastRender
 
-#include "swRest/SwRestState.h"                        // swRest (per-request scratch allocator)
+#include "corRest/CorRestState.h"                        // corRest (per-request scratch allocator)
 
-#include "swJsonld/SwldContext.h"                      // SwldContext, SwldKindImplicit
-#include "swJsonld/SwldContextCache.h"                 // SwldContextCache
-#include "swJsonld/swldCache.h"                        // swldCacheLookup, swldCacheInsert, swldCacheReapVolatile
-#include "swJsonld/swldContextParse.h"                 // swldContextFromObject, swldContextFromTree
+#include "corJsonld/CorLdContext.h"                      // CorLdContext, CorLdKindImplicit
+#include "corJsonld/CorLdContextCache.h"                 // CorLdContextCache
+#include "corJsonld/corLdCache.h"                        // corLdCacheLookup, corLdCacheInsert, corLdCacheReapVolatile
+#include "corJsonld/corLdContextParse.h"                 // corLdContextFromObject, corLdContextFromTree
 
-#include "swNgsild/SwNgsild.h"                         // ldBrokerHttpEndpoint
-#include "swNgsild/ldPeriodicLoop.h"                   // ldPeriodicLoopRegister
-#include "swNgsild/ldContextHost.h"                    // Own interface
+#include "corNgsild/CorNgsild.h"                         // ldBrokerHttpEndpoint
+#include "corNgsild/ldPeriodicLoop.h"                   // ldPeriodicLoopRegister
+#include "corNgsild/ldContextHost.h"                    // Own interface
 
-extern SwldContextCache* swldCacheGet(void);
+extern CorLdContextCache* corLdCacheGet(void);
 
 
 
@@ -63,14 +63,14 @@ static uint64_t fnv1a64(const char* s, int len)
 // The cache is therefore bounded by the number of DISTINCT inline contexts
 // seen in a TTL window, not by request count.
 //
-SwldContext* ldContextHostVolatile(KjNode* ctxBody)
+CorLdContext* ldContextHostVolatile(KjNode* ctxBody)
 {
   if (ctxBody == NULL)
     return NULL;
   if (ctxBody->type != KjObject && ctxBody->type != KjArray)
     return NULL;
 
-  SwldContextCache* cacheP = swldCacheGet();
+  CorLdContextCache* cacheP = corLdCacheGet();
   KAlloc*           storeP = (cacheP != NULL) ? cacheP->kaP : NULL;
   if (storeP == NULL)
     return NULL;
@@ -80,7 +80,7 @@ SwldContext* ldContextHostVolatile(KjNode* ctxBody)
   // request and never touch the arena — so repeated identical contexts under
   // load don't grow the cache allocator at all.
   int   bodyLen = kjFastRenderSize(ctxBody) + 32;
-  char* scratch = (char*) kaAlloc(&swRest.kalloc, bodyLen);
+  char* scratch = (char*) kaAlloc(&corRest.kalloc, bodyLen);
   if (scratch == NULL)
     return NULL;
 
@@ -101,7 +101,7 @@ SwldContext* ldContextHostVolatile(KjNode* ctxBody)
   // Dedup: an identical body already hosted? Refresh its TTL and reuse it.
   // The body-equality guard makes a (astronomically unlikely) hash collision
   // a correctness non-event — a mismatch just falls through to re-host.
-  SwldContext* hitP = swldCacheLookup(id);
+  CorLdContext* hitP = corLdCacheLookup(id);
   if (hitP != NULL && hitP->volatileCtx && hitP->body != NULL &&
       strcmp(hitP->body, scratch) == 0)
   {
@@ -112,9 +112,9 @@ SwldContext* ldContextHostVolatile(KjNode* ctxBody)
   // Miss — build the entry. Copy id + body into the cache arena (they must
   // outlive the request); the maps come from the same parse the sub/reg
   // auto-population uses.
-  SwldContext* ctxP = (ctxBody->type == KjObject)
-                        ? swldContextFromObject(ctxBody, storeP, NULL)
-                        : swldContextFromTree(ctxBody, storeP, NULL);  // Hosted @context - identified by localId, no URL of its own to resolve against
+  CorLdContext* ctxP = (ctxBody->type == KjObject)
+                        ? corLdContextFromObject(ctxBody, storeP, NULL)
+                        : corLdContextFromTree(ctxBody, storeP, NULL);  // Hosted @context - identified by localId, no URL of its own to resolve against
   if (ctxP == NULL)
     return NULL;
 
@@ -142,11 +142,11 @@ SwldContext* ldContextHostVolatile(KjNode* ctxBody)
   ctxP->id          = idBuf;
   ctxP->url         = urlBuf;
   ctxP->body        = bodyP;
-  ctxP->kind        = SwldKindImplicit;
+  ctxP->kind        = CorLdKindImplicit;
   ctxP->volatileCtx = true;
   ctxP->expiresAt   = now + LD_VOLATILE_CTX_TTL_SEC;
 
-  swldCacheInsert(ctxP);   // cache only — never db.contextSave
+  corLdCacheInsert(ctxP);   // cache only — never db.contextSave
 
   return ctxP;
 }
@@ -164,7 +164,7 @@ static void volatileReapTick(void* ctx, uint64_t nowNs, KAlloc* kaP)
   (void) nowNs;
   (void) kaP;
 
-  swldCacheReapVolatile((double) time(NULL));
+  corLdCacheReapVolatile((double) time(NULL));
 }
 
 

@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDENTITYMATCH_H_
-#define SWNGSILD_LDENTITYMATCH_H_
+#ifndef CORNGSILD_LDENTITYMATCH_H_
+#define CORNGSILD_LDENTITYMATCH_H_
 
 //
 // FILE            ldEntityMatch.h
@@ -15,9 +15,9 @@
 
 #include "kjson/KjNode.h"                             // KjNode
 
-#include "swNgsild/LdQ.h"                             // LdQNode
-#include "swNgsild/LdScopeExpr.h"                     // LdScopeExpr
-#include "swNgsild/LdTypeExpr.h"                      // LdTypeExpr
+#include "corNgsild/LdQ.h"                             // LdQNode
+#include "corNgsild/LdScopeExpr.h"                     // LdScopeExpr
+#include "corNgsild/LdTypeExpr.h"                      // LdTypeExpr
 
 
 
@@ -43,7 +43,7 @@ extern bool ldEntityMatchScope(KjNode* scopeP, LdScopeExpr* expr);
 //
 // Used by ldEntityMatchQ to evaluate § 4.9 LinkedEntityRelation
 // sub-queries (q=rel{sub-q}) against the *target* of the Relationship.
-// swNgsild stays free of db.* coupling — the broker passes a fetcher
+// corNgsild stays free of db.* coupling — the broker passes a fetcher
 // that wraps db.entityRetrieve (or a dist-op fallback). Returning
 // non-zero / NULL means the target is unavailable; the linked sub-q
 // then evaluates to false (linking entity is excluded from results).
@@ -64,4 +64,4 @@ extern bool ldEntityMatchQ  (KjNode* entityP, LdQNode* node);
 extern bool ldEntityMatchQEx(KjNode* entityP, LdQNode* node,
                              LdQEntityFetchFunc fetcher, void* userData);
 
-#endif  // SWNGSILD_LDENTITYMATCH_H_
+#endif  // CORNGSILD_LDENTITYMATCH_H_

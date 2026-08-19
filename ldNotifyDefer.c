@@ -12,9 +12,9 @@
 #include "kjson/KjNode.h"                        // KjNode
 #include "kjson/kjLookup.h"                      // kjLookup
 
-#include "swNgsild/ldSubscriptionNotify.h"       // ldSubscriptionNotifyBatch, LdNotifyPendingEntry
-#include "swNgsild/SwNgsild.h"                   // swNgsild (per-conn pending* cache)
-#include "swNgsild/ldNotifyDefer.h"              // Own interface
+#include "corNgsild/ldSubscriptionNotify.h"       // ldSubscriptionNotifyBatch, LdNotifyPendingEntry
+#include "corNgsild/CorNgsild.h"                   // corNgsild (per-conn pending* cache)
+#include "corNgsild/ldNotifyDefer.h"              // Own interface
 
 
 
@@ -30,8 +30,8 @@
 //
 #define LD_NOTIFY_PENDING_INITIAL_CAP 16
 
-// Inc6c — the queue lives in the per-connection swNgsild (swNgsild.pendingV/N/Cap +
-// swNgsild.pendingCache); its buffer is freed in swNgsildStateFree.
+// Inc6c — the queue lives in the per-connection corNgsild (corNgsild.pendingV/N/Cap +
+// corNgsild.pendingCache); its buffer is freed in corNgsildStateFree.
 
 
 
@@ -174,35 +174,35 @@ void ldNotifyDefer(LdSubCache* cacheP, KjNode* entityP, LdNotifyOp op, LdMergeRe
   }
 
   // All pending entries within a request share one (sub) cache.
-  swNgsild.pendingCache = cacheP;
+  corNgsild.pendingCache = cacheP;
 
-  if (swNgsild.pendingN >= swNgsild.pendingCap)
+  if (corNgsild.pendingN >= corNgsild.pendingCap)
   {
-    int newCap = (swNgsild.pendingCap == 0) ? LD_NOTIFY_PENDING_INITIAL_CAP : swNgsild.pendingCap * 2;
-    LdNotifyPendingEntry* newV = (LdNotifyPendingEntry*) realloc(swNgsild.pendingV, newCap * sizeof(LdNotifyPendingEntry));
+    int newCap = (corNgsild.pendingCap == 0) ? LD_NOTIFY_PENDING_INITIAL_CAP : corNgsild.pendingCap * 2;
+    LdNotifyPendingEntry* newV = (LdNotifyPendingEntry*) realloc(corNgsild.pendingV, newCap * sizeof(LdNotifyPendingEntry));
     if (newV == NULL)
       return;
-    swNgsild.pendingV   = newV;
-    swNgsild.pendingCap = newCap;
+    corNgsild.pendingV   = newV;
+    corNgsild.pendingCap = newCap;
   }
 
-  swNgsild.pendingV[swNgsild.pendingN].entityP     = entityP;
-  swNgsild.pendingV[swNgsild.pendingN].op          = op;
-  swNgsild.pendingV[swNgsild.pendingN].hasReport   = (reportP != NULL);
-  swNgsild.pendingV[swNgsild.pendingN].deletedAtNs = 0;
-  swNgsild.pendingV[swNgsild.pendingN].reasonsMask = 0;
+  corNgsild.pendingV[corNgsild.pendingN].entityP     = entityP;
+  corNgsild.pendingV[corNgsild.pendingN].op          = op;
+  corNgsild.pendingV[corNgsild.pendingN].hasReport   = (reportP != NULL);
+  corNgsild.pendingV[corNgsild.pendingN].deletedAtNs = 0;
+  corNgsild.pendingV[corNgsild.pendingN].reasonsMask = 0;
   if (reportP != NULL && reportP->changes != NULL)
   {
     for (KjNode* chP = reportP->changes->value.firstChildP; chP != NULL; chP = chP->next)
     {
       KjNode* reasonP = kjLookup(chP, "reason");
       if (reasonP != NULL && reasonP->type == KjString)
-        swNgsild.pendingV[swNgsild.pendingN].reasonsMask |= ldTriggerFromReport(reasonP->value.s);
+        corNgsild.pendingV[corNgsild.pendingN].reasonsMask |= ldTriggerFromReport(reasonP->value.s);
     }
   }
   if (reportP != NULL)
-    swNgsild.pendingV[swNgsild.pendingN].report    = *reportP;  // struct copy; referenced change-list tree lives in the request arena
-  swNgsild.pendingN++;
+    corNgsild.pendingV[corNgsild.pendingN].report    = *reportP;  // struct copy; referenced change-list tree lives in the request arena
+  corNgsild.pendingN++;
 }
 
 
@@ -216,24 +216,24 @@ void ldNotifyDeferDelete(LdSubCache* cacheP, KjNode* entityP, uint64_t deletedAt
   if (cacheP == NULL || entityP == NULL)
     return;
 
-  swNgsild.pendingCache = cacheP;
+  corNgsild.pendingCache = cacheP;
 
-  if (swNgsild.pendingN >= swNgsild.pendingCap)
+  if (corNgsild.pendingN >= corNgsild.pendingCap)
   {
-    int newCap = (swNgsild.pendingCap == 0) ? LD_NOTIFY_PENDING_INITIAL_CAP : swNgsild.pendingCap * 2;
-    LdNotifyPendingEntry* newV = (LdNotifyPendingEntry*) realloc(swNgsild.pendingV, newCap * sizeof(LdNotifyPendingEntry));
+    int newCap = (corNgsild.pendingCap == 0) ? LD_NOTIFY_PENDING_INITIAL_CAP : corNgsild.pendingCap * 2;
+    LdNotifyPendingEntry* newV = (LdNotifyPendingEntry*) realloc(corNgsild.pendingV, newCap * sizeof(LdNotifyPendingEntry));
     if (newV == NULL)
       return;
-    swNgsild.pendingV   = newV;
-    swNgsild.pendingCap = newCap;
+    corNgsild.pendingV   = newV;
+    corNgsild.pendingCap = newCap;
   }
 
-  swNgsild.pendingV[swNgsild.pendingN].entityP     = entityP;
-  swNgsild.pendingV[swNgsild.pendingN].op          = LdNotifyEntityDelete;
-  swNgsild.pendingV[swNgsild.pendingN].hasReport   = false;
-  swNgsild.pendingV[swNgsild.pendingN].deletedAtNs = deletedAtNs;
-  swNgsild.pendingV[swNgsild.pendingN].reasonsMask = 0;
-  swNgsild.pendingN++;
+  corNgsild.pendingV[corNgsild.pendingN].entityP     = entityP;
+  corNgsild.pendingV[corNgsild.pendingN].op          = LdNotifyEntityDelete;
+  corNgsild.pendingV[corNgsild.pendingN].hasReport   = false;
+  corNgsild.pendingV[corNgsild.pendingN].deletedAtNs = deletedAtNs;
+  corNgsild.pendingV[corNgsild.pendingN].reasonsMask = 0;
+  corNgsild.pendingN++;
 }
 
 
@@ -244,16 +244,16 @@ void ldNotifyDeferDelete(LdSubCache* cacheP, KjNode* entityP, uint64_t deletedAt
 //
 void ldNotifyDispatchPending(void)
 {
-  if (swNgsild.pendingCache == NULL || swNgsild.pendingN == 0)
+  if (corNgsild.pendingCache == NULL || corNgsild.pendingN == 0)
   {
-    swNgsild.pendingN     = 0;
-    swNgsild.pendingCache = NULL;
+    corNgsild.pendingN     = 0;
+    corNgsild.pendingCache = NULL;
     return;
   }
 
-  ldSubscriptionNotifyBatch(swNgsild.pendingCache, swNgsild.pendingV, swNgsild.pendingN);
+  ldSubscriptionNotifyBatch(corNgsild.pendingCache, corNgsild.pendingV, corNgsild.pendingN);
 
-  swNgsild.pendingN     = 0;
-  swNgsild.pendingCache = NULL;
+  corNgsild.pendingN     = 0;
+  corNgsild.pendingCache = NULL;
 }
 

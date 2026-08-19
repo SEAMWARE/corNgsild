@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LD_NAME_CONTENT_CHECK_H_
-#define SWNGSILD_LD_NAME_CONTENT_CHECK_H_
+#ifndef CORNGSILD_LD_NAME_CONTENT_CHECK_H_
+#define CORNGSILD_LD_NAME_CONTENT_CHECK_H_
 
 //
 // FILE            ldNameContentCheck.h
@@ -60,4 +60,4 @@ extern bool ldStringHasForbiddenChars(const char* s);
 //
 extern bool ldCheckNamesAndContent(KjNode* tree);
 
-#endif  // SWNGSILD_LD_NAME_CONTENT_CHECK_H_
+#endif  // CORNGSILD_LD_NAME_CONTENT_CHECK_H_

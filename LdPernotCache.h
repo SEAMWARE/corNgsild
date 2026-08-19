@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDPERNOTCACHE_H_
-#define SWNGSILD_LDPERNOTCACHE_H_
+#ifndef CORNGSILD_LDPERNOTCACHE_H_
+#define CORNGSILD_LDPERNOTCACHE_H_
 
 //
 // FILE            LdPernotCache.h
@@ -19,10 +19,10 @@
 #include "kjson/KjNode.h"                              // KjNode
 #include "kalloc/KAlloc.h"                             // KAlloc
 
-#include "swNgsild/LdQ.h"                              // LdQNode
-#include "swNgsild/LdScopeExpr.h"                      // LdScopeExpr
-#include "swNgsild/LdGeoRel.h"                         // LdGeoRel
-#include "swNgsild/LdSubCache.h"                       // LdSubEntitySelector (reuse)
+#include "corNgsild/LdQ.h"                              // LdQNode
+#include "corNgsild/LdScopeExpr.h"                      // LdScopeExpr
+#include "corNgsild/LdGeoRel.h"                         // LdGeoRel
+#include "corNgsild/LdSubCache.h"                       // LdSubEntitySelector (reuse)
 
 
 
@@ -108,4 +108,4 @@ typedef struct LdPernotCache
   char           allocBuf[1024];
 } LdPernotCache;
 
-#endif  // SWNGSILD_LDPERNOTCACHE_H_
+#endif  // CORNGSILD_LDPERNOTCACHE_H_

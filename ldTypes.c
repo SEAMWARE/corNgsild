@@ -10,9 +10,9 @@
 
 #include "kbase/kLibLog.h"                             // KLOG_T
 
-#include "swNgsild/LdVocab.h"                            // LD_VOCAB_HAS_*
-#include "swNgsild/ldTypes.h"                            // Own interface
-#include "swNgsild/ldTraceLevels.h"                      // LdTTypes
+#include "corNgsild/LdVocab.h"                            // LD_VOCAB_HAS_*
+#include "corNgsild/ldTypes.h"                            // Own interface
+#include "corNgsild/ldTraceLevels.h"                      // LdTTypes
 
 
 

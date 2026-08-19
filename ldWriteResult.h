@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LD_WRITE_RESULT_H_
-#define SWNGSILD_LD_WRITE_RESULT_H_
+#ifndef CORNGSILD_LD_WRITE_RESULT_H_
+#define CORNGSILD_LD_WRITE_RESULT_H_
 
 //
 // FILE            ldWriteResult.h
@@ -114,4 +114,4 @@ extern void ldWriteResultMerge(LdWriteResult* wrP, const char* regId,
                                KjNode* responseTree,
                                KjNode* forwardedFrag, bool tolerate404);
 
-#endif  // SWNGSILD_LD_WRITE_RESULT_H_
+#endif  // CORNGSILD_LD_WRITE_RESULT_H_

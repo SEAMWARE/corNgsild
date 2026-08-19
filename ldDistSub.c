@@ -21,21 +21,21 @@
 #include "kjson/kjRender.h"                            // kjFastRender
 #include "kjson/kjRenderSize.h"                        // kjFastRenderSize
 
-#include "swRest/SwRestState.h"                        // swRest
-#include "swRest/SwRestVerb.h"                         // SwVerbPost, SwVerbDelete, SwVerbPatch
-#include "swRest/SwRestKeyValue.h"                     // SwRestKeyValue
-#include "swJsonld/swldInit.h"                         // SWLD_CORE_CONTEXT_URL
+#include "corRest/CorRestState.h"                        // corRest
+#include "corRest/CorRestVerb.h"                         // CorVerbPost, CorVerbDelete, CorVerbPatch
+#include "corRest/CorRestKeyValue.h"                     // CorRestKeyValue
+#include "corJsonld/corLdInit.h"                         // CORLD_CORE_CONTEXT_URL
 
-#include "swNgsild/SwNgsild.h"                         // ldBrokerHttpEndpoint
-#include "swNgsild/ldStripSysAttrs.h"                  // ldStripSysAttrs
-#include "swNgsild/LdSubCache.h"                       // LdSubCacheItem, LdSubSubordinate
-#include "swNgsild/ldSubCache.h"                       // ldSubCacheRdLock, ldSubCacheUnlock
-#include "swNgsild/LdRegCache.h"                       // LdRegCache, LdRegCacheItem
-#include "swNgsild/ldRegCache.h"                       // ldRegOpSupported, ldRegCacheItemLookup, ldRegCacheRdLock
-#include "swNgsild/LdOp.h"                             // LdOpCreateSubscription
-#include "swNgsild/LdVocab.h"                          // LD_VOCAB_*
-#include "swNgsild/ldDistOp.h"                         // ldDistOpSendReceive, ldDistOpCsrWouldLoop
-#include "swNgsild/ldDistSub.h"                        // Own interface
+#include "corNgsild/CorNgsild.h"                         // ldBrokerHttpEndpoint
+#include "corNgsild/ldStripSysAttrs.h"                  // ldStripSysAttrs
+#include "corNgsild/LdSubCache.h"                       // LdSubCacheItem, LdSubSubordinate
+#include "corNgsild/ldSubCache.h"                       // ldSubCacheRdLock, ldSubCacheUnlock
+#include "corNgsild/LdRegCache.h"                       // LdRegCache, LdRegCacheItem
+#include "corNgsild/ldRegCache.h"                       // ldRegOpSupported, ldRegCacheItemLookup, ldRegCacheRdLock
+#include "corNgsild/LdOp.h"                             // LdOpCreateSubscription
+#include "corNgsild/LdVocab.h"                          // LD_VOCAB_*
+#include "corNgsild/ldDistOp.h"                         // ldDistOpSendReceive, ldDistOpCsrWouldLoop
+#include "corNgsild/ldDistSub.h"                        // Own interface
 
 
 
@@ -201,7 +201,7 @@ static char* derivedSubBody(LdSubCacheItem* itemP,
                             const char*     callbackUri,
                             int*            bodyLenP)
 {
-  KjNode* clone = kjClone(swRest.kjsonP, itemP->subTree);
+  KjNode* clone = kjClone(corRest.kjsonP, itemP->subTree);
   if (clone == NULL)
     return NULL;
 
@@ -233,7 +233,7 @@ static char* derivedSubBody(LdSubCacheItem* itemP,
     idP->value.s = (char*) remoteSubId;
   else
   {
-    KjNode* newIdP = kjString(swRest.kjsonP, "id", remoteSubId);
+    KjNode* newIdP = kjString(corRest.kjsonP, "id", remoteSubId);
     kjChildAdd(clone, newIdP);
   }
 
@@ -263,7 +263,7 @@ static char* derivedSubBody(LdSubCacheItem* itemP,
     kjChildRemove(clone, atCtxP);
 
   int   sz  = kjFastRenderSize(clone) + 1;
-  char* buf = (char*) kaAlloc(&swRest.kalloc, sz);
+  char* buf = (char*) kaAlloc(&corRest.kalloc, sz);
   kjFastRender(clone, buf);
 
   if (bodyLenP != NULL)
@@ -319,7 +319,7 @@ static bool fanoutToReg(LdSubCacheItem* itemP, LdRegCacheItem* regP, const char*
 
   // Compute the narrowed entity filter up-front. Empty intersection =
   // no slice to subscribe to on this CSR — bail before bumping runNo.
-  KjNode* narrowed = narrowEntities(itemP, regP, swRest.kjsonP);
+  KjNode* narrowed = narrowEntities(itemP, regP, corRest.kjsonP);
   if (narrowed == NULL)
     return false;
 
@@ -329,13 +329,13 @@ static bool fanoutToReg(LdSubCacheItem* itemP, LdRegCacheItem* regP, const char*
   int runNo = ++itemP->subordinateRunNo;
 
   // Derived sub id: "<parent>:<runNo>"
-  char* derivedId = (char*) kaAlloc(&swRest.kalloc, parentLen + 16);
+  char* derivedId = (char*) kaAlloc(&corRest.kalloc, parentLen + 16);
   snprintf(derivedId, parentLen + 16, "%s:%d", itemP->subId, runNo);
 
   // Callback URI: "<our-endpoint>/ngsi-ld/ex/v1/notifications/<parent-sub-id>"
   static const char* notifPath = "/ngsi-ld/ex/v1/notifications/";
   int notifPathLen = (int) strlen(notifPath);
-  char* callback = (char*) kaAlloc(&swRest.kalloc, epLen + notifPathLen + parentLen + 1);
+  char* callback = (char*) kaAlloc(&corRest.kalloc, epLen + notifPathLen + parentLen + 1);
   char* cp = callback;
   memcpy(cp, ldBrokerHttpEndpoint, epLen); cp += epLen;
   memcpy(cp, notifPath, notifPathLen);     cp += notifPathLen;
@@ -350,13 +350,13 @@ static bool fanoutToReg(LdSubCacheItem* itemP, LdRegCacheItem* regP, const char*
   static const char* subPath = "/ngsi-ld/v1/subscriptions";
   int subPathLen = (int) strlen(subPath);
   int regEpLen   = (int) strlen(regP->endpoint);
-  char* url = (char*) kaAlloc(&swRest.kalloc, regEpLen + subPathLen + 1);
+  char* url = (char*) kaAlloc(&corRest.kalloc, regEpLen + subPathLen + 1);
   memcpy(url, regP->endpoint, regEpLen);
   memcpy(url + regEpLen, subPath, subPathLen + 1);
 
   const char* errorDetail = NULL;
 
-  int status = ldDistOpSendReceive(regP, SwVerbPost, url, body, bodyLen, ownAlias,
+  int status = ldDistOpSendReceive(regP, CorVerbPost, url, body, bodyLen, ownAlias,
                                    &errorDetail, NULL, NULL);
 
   if (status != 201)
@@ -458,14 +458,14 @@ int ldDistSubCascadeDelete(LdSubCacheItem* itemP, LdRegCache* regCacheP, const c
 
     int   regEpLen = (int) strlen(regP->endpoint);
     int   idLen    = (int) strlen(sub->remoteSubId);
-    char* url      = (char*) kaAlloc(&swRest.kalloc, regEpLen + subPathLen + idLen + 1);
+    char* url      = (char*) kaAlloc(&corRest.kalloc, regEpLen + subPathLen + idLen + 1);
     char* cp       = url;
     memcpy(cp, regP->endpoint, regEpLen); cp += regEpLen;
     memcpy(cp, subPath,        subPathLen); cp += subPathLen;
     memcpy(cp, sub->remoteSubId, idLen + 1);
 
     const char* errorDetail = NULL;
-    int status = ldDistOpSendReceive(regP, SwVerbDelete, url, NULL, 0, ownAlias,
+    int status = ldDistOpSendReceive(regP, CorVerbDelete, url, NULL, 0, ownAlias,
                                      &errorDetail, NULL, NULL);
 
     if (status >= 200 && status < 300)
@@ -493,7 +493,7 @@ int ldDistSubCascadeDelete(LdSubCacheItem* itemP, LdRegCache* regCacheP, const c
 //
 static char* patchBody(LdSubCacheItem* itemP, KjNode* fragmentP, int* bodyLenP)
 {
-  KjNode* clone = kjClone(swRest.kjsonP, fragmentP);
+  KjNode* clone = kjClone(corRest.kjsonP, fragmentP);
   if (clone == NULL)
     return NULL;
 
@@ -513,7 +513,7 @@ static char* patchBody(LdSubCacheItem* itemP, KjNode* fragmentP, int* bodyLenP)
     kjChildRemove(clone, atCtxP2);
 
   int   sz  = kjFastRenderSize(clone) + 1;
-  char* buf = (char*) kaAlloc(&swRest.kalloc, sz);
+  char* buf = (char*) kaAlloc(&corRest.kalloc, sz);
   kjFastRender(clone, buf);
 
   if (bodyLenP != NULL)
@@ -539,7 +539,7 @@ static char* buildSubUrl(LdRegCacheItem* regP, const char* remoteSubId)
   int   subPathLen = (int) strlen(subPath);
   int   regEpLen   = (int) strlen(regP->endpoint);
   int   idLen      = (int) strlen(remoteSubId);
-  char* url        = (char*) kaAlloc(&swRest.kalloc, regEpLen + subPathLen + idLen + 1);
+  char* url        = (char*) kaAlloc(&corRest.kalloc, regEpLen + subPathLen + idLen + 1);
   char* cp         = url;
   memcpy(cp, regP->endpoint, regEpLen); cp += regEpLen;
   memcpy(cp, subPath,        subPathLen); cp += subPathLen;
@@ -595,7 +595,7 @@ int ldDistSubReconcile(LdSubCacheItem*      itemP,
     bool stillMatches = false;
     if (regP != NULL && regP->endpoint != NULL)
     {
-      KjNode* narrowed = narrowEntities(itemP, regP, swRest.kjsonP);
+      KjNode* narrowed = narrowEntities(itemP, regP, corRest.kjsonP);
       stillMatches = (narrowed != NULL);
     }
 
@@ -603,7 +603,7 @@ int ldDistSubReconcile(LdSubCacheItem*      itemP,
     {
       char*       url         = buildSubUrl(regP, sub->remoteSubId);
       const char* errorDetail = NULL;
-      int status = ldDistOpSendReceive(regP, SwVerbPatch, url, body, bodyLen, ownAlias,
+      int status = ldDistOpSendReceive(regP, CorVerbPatch, url, body, bodyLen, ownAlias,
                                        &errorDetail, NULL, NULL);
       if (status >= 200 && status < 300)
         changes++;
@@ -623,7 +623,7 @@ int ldDistSubReconcile(LdSubCacheItem*      itemP,
     {
       char*       url         = buildSubUrl(regP, sub->remoteSubId);
       const char* errorDetail = NULL;
-      int status = ldDistOpSendReceive(regP, SwVerbDelete, url, NULL, 0, ownAlias,
+      int status = ldDistOpSendReceive(regP, CorVerbDelete, url, NULL, 0, ownAlias,
                                        &errorDetail, NULL, NULL);
       if (status < 200 || status >= 300)
         KT_W("dist-sub reconcile DELETE: CSR %s remote sub %s for parent %s status=%d (%s)",
@@ -784,14 +784,14 @@ int ldDistSubOnRegDelete(LdSubCache*          subCacheP,
       {
         int   regEpLen = (int) strlen(regItemP->endpoint);
         int   idLen    = (int) strlen(sub->remoteSubId);
-        char* url      = (char*) kaAlloc(&swRest.kalloc, regEpLen + subPathLen + idLen + 1);
+        char* url      = (char*) kaAlloc(&corRest.kalloc, regEpLen + subPathLen + idLen + 1);
         char* cp       = url;
         memcpy(cp, regItemP->endpoint, regEpLen); cp += regEpLen;
         memcpy(cp, subPath,            subPathLen); cp += subPathLen;
         memcpy(cp, sub->remoteSubId, idLen + 1);
 
         const char* errorDetail = NULL;
-        int status = ldDistOpSendReceive(regItemP, SwVerbDelete, url, NULL, 0, ownAlias,
+        int status = ldDistOpSendReceive(regItemP, CorVerbDelete, url, NULL, 0, ownAlias,
                                          &errorDetail, NULL, NULL);
         if (status < 200 || status >= 300)
           KT_W("dist-sub on-reg-delete: CSR %s remote sub %s for parent %s status=%d (%s)",

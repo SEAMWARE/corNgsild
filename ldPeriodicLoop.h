@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDPERIODICLOOP_H_
-#define SWNGSILD_LDPERIODICLOOP_H_
+#ifndef CORNGSILD_LDPERIODICLOOP_H_
+#define CORNGSILD_LDPERIODICLOOP_H_
 
 //
 // FILE            ldPeriodicLoop.h
@@ -72,4 +72,4 @@ extern int ldPeriodicLoopStart(void);
 //
 extern void ldPeriodicLoopStop(void);
 
-#endif  // SWNGSILD_LDPERIODICLOOP_H_
+#endif  // CORNGSILD_LDPERIODICLOOP_H_

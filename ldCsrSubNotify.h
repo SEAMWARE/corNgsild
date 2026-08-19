@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDCSRSUBNOTIFY_H_
-#define SWNGSILD_LDCSRSUBNOTIFY_H_
+#ifndef CORNGSILD_LDCSRSUBNOTIFY_H_
+#define CORNGSILD_LDCSRSUBNOTIFY_H_
 
 //
 // FILE            ldCsrSubNotify.h
@@ -21,8 +21,8 @@
 #include "kalloc/KAlloc.h"                              // KAlloc
 #include "kjson/KjNode.h"                               // KjNode
 
-#include "swNgsild/LdSubCache.h"                        // LdSubCacheItem
-#include "swNgsild/LdRegCache.h"                        // LdRegCache
+#include "corNgsild/LdSubCache.h"                        // LdSubCacheItem
+#include "corNgsild/LdRegCache.h"                        // LdRegCache
 
 
 
@@ -30,7 +30,7 @@
 //
 // CsrSubPending - one deferred csource-notification (queued during a request,
 // flushed by ldCsrSubDispatchPending in the post-response hook). Held in the
-// per-connection swNgsild (Inc6c) so concurrent in-flight requests don't share.
+// per-connection corNgsild (Inc6c) so concurrent in-flight requests don't share.
 //
 typedef struct CsrSubPending
 {
@@ -146,4 +146,4 @@ extern void ldCsrSubOnRegUpdate(LdSubCache* regSubCacheP,
 //
 extern void ldCsrSubPeriodicLoopRegister(LdSubCache* regSubCacheP, LdRegCache* regCacheP);
 
-#endif  // SWNGSILD_LDCSRSUBNOTIFY_H_
+#endif  // CORNGSILD_LDCSRSUBNOTIFY_H_

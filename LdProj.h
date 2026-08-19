@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDPROJ_H_
-#define SWNGSILD_LDPROJ_H_
+#ifndef CORNGSILD_LDPROJ_H_
+#define CORNGSILD_LDPROJ_H_
 
 //
 // FILE            LdProj.h
@@ -86,4 +86,4 @@ extern char** ldProjectionTopLevelNames(LdProjItem* tree, KAlloc* kaP, bool incl
 //
 extern LdProjItem* ldProjectionFindChild(LdProjItem* tree, const char* name);
 
-#endif  // SWNGSILD_LDPROJ_H_
+#endif  // CORNGSILD_LDPROJ_H_

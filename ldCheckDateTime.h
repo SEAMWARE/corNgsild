@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDCHECKDATETIME_H_
-#define SWNGSILD_LDCHECKDATETIME_H_
+#ifndef CORNGSILD_LDCHECKDATETIME_H_
+#define CORNGSILD_LDCHECKDATETIME_H_
 
 //
 // FILE            ldCheckDateTime.h
@@ -38,4 +38,4 @@ extern bool ldCheckDateTime(const char* dateTimeStr, double* secondsP);
 //
 extern int64_t  ldIsoToNanoseconds(const char* iso);
 
-#endif  // SWNGSILD_LDCHECKDATETIME_H_
+#endif  // CORNGSILD_LDCHECKDATETIME_H_

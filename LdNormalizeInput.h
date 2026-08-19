@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDNORMALIZEINPUT_H_
-#define SWNGSILD_LDNORMALIZEINPUT_H_
+#ifndef CORNGSILD_LDNORMALIZEINPUT_H_
+#define CORNGSILD_LDNORMALIZEINPUT_H_
 
 //
 // FILE            LdNormalizeInput.h
@@ -56,4 +56,4 @@ extern void ldNormalizeInput(KjNode* entityP, KAlloc* kaP, bool mergeMode, bool 
 //
 extern void ldWrapAsGeoProperty(KjNode* entityP, KjNode* childP, KAlloc* kaP);
 
-#endif  // SWNGSILD_LDNORMALIZEINPUT_H_
+#endif  // CORNGSILD_LDNORMALIZEINPUT_H_

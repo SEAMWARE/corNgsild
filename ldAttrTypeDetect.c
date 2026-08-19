@@ -11,10 +11,10 @@
 #include "kbase/kLibLog.h"                             // KLOG_T
 #include "kjson/KjNode.h"                               // KjNode
 
-#include "swNgsild/LdVocab.h"                            // LD_VOCAB_*
-#include "swNgsild/ldTypes.h"                            // ldAttrTypeFromString, ldAttrTypeToString
-#include "swNgsild/ldAttrTypeDetect.h"                   // Own interface
-#include "swNgsild/ldTraceLevels.h"                      // LdTDetect
+#include "corNgsild/LdVocab.h"                            // LD_VOCAB_*
+#include "corNgsild/ldTypes.h"                            // ldAttrTypeFromString, ldAttrTypeToString
+#include "corNgsild/ldAttrTypeDetect.h"                   // Own interface
+#include "corNgsild/ldTraceLevels.h"                      // LdTDetect
 
 
 

@@ -5,8 +5,8 @@
 //
 // Copyright 2026 Seamware
 //
-#ifndef SWNGSILD_LD_PCHECK_QUERY_H_
-#define SWNGSILD_LD_PCHECK_QUERY_H_
+#ifndef CORNGSILD_LD_PCHECK_QUERY_H_
+#define CORNGSILD_LD_PCHECK_QUERY_H_
 
 #include <stdbool.h>                                     // bool
 
@@ -25,4 +25,4 @@
 //
 extern bool pCheckQuery(void);
 
-#endif  // SWNGSILD_LD_PCHECK_QUERY_H_
+#endif  // CORNGSILD_LD_PCHECK_QUERY_H_

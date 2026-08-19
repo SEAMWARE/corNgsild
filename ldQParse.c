@@ -25,13 +25,13 @@
 #include "kalloc/KAlloc.h"                             // kaAlloc
 #include "kalloc/kaAlloc.h"                            // kaAlloc
 #include "kalloc/kaStrdup.h"                            // kaStrdup
-#include "swJsonld/swldExpand.h"                           // swldExpand
+#include "corJsonld/corLdExpand.h"                           // corLdExpand
 
-#include "swNgsild/LdProblem.h"                          // LD_ERROR_BAD_REQUEST_DATA
-#include "swNgsild/SwNgsild.h"                           // swNgsild
-#include "swNgsild/ldError.h"                            // ldError
-#include "swNgsild/ldCheckDateTime.h"                    // ldIsoToNanoseconds
-#include "swNgsild/ldQParse.h"                           // Own interface
+#include "corNgsild/LdProblem.h"                          // LD_ERROR_BAD_REQUEST_DATA
+#include "corNgsild/CorNgsild.h"                           // corNgsild
+#include "corNgsild/ldError.h"                            // ldError
+#include "corNgsild/ldCheckDateTime.h"                    // ldIsoToNanoseconds
+#include "corNgsild/ldQParse.h"                           // Own interface
 
 
 
@@ -69,12 +69,12 @@ static char* expandAttr(const char* name, int len, KAlloc* kaP)
   buf[len] = 0;
 
   // Already a full IRI — don't expand again
-  if (swldAlreadyExpanded(buf))
+  if (corLdAlreadyExpanded(buf))
     return buf;
 
-  char* expanded = swldExpand(swNgsild.contextP, buf, kaP, NULL, NULL);
+  char* expanded = corLdExpand(corNgsild.contextP, buf, kaP, NULL, NULL);
 
-  // swldExpand may return a pointer into the context structure (itemP->id),
+  // corLdExpand may return a pointer into the context structure (itemP->id),
   // which lives in the request allocator.  The q-expr tree persists in the
   // subscription cache, so copy the result into kaP (the cache allocator).
   if (expanded != NULL && expanded != buf)
@@ -921,7 +921,7 @@ LdQNode* ldQParse(const char* q, KAlloc* kaP)
 //
 // Returns NULL when the whole expression is unconstrained at the DB layer (the
 // caller then queries with no q at all). The original tree is never mutated;
-// the full q (with the linked layers) stays in swNgsild.qExpr for the
+// the full q (with the linked layers) stays in corNgsild.qExpr for the
 // post-filter.
 //
 LdQNode* ldQStripLinked(LdQNode* node, KAlloc* kaP)

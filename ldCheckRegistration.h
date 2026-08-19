@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDCHECKREGISTRATION_H_
-#define SWNGSILD_LDCHECKREGISTRATION_H_
+#ifndef CORNGSILD_LDCHECKREGISTRATION_H_
+#define CORNGSILD_LDCHECKREGISTRATION_H_
 
 //
 // FILE            ldCheckRegistration.h
@@ -13,7 +13,7 @@
 
 #include "kalloc/KAlloc.h"                             // KAlloc
 #include "kjson/KjNode.h"                               // KjNode
-#include "swNgsild/LdOp.h"                               // LdOp
+#include "corNgsild/LdOp.h"                               // LdOp
 
 
 
@@ -28,4 +28,4 @@
 //
 extern bool ldCheckRegistration(KjNode* regP, LdOp op, bool merged, KAlloc* faP);
 
-#endif  // SWNGSILD_LDCHECKREGISTRATION_H_
+#endif  // CORNGSILD_LDCHECKREGISTRATION_H_

@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDQATTRS_H_
-#define SWNGSILD_LDQATTRS_H_
+#ifndef CORNGSILD_LDQATTRS_H_
+#define CORNGSILD_LDQATTRS_H_
 
 //
 // FILE            ldQAttrs.h
@@ -16,7 +16,7 @@
 //
 #include "kalloc/KAlloc.h"                             // KAlloc
 
-#include "swNgsild/LdQ.h"                              // LdQNode
+#include "corNgsild/LdQ.h"                              // LdQNode
 
 
 
@@ -34,4 +34,4 @@
 //
 extern char** ldQAttrs(LdQNode* nodeP, KAlloc* kaP);
 
-#endif  // SWNGSILD_LDQATTRS_H_
+#endif  // CORNGSILD_LDQATTRS_H_

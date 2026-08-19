@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDTOAGGREGATEDVALUES_H_
-#define SWNGSILD_LDTOAGGREGATEDVALUES_H_
+#ifndef CORNGSILD_LDTOAGGREGATEDVALUES_H_
+#define CORNGSILD_LDTOAGGREGATEDVALUES_H_
 
 //
 // FILE            ldToAggregatedValues.h
@@ -92,4 +92,4 @@ extern bool ldIso8601DurationParse(const char* iso, LdDuration* durationP);
 //
 extern bool ldAggrMethodValid(const char* s);
 
-#endif  // SWNGSILD_LDTOAGGREGATEDVALUES_H_
+#endif  // CORNGSILD_LDTOAGGREGATEDVALUES_H_

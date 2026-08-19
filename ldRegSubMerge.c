@@ -14,8 +14,8 @@
 #include "kjson/kjChildReplace.h"                      // kjChildReplace
 #include "kjson/kjClone.h"                             // kjClone
 
-#include "swNgsild/LdVocab.h"                          // LD_VOCAB_NGSILD_NULL
-#include "swNgsild/ldRegSubMerge.h"                    // Own interface
+#include "corNgsild/LdVocab.h"                          // LD_VOCAB_NGSILD_NULL
+#include "corNgsild/ldRegSubMerge.h"                    // Own interface
 
 
 

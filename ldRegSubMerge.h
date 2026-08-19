@@ -1,5 +1,5 @@
-#ifndef SW_NGSILD_LD_REG_SUB_MERGE_H
-#define SW_NGSILD_LD_REG_SUB_MERGE_H
+#ifndef COR_NGSILD_LD_REG_SUB_MERGE_H
+#define COR_NGSILD_LD_REG_SUB_MERGE_H
 //
 // FILE            ldRegSubMerge.h
 //
@@ -29,4 +29,4 @@
 //
 extern void ldRegSubMerge(KjNode* target, KjNode* fragment, Kjson* allocP);
 
-#endif  // SW_NGSILD_LD_REG_SUB_MERGE_H
+#endif  // COR_NGSILD_LD_REG_SUB_MERGE_H

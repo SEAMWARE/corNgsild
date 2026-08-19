@@ -11,13 +11,13 @@
 
 #include "kalloc/KAlloc.h"                             // KAlloc, kaAlloc
 #include "kalloc/kaStrdup.h"                           // kaStrdup
-#include "swRest/SwRestState.h"                        // swRest
-#include "swJsonld/swldExpand.h"                       // swldExpand
-#include "swNgsild/SwNgsild.h"                         // swNgsild
-#include "swNgsild/LdProj.h"                           // LdProjItem
-#include "swNgsild/LdQ.h"                              // LdQNode
+#include "corRest/CorRestState.h"                        // corRest
+#include "corJsonld/corLdExpand.h"                       // corLdExpand
+#include "corNgsild/CorNgsild.h"                         // corNgsild
+#include "corNgsild/LdProj.h"                           // LdProjItem
+#include "corNgsild/LdQ.h"                              // LdQNode
 
-#include "swNgsild/ldExpandParams.h"                   // Own interface
+#include "corNgsild/ldExpandParams.h"                   // Own interface
 
 
 
@@ -32,7 +32,7 @@
 //
 // Other NGSI-LD core terms (createdAt / modifiedAt / observedAt / deletedAt /
 // type names defined in the core context) don't need an entry here because
-// swldInit's coreContextRewriteToShort makes swldExpand return the bare name
+// corLdInit's coreContextRewriteToShort makes corLdExpand return the bare name
 // for any core-context term. We only list the four where the core context
 // maps to a JSON-LD keyword (`@id`, `@type`, ...) — the rewrite skips those
 // to keep the @-keyword bypass paths happy, so the bare-name guarantee has
@@ -54,7 +54,7 @@ static char* expandString(char* s, KAlloc* kaP)
   if (isReservedMember(s))
     return s;
 
-  char* expanded = swldExpand(swNgsild.contextP, s, kaP, NULL, NULL);
+  char* expanded = corLdExpand(corNgsild.contextP, s, kaP, NULL, NULL);
   return (expanded != NULL) ? expanded : s;
 }
 
@@ -97,7 +97,7 @@ static void qExpandValuesWalk(LdQNode* nodeP, char** evV, KAlloc* kaP)
       {
         if (strcmp(nodeP->term.attr, evV[ix]) == 0)
         {
-          char* expanded = swldExpand(swNgsild.contextP, nodeP->term.value.s, kaP, NULL, NULL);
+          char* expanded = corLdExpand(corNgsild.contextP, nodeP->term.value.s, kaP, NULL, NULL);
           if (expanded != NULL)
             nodeP->term.value.s = expanded;
           break;
@@ -120,7 +120,7 @@ static void qExpandValuesWalk(LdQNode* nodeP, char** evV, KAlloc* kaP)
 
 // -----------------------------------------------------------------------------
 //
-// ldExpandParams - expand all vocab-bearing URL params in swNgsild
+// ldExpandParams - expand all vocab-bearing URL params in corNgsild
 //
 // Called once per request from the preServiceHook, after the payload body
 // has been parsed (@context available) and all URL params stored.
@@ -131,31 +131,31 @@ static void qExpandValuesWalk(LdQNode* nodeP, char** evV, KAlloc* kaP)
 //
 void ldExpandParams(KAlloc* kaP)
 {
-  if (swRest.out.problemType != NULL)
+  if (corRest.out.problemType != NULL)
     return;
 
-  // type: only expand typeV[] entries (the parsed list). swNgsild.type is the
+  // type: only expand typeV[] entries (the parsed list). corNgsild.type is the
   // raw string (may be "T1,T2") — not meaningful as a single expanded IRI.
-  expandArray(swNgsild.typeV,             kaP);
-  expandArray(swNgsild.pickV,             kaP);
-  expandArray(swNgsild.attrsV,            kaP);
-  expandArray(swNgsild.omitV,             kaP);
-  expandArray(swNgsild.jsonKeysV,         kaP);
-  expandArray(swNgsild.expandValuesV,     kaP);
+  expandArray(corNgsild.typeV,             kaP);
+  expandArray(corNgsild.pickV,             kaP);
+  expandArray(corNgsild.attrsV,            kaP);
+  expandArray(corNgsild.omitV,             kaP);
+  expandArray(corNgsild.jsonKeysV,         kaP);
+  expandArray(corNgsild.expandValuesV,     kaP);
 
   // Expand the projection trees recursively so the linked-entity walker can
   // match against expanded IRIs inside nested entities.
-  for (LdProjItem* itemP = swNgsild.pickTree; itemP != NULL; itemP = itemP->next)
+  for (LdProjItem* itemP = corNgsild.pickTree; itemP != NULL; itemP = itemP->next)
     itemP->name = expandString(itemP->name, kaP);
-  for (LdProjItem* itemP = swNgsild.omitTree; itemP != NULL; itemP = itemP->next)
+  for (LdProjItem* itemP = corNgsild.omitTree; itemP != NULL; itemP = itemP->next)
     itemP->name = expandString(itemP->name, kaP);
   // Recurse into children.
   // Stack-walk both trees with a tiny helper.
   {
     LdProjItem* stack[64];
     int sp = 0;
-    if (swNgsild.pickTree != NULL) stack[sp++] = swNgsild.pickTree;
-    if (swNgsild.omitTree != NULL) stack[sp++] = swNgsild.omitTree;
+    if (corNgsild.pickTree != NULL) stack[sp++] = corNgsild.pickTree;
+    if (corNgsild.omitTree != NULL) stack[sp++] = corNgsild.omitTree;
     while (sp > 0)
     {
       LdProjItem* level = stack[--sp];
@@ -172,27 +172,27 @@ void ldExpandParams(KAlloc* kaP)
     }
   }
 
-  swNgsild.geoproperty      = expandString(swNgsild.geoproperty, kaP);
-  swNgsild.geometryProperty = expandString(swNgsild.geometryProperty, kaP);
+  corNgsild.geoproperty      = expandString(corNgsild.geoproperty, kaP);
+  corNgsild.geometryProperty = expandString(corNgsild.geometryProperty, kaP);
 
   // q-tree was parsed before expandValuesV was finalized (URL param order is
   // not guaranteed). Apply value expansion to matching string leaves now.
-  if (swNgsild.qExpr != NULL && swNgsild.expandValuesV != NULL)
-    qExpandValuesWalk(swNgsild.qExpr, swNgsild.expandValuesV, kaP);
+  if (corNgsild.qExpr != NULL && corNgsild.expandValuesV != NULL)
+    qExpandValuesWalk(corNgsild.qExpr, corNgsild.expandValuesV, kaP);
 
   // orderBy: expand each dot-separated segment of each term's attrName.
   // Store the expanded segments as a separate array (pathSegV) — the joined
   // form is unsafe to walk because expanded IRIs contain dots themselves
   // (`https://uri.etsi.org/...`).
-  if (swNgsild.orderByV != NULL)
+  if (corNgsild.orderByV != NULL)
   {
-    for (int i = 0; i < swNgsild.orderByCount; i++)
+    for (int i = 0; i < corNgsild.orderByCount; i++)
     {
-      char* in = swNgsild.orderByV[i].attrName;
+      char* in = corNgsild.orderByV[i].attrName;
       if (in == NULL)
       {
-        swNgsild.orderByV[i].pathSegV = NULL;
-        swNgsild.orderByV[i].pathSegN = 0;
+        corNgsild.orderByV[i].pathSegV = NULL;
+        corNgsild.orderByV[i].pathSegN = 0;
         continue;
       }
 
@@ -211,8 +211,8 @@ void ldExpandParams(KAlloc* kaP)
         segV[ix++] = (exp != NULL) ? exp : tok;
       }
       segV[ix] = NULL;
-      swNgsild.orderByV[i].pathSegV = segV;
-      swNgsild.orderByV[i].pathSegN = ix;
+      corNgsild.orderByV[i].pathSegV = segV;
+      corNgsild.orderByV[i].pathSegN = ix;
 
       // Keep attrName as the joined-expanded form for logging; sort uses pathSegV.
       // Recompute joined form for backward compat.
@@ -229,7 +229,7 @@ void ldExpandParams(KAlloc* kaP)
         outLen += segLen;
         out[outLen] = 0;
       }
-      swNgsild.orderByV[i].attrName = out;
+      corNgsild.orderByV[i].attrName = out;
     }
   }
 }

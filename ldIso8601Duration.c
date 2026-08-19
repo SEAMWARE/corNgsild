@@ -12,7 +12,7 @@
 #include <stdint.h>                                      // int64_t
 #include <stdlib.h>                                      // strtod
 
-#include "swNgsild/ldIso8601Duration.h"                  // Own interface
+#include "corNgsild/ldIso8601Duration.h"                  // Own interface
 
 
 //

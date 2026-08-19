@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDTYPES_H_
-#define SWNGSILD_LDTYPES_H_
+#ifndef CORNGSILD_LDTYPES_H_
+#define CORNGSILD_LDTYPES_H_
 
 //
 // FILE            ldTypes.h
@@ -11,9 +11,9 @@
 //
 #include <stdbool.h>                                     // bool
 
-#include "swNgsild/LdAttrType.h"                        // LdAttrType
-#include "swNgsild/LdOp.h"                              // LdOp
-#include "swNgsild/LdFormat.h"                           // LdFormat
+#include "corNgsild/LdAttrType.h"                        // LdAttrType
+#include "corNgsild/LdOp.h"                              // LdOp
+#include "corNgsild/LdFormat.h"                           // LdFormat
 
 
 
@@ -69,4 +69,4 @@ extern const char* ldFormatToString(LdFormat format);
 //
 extern LdFormat ldFormatFromString(const char* str, bool temporal);
 
-#endif  // SWNGSILD_LDTYPES_H_
+#endif  // CORNGSILD_LDTYPES_H_

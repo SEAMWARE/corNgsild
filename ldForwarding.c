@@ -16,7 +16,7 @@
 #include <strings.h>                                   // strcasecmp
 #include <string.h>                                    // strchr
 
-#include "swNgsild/ldForwarding.h"                     // Own interface
+#include "corNgsild/ldForwarding.h"                     // Own interface
 
 
 

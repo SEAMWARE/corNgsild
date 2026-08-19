@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDPERNOTLOOP_H_
-#define SWNGSILD_LDPERNOTLOOP_H_
+#ifndef CORNGSILD_LDPERNOTLOOP_H_
+#define CORNGSILD_LDPERNOTLOOP_H_
 
 //
 // FILE            ldPernotLoop.h
@@ -11,7 +11,7 @@
 // Background thread for periodic notification subscriptions.
 //
 #include "kjson/KjNode.h"                              // KjNode
-#include "swNgsild/LdPernotCache.h"                    // LdPernotCache
+#include "corNgsild/LdPernotCache.h"                    // LdPernotCache
 
 
 
@@ -39,4 +39,4 @@ extern void ldPernotLoopStart(LdPernotCache* cacheP, LdPernotQueryFunc queryFn);
 // ldPernotLoopStop - signal the thread to stop
 extern void ldPernotLoopStop(void);
 
-#endif  // SWNGSILD_LDPERNOTLOOP_H_
+#endif  // CORNGSILD_LDPERNOTLOOP_H_

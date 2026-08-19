@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDCHECKURI_H_
-#define SWNGSILD_LDCHECKURI_H_
+#ifndef CORNGSILD_LDCHECKURI_H_
+#define CORNGSILD_LDCHECKURI_H_
 
 //
 // FILE            ldCheckUri.h
@@ -19,4 +19,4 @@
 //
 extern bool ldCheckUri(const char* uri);
 
-#endif  // SWNGSILD_LDCHECKURI_H_
+#endif  // CORNGSILD_LDCHECKURI_H_

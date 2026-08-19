@@ -12,9 +12,9 @@
 #include "kalloc/KAlloc.h"                             // kaAlloc
 #include "kalloc/kaAlloc.h"                            // kaAlloc
 
-#include "swNgsild/LdProblem.h"                          // LD_ERROR_BAD_REQUEST_DATA
-#include "swNgsild/ldError.h"                            // ldError
-#include "swNgsild/LdGeoRel.h"                          // Own interface
+#include "corNgsild/LdProblem.h"                          // LD_ERROR_BAD_REQUEST_DATA
+#include "corNgsild/ldError.h"                            // ldError
+#include "corNgsild/LdGeoRel.h"                          // Own interface
 
 
 

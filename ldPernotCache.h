@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDPERNOTCACHE_OPS_H_
-#define SWNGSILD_LDPERNOTCACHE_OPS_H_
+#ifndef CORNGSILD_LDPERNOTCACHE_OPS_H_
+#define CORNGSILD_LDPERNOTCACHE_OPS_H_
 
 //
 // FILE            ldPernotCache.h
@@ -11,8 +11,8 @@
 #include "kjson/KjNode.h"                              // KjNode
 #include "kalloc/KAlloc.h"                             // KAlloc
 
-#include "swNgsild/LdPernotCache.h"                    // LdPernotCache, LdPernotItem
-#include "swNgsild/LdQ.h"                              // LdQNode
+#include "corNgsild/LdPernotCache.h"                    // LdPernotCache, LdPernotItem
+#include "corNgsild/LdQ.h"                              // LdQNode
 
 
 
@@ -32,4 +32,4 @@ extern bool ldPernotCacheItemRemove(LdPernotCache* cacheP, const char* subId);
 // ldPernotCacheRelease - free everything
 extern void ldPernotCacheRelease(LdPernotCache* cacheP);
 
-#endif  // SWNGSILD_LDPERNOTCACHE_OPS_H_
+#endif  // CORNGSILD_LDPERNOTCACHE_OPS_H_

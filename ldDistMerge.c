@@ -17,9 +17,9 @@
 #include "kjson/kjBuilder.h"                             // kjChildRemove, kjArray, kjString, kjChildAdd
 #include "kjson/kjClone.h"                               // kjClone
 
-#include "swNgsild/LdVocab.h"                            // LD_VOCAB_OBSERVED_AT, LD_VOCAB_MODIFIED_AT, LD_VOCAB_EXPIRES_AT, LD_VOCAB_SCOPE
-#include "swNgsild/ldCheckDateTime.h"                    // ldIsoToNanoseconds
-#include "swNgsild/ldDistMerge.h"                        // Own interface
+#include "corNgsild/LdVocab.h"                            // LD_VOCAB_OBSERVED_AT, LD_VOCAB_MODIFIED_AT, LD_VOCAB_EXPIRES_AT, LD_VOCAB_SCOPE
+#include "corNgsild/ldCheckDateTime.h"                    // ldIsoToNanoseconds
+#include "corNgsild/ldDistMerge.h"                        // Own interface
 
 
 

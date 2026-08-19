@@ -5,7 +5,7 @@
 #
 # Copyright 2026 Seamware
 #
-LIB_NAME      = swNgsild
+LIB_NAME      = corNgsild
 LIB_SO        = lib$(LIB_NAME).so
 LIB           = lib$(LIB_NAME).a
 CC            = gcc
@@ -15,14 +15,14 @@ DFLAGS        = -DANSI
 
 #
 # ICU "root" collation for orderBy string ordering (§ 7.6.2.1). ON by default;
-# build with 'make SW_WITH_ICU=0 ...' to drop the libicu dependency (orderBy
+# build with 'make COR_WITH_ICU=0 ...' to drop the libicu dependency (orderBy
 # then uses a case-insensitive ASCII approximation of root collation). The
-# swBroker CMake option SW_FEATURE_ICU_COLLATION must match this setting — it
+# coraine CMake option COR_FEATURE_ICU_COLLATION must match this setting — it
 # adds the matching -licui18n/-licuuc/-licudata to the final broker link.
 #
-SW_WITH_ICU  ?= 1
-ifeq ($(SW_WITH_ICU),1)
-DFLAGS       += -DSW_WITH_ICU
+COR_WITH_ICU  ?= 1
+ifeq ($(COR_WITH_ICU),1)
+DFLAGS       += -DCOR_WITH_ICU
 ICU_CFLAGS   := $(shell pkg-config --cflags icu-i18n 2>/dev/null)
 ICU_LIBS     := $(shell pkg-config --libs icu-i18n 2>/dev/null)
 endif
@@ -31,7 +31,7 @@ CFLAGS        = -Wall -Werror -O2 -fPIC -Wno-unused-function $(DFLAGS) $(INCLUDE
 
 debug: CFLAGS += -g -DDEBUG
 debug: all
-LIB_SOURCES   = swNgsild.c \
+LIB_SOURCES   = corNgsild.c \
                 ldInit.c \
                 ldError.c \
                 ldParams.c \
@@ -119,7 +119,7 @@ LIB_SOURCES   = swNgsild.c \
 LIB_OBJS      = $(LIB_SOURCES:c=o)
 LIB_DEPS      = $(LIB_SOURCES:c=d)
 
-LIBS          = ../swRest/libswRest.a ../swJsonld/libswJsonld.a ../kalloc/libkalloc.a ../kjson/libkjson.a ../kbase/libkbase.a ../klog/libklog.a ../ktrace/libktrace.a ../khash/libkhash.a -lpthread
+LIBS          = ../corRest/libcorRest.a ../corJsonld/libcorJsonld.a ../kalloc/libkalloc.a ../kjson/libkjson.a ../kbase/libkbase.a ../klog/libklog.a ../ktrace/libktrace.a ../khash/libkhash.a -lpthread
 
 .PHONY: all clean test install i di ci
 
@@ -154,9 +154,9 @@ $(LIB):			$(LIB_OBJS) $(LIB_SOURCES)
 
 $(LIB_SO):	$(LIB_OBJS) $(LIB_SOURCES)
 					$(CC) -shared $(LIB_OBJS) -o $(LIB_SO) \
-						-L../swRest -L../swJsonld -L../kalloc -L../kjson -L../kbase -L../klog -L../ktrace -L../khash \
-						-lswRest -lswJsonld -lkalloc -lkjson -lkbase -lklog -lktrace -lkhash -lmicrohttpd -lssl -lcrypto -lpthread -lmosquitto $(ICU_LIBS) \
-						-Wl,-rpath,'$$ORIGIN/../swRest:$$ORIGIN/../swJsonld:$$ORIGIN/../kalloc:$$ORIGIN/../kjson:$$ORIGIN/../kbase:$$ORIGIN/../klog:$$ORIGIN/../ktrace:$$ORIGIN/../khash'
+						-L../corRest -L../corJsonld -L../kalloc -L../kjson -L../kbase -L../klog -L../ktrace -L../khash \
+						-lcorRest -lcorJsonld -lkalloc -lkjson -lkbase -lklog -lktrace -lkhash -lmicrohttpd -lssl -lcrypto -lpthread -lmosquitto $(ICU_LIBS) \
+						-Wl,-rpath,'$$ORIGIN/../corRest:$$ORIGIN/../corJsonld:$$ORIGIN/../kalloc:$$ORIGIN/../kjson:$$ORIGIN/../kbase:$$ORIGIN/../klog:$$ORIGIN/../ktrace:$$ORIGIN/../khash'
 
 %.o: %.c
 					$(CC) $(CFLAGS) -c $< -o $@

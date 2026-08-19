@@ -10,9 +10,9 @@
 #include "kjson/KjNode.h"                              // KjNode
 #include "kjson/kjLookup.h"                            // kjLookup
 
-#include "swNgsild/LdQ.h"                              // LdQNode
-#include "swNgsild/ldQRender.h"                        // ldQRender
-#include "swNgsild/ldSubscriptionCompactQ.h"           // Own interface
+#include "corNgsild/LdQ.h"                              // LdQNode
+#include "corNgsild/ldQRender.h"                        // ldQRender
+#include "corNgsild/ldSubscriptionCompactQ.h"           // Own interface
 
 
 
@@ -20,7 +20,7 @@
 //
 // ldSubscriptionCompactQ -
 //
-void ldSubscriptionCompactQ(KjNode* subP, LdQNode* qExpr, SwldContext* contextP, KAlloc* allocP)
+void ldSubscriptionCompactQ(KjNode* subP, LdQNode* qExpr, CorLdContext* contextP, KAlloc* allocP)
 {
   if (qExpr == NULL)
     return;

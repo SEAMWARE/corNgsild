@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDSUBSCRIPTIONCOUNTERS_H_
-#define SWNGSILD_LDSUBSCRIPTIONCOUNTERS_H_
+#ifndef CORNGSILD_LDSUBSCRIPTIONCOUNTERS_H_
+#define CORNGSILD_LDSUBSCRIPTIONCOUNTERS_H_
 
 //
 // FILE            ldSubscriptionCounters.h
@@ -10,10 +10,10 @@
 //
 
 #include "kjson/KjNode.h"                              // KjNode
-#include "swNgsild/LdSubCache.h"                       // LdSubCacheItem
-#include "swNgsild/LdPernotCache.h"                    // LdPernotItem
+#include "corNgsild/LdSubCache.h"                       // LdSubCacheItem
+#include "corNgsild/LdPernotCache.h"                    // LdPernotItem
 
 extern void ldSubscriptionCountersInject(KjNode* subP, LdSubCacheItem* itemP);
 extern void ldPernotCountersInject(KjNode* subP, LdPernotItem* itemP);
 
-#endif  // SWNGSILD_LDSUBSCRIPTIONCOUNTERS_H_
+#endif  // CORNGSILD_LDSUBSCRIPTIONCOUNTERS_H_

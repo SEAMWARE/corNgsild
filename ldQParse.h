@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDQPARSE_H_
-#define SWNGSILD_LDQPARSE_H_
+#ifndef CORNGSILD_LDQPARSE_H_
+#define CORNGSILD_LDQPARSE_H_
 
 //
 // FILE            ldQParse.h
@@ -10,7 +10,7 @@
 // 
 //
 #include "kalloc/KAlloc.h"                             // KAlloc
-#include "swNgsild/LdQ.h"                               // LdQNode
+#include "corNgsild/LdQ.h"                               // LdQNode
 
 
 
@@ -35,4 +35,4 @@ extern LdQNode* ldQParse(const char* q, KAlloc* kaP);
 //
 extern LdQNode* ldQStripLinked(LdQNode* node, KAlloc* kaP);
 
-#endif  // SWNGSILD_LDQPARSE_H_
+#endif  // CORNGSILD_LDQPARSE_H_

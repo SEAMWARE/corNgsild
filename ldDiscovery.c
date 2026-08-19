@@ -23,10 +23,10 @@
 #include "kjson/KjNode.h"                               // KjNode
 #include "kjson/kjBuilder.h"                            // kjArray, kjObject, kjString, kjInteger, kjChildAdd
 #include "kjson/kjLookup.h"                             // kjLookup
-#include "swRest/SwRestState.h"                         // swRest
+#include "corRest/CorRestState.h"                         // corRest
 
-#include "swNgsild/LdRegCache.h"                        // LdRegCache, LdRegCacheItem, LdRegInfo, LdRegEntityInfo, LdRegMode
-#include "swNgsild/ldDiscovery.h"                       // Own interface
+#include "corNgsild/LdRegCache.h"                        // LdRegCache, LdRegCacheItem, LdRegInfo, LdRegEntityInfo, LdRegMode
+#include "corNgsild/ldDiscovery.h"                       // Own interface
 
 
 
@@ -39,7 +39,7 @@ static void stringArrayAddUnique(KjNode* arr, const char* s)
   for (KjNode* p = arr->value.firstChildP; p != NULL; p = p->next)
     if (p->type == KjString && strcmp(p->value.s, s) == 0)
       return;
-  kjChildAdd(arr, kjString(swRest.kjsonP, NULL, s));
+  kjChildAdd(arr, kjString(corRest.kjsonP, NULL, s));
 }
 
 
@@ -57,13 +57,13 @@ static KjNode* typeEntryEnsure(KjNode* agg, const char* typeIri, bool details)
       return e;
   }
 
-  KjNode* e = kjObject(swRest.kjsonP, NULL);
-  kjChildAdd(e, kjString(swRest.kjsonP, "typeIri", typeIri));
-  kjChildAdd(e, kjArray(swRest.kjsonP, "attrs"));
+  KjNode* e = kjObject(corRest.kjsonP, NULL);
+  kjChildAdd(e, kjString(corRest.kjsonP, "typeIri", typeIri));
+  kjChildAdd(e, kjArray(corRest.kjsonP, "attrs"));
   if (details)
   {
-    kjChildAdd(e, kjObject(swRest.kjsonP,  "attrTypes"));
-    kjChildAdd(e, kjInteger(swRest.kjsonP, "entityCount", 0));
+    kjChildAdd(e, kjObject(corRest.kjsonP,  "attrTypes"));
+    kjChildAdd(e, kjInteger(corRest.kjsonP, "entityCount", 0));
   }
   kjChildAdd(agg, e);
   return e;
@@ -84,13 +84,13 @@ static KjNode* attrEntryEnsure(KjNode* agg, const char* attrIri, bool details)
       return e;
   }
 
-  KjNode* e = kjObject(swRest.kjsonP, NULL);
-  kjChildAdd(e, kjString(swRest.kjsonP, "attrIri", attrIri));
+  KjNode* e = kjObject(corRest.kjsonP, NULL);
+  kjChildAdd(e, kjString(corRest.kjsonP, "attrIri", attrIri));
   if (details)
   {
-    kjChildAdd(e, kjArray(swRest.kjsonP,  "typeNames"));
-    kjChildAdd(e, kjArray(swRest.kjsonP,  "attrTypes"));
-    kjChildAdd(e, kjInteger(swRest.kjsonP, "attrCount", 0));
+    kjChildAdd(e, kjArray(corRest.kjsonP,  "typeNames"));
+    kjChildAdd(e, kjArray(corRest.kjsonP,  "attrTypes"));
+    kjChildAdd(e, kjInteger(corRest.kjsonP, "attrCount", 0));
   }
   kjChildAdd(agg, e);
   return e;
@@ -110,7 +110,7 @@ static void addAttrType(KjNode* entry, const char* attrName, const char* at)
   KjNode* atArr = kjLookup(attrTypesObj, attrName);
   if (atArr == NULL)
   {
-    atArr = kjArray(swRest.kjsonP, attrName);
+    atArr = kjArray(corRest.kjsonP, attrName);
     kjChildAdd(attrTypesObj, atArr);
   }
   stringArrayAddUnique(atArr, at);

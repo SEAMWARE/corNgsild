@@ -8,7 +8,7 @@
 #include <stddef.h>                                      // NULL
 #include <string.h>                                      // strcmp
 
-#include "swNgsild/LdSubStatus.h"                        // Own interface
+#include "corNgsild/LdSubStatus.h"                        // Own interface
 
 
 

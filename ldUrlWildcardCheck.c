@@ -8,13 +8,13 @@
 #include <stddef.h>                                    // NULL
 #include <string.h>                                    // strncmp, strstr, strchr
 
-#include "swRest/SwRestState.h"                        // swRest
-#include "swRest/SwRestService.h"                      // SwRestService
+#include "corRest/CorRestState.h"                        // corRest
+#include "corRest/CorRestService.h"                      // CorRestService
 
-#include "swNgsild/LdProblem.h"                        // LD_ERROR_BAD_REQUEST_DATA
-#include "swNgsild/ldError.h"                          // ldError
-#include "swNgsild/ldNameContentCheck.h"               // ldIsValidName
-#include "swNgsild/ldUrlWildcardCheck.h"               // Own interface
+#include "corNgsild/LdProblem.h"                        // LD_ERROR_BAD_REQUEST_DATA
+#include "corNgsild/ldError.h"                          // ldError
+#include "corNgsild/ldNameContentCheck.h"               // ldIsValidName
+#include "corNgsild/ldUrlWildcardCheck.h"               // Own interface
 
 
 
@@ -82,13 +82,13 @@ static bool slot0NeedsUri(const char* sp)
 
 // -----------------------------------------------------------------------------
 //
-// ldUrlWildcardOptionsInit - swRest service-init hook.
+// ldUrlWildcardOptionsInit - corRest service-init hook.
 //
 // Walks the URL pattern once and stores per-slot validation flags in
 // service->options. Subsequent per-request validation in
 // ldUrlWildcardCheck() is a small bit-check.
 //
-void ldUrlWildcardOptionsInit(SwRestService* service)
+void ldUrlWildcardOptionsInit(CorRestService* service)
 {
   if (service == NULL || service->url == NULL)         return;
   if (strncmp(service->url, "/ngsi-ld/", 9) != 0)      return;
@@ -112,30 +112,30 @@ void ldUrlWildcardOptionsInit(SwRestService* service)
 //
 bool ldUrlWildcardCheck(void)
 {
-  if (swRest.serviceP == NULL)                 return true;
-  SwRestServiceOptions opts = swRest.serviceP->options;
+  if (corRest.serviceP == NULL)                 return true;
+  CorRestServiceOptions opts = corRest.serviceP->options;
 
-  if (opts.wildcards.uriAt0 && swRest.in.wildcard[0] != NULL
-      && !isUri(swRest.in.wildcard[0]))
+  if (opts.wildcards.uriAt0 && corRest.in.wildcard[0] != NULL
+      && !isUri(corRest.in.wildcard[0]))
   {
     ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid URI",
-            "'%s' is not a valid URI", swRest.in.wildcard[0]);
+            "'%s' is not a valid URI", corRest.in.wildcard[0]);
     return false;
   }
 
-  if (opts.wildcards.nameAt1 && swRest.in.wildcard[1] != NULL
-      && !ldIsValidName(swRest.in.wildcard[1]))
+  if (opts.wildcards.nameAt1 && corRest.in.wildcard[1] != NULL
+      && !ldIsValidName(corRest.in.wildcard[1]))
   {
     ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Attribute Name",
-            "invalid attribute name '%s' (§ 4.6.2)", swRest.in.wildcard[1]);
+            "invalid attribute name '%s' (§ 4.6.2)", corRest.in.wildcard[1]);
     return false;
   }
 
-  if (opts.wildcards.uriAt2 && swRest.in.wildcard[2] != NULL
-      && !isUri(swRest.in.wildcard[2]))
+  if (opts.wildcards.uriAt2 && corRest.in.wildcard[2] != NULL
+      && !isUri(corRest.in.wildcard[2]))
   {
     ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid URI",
-            "instanceId '%s' is not a valid URI", swRest.in.wildcard[2]);
+            "instanceId '%s' is not a valid URI", corRest.in.wildcard[2]);
     return false;
   }
 

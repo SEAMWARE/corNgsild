@@ -37,25 +37,25 @@
 #include "kjson/kjRenderSize.h"                        // kjFastRenderSize
 #include "kjson/kjRender.h"                            // kjFastRender
 
-#include "swRest/SwRestState.h"                        // swRest
-#include "swRest/swRestClient.h"                       // SwRestClientRequest, etc.
-#include "swJsonld/swldCompactTree.h"                  // swldCompactTree, swldCompactTreeWith
-#include "swJsonld/swldDownload.h"                     // swldContextFromUrl
-#include "swJsonld/swldInit.h"                         // swldCoreContext
-#include "swJsonld/SwldContext.h"                      // SwldContext
+#include "corRest/CorRestState.h"                        // corRest
+#include "corRest/corRestClient.h"                       // CorRestClientRequest, etc.
+#include "corJsonld/corLdCompactTree.h"                  // corLdCompactTree, corLdCompactTreeWith
+#include "corJsonld/corLdDownload.h"                     // corLdContextFromUrl
+#include "corJsonld/corLdInit.h"                         // corLdCoreContext
+#include "corJsonld/CorLdContext.h"                      // CorLdContext
 
-#include "swNgsild/LdSubCache.h"                       // LdSubCacheItem, LdSubEntitySelector
-#include "swNgsild/ldSubCache.h"                       // ldSubCacheRdLock, ldSubCacheUnlock
-#include "swNgsild/ldStripSysAttrs.h"                  // ldStripSysAttrs
-#include "swNgsild/LdRegCache.h"                       // LdRegCache, LdRegCacheItem, LdRegInfo, LdRegEntityInfo
-#include "swNgsild/ldRegCache.h"                       // ldRegCacheRdLock, ldRegCacheUnlock
-#include "swNgsild/ldEntityMatch.h"                    // ldEntityMatchQ
-#include "swNgsild/SwNgsild.h"                          // swNgsild (per-conn csrPending* cache)
-#include "swNgsild/ldPeriodicLoop.h"                   // ldPeriodicLoopRegister
-#include "swNgsild/swNgsild.h"                         // swNgsild (for tenant access via opaque)
-#include "swNgsild/ldNotifyStatsHook.h"                // ldNotifyStatsHookInvoke
-#include "swNgsild/ldRequestSubstitute.h"              // ldRequestSubstitute
-#include "swNgsild/ldCsrSubNotify.h"                   // Own interface
+#include "corNgsild/LdSubCache.h"                       // LdSubCacheItem, LdSubEntitySelector
+#include "corNgsild/ldSubCache.h"                       // ldSubCacheRdLock, ldSubCacheUnlock
+#include "corNgsild/ldStripSysAttrs.h"                  // ldStripSysAttrs
+#include "corNgsild/LdRegCache.h"                       // LdRegCache, LdRegCacheItem, LdRegInfo, LdRegEntityInfo
+#include "corNgsild/ldRegCache.h"                       // ldRegCacheRdLock, ldRegCacheUnlock
+#include "corNgsild/ldEntityMatch.h"                    // ldEntityMatchQ
+#include "corNgsild/CorNgsild.h"                          // corNgsild (per-conn csrPending* cache)
+#include "corNgsild/ldPeriodicLoop.h"                   // ldPeriodicLoopRegister
+#include "corNgsild/corNgsild.h"                         // corNgsild (for tenant access via opaque)
+#include "corNgsild/ldNotifyStatsHook.h"                // ldNotifyStatsHookInvoke
+#include "corNgsild/ldRequestSubstitute.h"              // ldRequestSubstitute
+#include "corNgsild/ldCsrSubNotify.h"                   // Own interface
 
 
 
@@ -264,19 +264,19 @@ static KjNode* csourceNotificationBuild(LdSubCacheItem* subItemP,
   char isoTimeBuf[64];
   isoNow(isoTimeBuf, sizeof(isoTimeBuf));
 
-  KjNode* notification = kjObject(swRest.kjsonP, NULL);
-  kjChildAdd(notification, kjString(swRest.kjsonP, "id",             (char*) notifIdGenerate()));
-  kjChildAdd(notification, kjString(swRest.kjsonP, "type",           "ContextSourceNotification"));
-  kjChildAdd(notification, kjString(swRest.kjsonP, "subscriptionId", subItemP->subId));
-  kjChildAdd(notification, kjString(swRest.kjsonP, "notifiedAt",     isoTimeBuf));
-  kjChildAdd(notification, kjString(swRest.kjsonP, "triggerReason",  (char*) triggerReason));
+  KjNode* notification = kjObject(corRest.kjsonP, NULL);
+  kjChildAdd(notification, kjString(corRest.kjsonP, "id",             (char*) notifIdGenerate()));
+  kjChildAdd(notification, kjString(corRest.kjsonP, "type",           "ContextSourceNotification"));
+  kjChildAdd(notification, kjString(corRest.kjsonP, "subscriptionId", subItemP->subId));
+  kjChildAdd(notification, kjString(corRest.kjsonP, "notifiedAt",     isoTimeBuf));
+  kjChildAdd(notification, kjString(corRest.kjsonP, "triggerReason",  (char*) triggerReason));
 
-  KjNode* dataArray = kjArray(swRest.kjsonP, "data");
+  KjNode* dataArray = kjArray(corRest.kjsonP, "data");
   for (int i = 0; i < matchN; i++)
   {
     if (matchV[i]->regTree == NULL) continue;
 
-    KjNode* regClone = kjClone(swRest.kjsonP, matchV[i]->regTree);
+    KjNode* regClone = kjClone(corRest.kjsonP, matchV[i]->regTree);
 
     // § 6.4.5 — the registration's server-owned createdAt/modifiedAt (stored as
     // nanosecond integers) are not part of a CsourceNotification payload; strip
@@ -333,13 +333,13 @@ static void csourceNotificationPost(LdSubCacheItem* subItemP, KjNode* notificati
   // mappings — otherwise notification attribute keys ship expanded
   // IRIs that subscribers can't index by short name (047_03_01).
   {
-    SwldContext* notifCtx = NULL;
+    CorLdContext* notifCtx = NULL;
     if (subItemP->contextUrl != NULL)
-      notifCtx = swldContextFromUrl(subItemP->contextUrl, &swRest.kalloc);
+      notifCtx = corLdContextFromUrl(subItemP->contextUrl, &corRest.kalloc);
     if (notifCtx != NULL)
-      swldCompactTreeWith(notification, notifCtx);
+      corLdCompactTreeWith(notification, notifCtx);
     else
-      swldCompactTree(notification);
+      corLdCompactTree(notification);
   }
 
   // § 6.5.3: the POST MIME type is application/json by default but switches to
@@ -347,7 +347,7 @@ static void csourceNotificationPost(LdSubCacheItem* subItemP, KjNode* notificati
   // ships inline in the body (one per data[] member, parallel to the entity-
   // notification path in ldSubscriptionNotify) and NO Link header is sent; for
   // plain json the @context travels in the Link header instead.
-  bool acceptLdJson = (subItemP->endpointAccept == SwMimeLdJson);
+  bool acceptLdJson = (subItemP->endpointAccept == CorMimeLdJson);
 
   if (acceptLdJson && subItemP->contextUrl != NULL)
   {
@@ -357,27 +357,27 @@ static void csourceNotificationPost(LdSubCacheItem* subItemP, KjNode* notificati
       for (KjNode* ep = dataP->value.firstChildP; ep != NULL; ep = ep->next)
       {
         if (ep->type == KjObject && kjLookup(ep, "@context") == NULL)
-          kjChildAdd(ep, kjString(swRest.kjsonP, "@context", subItemP->contextUrl));
+          kjChildAdd(ep, kjString(corRest.kjsonP, "@context", subItemP->contextUrl));
       }
     }
   }
 
   int   bodySize = kjFastRenderSize(notification) + 1;
-  char* body     = (char*) kaAlloc(&swRest.kalloc, bodySize);
+  char* body     = (char*) kaAlloc(&corRest.kalloc, bodySize);
   kjFastRender(notification, body);
 
-  SwRestClientRequest  req;
-  SwRestClientResponse resp;
+  CorRestClientRequest  req;
+  CorRestClientResponse resp;
 
-  swRestClientRequestInit(&req, SwVerbPost, subItemP->endpointUri, NULL);
-  swRestClientRequestHeader(&req, "Content-Type", acceptLdJson ? "application/ld+json" : "application/json");
+  corRestClientRequestInit(&req, CorVerbPost, subItemP->endpointUri, NULL);
+  corRestClientRequestHeader(&req, "Content-Type", acceptLdJson ? "application/ld+json" : "application/json");
 
   if (!acceptLdJson)
   {
     const char* ctxUrl = subItemP->contextUrl;
     if (ctxUrl == NULL)
     {
-      SwldContext* coreP = swldCoreContext();
+      CorLdContext* coreP = corLdCoreContext();
       if (coreP != NULL) ctxUrl = coreP->url;
     }
     if (ctxUrl != NULL)
@@ -386,7 +386,7 @@ static void csourceNotificationPost(LdSubCacheItem* subItemP, KjNode* notificati
       snprintf(linkBuf, sizeof(linkBuf),
                "<%s>; rel=\"http://www.w3.org/ns/json-ld#context\"; type=\"application/ld+json\"",
                ctxUrl);
-      swRestClientRequestHeader(&req, "Link", linkBuf);
+      corRestClientRequestHeader(&req, "Link", linkBuf);
     }
   }
 
@@ -402,24 +402,24 @@ static void csourceNotificationPost(LdSubCacheItem* subItemP, KjNode* notificati
       {
         const char* hv = ldRequestSubstitute(kP->value.s, vP->value.s);
         if (hv != NULL)
-          swRestClientRequestHeader(&req, kP->value.s, hv);
+          corRestClientRequestHeader(&req, kP->value.s, hv);
       }
     }
   }
 
-  swRestClientRequestBody(&req, body, strlen(body));
+  corRestClientRequestBody(&req, body, strlen(body));
   // § 5.2.15 endpoint.timeout — per-sub override; default 10s
   int reqTmoMs = (subItemP->timeoutMs > 0) ? subItemP->timeoutMs : 10000;
-  swRestClientRequestTimeout(&req, 5000, reqTmoMs);
-  swRestClientSend(&req, &resp);
+  corRestClientRequestTimeout(&req, 5000, reqTmoMs);
+  corRestClientSend(&req, &resp);
 
   subItemP->timesSent++;
-  subItemP->lastNotification = swRest.requestStartTime;
+  subItemP->lastNotification = corRest.requestStartTime;
 
   bool ok = (resp.statusCode >= 200 && resp.statusCode < 300);
   if (ok)
   {
-    subItemP->lastSuccess = swRest.requestStartTime;
+    subItemP->lastSuccess = corRest.requestStartTime;
     // A later successful delivery clears a previous failure state
     if (subItemP->status == LdSubStatusFailed)
       subItemP->status = LdSubStatusActive;
@@ -427,13 +427,13 @@ static void csourceNotificationPost(LdSubCacheItem* subItemP, KjNode* notificati
   else
   {
     subItemP->timesFailed++;
-    subItemP->lastFailure = swRest.requestStartTime;
+    subItemP->lastFailure = corRest.requestStartTime;
     // § 12.4.7: "If the notification is not sent successfully ...
     // Update the subscription status to 'failed'"
     subItemP->status = LdSubStatusFailed;
   }
 
-  swRestClientResponseCleanup(&resp);
+  corRestClientResponseCleanup(&resp);
   ldNotifyStatsHookInvoke(true /*csrSub*/, ok);
 }
 
@@ -452,9 +452,9 @@ static void csourceNotificationPost(LdSubCacheItem* subItemP, KjNode* notificati
 // as ldNotifyDefer.c. The periodic tick runs on its own thread with no
 // post-response hook and builds + posts directly.
 //
-// The queue lives in the per-connection swNgsild (Inc6c: csrPendingV/N/Cap);
+// The queue lives in the per-connection corNgsild (Inc6c: csrPendingV/N/Cap);
 // CsrSubPending is declared in ldCsrSubNotify.h. The buffer is freed in
-// swNgsildStateFree when the connection's state is released.
+// corNgsildStateFree when the connection's state is released.
 //
 static void sendCsourceNotification(LdSubCacheItem* subItemP,
                                     LdRegCacheItem** matchV, int matchN,
@@ -468,26 +468,26 @@ static void sendCsourceNotification(LdSubCacheItem* subItemP,
   if (subItemP->lastFailure > 0)
   {
     uint64_t cool = (subItemP->cooldownNs != 0) ? subItemP->cooldownNs : ldDefaultCooldownNs;
-    if (subItemP->lastFailure + cool > swRest.requestStartTime)
+    if (subItemP->lastFailure + cool > corRest.requestStartTime)
       return;
   }
 
-  if (swNgsild.csrPendingN >= swNgsild.csrPendingCap)
+  if (corNgsild.csrPendingN >= corNgsild.csrPendingCap)
   {
-    int newCap = (swNgsild.csrPendingCap == 0) ? 8 : swNgsild.csrPendingCap * 2;
-    CsrSubPending* newV = (CsrSubPending*) realloc(swNgsild.csrPendingV, newCap * sizeof(CsrSubPending));
+    int newCap = (corNgsild.csrPendingCap == 0) ? 8 : corNgsild.csrPendingCap * 2;
+    CsrSubPending* newV = (CsrSubPending*) realloc(corNgsild.csrPendingV, newCap * sizeof(CsrSubPending));
     if (newV == NULL)
       return;
-    swNgsild.csrPendingV   = newV;
-    swNgsild.csrPendingCap = newCap;
+    corNgsild.csrPendingV   = newV;
+    corNgsild.csrPendingCap = newCap;
   }
 
   // The matched cache items may be deleted later in this same request
   // (a CSR delete fans out, THEN removes the item) — build the
   // notification tree NOW, defer only the POST.
-  swNgsild.csrPendingV[swNgsild.csrPendingN].subItemP     = subItemP;
-  swNgsild.csrPendingV[swNgsild.csrPendingN].notification = csourceNotificationBuild(subItemP, matchV, matchN, triggerReason);
-  swNgsild.csrPendingN++;
+  corNgsild.csrPendingV[corNgsild.csrPendingN].subItemP     = subItemP;
+  corNgsild.csrPendingV[corNgsild.csrPendingN].notification = csourceNotificationBuild(subItemP, matchV, matchN, triggerReason);
+  corNgsild.csrPendingN++;
 }
 
 
@@ -498,7 +498,7 @@ static void sendCsourceNotification(LdSubCacheItem* subItemP,
 //
 void ldCsrSubPendingDiscard(void)
 {
-  swNgsild.csrPendingN = 0;
+  corNgsild.csrPendingN = 0;
 }
 
 
@@ -512,9 +512,9 @@ void ldCsrSubPendingDiscard(void)
 //
 void ldCsrSubDispatchPending(void)
 {
-  for (int i = 0; i < swNgsild.csrPendingN; i++)
-    csourceNotificationPost(swNgsild.csrPendingV[i].subItemP, swNgsild.csrPendingV[i].notification);
-  swNgsild.csrPendingN = 0;
+  for (int i = 0; i < corNgsild.csrPendingN; i++)
+    csourceNotificationPost(corNgsild.csrPendingV[i].subItemP, corNgsild.csrPendingV[i].notification);
+  corNgsild.csrPendingN = 0;
 }
 
 
@@ -534,7 +534,7 @@ void ldCsrSubInitialNotify(LdRegCache* regCacheP, LdSubCacheItem* subItemP)
   if (subItemP->status == LdSubStatusPaused || subItemP->status == LdSubStatusExpired)
     return;
 
-  if (subItemP->expiresAt > 0 && swRest.requestStartTime > subItemP->expiresAt)
+  if (subItemP->expiresAt > 0 && corRest.requestStartTime > subItemP->expiresAt)
     return;
 
   //
@@ -542,7 +542,7 @@ void ldCsrSubInitialNotify(LdRegCache* regCacheP, LdSubCacheItem* subItemP)
   // only needed for the duration of this call.
   //
   int cap = 16;
-  LdRegCacheItem** matchV = (LdRegCacheItem**) kaAlloc(&swRest.kalloc, cap * sizeof(LdRegCacheItem*));
+  LdRegCacheItem** matchV = (LdRegCacheItem**) kaAlloc(&corRest.kalloc, cap * sizeof(LdRegCacheItem*));
   int n = 0;
 
   // Walk the reg cache under its rdlock — the sub-side caller has already
@@ -556,7 +556,7 @@ void ldCsrSubInitialNotify(LdRegCache* regCacheP, LdSubCacheItem* subItemP)
     if (n == cap)
     {
       int newCap = cap * 2;
-      LdRegCacheItem** nv = (LdRegCacheItem**) kaAlloc(&swRest.kalloc, newCap * sizeof(LdRegCacheItem*));
+      LdRegCacheItem** nv = (LdRegCacheItem**) kaAlloc(&corRest.kalloc, newCap * sizeof(LdRegCacheItem*));
       for (int i = 0; i < n; i++) nv[i] = matchV[i];
       matchV = nv;
       cap    = newCap;
@@ -593,7 +593,7 @@ static void fanOutForOneReg(LdSubCache* regSubCacheP, LdRegCacheItem* regItemP, 
     if (subItemP->status == LdSubStatusPaused || subItemP->status == LdSubStatusExpired)
       continue;
 
-    if (subItemP->expiresAt > 0 && swRest.requestStartTime > subItemP->expiresAt)
+    if (subItemP->expiresAt > 0 && corRest.requestStartTime > subItemP->expiresAt)
       continue;
 
     if (!subMatchesReg(subItemP, regItemP))
@@ -638,7 +638,7 @@ static bool subEligibleForNotify(LdSubCacheItem* subItemP)
   if (subItemP->status == LdSubStatusPaused || subItemP->status == LdSubStatusExpired)
     return false;
 
-  if (subItemP->expiresAt > 0 && swRest.requestStartTime > subItemP->expiresAt)
+  if (subItemP->expiresAt > 0 && corRest.requestStartTime > subItemP->expiresAt)
     return false;
 
   return true;
@@ -773,7 +773,7 @@ static CsrSubTickCtx tickCtxStorage;
 
 static void csrSubPeriodicTick(void* ctx, uint64_t now, KAlloc* kaP)
 {
-  (void) kaP;  // sendCsourceNotification reaches into swRest.kalloc directly
+  (void) kaP;  // sendCsourceNotification reaches into corRest.kalloc directly
 
   CsrSubTickCtx* tcP = (CsrSubTickCtx*) ctx;
   if (tcP == NULL || tcP->regSubCache == NULL || tcP->regCache == NULL) return;
@@ -809,7 +809,7 @@ static void csrSubPeriodicTick(void* ctx, uint64_t now, KAlloc* kaP)
 
     // Collect currently-matching CSRs.
     int cap = 16;
-    LdRegCacheItem** matchV = (LdRegCacheItem**) kaAlloc(&swRest.kalloc, cap * sizeof(LdRegCacheItem*));
+    LdRegCacheItem** matchV = (LdRegCacheItem**) kaAlloc(&corRest.kalloc, cap * sizeof(LdRegCacheItem*));
     int n = 0;
     for (LdRegCacheItem* regItemP = tcP->regCache->itemList; regItemP != NULL; regItemP = regItemP->next)
     {
@@ -817,7 +817,7 @@ static void csrSubPeriodicTick(void* ctx, uint64_t now, KAlloc* kaP)
       if (n == cap)
       {
         int newCap = cap * 2;
-        LdRegCacheItem** nv = (LdRegCacheItem**) kaAlloc(&swRest.kalloc, newCap * sizeof(LdRegCacheItem*));
+        LdRegCacheItem** nv = (LdRegCacheItem**) kaAlloc(&corRest.kalloc, newCap * sizeof(LdRegCacheItem*));
         for (int i = 0; i < n; i++) nv[i] = matchV[i];
         matchV = nv;
         cap    = newCap;

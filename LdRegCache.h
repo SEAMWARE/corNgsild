@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDREGCACHE_H_
-#define SWNGSILD_LDREGCACHE_H_
+#ifndef CORNGSILD_LDREGCACHE_H_
+#define CORNGSILD_LDREGCACHE_H_
 
 //
 // FILE            LdRegCache.h
@@ -32,8 +32,8 @@
 #include "kalloc/KAlloc.h"                             // KAlloc
 #include "kjson/KjNode.h"                              // KjNode
 
-#include "swNgsild/LdOp.h"                             // LdOp
-#include "swNgsild/LdGeoRel.h"                         // LdGeoRel
+#include "corNgsild/LdOp.h"                             // LdOp
+#include "corNgsild/LdGeoRel.h"                         // LdGeoRel
 
 
 
@@ -139,14 +139,14 @@ typedef struct LdRegCacheItem
   // NULL-terminated char* array (kv[0]=key, kv[1]=val, kv[2]=key, ...).
   char**                 contextSourceInfoKV;
 
-  // Lazy-loaded SwldContext* for forwarding TO this CSR. Sourced (in
+  // Lazy-loaded CorLdContext* for forwarding TO this CSR. Sourced (in
   // order) from contextSourceInfo.jsonldContext (the CSR's declared
   // "talk to me with this context"), the CSR's own top-level @context,
   // or NULL if neither — the caller then falls back to the request's
-  // context or core. Materialised on first use via swldContextFromUrl,
+  // context or core. Materialised on first use via corLdContextFromUrl,
   // re-used for every subsequent forward to this CSR. NULL until first
   // use (lazy) or when no @context source is available.
-  struct SwldContext*    forwardCtxP;
+  struct CorLdContext*    forwardCtxP;
 
   // scope (§ 5.2.9) — scopes (or scope patterns, § 4.18) this Context
   // Source covers. NULL-terminated string array. NULL means wildcard
@@ -156,7 +156,7 @@ typedef struct LdRegCacheItem
   // Geo coverage (§ 5.2.9). KjNode pointers into regTree, borrowed. All
   // three are full GeoJSON Geometry objects with "type" and "coordinates".
   // Match-time filtering is performed in the dispatch loop via the
-  // registered db.geoMatchFunc (shared plugin GEOS) — swNgsild has no
+  // registered db.geoMatchFunc (shared plugin GEOS) — corNgsild has no
   // direct GEOS dependency, it routes through that function pointer.
   KjNode*                locationP;           // where the source has Entities
   KjNode*                observationSpaceP;   // union of observationSpaces (§ 4.7)
@@ -198,7 +198,7 @@ typedef struct LdRegCacheItem
 //
 // Used by CSR Discovery (§ 5.10.2.4) and DistOp dispatch (§ 4.3.6) to
 // filter the cache by overlap with the request's geoQ. The implementation
-// lives in the broker (uses GEOS via the shared plugin code); swNgsild
+// lives in the broker (uses GEOS via the shared plugin code); corNgsild
 // only carries the function pointer.
 //
 // `csrGeoP` is the CSR's stored geo node — `location`, `observationSpace`,
@@ -231,4 +231,4 @@ typedef struct LdRegCache
   pthread_rwlock_t       lock;
 } LdRegCache;
 
-#endif  // SWNGSILD_LDREGCACHE_H_
+#endif  // CORNGSILD_LDREGCACHE_H_

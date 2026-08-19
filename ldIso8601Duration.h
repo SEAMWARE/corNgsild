@@ -1,5 +1,5 @@
-#ifndef SWNGSILD_LDISO8601DURATION_H_
-#define SWNGSILD_LDISO8601DURATION_H_
+#ifndef CORNGSILD_LDISO8601DURATION_H_
+#define CORNGSILD_LDISO8601DURATION_H_
 
 //
 // FILE            ldIso8601Duration.h
@@ -23,4 +23,4 @@
 
 extern int64_t ldIso8601DurationParseNs(const char* s);
 
-#endif  // SWNGSILD_LDISO8601DURATION_H_
+#endif  // CORNGSILD_LDISO8601DURATION_H_
