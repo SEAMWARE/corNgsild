@@ -15,6 +15,7 @@
 #include "kalloc/KAlloc.h"                             // KAlloc
 #include "kjson/KjNode.h"                               // KjNode
 #include "kjson/kjBuilder.h"                             // kjString
+#include "kjson/kjBufferCreate.h"                        // kjBufferCreate
 #include "kjson/kjLookup.h"                              // kjLookup
 
 #include "corNgsild/LdAttrType.h"                         // LdAttrType
@@ -318,6 +319,15 @@ bool ldToSimplified(KjNode* entityP, KAlloc* faP)
   if (entityP == NULL || entityP->type != KjObject)
     return false;
 
+  //
+  // The multi-attribute branch below is the only part of this file that CREATES
+  // nodes, and faP is here for exactly that. It used to pass NULL, which makes
+  // kjson fall back to malloc - so every simplified multi-attribute response
+  // leaked its dataset wrapper for the life of the process.
+  //
+  Kjson  kj;
+  Kjson* kjP = (faP != NULL) ? kjBufferCreate(&kj, faP) : NULL;
+
   KjNode* childP = entityP->value.firstChildP;
 
   while (childP != NULL)
@@ -336,7 +346,7 @@ bool ldToSimplified(KjNode* entityP, KAlloc* faP)
     //
     if (ldIsEntityKeyword(childP->name) == false && childP->type == KjArray)
     {
-      KjNode* datasetMap = kjObject(NULL, "dataset");
+      KjNode* datasetMap = kjObject(kjP, "dataset");
 
       for (KjNode* instP = childP->value.firstChildP; instP != NULL; instP = instP->next)
       {
@@ -358,7 +368,7 @@ bool ldToSimplified(KjNode* entityP, KAlloc* faP)
         {
           // Same carve-out as the single-instance path below: these three keep
           // their { languageMap | vocab | json : ... } wrapper in simplified form.
-          KjNode* wrapP = kjObject(NULL, dsKey);
+          KjNode* wrapP = kjObject(kjP, dsKey);
           kjChildAdd(wrapP, valueP);
           kjChildAdd(datasetMap, wrapP);
         }
