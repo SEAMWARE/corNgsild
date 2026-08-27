@@ -28,7 +28,7 @@ ICU_CFLAGS   := $(shell pkg-config --cflags icu-i18n 2>/dev/null)
 ICU_LIBS     := $(shell pkg-config --libs icu-i18n 2>/dev/null)
 endif
 
-CFLAGS        = -Wall -Werror -O2 -fPIC -Wno-unused-function $(DFLAGS) $(INCLUDE) $(ICU_CFLAGS) -MMD -MP
+CFLAGS        = -Wall -Werror -O2 -fPIC $(DFLAGS) $(INCLUDE) $(ICU_CFLAGS) -MMD -MP
 
 debug: CFLAGS += -g -DDEBUG
 debug: all

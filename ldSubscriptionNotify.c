@@ -150,32 +150,6 @@ static bool triggerMatches(LdSubCacheItem* itemP, LdNotifyOp op, int reasonsMask
 
 // -----------------------------------------------------------------------------
 //
-// entityHasType - check if entity has a specific type
-//
-static bool entityHasType(KjNode* entityTypeP, const char* type)
-{
-  if (entityTypeP == NULL || type == NULL)
-    return false;
-
-  if (entityTypeP->type == KjString)
-    return (strcmp(entityTypeP->value.s, type) == 0);
-
-  if (entityTypeP->type == KjArray)
-  {
-    for (KjNode* tP = entityTypeP->value.firstChildP; tP != NULL; tP = tP->next)
-    {
-      if (tP->type == KjString && strcmp(tP->value.s, type) == 0)
-        return true;
-    }
-  }
-
-  return false;
-}
-
-
-
-// -----------------------------------------------------------------------------
-//
 // selectorMatches - check entity against a pre-parsed EntitySelector
 //
 static bool selectorMatches(LdSubEntitySelector* selP, const char* entityId, KjNode* entityTypeP)
