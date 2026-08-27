@@ -161,17 +161,6 @@ static void expandAttrPath(LdQTerm* termP, const char* start, int len, KAlloc* k
 
 // -----------------------------------------------------------------------------
 //
-// isDateTimeChar - check if character can appear in an ISO 8601 date-time
-//
-static bool isDateTimeChar(char c)
-{
-  return isdigit(c) || c == '-' || c == 'T' || c == ':' || c == '.' || c == 'Z' || c == '+';
-}
-
-
-
-// -----------------------------------------------------------------------------
-//
 // looksLikeDateTime - check if string starts with YYYY-MM-DD pattern
 //
 static bool looksLikeDateTime(const char* s)

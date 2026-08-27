@@ -38,20 +38,6 @@ static bool isGeoJsonProtected(const char* name)
 
 // -----------------------------------------------------------------------------
 //
-// isProtected - check if a field name is a mandatory NGSI-LD member
-//
-static bool isProtected(const char* name)
-{
-  if (strcmp(name, "id")       == 0)  return true;
-  if (strcmp(name, "type")     == 0)  return true;
-  if (strcmp(name, "@context") == 0)  return true;
-  return false;
-}
-
-
-
-// -----------------------------------------------------------------------------
-//
 // inStringV - check if name is in a NULL-terminated string array
 //
 static bool inStringV(const char* name, char** strV)
