@@ -21,7 +21,7 @@
 #include "kjson/kjParse.h"                             // kjParse
 
 #include "kalloc/kaAlloc.h"                            // kaAlloc
-#include "ktrace/kTrace.h"                             // KT_T
+#include "ktrace/kTrace.h"                             // KT_T, KT_W
 #include "corRest/CorRestState.h"                        // corRest
 #include "corRest/CorRestKeyValue.h"                     // CorRestKeyValue
 #include "corRest/CorRestVerb.h"                         // CorVerbGet, CorVerbDelete
@@ -734,6 +734,21 @@ int ldDistOpSendReceiveEx(LdRegCacheItem*  csr,
       strcpy(d, resp.errorDetail);
       *errorDetailPP = d;
     }
+
+    //
+    // A forward that never came back leaves no other trace. The caller folds it
+    // into a ProblemDetails - one entry of a 207's "errors" array, or an
+    // NGSILD-Warning - and the broker log stays silent, so a nightly that fails on
+    // a starved endpoint can only be read off the test's captured response body.
+    // Warn once per failed forward, with what it takes to tell a slow context
+    // source from a broken one: which CSR, where, and why.
+    //
+    KT_W("dist-op %s %s: CSR %s forward failed (%s)",
+         corRestVerbToString(verb),
+         url,
+         (csr->regId != NULL) ? csr->regId : "?",
+         (resp.errorDetail[0] != 0) ? resp.errorDetail : "transport failure");
+
     return 502;
   }
 
@@ -1116,6 +1131,13 @@ int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
       }
       else
         resultV[i].errorDetail = "transport failure";
+
+      // The same silence as the single-forward path, once per failed peer.
+      KT_W("dist-op %s %s: CSR %s forward failed (%s)",
+           corRestVerbToString(itemV[i].hasVerb ? itemV[i].verb : verb),
+           itemV[i].url,
+           (csr->regId != NULL) ? csr->regId : "?",
+           resultV[i].errorDetail);
       continue;
     }
 
