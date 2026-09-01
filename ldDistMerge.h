@@ -103,4 +103,36 @@ extern void ldDistExpiresAtReconcile(KjNode* destP, KjNode* srcP);
 //
 extern void ldDistScopeMerge(KjNode* destP, KjNode* srcP, Kjson* allocP);
 
+
+
+// -----------------------------------------------------------------------------
+//
+// ldDistMergeSourceInto - § 4.5.5.3 for a WHOLE version of an Entity
+//
+// The one place the algorithm above is applied. `destP` is the version
+// assembled so far, `srcP` one further version (the local copy, or what one
+// Context Source returned); both are DB-model trees
+// (attr -> dsKey-named instance -> members). Call it once per version, in the
+// order the versions are to be considered - ties keep what is already in destP.
+//
+// It does the three things a version-merge consists of, so no caller has to
+// remember the list: the entity-level expiresAt reconciliation, the § 5.2.7
+// Scope union, and the per-(attrName, dsKey) instance conflict resolution.
+// id / _id / type / @-keywords on destP are never touched.
+//
+// Rule 1 is enforced on BOTH sides: an expired instance is discarded whether it
+// arrives in srcP or is already sitting in destP, and an attribute left with no
+// surviving instance is removed rather than kept as an empty wrapper.
+//
+// `kjsonP` allocates the attribute wrappers and the merged Scope array.
+// `clone` picks how instances travel:
+//
+//   false - instances MOVE out of srcP into destP. Cheapest, and what the read
+//           paths want: srcP is a per-request tree that dies with the request.
+//           srcP is left half-empty afterwards and must not be reused.
+//   true  - instances are CLONED into `kjsonP`. For a destP that outlives srcP,
+//           e.g. a snapshot frozen into the snap-tenant.
+//
+extern void ldDistMergeSourceInto(KjNode* destP, KjNode* srcP, int64_t nowNs, Kjson* kjsonP, bool clone);
+
 #endif  // CORNGSILD_LDDISTMERGE_H_

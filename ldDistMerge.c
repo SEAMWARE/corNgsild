@@ -17,6 +17,7 @@
 #include "kjson/kjLookup.h"                              // kjLookup
 #include "kjson/kjBuilder.h"                             // kjChildRemove, kjArray, kjString, kjChildAdd
 #include "kjson/kjClone.h"                               // kjClone
+#include "kjson/kjChildReplace.h"                        // kjChildReplace
 
 #include "corNgsild/LdVocab.h"                            // LD_VOCAB_OBSERVED_AT, LD_VOCAB_MODIFIED_AT, LD_VOCAB_EXPIRES_AT, LD_VOCAB_SCOPE
 #include "corNgsild/ldCheckDateTime.h"                    // ldIsoToNanoseconds
@@ -217,4 +218,117 @@ void ldDistScopeMerge(KjNode* destP, KjNode* srcP, Kjson* allocP)
     kjChildAdd(destP, kjString(allocP, LD_VOCAB_SCOPE, onlyP->value.s));
   else
     kjChildAdd(destP, unionP);
+}
+
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldDistMergeSourceInto -
+//
+void ldDistMergeSourceInto(KjNode* destP, KjNode* srcP, int64_t nowNs, Kjson* kjsonP, bool clone)
+{
+  if ((destP == NULL) || (srcP == NULL) || (destP->type != KjObject) || (srcP->type != KjObject))
+    return;
+
+  //
+  // The non-reified entity-level expiresAt is not an Attribute and takes its own
+  // route (unanimous across versions or gone), and § 5.2.7 unions the Scopes.
+  // Both belong to "merge one version in" - a caller that did the instance loop
+  // and forgot these two produced a subtly wrong Entity, which is exactly why
+  // this function exists.
+  //
+  ldDistExpiresAtReconcile(destP, srcP);
+  ldDistScopeMerge(destP, srcP, kjsonP);
+
+  KjNode* srcAttrP = srcP->value.firstChildP;
+
+  while (srcAttrP != NULL)
+  {
+    KjNode* nextSrcAttr = srcAttrP->next;
+
+    //
+    // _id is a storage artefact of the mongoc DB model, not an Attribute. It is
+    // skipped here so a snapshot merge (which works on trees straight out of the
+    // driver) needs no filtering of its own.
+    //
+    if ((srcAttrP->name == NULL) || (srcAttrP->name[0] == '@') ||
+        (strcmp(srcAttrP->name, "id")   == 0) ||
+        (strcmp(srcAttrP->name, "_id")  == 0) ||
+        (strcmp(srcAttrP->name, "type") == 0) ||
+        (srcAttrP->type != KjObject))
+    {
+      srcAttrP = nextSrcAttr;
+      continue;
+    }
+
+    KjNode* destAttrP = kjLookup(destP, srcAttrP->name);
+    bool    fresh     = (destAttrP == NULL);
+
+    if (fresh)
+    {
+      destAttrP = kjObject(kjsonP, srcAttrP->name);
+      kjChildAdd(destP, destAttrP);
+    }
+
+    KjNode* srcInstP = srcAttrP->value.firstChildP;
+
+    while (srcInstP != NULL)
+    {
+      KjNode* nextSrcInst = srcInstP->next;
+      KjNode* destInstP   = kjLookup(destAttrP, srcInstP->name);
+
+      //
+      // Rule 1, on the side already assembled. Done BEFORE the src-side check,
+      // so that two expired candidates leave nothing behind rather than leaving
+      // whichever of them was looked at first.
+      //
+      if ((destInstP != NULL) && ldDistInstanceIsExpired(destInstP, nowNs))
+      {
+        kjChildRemove(destAttrP, destInstP);
+        destInstP = NULL;
+      }
+
+      // Rule 1, on the arriving side. An expired candidate never wins, not even
+      // uncontested.
+      if (ldDistInstanceIsExpired(srcInstP, nowNs))
+      {
+        srcInstP = nextSrcInst;
+        continue;
+      }
+
+      if ((destInstP == NULL) || ldDistInstanceShouldReplace(destInstP, srcInstP, nowNs))
+      {
+        KjNode* winnerP;
+
+        if (clone)
+          winnerP = kjClone(kjsonP, srcInstP);
+        else
+        {
+          // Unlink before adding: kjChildAdd re-links the node, which would
+          // truncate srcAttrP's list from srcInstP onwards.
+          kjChildRemove(srcAttrP, srcInstP);
+          winnerP = srcInstP;
+        }
+
+        if (destInstP == NULL)
+          kjChildAdd(destAttrP, winnerP);
+        else
+          kjChildReplace(destAttrP, destInstP, winnerP);
+      }
+
+      srcInstP = nextSrcInst;
+    }
+
+    //
+    // An Attribute whose every candidate was expired must not survive as an
+    // empty wrapper. Only a wrapper this call created can end up empty - a
+    // pre-existing one still holds the dsKeys srcP never mentioned.
+    //
+    if (fresh && (destAttrP->value.firstChildP == NULL))
+      kjChildRemove(destP, destAttrP);
+
+    srcAttrP = nextSrcAttr;
+  }
 }
