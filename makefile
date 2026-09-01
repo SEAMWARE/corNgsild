@@ -28,7 +28,25 @@ ICU_CFLAGS   := $(shell pkg-config --cflags icu-i18n 2>/dev/null)
 ICU_LIBS     := $(shell pkg-config --libs icu-i18n 2>/dev/null)
 endif
 
-CFLAGS        = -Wall -Werror -O2 -fPIC $(DFLAGS) $(INCLUDE) $(ICU_CFLAGS) -MMD -MP
+#
+# EXTRA_CFLAGS - the hook for a caller that needs to ADD flags to this build.
+#
+# It exists because DFLAGS cannot do that job. DFLAGS is a plain variable, so
+# `make DFLAGS=...` REPLACES it - the command line beats the makefile, and the
+# `DFLAGS += -DCOR_WITH_ICU` above is then ignored too, because a `+=` never
+# appends to a variable set on the command line. A caller reaching for DFLAGS to
+# add one flag therefore silently drops -DANSI and the ICU selection, and this
+# lib gets compiled with the ASCII-approximation collation path (ldOrderSort.c
+# has five #ifdef COR_WITH_ICU blocks) while the broker links against ICU -
+# exactly the mismatch the COR_WITH_ICU comment above warns about.
+#
+# That is not hypothetical: coraine's coverage targets did it, so every coverage
+# run measured a differently-compiled broker than the one that ships.
+#
+# EXTRA_CFLAGS is appended LAST, so a caller's -O0 / -Wno-error also win over the
+# -O2 / -Werror here, which is what an instrumented build needs.
+#
+CFLAGS        = -Wall -Werror -O2 -fPIC $(DFLAGS) $(INCLUDE) $(ICU_CFLAGS) -MMD -MP $(EXTRA_CFLAGS)
 
 debug: CFLAGS += -g -DDEBUG
 debug: all
