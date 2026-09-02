@@ -124,7 +124,6 @@ LIB_SOURCES   = corNgsild.c \
                 ldDiscoveryForward.c \
                 ldStripAtContext.c \
                 ldDistMerge.c \
-                ldDatasetIdDedup.c \
                 ldNameContentCheck.c \
                 ldUrlWildcardCheck.c \
                 ldMqttNotify.c \
