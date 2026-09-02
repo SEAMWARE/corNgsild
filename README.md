@@ -68,7 +68,7 @@ Parsers + matchers/renderers for the NGSI-LD filter languages:
 
 Merge, fragment and attribute-set logic shared by the write endpoints:
 `ldEntityMerge` (RFC 7396-style merge with the NGSI-LD null marker),
-`ldEntityAttrsSet`, `ldEntityFragment`, `ldEntityMatch`, `ldDatasetIdDedup`.
+`ldEntityAttrsSet`, `ldEntityFragment`, `ldEntityMatch`.
 
 ### Distributed operations & forwarding
 
