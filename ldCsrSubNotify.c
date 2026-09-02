@@ -31,6 +31,7 @@
 #include <time.h>                                      // clock_gettime
 
 #include "kalloc/kaAlloc.h"                            // kaAlloc
+#include "ktrace/kTrace.h"                             // KT_T, KT_W, KT_RVE
 #include "kjson/KjNode.h"                              // KjNode
 #include "kjson/kjBuilder.h"                           // kjObject, kjString, kjArray, kjChildAdd
 #include "kjson/kjClone.h"                             // kjClone
@@ -45,6 +46,7 @@
 #include "corJsonld/corLdInit.h"                         // corLdCoreContext
 #include "corJsonld/CorLdContext.h"                      // CorLdContext
 
+#include "corNgsild/ldTraceLevels.h"                    // LdTCsrNotify
 #include "corNgsild/LdSubCache.h"                       // LdSubCacheItem, LdSubEntitySelector
 #include "corNgsild/ldSubCache.h"                       // ldSubCacheRdLock, ldSubCacheUnlock
 #include "corNgsild/ldStripSysAttrs.h"                  // ldStripSysAttrs
@@ -420,6 +422,8 @@ static void csourceNotificationPost(LdSubCacheItem* subItemP, KjNode* notificati
   bool ok = (resp.statusCode >= 200 && resp.statusCode < 300);
   if (ok)
   {
+    KT_T(LdTCsrNotify, "CSR-sub '%s': notification delivered to %s (%d)",
+         subItemP->subId, subItemP->endpointUri, resp.statusCode);
     subItemP->lastSuccess = corRest.requestStartTime;
     // A later successful delivery clears a previous failure state
     if (subItemP->status == LdSubStatusFailed)
@@ -427,6 +431,15 @@ static void csourceNotificationPost(LdSubCacheItem* subItemP, KjNode* notificati
   }
   else
   {
+    //
+    // A WARNING and not a trace: the subscriber did not get what the spec
+    // promised it, and until now the only record of that was a counter on the
+    // subscription that somebody had to think to go and read. A notification
+    // that was never delivered and a notification that was never sent look
+    // identical from the outside - this is the line that tells them apart.
+    //
+    KT_W("CSR-sub '%s': notification to %s FAILED (%d) - timesFailed now %d, status -> failed",
+         subItemP->subId, subItemP->endpointUri, resp.statusCode, subItemP->timesFailed + 1);
     subItemP->timesFailed++;
     subItemP->lastFailure = corRest.requestStartTime;
     // § 12.4.7: "If the notification is not sent successfully ...
@@ -462,7 +475,7 @@ static void sendCsourceNotification(LdSubCacheItem* subItemP,
                                     const char* triggerReason)
 {
   if (subItemP->endpointUri == NULL)
-    return;
+    KT_RVE("CSR-sub '%s': no endpoint URI - cannot notify", (subItemP->subId != NULL)? subItemP->subId : "?");
 
   // § 5.2.15 endpoint.cooldown — skip if inside the cooldown window after
   // the last failure. Default 30s when unspecified (same as entity subs).
@@ -470,7 +483,10 @@ static void sendCsourceNotification(LdSubCacheItem* subItemP,
   {
     uint64_t cool = (subItemP->cooldownNs != 0) ? subItemP->cooldownNs : ldDefaultCooldownNs;
     if (subItemP->lastFailure + cool > corRest.requestStartTime)
+    {
+      KT_T(LdTCsrNotify, "CSR-sub '%s': inside cooldown - no notification", subItemP->subId);
       return;
+    }
   }
 
   if (corNgsild.csrPendingN >= corNgsild.csrPendingCap)
@@ -478,7 +494,8 @@ static void sendCsourceNotification(LdSubCacheItem* subItemP,
     int newCap = (corNgsild.csrPendingCap == 0) ? 8 : corNgsild.csrPendingCap * 2;
     CsrSubPending* newV = (CsrSubPending*) realloc(corNgsild.csrPendingV, newCap * sizeof(CsrSubPending));
     if (newV == NULL)
-      return;
+      KT_RVE("CSR-sub '%s': out of memory for the pending queue (%d entries) - notification DROPPED",
+             subItemP->subId, newCap);
     corNgsild.csrPendingV   = newV;
     corNgsild.csrPendingCap = newCap;
   }
@@ -513,6 +530,9 @@ void ldCsrSubPendingDiscard(void)
 //
 void ldCsrSubDispatchPending(void)
 {
+  if (corNgsild.csrPendingN > 0)
+    KT_T(LdTCsrNotify, "dispatching %d deferred CSR notification(s)", corNgsild.csrPendingN);
+
   for (int i = 0; i < corNgsild.csrPendingN; i++)
     csourceNotificationPost(corNgsild.csrPendingV[i].subItemP, corNgsild.csrPendingV[i].notification);
   corNgsild.csrPendingN = 0;
@@ -527,16 +547,26 @@ void ldCsrSubDispatchPending(void)
 void ldCsrSubInitialNotify(LdRegCache* regCacheP, LdSubCacheItem* subItemP)
 {
   if (regCacheP == NULL || subItemP == NULL || subItemP->endpointUri == NULL)
-    return;
+    KT_RVE("no initial notification: regCache %s, subItem %s, endpointUri %s",
+           (regCacheP != NULL)? "ok" : "NULL",
+           (subItemP  != NULL)? "ok" : "NULL",
+           ((subItemP != NULL) && (subItemP->endpointUri != NULL))? "ok" : "NULL");
 
   // § 12.4.7 sits on top of the § 10.5.7 lifecycle rules: a subscription
   // created paused (isActive=false) or already expired gets NO initial
   // notification.
   if (subItemP->status == LdSubStatusPaused || subItemP->status == LdSubStatusExpired)
+  {
+    KT_T(LdTCsrNotify, "CSR-sub '%s': %s - no initial notification", subItemP->subId,
+         (subItemP->status == LdSubStatusPaused)? "paused" : "expired");
     return;
+  }
 
   if (subItemP->expiresAt > 0 && corRest.requestStartTime > subItemP->expiresAt)
+  {
+    KT_T(LdTCsrNotify, "CSR-sub '%s': already expired - no initial notification", subItemP->subId);
     return;
+  }
 
   //
   // Collect matching CSRs. Use the request allocator — the buffer is

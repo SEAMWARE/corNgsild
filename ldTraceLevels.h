@@ -46,6 +46,12 @@
 #define LdTNotifHeader   232  // notification — HTTP headers (one per line)
 #define LdTNotifBody     233  // notification — body
 #define LdTNotifRes      234  // notification — response line (status)
+#define LdTCsrNotify     235  // CSR-subscription notification — why one was or was not sent.
+                              // A notification that is deliberately SKIPPED (a paused or
+                              // expired subscription, one inside its § 5.2.15 cooldown) is
+                              // correct behaviour, so it is a trace and not a warning - but
+                              // it is indistinguishable from a LOST notification unless it
+                              // says so somewhere. That ambiguity cost a CI investigation.
 
 #define LdTExpiry        240  // transient Entity — lazily removed after a read found it expired
 

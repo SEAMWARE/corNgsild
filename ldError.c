@@ -11,7 +11,7 @@
 #include <stdarg.h>                               // va_list, va_start, va_end
 #include <stdio.h>                                // vsnprintf
 
-#include "kbase/kLibLog.h"                      // kLogFunction
+#include "ktrace/ktOut.h"                       // ktOut
 #include "kjson/KjNode.h"                       // KjNode
 #include "kjson/kjBuilder.h"                    // kjObject, kjString, kjChildAdd
 #include "corRest/corRest.h"                      // corRest
@@ -50,10 +50,15 @@ void ldErrorFunction
   va_end(ap);
 
   //
-  // Log the error at the caller's location
+  // Log the error at the CALLER's location - which is why the macro passes
+  // __FILE__/__LINE__/__func__ in rather than letting the trace macro capture
+  // this file. A ProblemDetails that never reaches the log is a 400 nobody can
+  // explain afterwards.
   //
-  if (kLogFunction != NULL)
-    kLogFunction(1, 0, fileName, lineNo, functionName, "%d %s: %s", status, title, corRest.out.problemDetail);
+  // ktOut() rather than KT_E(): KT_E captures __FILE__ and __LINE__ at ITS OWN
+  // call site, which would point every error in the broker at this line.
+  //
+  ktOut(fileName, lineNo, functionName, 'E', -1, "%d %s: %s", status, title, corRest.out.problemDetail);
 }
 
 
