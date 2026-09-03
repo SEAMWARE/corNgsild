@@ -458,6 +458,24 @@ static bool qLeafCompare(LdQTerm* term, KjNode* valueP)
   if (valueP->type == KjInt)        { entityNum = (double) valueP->value.i; isNum = true; }
   else if (valueP->type == KjFloat) { entityNum = valueP->value.f;          isNum = true; }
 
+  //
+  // § 7.2.3.3, and the asymmetry is the spec's, not a shortcut:
+  //
+  //   Unequal  - "if the data type of the target value and the data type of the
+  //               Query Term value are different, then they shall be considered
+  //               UNEQUAL" -> a type mismatch MATCHES.
+  //   Greater / Less / Equal
+  //            - "if there is no equality between the target value data type and
+  //               the Query Term value data type then it shall be considered as
+  //               NOT MATCHING".
+  //   Pattern / notPattern
+  //            - "if the target value data type is different than String then it
+  //               shall be considered as NOT MATCHING" - notPattern included, so
+  //               a number is not "a value that does not match the regex".
+  //
+  // Hence every type-guard below answers `term->op == LdQUnequal` rather than
+  // plain false: only != survives a mismatch.
+  //
   switch (term->valueType)
   {
   case LdQNumber:
@@ -482,7 +500,7 @@ static bool qLeafCompare(LdQTerm* term, KjNode* valueP)
       default:         return false;   // ordering on an array has no sensible semantic
       }
     }
-    if (!isNum) return false;
+    if (!isNum) return (term->op == LdQUnequal);
     switch (term->op)
     {
     case LdQEqual:     return entityNum == term->value.n;
@@ -543,7 +561,7 @@ static bool qLeafCompare(LdQTerm* term, KjNode* valueP)
       default:         return false;   // ordering on array doesn't have a sensible semantic
       }
     }
-    if (valueP->type != KjString) return false;
+    if (valueP->type != KjString) return (term->op == LdQUnequal);
     {
       int cmp = strcmp(valueP->value.s, term->value.s);
       switch (term->op)
@@ -576,7 +594,7 @@ static bool qLeafCompare(LdQTerm* term, KjNode* valueP)
       default:         return false;
       }
     }
-    if (valueP->type != KjBoolean) return false;
+    if (valueP->type != KjBoolean) return (term->op == LdQUnequal);
     {
       bool entityBool = valueP->value.b;
       switch (term->op)
@@ -588,7 +606,7 @@ static bool qLeafCompare(LdQTerm* term, KjNode* valueP)
     }
 
   case LdQDateTime:
-    if (valueP->type != KjInt) return false;
+    if (valueP->type != KjInt) return (term->op == LdQUnequal);
     {
       long long entityNs = valueP->value.i;
       long long queryNs  = term->value.ns;
@@ -628,7 +646,7 @@ static bool qLeafCompare(LdQTerm* term, KjNode* valueP)
     return false;
 
   case LdQRange:
-    if (!isNum) return false;
+    if (!isNum) return (term->op == LdQUnequal);
     if (term->op == LdQEqual)
       return entityNum >= term->value.numRange.lo && entityNum <= term->value.numRange.hi;
     else if (term->op == LdQUnequal)
