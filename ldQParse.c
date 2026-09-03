@@ -32,6 +32,7 @@
 #include "corNgsild/CorNgsild.h"                           // corNgsild
 #include "corNgsild/ldError.h"                            // ldError
 #include "corNgsild/ldCheckDateTime.h"                    // ldIsoToNanoseconds
+#include "corNgsild/ldCheckUri.h"                         // ldUriValid
 #include "corNgsild/ldQParse.h"                           // Own interface
 
 
@@ -161,6 +162,98 @@ static void expandAttrPath(LdQTerm* termP, const char* start, int len, KAlloc* k
 
 // -----------------------------------------------------------------------------
 //
+static bool looksLikeDateTime(const char* s);   // fwd decl (defined below)
+
+
+
+// -----------------------------------------------------------------------------
+//
+// looksLikeTime - HH:MM[:SS[.frac]][Z|(+|-)HH:MM], the ABNF's `time` production
+//
+// A bare Time has no date in front of it, so looksLikeDateTime cannot see it and
+// ldUriValid rejects it (a scheme must start with a letter). Without this it
+// would be the one ComparableValue the grammar allows and the parser refuses.
+// Compared as a string, which is how a Time-valued Property is stored.
+//
+static bool looksLikeTime(const char* s)
+{
+  int len = strlen(s);
+
+  if ((len < 5) || !isdigit(s[0]) || !isdigit(s[1]) || (s[2] != ':') || !isdigit(s[3]) || !isdigit(s[4]))
+    return false;
+
+  for (int i = 5; i < len; i++)
+  {
+    if (!isdigit(s[i]) && (s[i] != ':') && (s[i] != '.') && (s[i] != '+') && (s[i] != '-') && (s[i] != 'Z'))
+      return false;
+  }
+
+  return true;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// qValueClassify - which Value production does this UNQUOTED token match?
+//
+// § 7.2.3.3:
+//   ComparableValue = Number / quotedStr / dateTime / date / time
+//   OtherValue      = false / true
+//   CompEqualityValue = OtherValue / ValueList / Range / URI
+//
+// A quoted token never reaches here - the caller handles quotes. What is left
+// must be one of the productions above, and anything else is a syntax error
+// rather than something to guess at. `12B` used to become the string "12B" (or,
+// inside a value list, the NUMBER 12, because strtod stops at the B and nobody
+// looked at what came after); `Building` used to become the string "Building".
+// Both are now 400s: the grammar has no unquoted-string production, and a
+// silently wrong answer to a malformed query is worse than a refusal.
+//
+// A URI is admitted unquoted because the grammar admits it - `CompEqualityValue`
+// lists URI - which is what makes locatedIn==urn:ngsi-ld:City:Pisa legal (and the
+// conformance suite depends on it, 019_09_08). Coraine also admits a URI as a
+// LIST item, which the ABNF does not; see spec-doubts-2 #122. A URI containing a
+// comma has to be quoted, because the percent-encoding that would protect it is
+// undone by the HTTP layer before the q grammar is ever applied.
+//
+// Returns LdQNoValue when the token matches nothing - the caller raises the 400.
+//
+static LdQValueType qValueClassify(const char* tok, double* numP)
+{
+  if ((tok == NULL) || (tok[0] == 0))
+    return LdQNoValue;
+
+  if (strcmp(tok, "true") == 0 || strcmp(tok, "false") == 0)
+    return LdQBool;
+
+  // A Number must be the WHOLE token. strtod stops where the number stops and
+  // reports where that was; if anything follows, this was never a number.
+  {
+    char*  end = NULL;
+    double n   = strtod(tok, &end);
+
+    if ((end != NULL) && (end != tok) && (*end == 0))
+    {
+      if (numP != NULL)
+        *numP = n;
+      return LdQNumber;
+    }
+  }
+
+  if (looksLikeDateTime(tok))
+    return LdQDateTime;
+
+  if (looksLikeTime(tok) || ldUriValid(tok))
+    return LdQString;
+
+  return LdQNoValue;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // looksLikeDateTime - check if string starts with YYYY-MM-DD pattern
 //
 static bool looksLikeDateTime(const char* s)
@@ -215,7 +308,7 @@ static bool parseValueList(const char* raw, int rawLen, LdQTerm* term, KAlloc* k
   const char* p  = raw;
   const char* end = raw + rawLen;
 
-  LdQValueType itemType = LdQNoValue;
+  LdQValueType* itemTypeV = (LdQValueType*) kaAlloc(kaP, count * sizeof(LdQValueType));
 
   while (p < end && ix < count)
   {
@@ -240,8 +333,7 @@ static bool parseValueList(const char* raw, int rawLen, LdQTerm* term, KAlloc* k
       if (p < end)
         p++;  // skip closing quote
 
-      if (itemType == LdQNoValue)
-        itemType = LdQString;
+      itemTypeV[ix] = LdQString;   // quoted: a string, whatever it looks like
     }
     else
     {
@@ -257,14 +349,25 @@ static bool parseValueList(const char* raw, int rawLen, LdQTerm* term, KAlloc* k
       while (itemLen > 0 && itemStart[itemLen - 1] == ' ')
         itemLen--;
 
-      if (itemType == LdQNoValue)
+      //
+      // Classify THIS item, and reject it if it is not a Value. The old code
+      // declared the whole list's type from the first item and called anything
+      // that was not true/false a number, without ever converting it - so the
+      // matcher's strtod turned `[3` into 0 and `7]` into 7, and a list of
+      // unquoted URIs compared as numbers and matched nothing at all.
+      //
+      char* probe = (char*) kaAlloc(kaP, itemLen + 1);
+      memcpy(probe, itemStart, itemLen);
+      probe[itemLen] = 0;
+
+      itemTypeV[ix] = qValueClassify(probe, NULL);
+
+      if (itemTypeV[ix] == LdQNoValue)
       {
-        if (itemLen == 4 && strncmp(itemStart, "true", 4) == 0)
-          itemType = LdQBool;
-        else if (itemLen == 5 && strncmp(itemStart, "false", 5) == 0)
-          itemType = LdQBool;
-        else
-          itemType = LdQNumber;
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid q parameter",
+                "value list item '%s' is not a valid value: a string must be quoted, "
+                "and a number must not carry anything after it", probe);
+        return false;
       }
     }
 
@@ -281,7 +384,8 @@ static bool parseValueList(const char* raw, int rawLen, LdQTerm* term, KAlloc* k
   term->valueType              = LdQValueList;
   term->value.list.values      = values;
   term->value.list.count       = ix;
-  term->value.list.itemType    = itemType;
+  term->value.list.itemTypeV   = itemTypeV;
+  term->value.list.itemType    = (ix > 0) ? itemTypeV[0] : LdQNoValue;   // legacy single type
 
   return true;
 }
@@ -305,17 +409,39 @@ static bool parseRange(const char* raw, int rawLen, const char* dotdot, LdQTerm*
   memcpy(hi, dotdot + 2, hiLen);
   hi[hiLen] = 0;
 
+  //
+  // Both ends have to be Values, and of the same kind - a Range is
+  // "ComparableValue dots ComparableValue". The numeric branch used to call
+  // strtod(lo, NULL) with no endptr at all, so `2..8x` was silently 2..8 and
+  // `x..y` was 0..0.
+  //
+  double loNum = 0;
+  double hiNum = 0;
+
   if (looksLikeDateTime(lo))
   {
+    if (!looksLikeDateTime(hi))
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid q parameter",
+              "range '%s..%s' mixes a date-time with something else", lo, hi);
+      return false;
+    }
+
     term->valueType          = LdQDateRange;
     term->value.dateRange.lo = lo;
     term->value.dateRange.hi = hi;
   }
-  else
+  else if ((qValueClassify(lo, &loNum) == LdQNumber) && (qValueClassify(hi, &hiNum) == LdQNumber))
   {
     term->valueType         = LdQRange;
-    term->value.numRange.lo = strtod(lo, NULL);
-    term->value.numRange.hi = strtod(hi, NULL);
+    term->value.numRange.lo = loNum;
+    term->value.numRange.hi = hiNum;
+  }
+  else
+  {
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid q parameter",
+            "range '%s..%s' needs two numbers or two date-times", lo, hi);
+    return false;
   }
 
   return true;
@@ -638,12 +764,14 @@ static LdQNode* parseTerm(const char** pp, KAlloc* kaP)
 
     if (dotdot != NULL)
     {
-      parseRange(vStart, vLen, dotdot, &nodeP->term, kaP);
+      if (parseRange(vStart, vLen, dotdot, &nodeP->term, kaP) == false)
+        return NULL;   // parseRange raised the ProblemDetails
     }
     else if (strchr(vStart, ',') != NULL && (int)(strchr(vStart, ',') - vStart) < vLen && (nodeP->term.op == LdQEqual || nodeP->term.op == LdQUnequal))
     {
       // Value list (comma-separated)
-      parseValueList(vStart, vLen, &nodeP->term, kaP);
+      if (parseValueList(vStart, vLen, &nodeP->term, kaP) == false)
+        return NULL;   // parseValueList raised the ProblemDetails
     }
     else if (looksLikeDateTime(vStart))
     {
@@ -656,29 +784,34 @@ static LdQNode* parseTerm(const char** pp, KAlloc* kaP)
     }
     else
     {
-      // Try numeric first; if strtod doesn't consume the whole token,
-      // treat the value as an unquoted string. § 4.9 grammatically
-      // requires quotes around strings, but URIs, plain words and
-      // similar tokens routinely appear unquoted in real-world q
-      // expressions (and the ETSI suite tests for it — 019_09_08:
-      // `locatedIn==urn:ngsi-ld:City:Pisa`). Without this fallback,
-      // strtod returns 0.0 and the match silently never fires.
-      char* endP = NULL;
-      double n = strtod(vStart, &endP);
-      if (endP != NULL && (endP == vStart + vLen))
-      {
-        nodeP->term.valueType = LdQNumber;
-        nodeP->term.value.n   = n;
-      }
-      else
-      {
-        char* s = (char*) kaAlloc(kaP, vLen + 1);
-        memcpy(s, vStart, vLen);
-        s[vLen] = 0;
+      //
+      // A single unquoted Value. It has to BE one of the grammar's Values -
+      // see qValueClassify. There used to be a fallback here that made any
+      // leftover token a string, justified by unquoted URIs; the grammar
+      // admits those on its own (`CompEqualityValue` lists URI), so the
+      // fallback was only ever covering tokens that are not Values at all.
+      //
+      char* tok = (char*) kaAlloc(kaP, vLen + 1);
+      memcpy(tok, vStart, vLen);
+      tok[vLen] = 0;
 
-        nodeP->term.valueType = LdQString;
-        nodeP->term.value.s   = s;
+      double       num  = 0;
+      LdQValueType type = qValueClassify(tok, &num);
+
+      if (type == LdQNoValue)
+      {
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid q parameter",
+                "'%s' is not a valid value: a string must be quoted, and a number "
+                "must not carry anything after it", tok);
+        return NULL;
       }
+
+      nodeP->term.valueType = type;
+
+      if      (type == LdQNumber)   nodeP->term.value.n  = num;
+      else if (type == LdQBool)     nodeP->term.value.b  = (strcmp(tok, "true") == 0);
+      else if (type == LdQDateTime) nodeP->term.value.ns = (long long) ldIsoToNanoseconds(tok);
+      else                          nodeP->term.value.s  = tok;
     }
   }
 

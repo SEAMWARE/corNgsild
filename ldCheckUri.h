@@ -16,7 +16,19 @@
 
 // -----------------------------------------------------------------------------
 //
-// ldCheckUri -
+// ldUriValid - is this a URI? (the predicate, with no ProblemDetails)
+//
+// A scheme starting with a letter, a colon, something after it, and no
+// whitespace. Callers that have their own error to raise - the q parser
+// answers "Invalid q parameter", not "Invalid URI" - use this one.
+//
+extern bool ldUriValid(const char* uri);
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldCheckUri - ldUriValid, raising 400 "Invalid URI" when it is not
 //
 extern bool ldCheckUri(const char* uri);
 

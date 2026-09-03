@@ -21,6 +21,7 @@
 #include "corNgsild/LdScopeExpr.h"                     // LdScopeExpr
 #include "corNgsild/LdTypeExpr.h"                      // LdTypeExpr
 #include "corNgsild/ldScopeMatch.h"                     // ldScopePatternMatch
+#include "corNgsild/ldCheckDateTime.h"                  // ldIsoToNanoseconds
 #include "corNgsild/ldEntityMatch.h"                    // Own interface
 
 
@@ -654,20 +655,44 @@ static bool qLeafCompare(LdQTerm* term, KjNode* valueP)
     return false;
 
   case LdQValueList:
+    //
+    // Per ITEM, not per list: § 7.2.3.4 condition 2 asks whether the target is
+    // "identical or equivalent to ANY of the list values", and says nothing
+    // about the values sharing a type - `q=a==1,"two"` is a legal list. The
+    // types come from the parser, which converted and validated each item; the
+    // strtod here is on a token already proven to be a whole number.
+    //
     for (int i = 0; i < term->value.list.count; i++)
     {
-      if (term->value.list.itemType == LdQNumber && isNum)
+      LdQValueType itemType = (term->value.list.itemTypeV != NULL)
+                              ? term->value.list.itemTypeV[i]
+                              : term->value.list.itemType;
+
+      if ((itemType == LdQNumber) && isNum)
       {
-        double listNum = strtod(term->value.list.values[i], NULL);
-        if (entityNum == listNum)
+        if (entityNum == strtod(term->value.list.values[i], NULL))
           return (term->op == LdQEqual);
       }
-      else if (term->value.list.itemType == LdQString && valueP->type == KjString)
+      else if ((itemType == LdQString) && (valueP->type == KjString))
       {
         if (strcmp(valueP->value.s, term->value.list.values[i]) == 0)
           return (term->op == LdQEqual);
       }
+      else if ((itemType == LdQBool) && (valueP->type == KjBoolean))
+      {
+        if (valueP->value.b == (strcmp(term->value.list.values[i], "true") == 0))
+          return (term->op == LdQEqual);
+      }
+      else if ((itemType == LdQDateTime) && (valueP->type == KjInt))
+      {
+        if ((long long) valueP->value.i == (long long) ldIsoToNanoseconds(term->value.list.values[i]))
+          return (term->op == LdQEqual);
+      }
     }
+
+    // Nothing matched. Per § 7.2.3.3 that is "unequal" - including when the
+    // target's type differs from every item's, which is a mismatch and so
+    // "considered unequal" too.
     return (term->op == LdQUnequal);
 
   default:
