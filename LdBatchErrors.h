@@ -97,24 +97,4 @@ extern KjNode* ldBatchErrorListToTree(const LdBatchErrorList* listP,
 
 
 
-// -----------------------------------------------------------------------------
-//
-// ldBatchErrorListSingleStatus - if every entry has the same statusCode,
-// return it; otherwise -1. The decision matrix uses this to collapse a
-// uniform-error 207 into a single-status 4xx / 5xx where appropriate
-// (§ 6.14 / 6.15 / 6.16 / 6.17 / 6.20).
-//
-extern int ldBatchErrorListSingleStatus(const LdBatchErrorList* listP);
-
-
-
-// -----------------------------------------------------------------------------
-//
-// ldBatchErrorListFirstAsProblemDetails - clone the first entry's
-// ProblemDetails into a standalone tree (type/title/status/detail) for use
-// as the body of a single-status response.
-//
-extern KjNode* ldBatchErrorListFirstAsProblemDetails(const LdBatchErrorList* listP,
-                                                     Kjson*                  kjsonP);
-
 #endif  // CORNGSILD_LD_BATCH_ERRORS_H_

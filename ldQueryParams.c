@@ -8,33 +8,11 @@
 // 
 //
 #include <stddef.h>                                    // NULL
-#include <string.h>                                    // strcmp, strchr
 
-#include "kalloc/KAlloc.h"                           // kaAlloc
+#include "kalloc/KAlloc.h"                           // KAlloc
 #include "kalloc/kaAlloc.h"                            // kaAlloc
-#include "kalloc/kaStrdup.h"                          // kaStrdup
-#include "corRest/corRest.h"                           // corRest
-#include "corJsonld/corLdExpand.h"                         // corLdExpand
 
-#include "corNgsild/CorNgsild.h"                         // corNgsild
 #include "corNgsild/ldQueryParams.h"                    // Own interface
-
-
-
-// -----------------------------------------------------------------------------
-//
-// ldQueryParamValue - look up a URL parameter value by name
-//
-char* ldQueryParamValue(const char* name)
-{
-  for (int ix = 0; ix < corRest.in.uriParamCount; ix++)
-  {
-    if (strcmp(corRest.in.uriParamV[ix].key, name) == 0)
-      return corRest.in.uriParamV[ix].value;
-  }
-
-  return NULL;
-}
 
 
 
@@ -78,38 +56,5 @@ char** ldParamSplit(char* csv, KAlloc* faP)
   }
 
   result[ix] = NULL;
-  return result;
-}
-
-
-
-// -----------------------------------------------------------------------------
-//
-// ldParamExpandV - expand each value in a NULL-terminated string array
-//
-char** ldParamExpandV(char** srcV, KAlloc* faP)
-{
-  if (srcV == NULL)
-    return NULL;
-
-  //
-  // Count entries
-  //
-  int count = 0;
-  while (srcV[count] != NULL)
-    count++;
-
-  //
-  // Allocate new array
-  //
-  char** result = (char**) kaAlloc(faP, (count + 1) * sizeof(char*));
-
-  for (int ix = 0; ix < count; ix++)
-  {
-    char* expanded = corLdExpand(corNgsild.contextP, srcV[ix], faP, NULL, NULL);
-    result[ix] = (expanded != NULL) ? expanded : kaStrdup(faP, srcV[ix]);
-  }
-
-  result[count] = NULL;
   return result;
 }

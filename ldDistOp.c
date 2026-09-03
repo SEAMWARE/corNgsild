@@ -770,24 +770,6 @@ int ldDistOpSendReceiveEx(LdRegCacheItem*  csr,
 
 // -----------------------------------------------------------------------------
 //
-// ldDistOpSend - thin wrapper when the caller doesn't need the response body
-//
-int ldDistOpSend(LdRegCacheItem*  csr,
-                 CorRestVerb       verb,
-                 const char*      url,
-                 const char*      body,
-                 int              bodyLen,
-                 const char*      ownAlias,
-                 const char**     errorDetailPP)
-{
-  return ldDistOpSendReceive(csr, verb, url, body, bodyLen, ownAlias,
-                             errorDetailPP, NULL, NULL);
-}
-
-
-
-// -----------------------------------------------------------------------------
-//
 // responseContextLink - extract the json-ld#context Link URL from a response.
 //
 // A forwarded read body is expanded via the context that travels WITH it; for

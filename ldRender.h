@@ -19,14 +19,6 @@
 
 // -----------------------------------------------------------------------------
 //
-// ldToNormalized -
-//
-extern bool ldToNormalized(KjNode* entityP, KAlloc* faP);
-
-
-
-// -----------------------------------------------------------------------------
-//
 // ldToConcise -
 //
 extern bool ldToConcise(KjNode* entityP, KAlloc* faP);

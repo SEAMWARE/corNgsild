@@ -16,14 +16,6 @@
 
 // -----------------------------------------------------------------------------
 //
-// ldQueryParamValue - look up a URL parameter value by name
-//
-extern char* ldQueryParamValue(const char* name);
-
-
-
-// -----------------------------------------------------------------------------
-//
 // ldParamSplit - split a comma-separated value into a NULL-terminated array
 //
 // Returns a faP-allocated array of pointers into the original (modified) string.
@@ -32,13 +24,5 @@ extern char* ldQueryParamValue(const char* name);
 extern char** ldParamSplit(char* csv, KAlloc* faP);
 
 
-
-// -----------------------------------------------------------------------------
-//
-// ldParamExpandV - expand each value in a NULL-terminated string array
-//
-// Returns a new faP-allocated array with expanded URIs.
-//
-extern char** ldParamExpandV(char** srcV, KAlloc* faP);
 
 #endif  // CORNGSILD_LDQUERYPARAMS_H_

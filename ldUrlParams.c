@@ -23,7 +23,7 @@
 #include "corJsonld/corLdInit.h"                             // corLdCoreContext
 #include "corNgsild/ldCheckDateTime.h"                    // ldCheckDateTime, ldIsoToNanoseconds
 #include "corNgsild/ldTypes.h"                            // ldFormatFromString
-#include "corNgsild/ldQueryParams.h"                      // ldParamSplit, ldParamExpandV
+#include "corNgsild/ldQueryParams.h"                      // ldParamSplit
 #include "corNgsild/ldCheckUri.h"                         // ldCheckUri
 #include "corNgsild/ldQParse.h"                           // ldQParse
 #include "corNgsild/LdProblem.h"                          // LD_ERROR_BAD_REQUEST_DATA

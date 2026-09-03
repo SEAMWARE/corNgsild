@@ -29,8 +29,8 @@
 #include "corNgsild/ldCheckAttribute.h"                   // ldCheckAttribute
 #include "corNgsild/ldCheckSubscription.h"                // ldCheckSubscription
 #include "corNgsild/ldCheckRegistration.h"                // ldCheckRegistration
-#include "corNgsild/ldRender.h"                            // ldToNormalized, ldToConcise, ldToSimplified
-#include "corNgsild/ldQueryParams.h"                       // ldQueryParamValue, ldParamSplit, ldParamExpandV
+#include "corNgsild/ldRender.h"                            // ldToConcise, ldToSimplified
+#include "corNgsild/ldQueryParams.h"                       // ldParamSplit
 #include "corNgsild/ldPickOmit.h"                          // ldPickOmit
 #include "corNgsild/ldStripSysAttrs.h"                     // ldStripSysAttrs
 #include "corNgsild/ldApiEntityToDbModel.h"                 // ldApiEntityToDbModel

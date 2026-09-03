@@ -104,20 +104,6 @@ void ldPickOmit(KjNode* entityP, char** pickV, char** omitV)
 
 // -----------------------------------------------------------------------------
 //
-// ldPickOmitNested -
-//
-// Identical semantics to ldPickOmit; kept as a separate symbol so callers
-// can document intent (linked-entity vs root) without rebinding.
-//
-void ldPickOmitNested(KjNode* entityP, char** pickV, char** omitV)
-{
-  pickOmitImpl(entityP, pickV, omitV);
-}
-
-
-
-// -----------------------------------------------------------------------------
-//
 // ldAttrsFilter - § 6.4.3.2 / § 5.10.2 ?attrs= response filter
 //
 // Unlike pick (§ 6.3.6), `attrs` only filters Attributes — entity members
