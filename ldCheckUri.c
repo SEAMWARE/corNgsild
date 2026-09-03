@@ -38,7 +38,7 @@ static bool isSchemeChar(char c)
 // The scheme must start with a letter and contain only scheme chars (RFC 3986
 // § 3.1) - 'entity_pattern=urn:x' has a colon but is NOT a URI.
 //
-static bool uriValid(const char* uri)
+bool ldUriValid(const char* uri)
 {
   if (uri == NULL || uri[0] == 0)
     return false;
@@ -86,7 +86,7 @@ static bool uriValid(const char* uri)
 //
 bool ldCheckUri(const char* uri)
 {
-  if (uriValid(uri) == false)
+  if (ldUriValid(uri) == false)
   {
     ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid URI", "Not a valid URI: '%s'", uri);
     return false;

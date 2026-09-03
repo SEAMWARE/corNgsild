@@ -70,7 +70,16 @@ typedef struct LdQValue
 
     struct { double lo; double hi; }                          numRange;   // LdQRange (numeric)
     struct { char*  lo; char*  hi; }                          dateRange;  // LdQRange (date)
-    struct { char** values; int count; LdQValueType itemType; } list;     // LdQValueList
+    //
+    // LdQValueList. itemTypeV[] carries ONE type per value, because § 7.2.3.4
+    // condition 2 - "the target value is identical or equivalent to any of the
+    // list values" - puts no requirement on the values sharing a type, so
+    // `q=a==1,"two"` is a legal list of two different kinds of Value.
+    //
+    // itemType is the old single-type field, kept while the consumers move over
+    // to itemTypeV; it holds the FIRST item's type. Do not add new users.
+    //
+    struct { char** values; int count; LdQValueType itemType; LdQValueType* itemTypeV; } list;
   };
 } LdQValue;
 
