@@ -27,25 +27,6 @@
 
 // -----------------------------------------------------------------------------
 //
-// ldSnapshotStatusToString -
-//
-const char* ldSnapshotStatusToString(LdSnapshotStatus s)
-{
-  switch (s)
-  {
-    case LdSnapshotPreparing: return "preparing";
-    case LdSnapshotSuccess:   return "success";
-    case LdSnapshotPartial:   return "partial";
-    case LdSnapshotEmpty:     return "empty";
-    case LdSnapshotFailure:   return "failure";
-  }
-  return "preparing";
-}
-
-
-
-// -----------------------------------------------------------------------------
-//
 // ldSnapshotCacheCreate -
 //
 LdSnapshotCache* ldSnapshotCacheCreate(void)

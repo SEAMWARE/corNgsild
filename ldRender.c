@@ -8,19 +8,17 @@
 // 
 //
 #include <stdbool.h>                                     // bool
-#include "corRest/corRest.h"                            // corRest
 #include <string.h>                                      // strcmp
 
 #include "kbase/kLibLog.h"                             // KLOG_T
 #include "kalloc/KAlloc.h"                             // KAlloc
 #include "kjson/KjNode.h"                               // KjNode
-#include "kjson/kjBuilder.h"                             // kjString
+#include "kjson/kjBuilder.h"                             // kjChildAdd, kjChildRemove, kjObject
 #include "kjson/kjBufferCreate.h"                        // kjBufferCreate
 #include "kjson/kjLookup.h"                              // kjLookup
 
 #include "corNgsild/LdAttrType.h"                         // LdAttrType
 #include "corNgsild/LdVocab.h"                            // LD_VOCAB_*
-#include "corNgsild/ldTypes.h"                            // ldAttrTypeToString
 #include "corNgsild/ldAttrTypeDetect.h"                   // ldAttrTypeDetect
 #include "corNgsild/ldIsEntityKeyword.h"                   // ldIsEntityKeyword
 #include "corNgsild/ldRender.h"                           // Own interface
@@ -72,81 +70,6 @@ static bool attrTypeCanBeInferred(LdAttrType attrType)
   case LdAttrGeoProperty:      return false;   // shares hasValue with Property
   default:                     return false;
   }
-}
-
-
-
-// =============================================================================
-//
-// toNormalized - ensure every attribute has an explicit "type" field
-//
-// =============================================================================
-
-
-
-// -----------------------------------------------------------------------------
-//
-// attrToNormalized -
-//
-static void attrToNormalized(KjNode* attrP, KAlloc* faP)
-{
-  if (attrP->type != KjObject)
-    return;
-
-  LdAttrType attrType = ldAttrTypeDetect(attrP);
-  if (attrType == LdAttrNone)
-    return;
-
-  // Check if "type" already exists
-  bool hasType = false;
-  for (KjNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
-  {
-    if (strcmp(childP->name, "type") == 0)
-    {
-      hasType = true;
-      break;
-    }
-  }
-
-  // Add "type" if missing
-  if (hasType == false)
-  {
-    KjNode* typeNodeP = kjString(corRest.kjsonP, "type", ldAttrTypeToString(attrType));
-    if (typeNodeP != NULL)
-    {
-      // Insert at the beginning
-      typeNodeP->next = attrP->value.firstChildP;
-      attrP->value.firstChildP = typeNodeP;
-    }
-  }
-
-  // Recurse into sub-attributes
-  for (KjNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
-  {
-    if (isAttrKeyword(childP->name) == false)
-      attrToNormalized(childP, faP);
-  }
-}
-
-
-
-// -----------------------------------------------------------------------------
-//
-// ldToNormalized -
-//
-bool ldToNormalized(KjNode* entityP, KAlloc* faP)
-{
-  if (entityP == NULL || entityP->type != KjObject)
-    return false;
-
-  for (KjNode* childP = entityP->value.firstChildP; childP != NULL; childP = childP->next)
-  {
-    if (ldIsEntityKeyword(childP->name) == false)
-      attrToNormalized(childP, faP);
-  }
-
-  KLOG_T(LdTRender, "Entity converted to normalized format");
-  return true;
 }
 
 

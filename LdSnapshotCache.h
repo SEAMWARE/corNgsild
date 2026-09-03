@@ -43,10 +43,6 @@ typedef enum LdSnapshotStatus
 
 
 
-extern const char* ldSnapshotStatusToString(LdSnapshotStatus s);
-
-
-
 // -----------------------------------------------------------------------------
 //
 // LdSnapshotCacheItem - one snapshot in the cache.

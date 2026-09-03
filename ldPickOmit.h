@@ -30,18 +30,6 @@ extern void ldPickOmit(KjNode* entityP, char** pickV, char** omitV);
 
 // -----------------------------------------------------------------------------
 //
-// ldPickOmitNested - identical semantics to ldPickOmit; a separate symbol so
-// call sites on Linked Entities reached via § 4.5.23 can document intent. A
-// sub-projection `attr{...}` lists exactly what to keep (or remove), and
-// id/type have no special status there either. The ETSI test suite (018_20,
-// 018_21, 019_20, 019_21, 019_22, 019_23) checks this directly.
-//
-extern void ldPickOmitNested(KjNode* entityP, char** pickV, char** omitV);
-
-
-
-// -----------------------------------------------------------------------------
-//
 // ldAttrsFilter - apply ?attrs= response filter (deprecated alias of pick)
 //
 // § 6.4.3.2 / § 5.10.2: `attrs` only filters Attributes — entity members

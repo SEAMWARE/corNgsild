@@ -11,7 +11,7 @@
 //
 // Shared distributed-operation plumbing used by every NGSI-LD entity
 // write / read service routine. Each endpoint composes its own URL
-// and (if applicable) body, then calls ldDistOpSend(); this module
+// and (if applicable) body, then calls ldDistOpSendReceive(); this module
 // handles header composition (Via + tenant + contextSourceInfo),
 // plugin lookup, timeout wiring, counter updates, and a common
 // BatchEntityError append helper.
@@ -90,7 +90,7 @@ extern bool ldDistOpEndpointIsSelf(const char* endpoint);
 
 // -----------------------------------------------------------------------------
 //
-// ldDistOpSend - send one CSR forward and update its counters
+// ldDistOpSendReceive - send one CSR forward and update its counters
 //
 // Common machinery shared by every dispatcher:
 //   - Resolves the forwarding plugin by endpoint scheme.
@@ -120,24 +120,10 @@ extern bool ldDistOpEndpointIsSelf(const char* endpoint);
 // Returns the upstream HTTP status (2xx on success). On transport error
 // returns 502 and populates *errorDetailPP.
 //
-extern int ldDistOpSend(LdRegCacheItem*  csr,
-                        CorRestVerb       verb,
-                        const char*      url,
-                        const char*      body,
-                        int              bodyLen,
-                        const char*      ownAlias,
-                        const char**     errorDetailPP);
-
-
-
-// -----------------------------------------------------------------------------
-//
-// ldDistOpSendReceive - like ldDistOpSend, but also returns the response
-// body (used by GET forwards which must parse the upstream payload).
-//
-// responseBodyPP / responseBodyLenP are out-parameters. On success with a
-// non-empty body they point into the request kalloc; empty-body cases
-// leave them NULL/0. Both may be NULL — behaves like ldDistOpSend then.
+// responseBodyPP / responseBodyLenP are out-parameters, for the GET forwards
+// that must parse the upstream payload. On success with a non-empty body they
+// point into the request kalloc; empty-body cases leave them NULL/0. Both may
+// be NULL when the caller has no use for the response body.
 //
 extern int ldDistOpSendReceive(LdRegCacheItem*  csr,
                                CorRestVerb       verb,
