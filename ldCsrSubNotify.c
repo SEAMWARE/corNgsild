@@ -48,7 +48,7 @@
 
 #include "corNgsild/ldTraceLevels.h"                    // LdTCsrNotify
 #include "corNgsild/LdSubCache.h"                       // LdSubCacheItem, LdSubEntitySelector
-#include "corNgsild/ldSubCache.h"                       // ldSubCacheRdLock, ldSubCacheUnlock
+#include "corNgsild/ldSubCache.h"                       // ldSubCacheRdLock, ldSubCacheUnlock, ldSubCacheItemPin
 #include "corNgsild/ldStripSysAttrs.h"                  // ldStripSysAttrs
 #include "corNgsild/LdRegCache.h"                       // LdRegCache, LdRegCacheItem, LdRegInfo, LdRegEntityInfo
 #include "corNgsild/ldRegCache.h"                       // ldRegCacheRdLock, ldRegCacheUnlock
@@ -500,9 +500,20 @@ static void sendCsourceNotification(LdSubCacheItem* subItemP,
     corNgsild.csrPendingCap = newCap;
   }
 
-  // The matched cache items may be deleted later in this same request
-  // (a CSR delete fans out, THEN removes the item) — build the
-  // notification tree NOW, defer only the POST.
+  //
+  // The matched cache items may be deleted later in this same request (a CSR
+  // delete fans out, THEN removes the item) — or, with --high-availability, by
+  // the HA watch thread the instant a peer touches the subscription. Build the
+  // notification tree NOW, defer only the POST — and PIN the item for as long
+  // as the queue holds a pointer to it: csourceNotificationPost dereferences it
+  // (endpoint, context, receiverInfo) and writes its counters back, all after
+  // the response has been handed over and every lock has been dropped.
+  //
+  // The caller's own pin, if it has one, ends when the caller returns; this one
+  // belongs to the queue and is released in ldCsrSubDispatchPending /
+  // ldCsrSubPendingDiscard.
+  //
+  ldSubCacheItemPin(subItemP);
   corNgsild.csrPendingV[corNgsild.csrPendingN].subItemP     = subItemP;
   corNgsild.csrPendingV[corNgsild.csrPendingN].notification = csourceNotificationBuild(subItemP, matchV, matchN, triggerReason);
   corNgsild.csrPendingN++;
@@ -516,6 +527,9 @@ static void sendCsourceNotification(LdSubCacheItem* subItemP,
 //
 void ldCsrSubPendingDiscard(void)
 {
+  for (int i = 0; i < corNgsild.csrPendingN; i++)
+    ldSubCacheItemUnpin(corNgsild.csrPendingV[i].subItemP);
+
   corNgsild.csrPendingN = 0;
 }
 
@@ -534,7 +548,10 @@ void ldCsrSubDispatchPending(void)
     KT_T(LdTCsrNotify, "dispatching %d deferred CSR notification(s)", corNgsild.csrPendingN);
 
   for (int i = 0; i < corNgsild.csrPendingN; i++)
+  {
     csourceNotificationPost(corNgsild.csrPendingV[i].subItemP, corNgsild.csrPendingV[i].notification);
+    ldSubCacheItemUnpin(corNgsild.csrPendingV[i].subItemP);
+  }
   corNgsild.csrPendingN = 0;
 }
 
