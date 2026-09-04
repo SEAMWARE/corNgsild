@@ -76,10 +76,7 @@ typedef struct LdQValue
     // list values" - puts no requirement on the values sharing a type, so
     // `q=a==1,"two"` is a legal list of two different kinds of Value.
     //
-    // itemType is the old single-type field, kept while the consumers move over
-    // to itemTypeV; it holds the FIRST item's type. Do not add new users.
-    //
-    struct { char** values; int count; LdQValueType itemType; LdQValueType* itemTypeV; } list;
+    struct { char** values; int count; LdQValueType* itemTypeV; } list;
   };
 } LdQValue;
 

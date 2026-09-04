@@ -385,7 +385,6 @@ static bool parseValueList(const char* raw, int rawLen, LdQTerm* term, KAlloc* k
   term->value.list.values      = values;
   term->value.list.count       = ix;
   term->value.list.itemTypeV   = itemTypeV;
-  term->value.list.itemType    = (ix > 0) ? itemTypeV[0] : LdQNoValue;   // legacy single type
 
   return true;
 }
