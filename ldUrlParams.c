@@ -413,12 +413,16 @@ void ldParamHook(const char* name, const char* value)
   }
   else if (strcmp(name, "hops") == 0)
   {
-    if (value != NULL)
-    {
-      corNgsild.hops    = atoi(value);
-      corNgsild.hopsSet = true;
-      if (corNgsild.hops < 0) corNgsild.hops = 0;
-    }
+    //
+    // Through intParam like every other integer param. atoi took "2x" as 2 and
+    // "abc" as 0, and this one is the worst place for that: hops=0 means "do not
+    // forward", so a typo silently turned a distributed query into a local one
+    // and answered it as if nothing were missing. The clamp it needed
+    // (`if (hops < 0) hops = 0`) is gone with it - a negative is now a 400,
+    // which is what the other params do with one.
+    //
+    if (!intParam("hops", value, &corNgsild.hops, 0)) return;
+    corNgsild.hopsSet = true;
   }
   else if (strcmp(name, "drop") == 0)
   {
@@ -493,20 +497,12 @@ void ldParamHook(const char* name, const char* value)
   }
   else if (strcmp(name, "joinLevel") == 0)
   {
-    // § 4.5.23 — strictly positive integer. 0 / negatives / non-numeric
-    // are BadRequestData (the spec implies "depth", which is meaningless
-    // at zero).
-    if (value == NULL)
-      return;
-
-    int n = atoi(value);
-    if (n < 1)
-    {
-      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid request",
-              "'joinLevel' must be a positive integer");
-      return;
-    }
-    corNgsild.joinLevel = n;
+    // § 4.5.23 — strictly positive integer. 0 / negatives / non-numeric are
+    // BadRequestData (the spec implies "depth", which is meaningless at zero).
+    // That is what the comment always said; atoi only delivered two thirds of
+    // it, taking "3x" as 3. intParam says it and means it, and names the value
+    // it refused.
+    if (!intParam("joinLevel", value, &corNgsild.joinLevel, 1)) return;
   }
   else if (strcmp(name, "containedBy") == 0)
   {
