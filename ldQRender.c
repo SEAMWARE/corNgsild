@@ -237,9 +237,7 @@ static int renderTerm(LdQTerm* term, CorLdContext* contextP, KAlloc* allocP, cha
     n = snprintf(buf, bufSize, "%s%s", attr, op);
     for (int i = 0; i < term->value.list.count && n < bufSize; i++)
     {
-      LdQValueType itemType = (term->value.list.itemTypeV != NULL)
-                              ? term->value.list.itemTypeV[i]
-                              : term->value.list.itemType;
+      LdQValueType itemType = term->value.list.itemTypeV[i];
 
       if (i > 0) n += snprintf(buf + n, bufSize - n, ",");
       if (itemType == LdQString)

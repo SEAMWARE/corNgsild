@@ -766,9 +766,7 @@ static bool qLeafCompare(LdQTerm* term, KjNode* valueP)
 
       for (int i = 0; (i < term->value.list.count) && !hit; i++)
       {
-        LdQValueType itemType = (term->value.list.itemTypeV != NULL)
-                                ? term->value.list.itemTypeV[i]
-                                : term->value.list.itemType;
+        LdQValueType itemType = term->value.list.itemTypeV[i];
 
         for (KjNode* elemP = valueP->value.firstChildP; elemP != NULL; elemP = elemP->next)
         {
@@ -793,9 +791,7 @@ static bool qLeafCompare(LdQTerm* term, KjNode* valueP)
 
     for (int i = 0; i < term->value.list.count; i++)
     {
-      LdQValueType itemType = (term->value.list.itemTypeV != NULL)
-                              ? term->value.list.itemTypeV[i]
-                              : term->value.list.itemType;
+      LdQValueType itemType = term->value.list.itemTypeV[i];
 
       if ((itemType == LdQNumber) && isNum)
       {
