@@ -275,6 +275,37 @@ static KjNode* getAttrValueAt(KjNode* containerP, const char* attrName, int ix)
 
 
 
+// -----------------------------------------------------------------------------
+//
+// attrIsRelationshipAt - is the addressed instance a Relationship?
+//
+// § 7.2.3.3: "If the target element corresponds to a Relationship or
+// ListRelationship, the combination of such target element with any operator
+// different than equal or unequal shall result in NOT MATCHING."
+//
+// The target of a Relationship is a URI, and a URI has no order - `r>"mid"` was
+// answering on the alphabetical accident that "urn:x:14" sorts after "mid".
+// Existence is unaffected: `q=r` asks whether the Attribute is there, not what
+// its object compares to.
+//
+static bool attrIsRelationshipAt(KjNode* containerP, const char* attrName, int ix)
+{
+  KjNode* instP = attrInstanceAt(containerP, attrName, ix);
+
+  if ((instP == NULL) || (instP->type != KjObject))
+    return false;
+
+  KjNode* typeP = kjLookup(instP, "type");
+
+  if ((typeP == NULL) || (typeP->type != KjString))
+    return false;
+
+  return (strcmp(typeP->value.s, "Relationship") == 0) ||
+         (strcmp(typeP->value.s, "ListRelationship") == 0);
+}
+
+
+
 // qLeafCompare - compare a fully-resolved value node against a term's operator
 // (forward declaration; defined right after matchTerm).
 static bool qLeafCompare(LdQTerm* term, KjNode* valueP);
@@ -361,6 +392,13 @@ static bool matchTermOnInstance(KjNode* entityP, LdQTerm* term, int instIx)
                                            : getAttrValue(containerP, leafName);
   if (valueP == NULL)
     return (term->op == LdQNotExists);
+
+  // § 7.2.3.3 - a Relationship answers only to equal and unequal (and to the
+  // existence operators, which do not look at the object at all).
+  if ((term->op != LdQEqual) && (term->op != LdQUnequal) &&
+      (term->op != LdQExists) && (term->op != LdQNotExists) &&
+      attrIsRelationshipAt(containerP, leafName, (containerP == entityP) ? instIx : 0))
+    return false;
 
   //
   // § 4.9 "[...]" — descend INTO the value through opaque member names.
