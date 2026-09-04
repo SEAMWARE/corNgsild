@@ -1,0 +1,1 @@
+-Wall -Werror -O2 -fPIC -DANSI -DCOR_WITH_ICU -I..  -MMD -MP  -g -DDEBUG
