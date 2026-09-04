@@ -816,6 +816,38 @@ static LdQNode* parseTerm(const char** pp, KAlloc* kaP)
   }
 
 
+  //
+  // § 7.2.3.3 - the ordering operators take a ComparableValue and nothing else:
+  //
+  //   QueryTerm =/ Attribute Operator ComparableValue
+  //   ComparableValue = Number / quotedStr / dateTime / date / time
+  //
+  // The richer right-hand sides - a boolean, a value list, a range - belong to
+  // CompEqualityValue, which only == and != accept. `A>=true` is therefore not a
+  // query with a debatable answer, it is not a query at all; the pushdown used
+  // to answer it with EVERY Entity, including ones that have no A, which breaks
+  // even "a matching entity shall contain the target element".
+  //
+  if ((nodeP->term.op == LdQGreater) || (nodeP->term.op == LdQLess) ||
+      (nodeP->term.op == LdQGreaterEq) || (nodeP->term.op == LdQLessEq))
+  {
+    const char* what = NULL;
+
+    if      (nodeP->term.valueType == LdQBool)      what = "a boolean";
+    else if (nodeP->term.valueType == LdQValueList) what = "a value list";
+    else if (nodeP->term.valueType == LdQRange)     what = "a range";
+    else if (nodeP->term.valueType == LdQDateRange) what = "a range";
+
+    if (what != NULL)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid q parameter",
+              "%s cannot be compared with an ordering operator - only a number, "
+              "a quoted string, a date-time, a date or a time can", what);
+      return NULL;
+    }
+  }
+
+
   // expandValues handling moved to ldExpandParams: at parse time, URL param
   // order may not have set expandValuesV yet, and term.attr is already in
   // expanded form — both sides need to be expanded for the match to work.

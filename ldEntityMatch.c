@@ -516,31 +516,56 @@ static bool qLeafCompare(LdQTerm* term, KjNode* valueP)
   case LdQString:
     if (term->op == LdQPattern || term->op == LdQNotPattern)
     {
+      //
+      // A regular expression is matched against a STRING. § 7.2.3.3 says so for
+      // both pattern operators: "if the target value data type is different than
+      // String then it shall be considered as NOT MATCHING" - and it means
+      // notPattern too, so a number is not "a value that does not match /x/",
+      // it is a value the operator does not apply to.
+      //
+      // An array of strings is walked element by element. That is not a
+      // ListProperty nicety: a languageMap value may BE an array of strings
+      // (§ 5.2.x), and `description[*]~=pain` has to see "pain" inside
+      // ["schmerz","pain"] - query_q_langprop_alllang pins it.
+      //
+      // The guard that was missing: an array with no string in it at all is a
+      // target the operator cannot be applied to, so it must not match !~=
+      // either. Computing "no element matched" and negating it reported a
+      // NUMERIC array as "does not match the pattern", which it does not - it
+      // has no string to match or fail against.
+      //
+      bool comparable = (valueP->type == KjString);
+
+      if (valueP->type == KjArray)
+      {
+        for (KjNode* elemP = valueP->value.firstChildP; elemP != NULL; elemP = elemP->next)
+        {
+          if (elemP->type == KjString) { comparable = true; break; }
+        }
+      }
+
+      if (!comparable)
+        return false;
+
       regex_t re;
       if (regcomp(&re, term->value.s, REG_EXTENDED | REG_NOSUB) != 0)
         return false;
+
       bool m = false;
+
       if (valueP->type == KjString)
-      {
         m = (regexec(&re, valueP->value.s, 0, NULL, 0) == 0);
-      }
-      else if (valueP->type == KjArray)
+      else
       {
-        // VocabProperty.vocab / Property with array value: match if ANY
-        // element matches (§ 4.9). Matches BSON's native array-containment
-        // semantics that the mongoc plugin gets for free.
         for (KjNode* elemP = valueP->value.firstChildP; elemP != NULL; elemP = elemP->next)
         {
-          if (elemP->type == KjString && regexec(&re, elemP->value.s, 0, NULL, 0) == 0)
+          if ((elemP->type == KjString) && (regexec(&re, elemP->value.s, 0, NULL, 0) == 0))
           { m = true; break; }
         }
       }
-      else
-      {
-        regfree(&re);
-        return false;
-      }
+
       regfree(&re);
+
       return (term->op == LdQPattern) ? m : !m;
     }
 
@@ -647,6 +672,36 @@ static bool qLeafCompare(LdQTerm* term, KjNode* valueP)
     return false;
 
   case LdQRange:
+    //
+    // An array target: any element inside the interval satisfies it, the way
+    // any element equal to the value satisfies == (§ 7.2.3.4 condition 1). The
+    // spec spells the array case out for a single value and for a value list
+    // (condition 2) and says nothing for a range - but a Property whose value
+    // is an array does not stop being one because the query is a range, and
+    // mongoc's $gte/$lte compare element-wise natively. See spec-doubts-2 #123.
+    //
+    if (valueP->type == KjArray)
+    {
+      bool hit = false;
+      for (KjNode* elemP = valueP->value.firstChildP; elemP != NULL; elemP = elemP->next)
+      {
+        double elemNum;
+        if      (elemP->type == KjInt)   elemNum = (double) elemP->value.i;
+        else if (elemP->type == KjFloat) elemNum = elemP->value.f;
+        else continue;
+
+        if ((elemNum >= term->value.numRange.lo) && (elemNum <= term->value.numRange.hi))
+        { hit = true; break; }
+      }
+
+      switch (term->op)
+      {
+      case LdQEqual:   return hit;
+      case LdQUnequal: return !hit;
+      default:         return false;
+      }
+    }
+
     if (!isNum) return (term->op == LdQUnequal);
     if (term->op == LdQEqual)
       return entityNum >= term->value.numRange.lo && entityNum <= term->value.numRange.hi;
@@ -662,6 +717,42 @@ static bool qLeafCompare(LdQTerm* term, KjNode* valueP)
     // types come from the parser, which converted and validated each item; the
     // strtod here is on a token already proven to be a whole number.
     //
+    //
+    // An array target, § 7.2.3.4 condition 2 second bullet: "the target value
+    // includes any of the Query Term values, and the target value is an array".
+    // mongoc gets this from BSON's $in; the walk has to do it by hand.
+    //
+    if (valueP->type == KjArray)
+    {
+      bool hit = false;
+
+      for (int i = 0; (i < term->value.list.count) && !hit; i++)
+      {
+        LdQValueType itemType = (term->value.list.itemTypeV != NULL)
+                                ? term->value.list.itemTypeV[i]
+                                : term->value.list.itemType;
+
+        for (KjNode* elemP = valueP->value.firstChildP; elemP != NULL; elemP = elemP->next)
+        {
+          if ((itemType == LdQNumber) && ((elemP->type == KjInt) || (elemP->type == KjFloat)))
+          {
+            double elemNum = (elemP->type == KjInt) ? (double) elemP->value.i : elemP->value.f;
+            if (elemNum == strtod(term->value.list.values[i], NULL)) { hit = true; break; }
+          }
+          else if ((itemType == LdQString) && (elemP->type == KjString))
+          {
+            if (strcmp(elemP->value.s, term->value.list.values[i]) == 0) { hit = true; break; }
+          }
+          else if ((itemType == LdQBool) && (elemP->type == KjBoolean))
+          {
+            if (elemP->value.b == (strcmp(term->value.list.values[i], "true") == 0)) { hit = true; break; }
+          }
+        }
+      }
+
+      return (term->op == LdQEqual) ? hit : !hit;
+    }
+
     for (int i = 0; i < term->value.list.count; i++)
     {
       LdQValueType itemType = (term->value.list.itemTypeV != NULL)
