@@ -205,6 +205,19 @@ static bool isGeoJsonValue(KjNode* valueP)
 // hasExplicitAttrType - check if the object already has an NGSI-LD "type" field
 //                       with a known attribute type value
 //
+// The node it recognizes is STAMPED KJF_ATTR_TERM here, exactly as addTypeField
+// stamps the one it creates. The recognition and the marking have to be the same
+// act: this function decides "that node is the Attribute's type" by name, while
+// the sub-attribute recursion below decides "that node is a sub-attribute" by
+// the KJF_ATTR_TERM bit. Two oracles for one node - and when they disagreed, the
+// attribute's own type was wrapped into a sub-Property and the attribute came
+// back as {"type":{"type":"Property","value":"Property"}}, which is not an
+// NGSI-LD Attribute at all.
+//
+// They disagreed whenever expansion had not visited the subtree (the bit is set
+// during corLdExpandTree), and stamping here closes that off for good - whatever
+// route the object took to get here.
+//
 static bool hasExplicitAttrType(KjNode* objP)
 {
   for (KjNode* childP = objP->value.firstChildP; childP != NULL; childP = childP->next)
@@ -212,14 +225,19 @@ static bool hasExplicitAttrType(KjNode* objP)
     if (strcmp(childP->name, "type") == 0 && childP->type == KjString)
     {
       const char* v = childP->value.s;
-      if (strcmp(v, "Property")         == 0)  return true;
-      if (strcmp(v, "Relationship")     == 0)  return true;
-      if (strcmp(v, "GeoProperty")      == 0)  return true;
-      if (strcmp(v, "LanguageProperty") == 0)  return true;
-      if (strcmp(v, "VocabProperty")    == 0)  return true;
-      if (strcmp(v, "ListProperty")     == 0)  return true;
-      if (strcmp(v, "ListRelationship") == 0)  return true;
-      if (strcmp(v, "JsonProperty")     == 0)  return true;
+
+      if ((strcmp(v, "Property")         == 0) ||
+          (strcmp(v, "Relationship")     == 0) ||
+          (strcmp(v, "GeoProperty")      == 0) ||
+          (strcmp(v, "LanguageProperty") == 0) ||
+          (strcmp(v, "VocabProperty")    == 0) ||
+          (strcmp(v, "ListProperty")     == 0) ||
+          (strcmp(v, "ListRelationship") == 0) ||
+          (strcmp(v, "JsonProperty")     == 0))
+      {
+        childP->flags |= KJF_CORE_TERM | KJF_ATTR_TERM;
+        return true;
+      }
       // The attribute-type keywords above are core-context terms and are NEVER
       // JSON-LD-expanded — they always arrive in short form. A "type" value
       // that DID expand (to https://uri.etsi.org/ngsi-ld/default-context/<term>

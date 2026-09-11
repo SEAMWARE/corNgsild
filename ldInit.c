@@ -12,7 +12,7 @@
 
 #include "kbase/kLibLog.h"                             // KLOG_T
 #include "kjson/KjNode.h"                              // KjNode
-#include "corJsonld/corLdExpand.h"                       // corLdSetVocabExpandCheck, corLdSetValueCheck
+#include "corJsonld/corLdExpand.h"                       // corLdSetVocabExpandCheck, corLdSetValueCheck, corLdSetKeywordCheck
 
 #include "corNgsild/ldTraceLevels.h"                      // LdTInit
 #include "corNgsild/ldParams.h"                           // ldParamsInit
@@ -88,6 +88,34 @@ static bool ldVocabNameCheck(const char* name)
   }
 
   return true;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldKeywordCheck - reject a member name that looks like a JSON-LD keyword but isn't
+//
+// Invoked by corJsonld for every '@'-prefixed member name that is not on the
+// closed JSON-LD 1.1 keyword list ("@referredType", "@odata.id", ...).
+//
+// JSON-LD 1.1 (§ "Expansion Algorithm", step 13.1) drops such a member with a
+// warning. NGSI-LD cannot: § 4.6.2 gives an Attribute name a grammar starting
+// at a letter, so an '@'-prefixed name is not a valid Attribute name either -
+// and silently dropping a member of an Entity the client asked us to store is
+// worse than refusing it. Neither reading is written down; see the spec-doubt
+// log.
+//
+// (What made this a 400 rather than a drop: unexpanded, the subtree reached the
+// NGSI-LD layer with none of its structural members marked, and the attribute's
+// own "type" was reified into a sub-attribute - see ldNormalizeInput.)
+//
+static bool ldKeywordCheck(const char* name)
+{
+  ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Member Name",
+          "'%s' is not a JSON-LD keyword, and § 4.6.2 does not allow a name to start with '@'",
+          name);
+  return false;
 }
 
 
@@ -290,6 +318,7 @@ int ldInit(void)
   ldHooksRegister();
   corLdSetVocabExpandCheck(ldVocabNameCheck);
   corLdSetValueCheck(ldValueCheck);
+  corLdSetKeywordCheck(ldKeywordCheck);
 
   // libmosquitto global init for MQTT notifications (§ 7).
   if (ldMqttInit() != 0)
