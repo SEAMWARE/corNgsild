@@ -15,13 +15,27 @@ INCLUDE       = -I$(PREFIX)
 DFLAGS        = -DANSI
 
 #
-# ICU "root" collation for orderBy string ordering (§ 7.6.2.1). ON by default;
-# build with 'make COR_WITH_ICU=0 ...' to drop the libicu dependency (orderBy
-# then uses a case-insensitive ASCII approximation of root collation). The
-# coraine CMake option COR_FEATURE_ICU_COLLATION must match this setting — it
-# adds the matching -licui18n/-licuuc/-licudata to the final broker link.
+# ICU "root" collation for orderBy string ordering (§ 7.6.2.1). OFF by default;
+# build with 'make COR_WITH_ICU=1 ...' to link libicu and get the collation the
+# specification names. The coraine CMake option COR_FEATURE_ICU_COLLATION must
+# match this setting — it adds the matching -licui18n/-licuuc/-licudata to the
+# final broker link, and coraine's makefile passes both from one variable.
 #
-COR_WITH_ICU  ?= 1
+# OFF by default because of what ON costs: three shared libraries and 39.2 MiB,
+# of which libicudata is 31.6 MiB - nine times the size of the whole broker, for
+# a collation table. That is the single largest thing a coraine deployment can
+# put on a machine, and it is there for one sort order.
+#
+# What the default gives up is bounded and measured, not a vague approximation.
+# Pure ASCII sorts identically either way (which is why it costs no ETSI test
+# purpose - the suite's orderBy TPs sort "A", "B", "C"). Three things differ:
+# punctuation no longer sorts before digits ('1one' before '_under'), a
+# non-ASCII letter takes its byte weight rather than its base letter's ('äpple'
+# after 'zebra' instead of beside 'apple'), and collation=<locale> is ignored.
+# Replacing ICU with a root-collation implementation of our own, tailorings
+# added on demand, is on the coraine roadmap; until then ON is one flag away.
+#
+COR_WITH_ICU  ?= 0
 ifeq ($(COR_WITH_ICU),1)
 DFLAGS       += -DCOR_WITH_ICU
 ICU_CFLAGS   := $(shell pkg-config --cflags icu-i18n 2>/dev/null)
