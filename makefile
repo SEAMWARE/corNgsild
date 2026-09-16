@@ -181,7 +181,7 @@ LIB_DEPS      = $(addprefix $(OBJDIR)/,$(LIB_SOURCES:.c=.d))
 #
 FLAGSTAMP    := $(OBJDIR)/.flags
 
-LIBS          = ../corRest/libcorRest.a ../corJsonld/libcorJsonld.a ../kalloc/libkalloc.a ../kjson/libkjson.a ../kbase/libkbase.a ../klog/libklog.a ../ktrace/libktrace.a ../khash/libkhash.a -lpthread
+LIBS          = ../corRest/libcorRest.a ../corJsonld/libcorJsonld.a ../kalloc/libkalloc.a ../kjson/libkjson.a ../kbase/libkbase.a ../ktrace/libktrace.a ../khash/libkhash.a -lpthread
 
 .PHONY: all clean test install i di ci
 
@@ -256,9 +256,9 @@ $(OBJDIR)/$(LIB):	$(LIB_OBJS)
 
 $(OBJDIR)/$(LIB_SO):	$(LIB_OBJS)
 					$(CC) -shared $(LIB_OBJS) -o $@ \
-						-L../corRest -L../corJsonld -L../kalloc -L../kjson -L../kbase -L../klog -L../ktrace -L../khash \
-						-lcorRest -lcorJsonld -lkalloc -lkjson -lkbase -lklog -lktrace -lkhash -lmicrohttpd -lssl -lcrypto -lpthread -lmosquitto $(ICU_LIBS) \
-						-Wl,-rpath,'$$ORIGIN/../corRest:$$ORIGIN/../corJsonld:$$ORIGIN/../kalloc:$$ORIGIN/../kjson:$$ORIGIN/../kbase:$$ORIGIN/../klog:$$ORIGIN/../ktrace:$$ORIGIN/../khash'
+						-L../corRest -L../corJsonld -L../kalloc -L../kjson -L../kbase -L../ktrace -L../khash \
+						-lcorRest -lcorJsonld -lkalloc -lkjson -lkbase -lktrace -lkhash -lmicrohttpd -lssl -lcrypto -lpthread -lmosquitto $(ICU_LIBS) \
+						-Wl,-rpath,'$$ORIGIN/../corRest:$$ORIGIN/../corJsonld:$$ORIGIN/../kalloc:$$ORIGIN/../kjson:$$ORIGIN/../kbase:$$ORIGIN/../ktrace:$$ORIGIN/../khash'
 
 $(OBJDIR)/%.o: %.c $(FLAGSTAMP)
 					@mkdir -p $(OBJDIR)
