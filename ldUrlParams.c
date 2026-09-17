@@ -26,7 +26,7 @@
 #include "corNgsild/ldQueryParams.h"                      // ldParamSplit
 #include "corNgsild/ldCheckUri.h"                         // ldCheckUri
 #include "corNgsild/ldQParse.h"                           // ldQParse
-#include "corNgsild/LdProblem.h"                          // LD_ERROR_BAD_REQUEST_DATA, LD_ERROR_LD_CONTEXT_NOT_AVAILABLE
+#include "corNgsild/LdProblem.h"                          // LD_ERROR_BAD_REQUEST_DATA, LD_ERROR_INVALID_REQUEST, LD_ERROR_LD_CONTEXT_NOT_AVAILABLE
 #include "corNgsild/ldError.h"                            // ldError
 #include "corNgsild/LdGeoRel.h"                           // ldGeoRelParse
 #include "corNgsild/LdScopeExpr.h"                        // ldScopeExprParse
@@ -125,15 +125,59 @@ bool ldContextResolve(void)
       char* start = strchr(hdr, '<');
       char* end   = (start != NULL) ? strchr(start, '>') : NULL;
 
-      if (start != NULL && end != NULL)
+      //
+      // Syntax first, and UNCONDITIONALLY - a malformed header is a malformed
+      // request whether or not this operation would have used the @context.
+      //
+      // It has to be checked rather than shrugged off: before this, three of
+      // the five malformed forms were SILENTLY IGNORED even on a GET, which
+      // then answered against the core context and advertised core. The client
+      // sent something wrong, the broker quietly did something else, and the
+      // response looked right. The other two came back 504, blaming
+      // availability for what is a spelling mistake.
+      //
+      // RFC 8288 § 3: the target of a Link header is `<URI-Reference>` - the
+      // angle brackets are part of the grammar, not decoration. RFC 3986 § 2:
+      // a URI contains no space, control character, '<', '>' or '"'.
+      //
+      if (start == NULL || end == NULL)
       {
-        start++;
-        *end = 0;
-        corNgsild.contextP = corLdContextFromUrl(start, faP);
-        if (corNgsild.contextP == NULL)
-          requestedUrl = kaStrdup(faP, start);   // copy: *end is restored below
-        *end = '>';
+        ldError(400, LD_ERROR_INVALID_REQUEST, "Invalid Request",
+                "Link header @context target must be enclosed in angle brackets (RFC 8288)");
+        corNgsild.contextError = true;
+        corNgsild.contextP     = corLdCoreContext();
+        return false;
       }
+
+      start++;
+
+      if (end == start)
+      {
+        ldError(400, LD_ERROR_INVALID_REQUEST, "Invalid Request",
+                "Link header @context target is empty");
+        corNgsild.contextError = true;
+        corNgsild.contextP     = corLdCoreContext();
+        return false;
+      }
+
+      for (char* cP = start; cP < end; cP++)
+      {
+        if ((unsigned char) *cP <= 0x20 || (unsigned char) *cP == 0x7f ||
+            *cP == '"' || *cP == '<' || *cP == '>')
+        {
+          ldError(400, LD_ERROR_INVALID_REQUEST, "Invalid Request",
+                  "Link header @context target is not a valid URI reference");
+          corNgsild.contextError = true;
+          corNgsild.contextP     = corLdCoreContext();
+          return false;
+        }
+      }
+
+      *end = 0;
+      corNgsild.contextP = corLdContextFromUrl(start, faP);
+      if (corNgsild.contextP == NULL)
+        requestedUrl = kaStrdup(faP, start);   // copy: *end is restored below
+      *end = '>';
 
       break;
     }
