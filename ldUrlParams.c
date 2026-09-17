@@ -26,7 +26,7 @@
 #include "corNgsild/ldQueryParams.h"                      // ldParamSplit
 #include "corNgsild/ldCheckUri.h"                         // ldCheckUri
 #include "corNgsild/ldQParse.h"                           // ldQParse
-#include "corNgsild/LdProblem.h"                          // LD_ERROR_BAD_REQUEST_DATA
+#include "corNgsild/LdProblem.h"                          // LD_ERROR_BAD_REQUEST_DATA, LD_ERROR_LD_CONTEXT_NOT_AVAILABLE
 #include "corNgsild/ldError.h"                            // ldError
 #include "corNgsild/LdGeoRel.h"                           // ldGeoRelParse
 #include "corNgsild/LdScopeExpr.h"                        // ldScopeExprParse
@@ -86,16 +86,35 @@ __thread CorNgsild corNgsildFallback;
 //
 // ldContextResolve - resolve @context from Link header or fall back to core context
 //
-// Called lazily for GET requests (no payload → parseHook didn't set contextP).
+// Called lazily for GET requests (no payload -> parseHook didn't set contextP).
 // Also callable directly from service routines that need the context before
 // the param hook runs (e.g. GET with zero URL params).
 //
-void ldContextResolve(void)
+// Returns false when the request NAMED an @context that could not be used - the
+// 504 is raised here and the caller must reject. Every other outcome is true.
+//
+// ⚠️ A failed download and "no @context supplied" both leave contextP NULL, and
+// treating them the same is what made an unreachable Link-header @context a
+// SILENT downgrade: the request asked for its own context, got core, and was
+// told "core" in the response Link header - self-consistent and wrong, because
+// every term whose meaning differs between the two was then misread. The two
+// cases are distinguished by whether a Link header was actually present.
+// POST already answered 504 through the parse hook; GET reached this fallback.
+//
+bool ldContextResolve(void)
 {
+  //
+  // Idempotent, and the ANSWER has to be too: this is called more than once per
+  // request (the param hook, then the pre-service hook, then service routines),
+  // and an early `return true` here hid the failure from every caller after the
+  // first - a query with URL params resolved first, failed, left core behind,
+  // and the pre-service hook was then told all was well.
+  //
   if (corNgsild.contextP != NULL)
-    return;
+    return (corNgsild.contextUnavailableUrl == NULL);
 
-  KAlloc* faP = &corRest.kalloc;
+  KAlloc* faP          = &corRest.kalloc;
+  char*   requestedUrl = NULL;
 
   for (int i = 0; i < corRest.in.httpHeaderCount; i++)
   {
@@ -111,11 +130,34 @@ void ldContextResolve(void)
         start++;
         *end = 0;
         corNgsild.contextP = corLdContextFromUrl(start, faP);
+        if (corNgsild.contextP == NULL)
+          requestedUrl = kaStrdup(faP, start);   // copy: *end is restored below
         *end = '>';
       }
 
       break;
     }
+  }
+
+  //
+  // The request named an @context and it could not be used.
+  //
+  // ⚠️ Report it by RETURNING FALSE, never by raising here. Raising inside this
+  // function was my first attempt and it is wrong: ldError sets the response
+  // error immediately, so the 504 stood even for the verbs that must ignore an
+  // unusable @context - the caller's decision came too late to matter. The
+  // caller decides, because only the caller knows whether the context is used.
+  //
+  // A usable contextP is left behind on purpose: the caller that cares rejects
+  // on the false return, and the callers that do not care carry on with core,
+  // which is the documented behaviour for an operation the context cannot
+  // affect (DELETE /entities/{id} - the id is already a full URI).
+  //
+  if (requestedUrl != NULL)
+  {
+    corNgsild.contextUnavailableUrl = requestedUrl;   // already an arena copy
+    corNgsild.contextP              = corLdCoreContext();
+    return false;
   }
 
   // Default user @context (§ 4 / § 8.2.3): the request carried no @context of
@@ -127,6 +169,8 @@ void ldContextResolve(void)
 
   if (corNgsild.contextP == NULL)
     corNgsild.contextP = corLdCoreContext();
+
+  return true;
 }
 
 
