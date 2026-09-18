@@ -6,7 +6,27 @@
 // Copyright 2026 Seamware
 // SPDX-License-Identifier: Apache-2.0
 //
-// § 4.6.2 / § 4.6.4 validation — see header.
+// § 5.2.2.3 name validation — see header.
+//
+// The § 5.2.2.5 VALUE scan that used to live here is gone. That clause names
+// < > " ' = ; ( ) as a hazard in the content of VALUES and says implementations
+// "should decide how to resolve" it — while also requiring, in the same
+// paragraph, that they "shall preserve the representation of the content of the
+// values ... and return the original content". Raising BadRequestData is one
+// permitted resolution and we took it; the cost was that `Beany's Animal
+// Collar` could not be stored, and 81 rows of the FIWARE tutorials' own seed
+// data would not load.
+//
+// KZ 2026-09-18: the restrictions belong on NAMES. Names are a grammar
+// (§ 5.2.2.3, ldIsValidName below) which excludes every one of those characters
+// by construction, so nothing is lost there.
+//
+// Injection safety does not depend on the scan: every place a value can become
+// query TEXT escapes it at that boundary — jsonStrEscape for the mongoc $expr
+// JSON, mongocEscapeDotsInKey for field names, PQexecParams for timescale
+// writes, escapeSqlLit for the TRoE q-to-SQL. Nothing is stored escaped, which
+// is what keeps it simple: the escape lives inside one statement and dies with
+// it.
 //
 #include <stdbool.h>                                     // bool
 #include <string.h>                                      // strchr, strcmp
@@ -18,35 +38,6 @@
 #include "corNgsild/LdProblem.h"                          // LD_ERROR_BAD_REQUEST_DATA
 #include "corNgsild/LdVocab.h"                            // LD_VOCAB_*
 #include "corNgsild/ldNameContentCheck.h"                 // Own interface
-
-
-// Top-level entity members that are URIs / DateTimes / structural — not names.
-static bool isStructuralKey(const char* key)
-{
-  if (key == NULL) return false;
-  if (key[0] == '@')                                                return true;
-  if (strcmp(key, "id")            == 0)                            return true;
-  if (strcmp(key, "scope")         == 0)                            return true;
-  if (strcmp(key, "createdAt")     == 0)                            return true;
-  if (strcmp(key, "modifiedAt")    == 0)                            return true;
-  if (strcmp(key, "deletedAt")     == 0)                            return true;
-  if (strcmp(key, "expiresAt")     == 0)                            return true;
-  if (strcmp(key, "observedAt")    == 0)                            return true;
-  if (strcmp(key, "value")         == 0)                            return true;
-  if (strcmp(key, "object")        == 0)                            return true;
-  if (strcmp(key, "objectType")    == 0)                            return true;
-  if (strcmp(key, "languageMap")   == 0)                            return true;
-  if (strcmp(key, "valueList")     == 0)                            return true;
-  if (strcmp(key, "objectList")    == 0)                            return true;
-  if (strcmp(key, "vocab")         == 0)                            return true;
-  if (strcmp(key, "json")          == 0)                            return true;
-  if (strcmp(key, "datasetId")     == 0)                            return true;
-  if (strcmp(key, "unitCode")      == 0)                            return true;
-  if (strcmp(key, "valueType")     == 0)                            return true;
-  if (strcmp(key, "type")          == 0)                            return true;  // value validated separately
-  return false;
-}
-
 
 
 // -----------------------------------------------------------------------------
@@ -142,164 +133,5 @@ bool ldIsValidName(const char* name)
     if (colon == NULL) break;
     segStart = colon + 1;
   }
-  return true;
-}
-
-
-
-// -----------------------------------------------------------------------------
-//
-// ldStringHasForbiddenChars -
-//
-bool ldStringHasForbiddenChars(const char* s)
-{
-  if (s == NULL) return false;
-  for (const unsigned char* p = (const unsigned char*) s; *p != 0; p++)
-  {
-    switch (*p)
-    {
-      case '<': case '>': case '"': case '\'':
-      case '=': case ';': case '(':  case ')':
-        return true;
-    }
-  }
-  return false;
-}
-
-
-
-// -----------------------------------------------------------------------------
-//
-// checkValueContent - a Property's `value` may be string, array, or object
-// (JSON-LD typed). For strings, run the forbidden-char check; for arrays,
-// recurse into elements; for objects, recurse into members (skipping the
-// type key). Returns true if clean, false (with ldError set) on violation.
-//
-static bool checkValueContent(const char* attrName, KjNode* valueP)
-{
-  if (valueP == NULL) return true;
-
-  if (valueP->type == KjString)
-  {
-    if (ldStringHasForbiddenChars(valueP->value.s))
-    {
-      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Forbidden Characters",
-              "value of '%s' contains forbidden characters (< > \" ' = ; ( ) — § 4.6.4)",
-              (attrName != NULL) ? attrName : "(anonymous)");
-      return false;
-    }
-    return true;
-  }
-
-  if (valueP->type == KjArray || valueP->type == KjObject)
-  {
-    for (KjNode* c = valueP->value.firstChildP; c != NULL; c = c->next)
-    {
-      if (!checkValueContent(attrName, c)) return false;
-    }
-  }
-
-  return true;
-}
-
-
-
-// -----------------------------------------------------------------------------
-//
-// checkAttribute - validate one attribute's name + nested values.
-//
-// Walk a single attribute's nested values and check for forbidden chars
-// in any string. Names are NOT checked here — they go through
-// ldVocabNameCheck during JSON-LD expansion (only suspect @vocab-fallback
-// names get validated). Recurses into sub-attributes for value content.
-//
-static bool checkAttribute(KjNode* attrP);
-
-static bool checkAttribute(KjNode* attrP)
-{
-  if (attrP == NULL) return true;
-
-  // Multi-instance attribute: array of instance objects.
-  if (attrP->type == KjArray)
-  {
-    for (KjNode* inst = attrP->value.firstChildP; inst != NULL; inst = inst->next)
-    {
-      if (inst->type != KjObject) continue;
-      KjNode tmp = *inst;
-      tmp.name = attrP->name;
-      if (!checkAttribute(&tmp)) return false;
-    }
-    return true;
-  }
-
-  if (attrP->type != KjObject) return true;
-
-  for (KjNode* c = attrP->value.firstChildP; c != NULL; c = c->next)
-  {
-    if (c->name == NULL) continue;
-
-    if (strcmp(c->name, "value") == 0)
-    {
-      if (!checkValueContent(attrP->name, c)) return false;
-      continue;
-    }
-
-    if (isStructuralKey(c->name)) continue;
-
-    // Sub-attribute: recurse to scan its values. Name itself is
-    // covered by ldVocabNameCheck during JSON-LD expansion.
-    if (c->type == KjObject || c->type == KjArray)
-      if (!checkAttribute(c)) return false;
-  }
-  return true;
-}
-
-
-
-// -----------------------------------------------------------------------------
-//
-// checkEntity - walk attributes scanning string values for § 4.6.4
-// forbidden chars. Names (entity type, attribute names) are validated
-// by ldVocabNameCheck during JSON-LD expansion — only names that fall
-// through to @vocab go through that hook, which is exactly the suspect
-// set (user-defined names without a proper @context mapping).
-//
-static bool checkEntity(KjNode* entityP)
-{
-  if (entityP == NULL || entityP->type != KjObject) return true;
-
-  for (KjNode* c = entityP->value.firstChildP; c != NULL; c = c->next)
-  {
-    if (c->name == NULL) continue;
-    if (isStructuralKey(c->name)) continue;
-    if (!checkAttribute(c)) return false;
-  }
-  return true;
-}
-
-
-
-// -----------------------------------------------------------------------------
-//
-// ldCheckNamesAndContent -
-//
-bool ldCheckNamesAndContent(KjNode* tree)
-{
-  if (tree == NULL) return true;
-
-  // Batch payload: array of entity objects.
-  if (tree->type == KjArray)
-  {
-    for (KjNode* e = tree->value.firstChildP; e != NULL; e = e->next)
-    {
-      if (e->type == KjObject)
-        if (!checkEntity(e)) return false;
-    }
-    return true;
-  }
-
-  if (tree->type == KjObject)
-    return checkEntity(tree);
-
   return true;
 }

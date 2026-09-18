@@ -30,7 +30,6 @@
 #include "corNgsild/CorNgsild.h"                           // corNgsild, ldParamHook
 #include "corNgsild/ldError.h"                            // ldError
 #include "corNgsild/ldEntityToApi.h"                      // ldEntityToApi
-#include "corNgsild/ldNameContentCheck.h"                 // ldCheckNamesAndContent
 #include "corNgsild/ldPickOmit.h"                         // ldPickOmit
 #include "corNgsild/ldToTemporalValues.h"                 // ldToTemporalValues
 #include "corNgsild/ldToAggregatedValues.h"               // ldToAggregatedValues, ldIso8601DurationParse
@@ -724,12 +723,6 @@ static void ldParseHook(void)
                                 && strncmp(corRest.in.urlPath, "/ngsi-ld/v1/entityOperations/", 29) == 0);
     if (isEntityPayloadPath || isEntityBatchPath)
     {
-      if (!ldCheckNamesAndContent(corRest.in.requestTree))
-      {
-        corNgsild.contextError = true;
-        return;
-      }
-
       // Empty-string entity type — must be caught pre-expansion (@vocab would
       // otherwise launder "" into the bare-prefix IRI and slip past ldCheckEntity).
       if (preExpandCheckEntityTypes(corRest.in.requestTree))
