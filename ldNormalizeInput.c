@@ -27,7 +27,7 @@
 #include "corJsonld/corLdExpand.h"                          // KJF_CORE_TERM
 #include "corNgsild/LdVocab.h"                            // LD_VOCAB_*
 #include "corNgsild/LdAttrType.h"                         // LdAttrType
-#include "corNgsild/ldTypes.h"                             // ldAttrTypeToString
+#include "corNgsild/ldTypes.h"                             // ldAttrTypeToString, ldAttrTypeFromString
 #include "corNgsild/ldAttrTypeDetect.h"                   // ldAttrTypeDetect
 #include "corNgsild/ldIsEntityKeyword.h"                   // ldIsEntityKeyword
 #include "corNgsild/LdNormalizeInput.h"                   // Own interface
@@ -226,26 +226,31 @@ static bool hasExplicitAttrType(KjNode* objP)
     {
       const char* v = childP->value.s;
 
-      if ((strcmp(v, "Property")         == 0) ||
-          (strcmp(v, "Relationship")     == 0) ||
-          (strcmp(v, "GeoProperty")      == 0) ||
-          (strcmp(v, "LanguageProperty") == 0) ||
-          (strcmp(v, "VocabProperty")    == 0) ||
-          (strcmp(v, "ListProperty")     == 0) ||
-          (strcmp(v, "ListRelationship") == 0) ||
-          (strcmp(v, "JsonProperty")     == 0))
+      //
+      // ldAttrTypeFromString is the one oracle for "is this an attribute type",
+      // and it knows BOTH spellings — the short name and the expanded IRI.
+      // This used to keep its own short-names-only list, which made a third
+      // oracle in a function whose own comment is about two oracles being one
+      // too many. An attribute sent as
+      //   "P": { "type": "https://uri.etsi.org/ngsi-ld/Property", "value": 1 }
+      // was then read as having no type at all, so addTypeField prepended one
+      // and the original stayed: TWO "type" members in one object, i.e. invalid
+      // JSON on the wire. A client may legitimately send either spelling — after
+      // JSON-LD expansion they are the same thing, and TS 104-175 § 4.3.4.2 only
+      // ALLOWS the short form, it does not mandate it.
+      //
+      // ⚠️ Still an EXACT match per spelling, never a prefix. An earlier broad
+      // "starts with https://uri.etsi.org/ngsi-ld/" check wrongly accepted the
+      // @vocab expansions too — .../default-context/Poinxt, a misspelled
+      // geometry, was stored as junk instead of being rejected. A @vocab
+      // expansion is not an attribute-type name and ldAttrTypeFromString does
+      // not know it, so it still falls through to Case 3's detect + reject.
+      //
+      if (ldAttrTypeFromString(v) != LdAttrNone)
       {
         childP->flags |= KJF_CORE_TERM | KJF_ATTR_TERM;
         return true;
       }
-      // The attribute-type keywords above are core-context terms and are NEVER
-      // JSON-LD-expanded — they always arrive in short form. A "type" value
-      // that DID expand (to https://uri.etsi.org/ngsi-ld/default-context/<term>
-      // via the core context's "@vocab") is by definition an unknown term, not
-      // an NGSI-LD attribute type, so it must fall through. (An earlier broad
-      // "starts with https://uri.etsi.org/ngsi-ld/" check wrongly accepted
-      // exactly those @vocab expansions — e.g. a "Poinxt" geometry — and stored
-      // them as junk instead of letting Case 3 detect + reject the geometry.)
     }
   }
   return false;
