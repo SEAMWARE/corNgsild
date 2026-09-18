@@ -40,7 +40,7 @@
 // against the target. Undeclared, the body is normalized or concise, where
 // § 5.3.2.3 admits no such target-dependence: a JSON primitive is a Property.
 //
-extern void ldNormalizeInput(KjNode* entityP, KAlloc* kaP, bool mergeMode, bool simplified);
+extern bool ldNormalizeInput(KjNode* entityP, KAlloc* kaP, bool mergeMode, bool simplified);
 
 
 

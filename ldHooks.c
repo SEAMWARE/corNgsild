@@ -1089,7 +1089,14 @@ static void ldParseHook(void)
     //
     bool simplified = mergeMode && simplifiedBodyDeclared();
 
-    ldNormalizeInput(corRest.in.requestTree, &corRest.kalloc, mergeMode, simplified);
+    //
+    // Normalization can now REFUSE: an attribute carrying a "type" that names no
+    // NGSI-LD Attribute type is an error, not something to infer a type for. It
+    // has already called ldError, so the established shape here applies - error
+    // set, return, let the framework render it.
+    //
+    if (ldNormalizeInput(corRest.in.requestTree, &corRest.kalloc, mergeMode, simplified) == false)
+      return;
   }
 }
 

@@ -23,8 +23,11 @@
 #include "kjson/KjNode.h"                               // KjNode
 #include "kjson/kjBuilder.h"                             // kjObject
 #include "kjson/kjChildReplace.h"                       // kjChildReplace
+#include "kjson/kjLookup.h"                             // kjLookup
 
 #include "corJsonld/corLdExpand.h"                          // KJF_CORE_TERM
+#include "corNgsild/ldError.h"                            // ldError
+#include "corNgsild/LdProblem.h"                          // LD_ERROR_BAD_REQUEST_DATA
 #include "corNgsild/LdVocab.h"                            // LD_VOCAB_*
 #include "corNgsild/LdAttrType.h"                         // LdAttrType
 #include "corNgsild/ldTypes.h"                             // ldAttrTypeToString, ldAttrTypeFromString
@@ -246,9 +249,24 @@ static bool hasExplicitAttrType(KjNode* objP)
       // expansion is not an attribute-type name and ldAttrTypeFromString does
       // not know it, so it still falls through to Case 3's detect + reject.
       //
-      if (ldAttrTypeFromString(v) != LdAttrNone)
+      LdAttrType attrType = ldAttrTypeFromString(v);
+
+      if (attrType != LdAttrNone)
       {
-        childP->flags |= KJF_CORE_TERM | KJF_ATTR_TERM;
+        //
+        // Canonicalize to the short name, so every spelling converges on one
+        // stored form: "Property", the full IRI
+        // "https://uri.etsi.org/ngsi-ld/Property", and the compact IRI
+        // "ngsi-ld:Property".
+        //
+        // corLdExpand now resolves all three to the short name itself, so on the
+        // ordinary request path this is a no-op. It is kept because this function
+        // also runs on subtrees expansion never visited - the same reason the
+        // KJF_ATTR_TERM stamping above exists - and there the raw spelling is
+        // whatever the client wrote.
+        //
+        childP->value.s = (char*) ldAttrTypeToString(attrType);
+        childP->flags  |= KJF_CORE_TERM | KJF_ATTR_TERM;
         return true;
       }
     }
@@ -345,7 +363,7 @@ void ldWrapAsGeoProperty(KjNode* entityP, KjNode* childP, KAlloc* kaP)
 
 
 
-static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool mergeMode, bool simplified);
+static bool normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool mergeMode, bool simplified);
 
 
 
@@ -356,7 +374,7 @@ static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool m
 // containerP: the parent node (entity or attribute object) — needed for kjChildReplace
 // attrP:      the attribute node to normalize
 //
-static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool mergeMode, bool simplified)
+static bool normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool mergeMode, bool simplified)
 {
   // ---  Scalar children → simplified Property  ---
   if (attrP->type == KjInt || attrP->type == KjFloat || attrP->type == KjString || attrP->type == KjBoolean || attrP->type == KjNull)
@@ -365,7 +383,7 @@ static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool m
     // In Merge Entity (PATCH § 5.6.17) they indicate deletion of the named
     // (sub-)attribute; in Create Entity they are rejected later by ldCheckEntity.
     if (attrP->type == KjString && strcmp(attrP->value.s, LD_VOCAB_NGSILD_NULL) == 0)
-      return;
+      return true;
 
     // A simplified merge (§ 10.2.9.4) is the one case where a bare scalar does NOT
     // mean a Property: "the type of any pre-existing Attribute in the target entity
@@ -375,10 +393,10 @@ static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool m
     // primitive is a Property - and a merge onto an Attribute of another type is
     // therefore an Attribute type change, which Merge Entity refuses.
     if (simplified)
-      return;
+      return true;
 
     wrapAsProperty(containerP, attrP, kaP);
-    return;
+    return true;
   }
 
   // ---  Array children  ---
@@ -387,7 +405,7 @@ static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool m
     KjNode* firstP = attrP->value.firstChildP;
 
     if (firstP == NULL)
-      return;  // empty array — leave for ldCheckEntity to reject
+      return true;  // empty array — leave for ldCheckEntity to reject
 
     if (firstP->type == KjObject)
     {
@@ -398,7 +416,10 @@ static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool m
         KjNode* elemNextP = elemP->next;
 
         if (elemP->type == KjObject)
-          normalizeAttr(attrP, elemP, kaP, mergeMode, simplified);
+        {
+          if (normalizeAttr(attrP, elemP, kaP, mergeMode, simplified) == false)
+            return false;
+        }
         else if (simplified == false)
         {
           //
@@ -425,16 +446,16 @@ static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool m
       // array of URIs. So in a simplified merge an array is as target-dependent
       // as a scalar - leave it for ldEntityMerge.
       if (simplified)
-        return;
+        return true;
 
       wrapAsProperty(containerP, attrP, kaP);
     }
-    return;
+    return true;
   }
 
   // ---  Object children  ---
   if (attrP->type != KjObject)
-    return;
+    return true;
 
   // A JSON literal {"@type":"@json","@value":X} is a single opaque value (clause 5),
   // not a fragment of sub-attributes: wrap it as a Property value in BOTH create and
@@ -442,7 +463,7 @@ static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool m
   if (isJsonLiteral(attrP))
   {
     wrapAsProperty(containerP, attrP, kaP);
-    return;
+    return true;
   }
 
   // Case 1: Has explicit attr type (Property/Relationship/etc.) → already normalized or concise with type
@@ -460,10 +481,54 @@ static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool m
         // is a Property - and passing mergeMode down here is what made Merge Entity the one
         // path that stored a bare "b": 2 inside an attribute, which is not NGSI-LD at all.
         //
-        normalizeAttr(attrP, subP, kaP, false, false);
+      {
+        if (normalizeAttr(attrP, subP, kaP, false, false) == false)
+          return false;
+      }
       subP = subNextP;
     }
-    return;
+    return true;
+  }
+
+  //
+  // Case 1b: there IS a "type" member, and Case 1 did not accept it.
+  //
+  // Then this is NOT a typeless concise attribute, and inferring a type for it
+  // is wrong. Exactly one thing makes an unrecognised "type" legal here: the
+  // simplified GeoProperty shape, where "type" is a GeoJSON geometry name and
+  // the object carries "coordinates" - Case 3 owns that, including rejecting a
+  // misspelled geometry. Anything else is an attribute type that does not exist.
+  //
+  // Without this, Case 2 fired on the "value" key, inferred Property and
+  // PREPENDED it, leaving the original in place:
+  //
+  //   "P": { "type": "Porpetry", "value": 1 }
+  //     -> 201, {"type":"Property","type":"Porpetry","value":1}
+  //
+  // Two members with the same name in one object - invalid JSON on the wire -
+  // and a silent 201 to a request that was wrong. "Banana" and the non-string
+  // 42 behaved the same. An attribute type sent as its expanded IRI was one
+  // INSTANCE of this; recognising that spelling removed the instance and left
+  // the class.
+  //
+  // ldCheckAttribute does not catch it: it treats LdAttrNone as a partial
+  // update fragment and accepts it deliberately (§ 5.6.x), which is right for
+  // a fragment carrying only sub-attributes and wrong for a bogus type.
+  //
+  {
+    KjNode* typeP = kjLookup(attrP, "type");
+
+    if ((typeP != NULL) && (isGeoJsonObject(attrP) == false) && (isSimplifiedGeoProperty(attrP) == false))
+    {
+      if (typeP->type != KjString)
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Attribute Type",
+                "attribute '%s': 'type' must be a string naming an NGSI-LD Attribute type", attrP->name);
+      else
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Attribute Type",
+                "attribute '%s': '%s' is not an NGSI-LD Attribute type", attrP->name, typeP->value.s);
+
+      return false;
+    }
   }
 
   // Case 2: Has a value key but no explicit attr type → concise format
@@ -504,10 +569,13 @@ static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool m
         // is a Property - and passing mergeMode down here is what made Merge Entity the one
         // path that stored a bare "b": 2 inside an attribute, which is not NGSI-LD at all.
         //
-        normalizeAttr(attrP, subP, kaP, false, false);
+      {
+        if (normalizeAttr(attrP, subP, kaP, false, false) == false)
+          return false;
+      }
       subP = subNextP;
     }
-    return;
+    return true;
   }
 
   // Case 3: Object with no value key, no attr type
@@ -518,7 +586,7 @@ static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool m
   if (isGeoJsonObject(attrP) || isSimplifiedGeoProperty(attrP))
   {
     ldWrapAsGeoProperty(containerP, attrP, kaP);
-    return;
+    return true;
   }
 
   // Case 4: Plain object value → simplified Property
@@ -542,13 +610,18 @@ static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool m
         // is a Property - and passing mergeMode down here is what made Merge Entity the one
         // path that stored a bare "b": 2 inside an attribute, which is not NGSI-LD at all.
         //
-        normalizeAttr(attrP, subP, kaP, false, false);
+      {
+        if (normalizeAttr(attrP, subP, kaP, false, false) == false)
+          return false;
+      }
       subP = subNextP;
     }
-    return;
+    return true;
   }
 
   wrapAsProperty(containerP, attrP, kaP);
+
+  return true;
 }
 
 
@@ -557,10 +630,10 @@ static void normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool m
 //
 // ldNormalizeInput -
 //
-void ldNormalizeInput(KjNode* entityP, KAlloc* kaP, bool mergeMode, bool simplified)
+bool ldNormalizeInput(KjNode* entityP, KAlloc* kaP, bool mergeMode, bool simplified)
 {
   if (entityP == NULL || entityP->type != KjObject)
-    return;
+    return true;
 
   KjNode* childP = entityP->value.firstChildP;
 
@@ -569,8 +642,13 @@ void ldNormalizeInput(KjNode* entityP, KAlloc* kaP, bool mergeMode, bool simplif
     KjNode* nextP = childP->next;  // save before normalizeAttr may replace childP
 
     if (ldIsEntityKeyword(childP->name) == false)
-      normalizeAttr(entityP, childP, kaP, mergeMode, simplified);
+    {
+      if (normalizeAttr(entityP, childP, kaP, mergeMode, simplified) == false)
+        return false;
+    }
 
     childP = nextP;
   }
+
+  return true;
 }
