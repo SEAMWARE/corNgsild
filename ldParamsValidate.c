@@ -223,9 +223,21 @@ bool ldParamsValidate(void)
   }
 
   // § 5.7.2.4 — Query Entities requires AT LEAST ONE of: type / attrs / q /
-  // geoquery (georel+geometry+coordinates) / scopeQ. Filtering by `id` or
-  // `idPattern` alone is "too wide query" and shall be 400 BadRequestData.
-  // The same applies to Query Temporal Entities (§ 5.7.4.4) and the
+  // ⭐ WHAT THE RULE IS FOR: enough information to MATCH REGISTRATIONS.
+  // Not response size. A query naming no entity, no type and no attribute
+  // gives the registry nothing to match on, so the broker cannot choose
+  // which Context Sources to forward to - it would have to ask every one.
+  //
+  // So `id` and `idPattern` COUNT: a registration is matched on entity id
+  // and on idPattern, which makes an explicit set of ids the most precise
+  // information a query can carry. Excluding them made
+  // `GET /entities?id=urn:X` a 400 - the narrowest possible query refused
+  // as too wide.
+  //
+  // ⚠️ `pick` does NOT count, though it names attributes: it is projection
+  // only, and selects no entity. `attrs` is the selector - an entity with
+  // none of those attributes is not returned - and `q` + `pick` together
+  // cover what `attrs` does without being one. `omit` narrows nothing.
   // /entityOperations/query POST variant.
   //
   // Exception: a request paginating via `?entityMap=<id>` is bounded by the
@@ -249,11 +261,13 @@ bool ldParamsValidate(void)
                      || (corNgsild.q != NULL)
                      || (corNgsild.georel != NULL && corNgsild.geometry != NULL && corNgsild.coordinates != NULL)
                      || (corNgsild.scopeQ != NULL)
-                     || (corNgsild.local == true);
+                     || (corNgsild.local == true)
+                     || (corNgsild.id != NULL)
+                     || (corNgsild.idPattern != NULL);
     if (!haveSelector)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid request",
-              "Query Entities requires at least one of 'type', 'attrs', 'q', a GeoQuery, 'scopeQ', or 'local=true' (§ 5.7.2.4 — id / idPattern alone is too wide)");
+              "Query Entities requires at least one of 'id', 'idPattern', 'type', 'attrs', 'q', a GeoQuery, 'scopeQ' or 'local=true' - without one there is nothing to match registrations on (§ 5.7.2.4)");
       return true;
     }
   }
