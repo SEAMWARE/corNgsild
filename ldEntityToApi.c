@@ -69,6 +69,43 @@ static void timestampToIso(long long nsec, char* buf, int bufSize)
 
 // -----------------------------------------------------------------------------
 //
+// isValueKey - is this the node holding the attribute's VALUE?
+//
+// One name per attribute type, and the same seven whichever pass has run: the DB
+// stores every value under "value", and restoreValueKey renames it to the type's
+// own key, which is one of these too.
+//
+// It matters because a Property's value is OPAQUE USER JSON. An object in there
+// may perfectly well carry a "type" member naming an NGSI-LD attribute type - an
+// IoT Agent that copies its own provisioning record into a value writes exactly
+// that - and the sub-attribute walks below would then rewrite user data as if it
+// were structure. TS 104-175 § 5.2.2.5: implementations "shall preserve the
+// representation of the content of the values ... and return the original
+// content when replying to context consumption requests".
+//
+// A user's own sub-attribute cannot collide with these: sub-attribute names are
+// expanded IRIs by the time they are stored, so only the structural keys are
+// still spelled short.
+//
+static bool isValueKey(const char* name)
+{
+  if (name == NULL)                                   return false;
+
+  if (strcmp(name, LD_VOCAB_HAS_VALUE)        == 0)   return true;   // "value"
+  if (strcmp(name, LD_VOCAB_HAS_OBJECT)       == 0)   return true;   // "object"
+  if (strcmp(name, LD_VOCAB_HAS_LANGUAGE_MAP) == 0)   return true;   // "languageMap"
+  if (strcmp(name, LD_VOCAB_HAS_VOCAB)        == 0)   return true;   // "vocab"
+  if (strcmp(name, LD_VOCAB_HAS_VALUE_LIST)   == 0)   return true;   // "valueList"
+  if (strcmp(name, LD_VOCAB_HAS_OBJECT_LIST)  == 0)   return true;   // "objectList"
+  if (strcmp(name, LD_VOCAB_HAS_JSON)         == 0)   return true;   // "json"
+
+  return false;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // timestampsToIsoStrings - convert createdAt/modifiedAt from integer to ISO string
 //
 // Walks the children of an object, finds createdAt/modifiedAt integer nodes,
@@ -103,11 +140,15 @@ static void timestampsToIsoStrings(KjNode* objP, KAlloc* allocP)
 
   // Recurse into sub-attributes so their createdAt/modifiedAt/... convert too.
   // A sub-attribute is a KjObject child carrying a "type" of a known NGSI-LD
-  // attribute type — not a geometry value (type "Point") or an opaque value
-  // object — so this matches restoreValueKey's sub-attribute detection.
+  // attribute type — and never the value node, whose contents are the user's
+  // (see isValueKey). Without that second half an integer the user happened to
+  // call "observedAt" inside a value came back as an ISO string.
   for (KjNode* childP = objP->value.firstChildP; childP != NULL; childP = childP->next)
   {
     if (childP->type != KjObject)
+      continue;
+
+    if (isValueKey(childP->name))
       continue;
 
     for (KjNode* gcP = childP->value.firstChildP; gcP != NULL; gcP = gcP->next)
@@ -180,10 +221,22 @@ static void restoreValueKey(KjNode* instP, bool collapseSingletonArrays)
     }
   }
 
-  // Recurse into sub-attributes (objects that have a "type" field with a known attr type)
+  //
+  // Recurse into sub-attributes (objects that have a "type" field with a known
+  // attr type) - but NEVER into the value itself, see isValueKey.
+  //
+  // Walking it renamed the USER's "value" key to "vocab" / "languageMap" /
+  // "valueList" / "json", and the entity came back altered. Property and
+  // Relationship are why this hid: their rename produces hasValue / hasObject,
+  // which compact straight back to "value" / "object", so only the types whose
+  // value key is spelled differently ever showed it.
+  //
   for (KjNode* childP = instP->value.firstChildP; childP != NULL; childP = childP->next)
   {
     if (childP->type != KjObject)
+      continue;
+
+    if (isValueKey(childP->name))
       continue;
 
     // Check if this child is a sub-attribute by looking for a "type" field with a known attr type
