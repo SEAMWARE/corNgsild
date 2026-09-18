@@ -41,24 +41,4 @@
 extern bool ldIsValidName(const char* name);
 
 
-
-// -----------------------------------------------------------------------------
-//
-// ldStringHasForbiddenChars - true if `s` contains any of < > " ' = ; ( ).
-//
-extern bool ldStringHasForbiddenChars(const char* s);
-
-
-
-// -----------------------------------------------------------------------------
-//
-// ldCheckNamesAndContent - walk the raw pre-expansion tree, raising
-// ldError(400, BadRequestData) on the first invalid name or string
-// value encountered.
-//
-// Returns true if the tree is clean, false (with ldError set) on the
-// first violation.
-//
-extern bool ldCheckNamesAndContent(KjNode* tree);
-
 #endif  // CORNGSILD_LD_NAME_CONTENT_CHECK_H_
