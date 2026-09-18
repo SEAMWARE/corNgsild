@@ -91,17 +91,50 @@ static void qExpandValuesWalk(LdQNode* nodeP, char** evV, KAlloc* kaP)
 
   if (nodeP->type == LdQTermNode)
   {
-    if (nodeP->term.valueType == LdQString &&
-        nodeP->term.op != LdQPattern && nodeP->term.op != LdQNotPattern)
+    //
+    // Does expandValues name this term's attribute at all?
+    //
+    bool wanted = false;
+    for (int ix = 0; evV[ix] != NULL; ix++)
     {
-      for (int ix = 0; evV[ix] != NULL; ix++)
+      if (strcmp(nodeP->term.attr, evV[ix]) == 0)
       {
-        if (strcmp(nodeP->term.attr, evV[ix]) == 0)
+        wanted = true;
+        break;
+      }
+    }
+
+    if (wanted && nodeP->term.op != LdQPattern && nodeP->term.op != LdQNotPattern)
+    {
+      if (nodeP->term.valueType == LdQString)
+      {
+        char* expanded = corLdExpand(corNgsild.contextP, nodeP->term.value.s, kaP, NULL, NULL);
+        if (expanded != NULL)
+          nodeP->term.value.s = expanded;
+      }
+      else if (nodeP->term.valueType == LdQValueList)
+      {
+        //
+        // A value LIST needs every STRING item expanded, not the list as a
+        // whole. Handling only LdQString meant `q=category=="barn"` matched a
+        // VocabProperty while `q=category=="barn","farm_auxiliary"` returned
+        // nothing - and so did a list of two IDENTICAL values, which is what
+        // gave it away: the list path never expanded anything at all.
+        //
+        // itemTypeV carries one type per item (§ 7.2.3.4 puts no requirement on
+        // a list sharing a type, so `a==1,"two"` is legal), and only a string
+        // item is a term that could expand - expanding a number or a bool would
+        // be meaningless.
+        //
+        for (int i = 0; i < nodeP->term.value.list.count; i++)
         {
-          char* expanded = corLdExpand(corNgsild.contextP, nodeP->term.value.s, kaP, NULL, NULL);
+          if (nodeP->term.value.list.itemTypeV != NULL &&
+              nodeP->term.value.list.itemTypeV[i] != LdQString)
+            continue;
+
+          char* expanded = corLdExpand(corNgsild.contextP, nodeP->term.value.list.values[i], kaP, NULL, NULL);
           if (expanded != NULL)
-            nodeP->term.value.s = expanded;
-          break;
+            nodeP->term.value.list.values[i] = expanded;
         }
       }
     }
