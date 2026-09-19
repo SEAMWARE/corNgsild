@@ -222,28 +222,36 @@ bool ldParamsValidate(void)
     return true;
   }
 
-  // § 5.7.2.4 — Query Entities requires AT LEAST ONE of: type / attrs / q /
-  // ⭐ WHAT THE RULE IS FOR: enough information to MATCH REGISTRATIONS.
-  // Not response size. A query naming no entity, no type and no attribute
-  // gives the registry nothing to match on, so the broker cannot choose
-  // which Context Sources to forward to - it would have to ask every one.
+  // § 10.4.3.4 (Query Entities) and § 10.5.5.4 (Query Temporal Evolution of
+  // Entities) — at least ONE of a CLOSED list shall be provided, or the
+  // request is 400 BadRequestData, "too wide query":
   //
-  // So `id` and `idPattern` COUNT: a registration is matched on entity id
-  // and on idPattern, which makes an explicit set of ids the most precise
-  // information a query can carry. Excluding them made
-  // `GET /entities?id=urn:X` a 400 - the narrowest possible query refused
-  // as too wide.
+  //   a. selector of Entity Types                          -> `type`
+  //   b. list of Attribute names (>= 1 non-system)         -> `attrs`
+  //   c. NGSI-LD Query (>= 1 non-system Attribute)         -> `q`
+  //   d. NGSI-LD GeoQuery                                  -> georel+geometry+coordinates
+  //   e. local scope (§ 8.6)                               -> `local=true`
   //
-  // ⚠️ `pick` does NOT count, though it names attributes: it is projection
-  // only, and selects no entity. `attrs` is the selector - an entity with
-  // none of those attributes is not returned - and `q` + `pick` together
-  // cover what `attrs` does without being one. `omit` narrows nothing.
-  // /entityOperations/query POST variant.
+  // ⚠️ `id` and `idPattern` are NOT on that list, and the clause says so in
+  // prose as well: "it is not possible to retrieve a set of entities by only
+  // specifying desired Entity identifiers, without further specifying
+  // restrictions on the entities' types or attributes". A named set of ids
+  // reads like the narrowest query there is, and for REGISTRATION MATCHING it
+  // would be - but the rule is not ours to reinterpret. Accepting them cost
+  // two ETSI TPs (019_03_05 and 021_24, both "Without Minimal Parameters",
+  // both asserting 400) for one tutorial page that omits `type`.
+  //
+  // ⚠️ `pick` does not count either, though it names attributes: it is
+  // projection only and selects no entity. `omit` narrows nothing. Nor does
+  // `scopeQ`: it narrows the result, but it is not on the clause's list, and
+  // getEntities.c has always rejected a scopeQ-only query - so listing it
+  // here only produced two different 400 messages for one rule.
   //
   // Exception: a request paginating via `?entityMap=<id>` is bounded by the
   // already-stored entity map (§ 5.14) — the original selectors lived on the
   // request that built the map, so a continuation request needs no further
   // selector.
+  //
   // Verb gate: the minimal-selector check is meaningful only for the
   // URL-param query verbs (GET /entities, GET /temporal/entities).
   // The POST body-based variants (POST /entityOperations/query and
@@ -260,14 +268,11 @@ bool ldParamsValidate(void)
                      || (corNgsild.attrs != NULL)
                      || (corNgsild.q != NULL)
                      || (corNgsild.georel != NULL && corNgsild.geometry != NULL && corNgsild.coordinates != NULL)
-                     || (corNgsild.scopeQ != NULL)
-                     || (corNgsild.local == true)
-                     || (corNgsild.id != NULL)
-                     || (corNgsild.idPattern != NULL);
+                     || (corNgsild.local == true);
     if (!haveSelector)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid request",
-              "Query Entities requires at least one of 'id', 'idPattern', 'type', 'attrs', 'q', a GeoQuery, 'scopeQ' or 'local=true' - without one there is nothing to match registrations on (§ 5.7.2.4)");
+              "Query Entities requires at least one of 'type', 'attrs', 'q', a GeoQuery or 'local=true' - a list of entity ids is not enough (§ 10.4.3.4, too wide query)");
       return true;
     }
   }
