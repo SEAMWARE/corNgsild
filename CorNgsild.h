@@ -300,9 +300,40 @@ extern bool ldNotifyValueChangeOnly;
 
 // -----------------------------------------------------------------------------
 //
-// ldDefaultContextUrl - default user @context URL (set by --userContext CLI arg, or NULL)
+// ldDefaultContextUrl - default user @context URL (set by --defaultUserContext/-duc, or NULL)
 //
 extern char* ldDefaultContextUrl;
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldDefaultContext - the context to expand with when the caller was given none
+//
+// ⭐ THE RULE, and it is one rule rather than a list of places: if there is no
+// user-supplied @context, the DEFAULT USER context is used. A broker started
+// with -duc therefore never expands with the core context alone - and a broker
+// without one expands with core, which is then the whole of what it has.
+//
+// That has to hold where there is no request to supply anything: the bridge
+// configuration file read at startup, a sample arriving on a transport, any
+// cache rebuilt from the store. Substituting the default in ONE code path - the
+// request path - is what leaves a short name expanding to the duc's IRI over
+// HTTP and to the @vocab IRI on its topic, which is two attributes on one
+// entity and nothing to say so.
+//
+// So callers ask THIS rather than corLdCoreContext(), unless they mean the core
+// context specifically (a core term, or a comparison against it).
+//
+// @param kaP  scratch for the download's parse tree only. A context that is
+//             cached is allocated from the cache's own process-lifetime
+//             allocator, so the returned pointer outlives kaP.
+//
+// Never returns NULL: an unreachable default user context warns and falls back
+// to core, because a broker that will not start is worse than one that says
+// loudly what it is doing.
+//
+extern CorLdContext* ldDefaultContext(KAlloc* kaP);
 extern uint64_t ldDefaultCooldownNs;   // --cooldownMillis: default endpoint cooldown after a delivery failure (0 = only when the subscription specifies one)
 
 

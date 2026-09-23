@@ -18,6 +18,7 @@
 #include "kalloc/kaStrdup.h"                           // kaStrdup
 #include "corNgsild/LdProj.h"                              // LdProjItem, ldProjectionParse, ldProjectionTopLevelNames
 #include "corRest/corRest.h"                             // corRest
+#include "ktrace/kTrace.h"                              // KT_W
 #include "corJsonld/corLdDownload.h"                         // corLdContextFromUrl
 #include "corJsonld/corLdExpand.h"                           // corLdExpand
 #include "corJsonld/corLdInit.h"                             // corLdCoreContext
@@ -62,6 +63,36 @@ bool        ldTimestampHighPrecision = false;
 //
 bool        ldNotifyValueChangeOnly = false;
 char*       ldDefaultContextUrl  = NULL;
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldDefaultContext - see CorNgsild.h
+//
+// The download is cached by corLdContextFromUrl, so the repeat calls this gets
+// - once per arriving sample, on the transport threads - cost a hash lookup.
+//
+CorLdContext* ldDefaultContext(KAlloc* kaP)
+{
+  if (ldDefaultContextUrl == NULL)
+    return corLdCoreContext();
+
+  CorLdContext* contextP = corLdContextFromUrl(ldDefaultContextUrl, kaP);
+
+  if (contextP == NULL)
+  {
+    //
+    // ⚠ NOT silent. Falling back to core here means every short name means
+    // something different from what the deployment intended, and the symptom
+    // is an attribute under an IRI nobody asked for rather than an error.
+    //
+    KT_W("the default user @context '%s' could not be used - expanding with the core context alone", ldDefaultContextUrl);
+    return corLdCoreContext();
+  }
+
+  return contextP;
+}
 uint64_t ldDefaultCooldownNs = 30000000000ULL;   // --cooldownMillis (default 30s; 0 disables the default)
 const char* ldCsourceAliasBase   = NULL;
 long long   ldBrokerStartTimeSec = 0;
