@@ -124,6 +124,8 @@ typedef struct LdSubCacheItem
   // Pre-parsed matching shortcuts
   LdSubEntitySelector*      entitySelectors;// linked list of parsed entities[] items (NULL = match all)
   char**                    watchedAttrsV;  // NULL-terminated array of expanded attr IRIs (NULL = all)
+  char**                    watchedDsV;     // parallel to watchedAttrsV: the datasetId of an "attr@datasetId"
+                                            // entry, NULL for a plain name (NULL array = no such entry)
   LdQNode*                  qExpr;          // parsed q-filter tree (NULL if no q)
   LdQNode*                  csfExpr;        // parsed csf, matched against the CSR itself. § 5.2.12
                                             // applies it to a Context Source Registration
