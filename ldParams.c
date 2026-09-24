@@ -60,6 +60,7 @@ CorRestParam ldParamRegistryV[] =
   { "aggrPeriodDuration",    LD_PARAM_AGGR_PERIOD_DURATION },
   { "sysAttrs",              LD_PARAM_SYSATTRS },
   { "datasetId",             LD_PARAM_DATASETID },
+  { "goal",                  LD_PARAM_GOAL      },
   { "expandValues",          LD_PARAM_EXPAND_VALUES },
   { "jsonKeys",              LD_PARAM_JSON_KEYS },
   { "geometryProperty",      LD_PARAM_GEOMETRY_PROPERTY },

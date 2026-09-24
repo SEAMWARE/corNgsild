@@ -74,6 +74,7 @@
 #define LD_PARAM_OFFSET_N              (1ULL << 51)  // § 6.4.7.3 — temporal pagination offset (with firstN/lastN)
 #define LD_PARAM_ORDER_FROM            (1ULL << 52)  // § 7.6.2.2 — sort-by-distance reference coordinates
 #define LD_PARAM_ORDER_GEOMETRY        (1ULL << 53)  // § 7.6.2.2 — sort-by-distance reference geometry type
+#define LD_PARAM_GOAL                  (1ULL << 54)  // not NGSI-LD - a DDS goal's id: ?goal=X is ?datasetId=urn:goal:X
 
 
 
@@ -246,6 +247,7 @@
 #define LD_PARAMS_DELETE_ENTITY_ATTR     \
   ( LD_PARAM_TYPE         \
   | LD_PARAM_DATASETID    \
+  | LD_PARAM_GOAL         \
   | LD_PARAM_DELETE_ALL   \
   | LD_PARAM_LOCAL        \
   )

@@ -8,6 +8,7 @@
 // 
 //
 #include <regex.h>                                       // regcomp, regfree
+#include <stdio.h>                                       // snprintf
 #include <stdlib.h>                                      // strtol
 #include <string.h>                                      // strcmp, strstr, strcasecmp
 #include <errno.h>                                        // errno, ERANGE
@@ -388,6 +389,12 @@ void ldParamHook(const char* name, const char* value)
   }
   else if (strcmp(name, "datasetId") == 0)
   {
+    if (corNgsild.goal != NULL)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid URL parameter", "goal and datasetId name the same thing - give one of them");
+      return;
+    }
+
     corNgsild.datasetId  = (char*) value;
     corNgsild.datasetIdV = ldParamSplit((char*) value, faP);
 
@@ -402,6 +409,40 @@ void ldParamHook(const char* name, const char* value)
       if (ldCheckUri(corNgsild.datasetIdV[ix]) == false)
         return;
     }
+  }
+  else if (strcmp(name, "goal") == 0)
+  {
+    //
+    // A goal of a DDS action lives in its own instance of the attribute it was
+    // sent through, datasetId urn:goal:<its id>. ?goal=<id> is that datasetId by
+    // the goal's own name - DELETE .../attrs/{attr}?goal=<id> cancels it. One
+    // goal, never a list, and never both spellings at once.
+    //
+    if (corNgsild.datasetId != NULL)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid URL parameter", "goal and datasetId name the same thing - give one of them");
+      return;
+    }
+
+    if ((value[0] == 0) || (strchr(value, ',') != NULL))
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid URL parameter", "goal: the id of ONE goal");
+      return;
+    }
+
+    int   len = 9 + strlen(value) + 1;   // "urn:goal:" + id + NUL
+    char* dsP = (char*) kaAlloc(faP, len);
+
+    snprintf(dsP, len, "urn:goal:%s", value);
+
+    if (ldCheckUri(dsP) == false)
+      return;
+
+    corNgsild.goal          = (char*) value;
+    corNgsild.datasetId     = dsP;
+    corNgsild.datasetIdV    = (char**) kaAlloc(faP, 2 * sizeof(char*));
+    corNgsild.datasetIdV[0] = dsP;
+    corNgsild.datasetIdV[1] = NULL;
   }
   else if (strcmp(name, "pick") == 0)
   {
