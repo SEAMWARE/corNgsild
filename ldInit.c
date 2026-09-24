@@ -12,7 +12,7 @@
 
 #include "kbase/kLibLog.h"                             // KLOG_T
 #include "kjson/KjNode.h"                              // KjNode
-#include "corJsonld/corLdExpand.h"                       // corLdSetVocabExpandCheck, corLdSetValueCheck, corLdSetKeywordCheck
+#include "corJsonld/corLdExpand.h"                       // corLdSetVocabExpandCheck, corLdSetValueCheck, corLdSetKeywordCheck, corLdSetVocabValueSuffix
 
 #include "corNgsild/ldTraceLevels.h"                      // LdTInit
 #include "corNgsild/ldParams.h"                           // ldParamsInit
@@ -297,6 +297,30 @@ static bool ldValueCheck(const char* term, const char* datatype, KjNode* valueP)
 //
 // Global state
 //
+// -----------------------------------------------------------------------------
+//
+// ldWatchedDatasetSuffix - where "attr@datasetId" in watchedAttributes stops being a name
+//
+// A watchedAttributes entry may name ONE instance of an Attribute (see
+// ldSubCache.c, watchedDatasetSplit). Only the name before the '@' is a vocab
+// term; the datasetId after it is a URI and must be neither expanded nor
+// compacted. § 4.6.2 keeps '@' out of a name, so the split is unambiguous.
+//
+static int ldWatchedDatasetSuffix(const char* term, const char* value)
+{
+  if ((term == NULL) || (strcmp(term, "watchedAttributes") != 0))
+    return -1;
+
+  const char* atP = strrchr(value, '@');
+
+  if ((atP == NULL) || (atP == value) || (strchr(atP + 1, ':') == NULL))
+    return -1;
+
+  return atP - value;
+}
+
+
+
 static bool ldInitialized = false;
 
 
@@ -319,6 +343,7 @@ int ldInit(void)
   corLdSetVocabExpandCheck(ldVocabNameCheck);
   corLdSetValueCheck(ldValueCheck);
   corLdSetKeywordCheck(ldKeywordCheck);
+  corLdSetVocabValueSuffix(ldWatchedDatasetSuffix);
 
   // libmosquitto global init for MQTT notifications (§ 7).
   if (ldMqttInit() != 0)

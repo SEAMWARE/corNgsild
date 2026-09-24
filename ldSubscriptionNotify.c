@@ -201,11 +201,44 @@ static bool entitiesMatch(LdSubCacheItem* itemP, const char* entityId, KjNode* e
 
 // -----------------------------------------------------------------------------
 //
+// instanceWritten - was the instance dsKey of an Attribute written by this change?
+//
+// preAttrP is the Attribute before the change (the report's preValue - NULL for
+// attributeCreated) and postAttrP after it (NULL for attributeDeleted), both
+// dataset-keyed. An instance that appeared or went away was written; one that is
+// in both was written if its modifiedAt moved - every instance a write touches
+// is stamped, the others keep theirs.
+//
+static bool instanceWritten(KjNode* preAttrP, KjNode* postAttrP, const char* dsKey)
+{
+  KjNode* preP  = (preAttrP  != NULL) ? kjLookup(preAttrP,  dsKey) : NULL;
+  KjNode* postP = (postAttrP != NULL) ? kjLookup(postAttrP, dsKey) : NULL;
+
+  if ((preP == NULL) || (postP == NULL))
+    return (preP != postP);
+
+  KjNode* preModP  = kjLookup(preP,  LD_VOCAB_MODIFIED_AT);
+  KjNode* postModP = kjLookup(postP, LD_VOCAB_MODIFIED_AT);
+
+  if ((preModP == NULL) || (postModP == NULL) || (preModP->type != KjInt) || (postModP->type != KjInt))
+    return true;  // nothing to tell them apart - a write to the Attribute counts, as for a plain name
+
+  return (preModP->value.i != postModP->value.i);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // watchedAttrsMatch - check if any changed attribute is watched
+//
+// An entry of watchedDsV names ONE instance ("attr@datasetId"): the change must
+// then have written that instance, not just the Attribute.
 //
 static bool watchedAttrsMatch(LdSubCacheItem* itemP, KjNode* entityP, LdNotifyOp op, LdMergeReport* reportP)
 {
   char** watchedV = itemP->watchedAttrsV;
+  char** dsV      = itemP->watchedDsV;
 
   if (watchedV == NULL)
     return true;  // all attributes are watched
@@ -214,7 +247,12 @@ static bool watchedAttrsMatch(LdSubCacheItem* itemP, KjNode* entityP, LdNotifyOp
   {
     for (int i = 0; watchedV[i] != NULL; i++)
     {
-      if (kjLookup(entityP, watchedV[i]) != NULL)
+      KjNode* attrP = kjLookup(entityP, watchedV[i]);
+
+      if (attrP == NULL)
+        continue;
+
+      if ((dsV == NULL) || (dsV[i] == NULL) || (kjLookup(attrP, dsV[i]) != NULL))
         return true;
     }
     return false;
@@ -229,7 +267,18 @@ static bool watchedAttrsMatch(LdSubCacheItem* itemP, KjNode* entityP, LdNotifyOp
 
       for (int i = 0; watchedV[i] != NULL; i++)
       {
-        if (strcmp(watchedV[i], attrP->value.s) == 0)
+        if (strcmp(watchedV[i], attrP->value.s) != 0)
+          continue;
+
+        if ((dsV == NULL) || (dsV[i] == NULL))
+          return true;
+
+        //
+        // The post-change Attribute is the entity's own - absent when the change
+        // removed it entirely. The reason cannot tell: deleting ONE instance is an
+        // attributeDeleted too, with the Attribute's other instances still there.
+        //
+        if (instanceWritten(kjLookup(chP, "preValue"), kjLookup(entityP, watchedV[i]), dsV[i]))
           return true;
       }
     }

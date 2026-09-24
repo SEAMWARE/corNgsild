@@ -115,6 +115,55 @@ static LdSubEntitySelector* entitySelectorsExtract(KjNode* entitiesP)
 
 // -----------------------------------------------------------------------------
 //
+// watchedDatasetSplit - split "attr@datasetId" entries of watchedAttrsV
+//
+// A watched entry may name ONE instance of an Attribute: "speed@urn:ds:1" is
+// watched only when the instance whose datasetId is urn:ds:1 is written. § 4.6.2
+// keeps '@' out of a name, so the '@' is the split - and corJsonld has already
+// expanded the name alone, through ldWatchedDatasetSuffix (ldInit.c).
+//
+// watchedAttrsV[i] becomes the name alone (a copy, the subTree is not touched)
+// and the datasetId goes to the returned array, at the same index. Returns NULL
+// when no entry names an instance, which is every standard subscription.
+//
+static char** watchedDatasetSplit(char** watchedV, KAlloc* kaP)
+{
+  if (watchedV == NULL)
+    return NULL;
+
+  int n = 0;
+  while (watchedV[n] != NULL)
+    n++;
+
+  char** dsV = NULL;
+
+  for (int i = 0; i < n; i++)
+  {
+    char* atP = strrchr(watchedV[i], '@');
+
+    if ((atP == NULL) || (atP == watchedV[i]) || (strchr(atP + 1, ':') == NULL))
+      continue;
+
+    if (dsV == NULL)
+      dsV = (char**) calloc(n + 1, sizeof(char*));
+
+    int   nameLen = atP - watchedV[i];
+    char* nameP   = (char*) kaAlloc(kaP, nameLen + 1);
+
+    memcpy(nameP, watchedV[i], nameLen);
+    nameP[nameLen] = 0;
+
+    dsV[i]      = atP + 1;  // borrowed, like the names
+    watchedV[i] = nameP;
+  }
+
+  return dsV;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // watchedAttrsExtract - build NULL-terminated string array from watchedAttributes
 //
 // Returns NULL if watchedAttributes is absent (meaning all attributes are watched).
@@ -353,6 +402,7 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
 
   KjNode* watchedP = kjLookup(itemP->subTree, LD_VOCAB_WATCHED_ATTRS);
   itemP->watchedAttrsV = watchedAttrsExtract(watchedP);
+  itemP->watchedDsV    = watchedDatasetSplit(itemP->watchedAttrsV, &cacheP->alloc);  // before the expansion: it is the NAME that expands
 
   // Expand short names in watchedAttrsV — same motivation as notifAttrsV
   // below. JSON-LD value coercion on array entries is intentionally NOT
@@ -811,6 +861,9 @@ static void cacheItemFree(LdSubCacheItem* itemP)
 
   if (itemP->watchedAttrsV != NULL)
     free(itemP->watchedAttrsV);  // array only — strings are borrowed
+
+  if (itemP->watchedDsV != NULL)
+    free(itemP->watchedDsV);     // array only — strings are borrowed
 
   if (itemP->notifAttrsV != NULL)
     free(itemP->notifAttrsV);    // array only — strings are borrowed

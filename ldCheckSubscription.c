@@ -9,7 +9,7 @@
 //
 #include <stdbool.h>                                     // bool
 #include <stdlib.h>                                      // free, calloc
-#include <string.h>                                      // strcmp
+#include <string.h>                                      // strcmp, strrchr
 #include <time.h>                                        // time
 #include <regex.h>                                       // regcomp, regfree, REG_EXTENDED
 
@@ -29,6 +29,7 @@
 #include "corNgsild/CorNgsild.h"                           // corNgsild
 #include "corNgsild/LdTypeExpr.h"                         // ldTypeExprParse, ldTypeExprFree
 #include "corNgsild/LdCheck.h"                            // OBJECT_CHECK, STRING_CHECK, ...
+#include "corNgsild/ldCheckUri.h"                         // ldCheckUri
 #include "corNgsild/LdVocab.h"                            // LD_VOCAB_*
 #include "corNgsild/LdGeoRel.h"                            // ldGeoRelParse
 #include "corNgsild/LdScopeExpr.h"                         // ldScopeExprParse
@@ -1086,6 +1087,14 @@ bool ldCheckSubscription(KjNode* subP, LdOp op, bool merged, LdFormat* notifForm
                 "'watchedAttributes' items must be strings");
         return false;
       }
+
+      //
+      // "attr@datasetId" names one instance - the datasetId has to be a URI, as
+      // any datasetId (the name before the '@' was checked when it was expanded)
+      //
+      const char* atP = strrchr(wP->value.s, '@');
+      if ((atP != NULL) && (atP != wP->value.s) && (ldCheckUri(atP + 1) == false))
+        return false;
     }
   }
 
