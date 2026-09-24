@@ -124,6 +124,7 @@ LIB_SOURCES   = corNgsild.c \
                 ldEntityMatch.c \
                 ldEntityAttrsSet.c \
                 ldSubscriptionNotify.c \
+                ldInstanceWritten.c \
                 ldThrottleDirty.c \
                 ldCsrSubNotify.c \
                 ldNotifyStatsHook.c \
