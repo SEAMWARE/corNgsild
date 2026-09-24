@@ -26,6 +26,16 @@ extern void ldHooksRegister(void);
 
 // -----------------------------------------------------------------------------
 //
+// corNgsildFallbackRelease - free the per-thread fallback's deferred queues
+//
+// For threads that are not corRest's (bridge plugins): see ldHooks.c.
+//
+extern void corNgsildFallbackRelease(void);
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldAcceptPrecondition - § 6.2.2 Accept-header content-negotiation precondition
 //
 // Call from the pre-service hook, before the service routine. Returns true when
