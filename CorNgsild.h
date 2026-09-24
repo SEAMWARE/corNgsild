@@ -65,6 +65,7 @@ typedef struct CorNgsild
 
   char*   datasetId;
   char**  datasetIdV;    // split from datasetId on commas (URIs + "@none")
+  char*   goal;          // ?goal=<uuid> - datasetId becomes urn:goal:<uuid> (the goal's instance)
 
   char*         scopeQ;
   LdScopeExpr*  scopeExpr;     // parsed scopeQ expression (OR-of-AND)
