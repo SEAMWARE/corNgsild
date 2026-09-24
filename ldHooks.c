@@ -1617,6 +1617,41 @@ static void corNgsildStateFree(void* p)
 
 // -----------------------------------------------------------------------------
 //
+// corNgsildFallbackRelease - free what a thread with no connection has queued up
+//
+// A thread that is not corRest's - a bridge plugin's, delivering a sample - has
+// no connection, so corNgsild resolves to the per-thread fallback, and the
+// deferred-notification queues it fills are realloc'd there exactly as on a
+// connection. On a connection corNgsildStateFree frees them when the connection
+// goes; nothing ever did on the fallback, and the thread took them with it when
+// it ended - a definite leak per plugin thread, which valgrind reports.
+//
+// Call after the queues have been dispatched. Harmless on a connection's state,
+// where there is nothing left to free by then either.
+//
+void corNgsildFallbackRelease(void)
+{
+  CorNgsild* sn = &corNgsildFallback;
+
+  for (int i = 0; i < sn->probePendingN; i++)
+    free(sn->probePendingV[i].regId);
+  sn->probePendingN = 0;
+
+  free(sn->csrPendingV);
+  sn->csrPendingV   = NULL;
+  sn->csrPendingN   = 0;
+  sn->csrPendingCap = 0;
+
+  free(sn->pendingV);
+  sn->pendingV   = NULL;
+  sn->pendingN   = 0;
+  sn->pendingCap = 0;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldHooksRegister - register all NGSI-LD hooks with corRest
 //
 void ldHooksRegister(void)
