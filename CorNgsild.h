@@ -264,6 +264,13 @@ typedef struct CorNgsild
   void*                  troeQTail;
   int                    troeQCount;
 
+  // What the request sent to a bridge before its write, and holds until its
+  // notifications have gone out (the broker's bridgeServiceSync.c). Opaque, a
+  // broker list in the request arena - released by the post-response hook, AFTER
+  // ldNotifyDispatchPending, so that what the bridge says next can never reach a
+  // subscriber before the request's own notification of the write.
+  void*                  bridgeReleaseQ;
+
 } CorNgsild;
 
 
