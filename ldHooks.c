@@ -1341,7 +1341,16 @@ static void ldRenderHook(void)
       ldEntityToApi(treeP, &corRest.kalloc);
     }
 
-    if (corNgsild.sysAttrs == false)
+    //
+    // The two simplified temporal representations read each instance's
+    // ?timeproperty - and modifiedAt / createdAt ARE sysAttrs. Stripped here,
+    // timeproperty=modifiedAt found no timestamp in any instance and answered
+    // with empty aggregations / empty value lists, unless ?sysAttrs was also
+    // given. For those two the strip waits until they have run.
+    //
+    bool temporalSimplified = (corNgsild.format == LdFormatTemporalValues) || (corNgsild.format == LdFormatAggregatedValues);
+
+    if ((corNgsild.sysAttrs == false) && !temporalSimplified)
       ldStripSysAttrs(corRest.out.responseTree);
 
     // Apply lang reduction BEFORE format simplification — the simplification
@@ -1400,6 +1409,10 @@ static void ldRenderHook(void)
       ldToAggregatedValues(treeP, corNgsild.aggrMethodsV, period.months, period.ns, startNs, endNs,
                            corNgsild.timeproperty, corRest.kjsonP, &corRest.kalloc);
     }
+
+    // The strip postponed above, now that the timestamps have been read
+    if ((corNgsild.sysAttrs == false) && temporalSimplified)
+      ldStripSysAttrs(corRest.out.responseTree);
   }
 
   // § 6.3.4 Accept negotiation already ran at the top of this hook —
