@@ -11,6 +11,7 @@
 
 #include "kalloc/KAlloc.h"                           // KAlloc
 #include "kalloc/kaAlloc.h"                            // kaAlloc
+#include "kalloc/kaStrdup.h"                           // kaStrdup
 
 #include "corNgsild/ldQueryParams.h"                    // Own interface
 
@@ -20,10 +21,18 @@
 //
 // ldParamSplit - split a comma-separated value into a NULL-terminated array
 //
+// Splits a COPY. The value passed in is the URI parameter's own value, and it
+// is read again after the parse: for the pagination Links (rel="next"/"prev")
+// and for the query string forwarded to Context Sources. Split in place, every
+// list there was cut at its first comma - attrs=a,b went on as attrs=a, and a
+// distributed query asked the source for less than the client asked for.
+//
 char** ldParamSplit(char* csv, KAlloc* faP)
 {
   if (csv == NULL || csv[0] == 0)
     return NULL;
+
+  csv = kaStrdup(faP, csv);
 
   //
   // Count commas to determine array size
@@ -41,7 +50,7 @@ char** ldParamSplit(char* csv, KAlloc* faP)
   char** result = (char**) kaAlloc(faP, (count + 1) * sizeof(char*));
 
   //
-  // Split in place
+  // Split (the copy) in place
   //
   int ix = 0;
   result[ix++] = csv;
