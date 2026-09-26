@@ -415,7 +415,8 @@ void ldParamHook(const char* name, const char* value)
     //
     // A goal of a DDS action lives in its own instance of the attribute it was
     // sent through, datasetId urn:goal:<its id>. ?goal=<id> is that datasetId by
-    // the goal's own name - DELETE .../attrs/{attr}?goal=<id> cancels it. One
+    // the goal's own name, wherever a datasetId is accepted - as Orion-LD takes
+    // it: DELETE .../attrs/{attr}?goal=<id> cancels it, a GET shows it. One
     // goal, never a list, and never both spellings at once.
     //
     if (corNgsild.datasetId != NULL)

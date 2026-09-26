@@ -107,6 +107,7 @@
   | LD_PARAM_VIA         \
   | LD_PARAM_SYSATTRS       \
   | LD_PARAM_DATASETID      \
+  | LD_PARAM_GOAL           \
   | LD_PARAM_EXPAND_VALUES  \
   | LD_PARAM_JSON_KEYS           \
   | LD_PARAM_GEOMETRY_PROPERTY   \
@@ -130,6 +131,7 @@
   | LD_PARAM_FORMAT         \
   | LD_PARAM_SYSATTRS       \
   | LD_PARAM_DATASETID      \
+  | LD_PARAM_GOAL           \
   | LD_PARAM_EXPAND_VALUES  \
   | LD_PARAM_JSON_KEYS           \
   | LD_PARAM_GEOMETRY_PROPERTY   \
@@ -160,6 +162,7 @@
   | LD_PARAM_GEOPROPERTY         \
   | LD_PARAM_SCOPE_Q             \
   | LD_PARAM_DATASETID           \
+  | LD_PARAM_GOAL                \
   | LD_PARAM_TIMEPROPERTY        \
   | LD_PARAM_TIMEREL             \
   | LD_PARAM_TIMEAT              \
@@ -189,6 +192,7 @@
 // DELETE /temporal/entities/{id}/attrs/{attr} — § 5.6.13 / § 6.21.3.1.
 #define LD_PARAMS_DELETE_TEMPORAL_ATTR  \
   ( LD_PARAM_DATASETID  \
+  | LD_PARAM_GOAL       \
   | LD_PARAM_DELETE_ALL \
   | LD_PARAM_LOCAL      \
   )
@@ -208,6 +212,7 @@
   | LD_PARAM_FIRST_N              \
   | LD_PARAM_OFFSET_N             \
   | LD_PARAM_DATASETID            \
+  | LD_PARAM_GOAL                 \
   | LD_PARAM_PICK                 \
   | LD_PARAM_OMIT                 \
   | LD_PARAM_LANG                 \
@@ -238,6 +243,7 @@
   | LD_PARAM_OPTIONS     \
   | LD_PARAM_SYSATTRS    \
   | LD_PARAM_DATASETID   \
+  | LD_PARAM_GOAL        \
   | LD_PARAM_FORMAT      \
   | LD_PARAM_LANG        \
   | LD_PARAM_LOCAL       \
