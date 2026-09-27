@@ -13,7 +13,8 @@
 #include <stdbool.h>                                     // bool
 #include <stdint.h>                                      // uint64_t
 
-#include "kjson/KjNode.h"                              // KjNode
+#include "kalloc/KAlloc.h"                               // KAlloc
+#include "corTree/CorNode.h"                             // CorNode
 
 #include "corRest/CorRestState.h"                        // corRest (per-conn userData binding)
 #include "corJsonld/CorLdContext.h"                     // CorLdContext
@@ -206,7 +207,7 @@ typedef struct CorNgsild
                                             // whole entity does not), so the caller decides.
   CorLdContext*       contextP;
   const char*        userContextUrl;  // URL from Link header or default context (NULL if none)
-  KjNode*            userContextBody; // Pointer to the in-body @context node, captured BEFORE
+  CorNode*           userContextBody; // Pointer to the in-body @context node, captured BEFORE
                                       // corLdExpandTree strips it from the tree. Set when the
                                       // user supplied an @context array or inline-object body
                                       // form; NULL for a single-URL or absent @context. Used
@@ -219,7 +220,7 @@ typedef struct CorNgsild
   // catches before the service routine sees the body (e.g. ld+json array
   // element missing @context). The batch handler drains this list into
   // its own errors[] before normal processing.
-  KjNode*  batchPreErrors;
+  CorNode* batchPreErrors;
 
   // § 4.17 — parse-once cache for subscription entities[].type
   // expressions. Set by ldCheckSubscription (one slot per entities[]
@@ -418,7 +419,7 @@ extern const char* ldBrokerHttpEndpoint;
 // tree is parsed once at startup and cloned into the response arena on
 // each request without going through @context. NULL when not configured.
 //
-extern KjNode* ldContextSourceExtras;
+extern CorNode* ldContextSourceExtras;
 
 
 

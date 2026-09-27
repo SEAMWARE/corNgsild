@@ -23,10 +23,10 @@
 #include "corRest/corRest.h"                            // corRest
 #include "kalloc/kaAlloc.h"                             // kaAlloc
 
-#include "kjson/KjNode.h"                               // KjNode
-#include "kjson/kjLookup.h"                             // kjLookup
-#include "kjson/kjRender.h"                             // kjFastRender
-#include "kjson/kjRenderSize.h"                         // kjFastRenderSize
+#include "corTree/CorNode.h"                            // CorNode
+#include "corTree/corTreeLookup.h"                      // corTreeLookup
+#include "corJson/corJsonRender.h"                      // corJsonFastRender
+#include "corJson/corJsonRenderSize.h"                  // corJsonFastRenderSize
 
 #include "corNgsild/corNgsild.h"                          // ldError, LD_ERROR_*, corNgsild, ldParamHook
 #include "corNgsild/LdProblem.h"                         // LD_ERROR_BAD_REQUEST_DATA
@@ -37,18 +37,18 @@
 
 // -----------------------------------------------------------------------------
 //
-// arrayJoin - comma-join a KjArray of strings.
+// arrayJoin - comma-join a CorArray of strings.
 //
-static const char* arrayJoin(KjNode* arrP)
+static const char* arrayJoin(CorNode* arrP)
 {
-  if (arrP == NULL || arrP->type != KjArray)
+  if (arrP == NULL || arrP->type != CorArray)
     return NULL;
 
   int total = 0;
   int n     = 0;
-  for (KjNode* c = arrP->value.firstChildP; c != NULL; c = c->next)
+  for (CorNode* c = arrP->value.firstChildP; c != NULL; c = c->next)
   {
-    if (c->type != KjString) continue;
+    if (c->type != CorString) continue;
     total += strlen(c->value.s) + 1;
     n++;
   }
@@ -57,9 +57,9 @@ static const char* arrayJoin(KjNode* arrP)
 
   char* buf = (char*) kaAlloc(&corRest.kalloc, total + 1);
   int pos = 0;
-  for (KjNode* c = arrP->value.firstChildP; c != NULL; c = c->next)
+  for (CorNode* c = arrP->value.firstChildP; c != NULL; c = c->next)
   {
-    if (c->type != KjString) continue;
+    if (c->type != CorString) continue;
     if (pos > 0) buf[pos++] = ',';
     int len = strlen(c->value.s);
     memcpy(buf + pos, c->value.s, len);
@@ -78,33 +78,33 @@ static const char* arrayJoin(KjNode* arrP)
 // Multiple selectors merge: all ids joined, all types joined, first
 // idPattern wins. Per-selector correlation is lost (same as URL form).
 //
-static void collectFromEntities(KjNode* entsArr)
+static void collectFromEntities(CorNode* entsArr)
 {
-  if (entsArr == NULL || entsArr->type != KjArray)
+  if (entsArr == NULL || entsArr->type != CorArray)
     return;
 
   int idLen = 0, typeLen = 0, idCount = 0, typeCount = 0;
   const char* firstIdPattern = NULL;
 
-  for (KjNode* selP = entsArr->value.firstChildP; selP != NULL; selP = selP->next)
+  for (CorNode* selP = entsArr->value.firstChildP; selP != NULL; selP = selP->next)
   {
-    if (selP->type != KjObject) continue;
+    if (selP->type != CorObject) continue;
 
-    KjNode* idP        = kjLookup(selP, "id");
-    KjNode* typeP      = kjLookup(selP, "type");
-    KjNode* patternP   = kjLookup(selP, "idPattern");
+    CorNode* idP       = corTreeLookup(selP, "id");
+    CorNode* typeP     = corTreeLookup(selP, "type");
+    CorNode* patternP  = corTreeLookup(selP, "idPattern");
 
-    if (idP != NULL && idP->type == KjString)
+    if (idP != NULL && idP->type == CorString)
     {
       idLen += strlen(idP->value.s) + 1;
       idCount++;
     }
-    if (typeP != NULL && typeP->type == KjString)
+    if (typeP != NULL && typeP->type == CorString)
     {
       typeLen += strlen(typeP->value.s) + 1;
       typeCount++;
     }
-    if (firstIdPattern == NULL && patternP != NULL && patternP->type == KjString)
+    if (firstIdPattern == NULL && patternP != NULL && patternP->type == CorString)
       firstIdPattern = patternP->value.s;
   }
 
@@ -112,11 +112,11 @@ static void collectFromEntities(KjNode* entsArr)
   {
     char* buf = (char*) kaAlloc(&corRest.kalloc, idLen + 1);
     int pos = 0;
-    for (KjNode* selP = entsArr->value.firstChildP; selP != NULL; selP = selP->next)
+    for (CorNode* selP = entsArr->value.firstChildP; selP != NULL; selP = selP->next)
     {
-      if (selP->type != KjObject) continue;
-      KjNode* idP = kjLookup(selP, "id");
-      if (idP == NULL || idP->type != KjString) continue;
+      if (selP->type != CorObject) continue;
+      CorNode* idP = corTreeLookup(selP, "id");
+      if (idP == NULL || idP->type != CorString) continue;
       if (pos > 0) buf[pos++] = ',';
       int len = strlen(idP->value.s);
       memcpy(buf + pos, idP->value.s, len);
@@ -130,11 +130,11 @@ static void collectFromEntities(KjNode* entsArr)
   {
     char* buf = (char*) kaAlloc(&corRest.kalloc, typeLen + 1);
     int pos = 0;
-    for (KjNode* selP = entsArr->value.firstChildP; selP != NULL; selP = selP->next)
+    for (CorNode* selP = entsArr->value.firstChildP; selP != NULL; selP = selP->next)
     {
-      if (selP->type != KjObject) continue;
-      KjNode* typeP = kjLookup(selP, "type");
-      if (typeP == NULL || typeP->type != KjString) continue;
+      if (selP->type != CorObject) continue;
+      CorNode* typeP = corTreeLookup(selP, "type");
+      if (typeP == NULL || typeP->type != CorString) continue;
       if (pos > 0) buf[pos++] = ',';
       int len = strlen(typeP->value.s);
       memcpy(buf + pos, typeP->value.s, len);
@@ -154,25 +154,25 @@ static void collectFromEntities(KjNode* entsArr)
 //
 // collectFromGeoQ - explode a GeoQuery object (§ 5.2.13).
 //
-static void collectFromGeoQ(KjNode* geoQ)
+static void collectFromGeoQ(CorNode* geoQ)
 {
-  if (geoQ == NULL || geoQ->type != KjObject)
+  if (geoQ == NULL || geoQ->type != CorObject)
     return;
 
-  KjNode* georel      = kjLookup(geoQ, "georel");
-  KjNode* geometry    = kjLookup(geoQ, "geometry");
-  KjNode* coords      = kjLookup(geoQ, "coordinates");
-  KjNode* geoproperty = kjLookup(geoQ, "geoproperty");
+  CorNode* georel     = corTreeLookup(geoQ, "georel");
+  CorNode* geometry   = corTreeLookup(geoQ, "geometry");
+  CorNode* coords     = corTreeLookup(geoQ, "coordinates");
+  CorNode* geoproperty = corTreeLookup(geoQ, "geoproperty");
 
-  if (georel      != NULL && georel->type      == KjString) ldParamHook("georel",      georel->value.s);
-  if (geometry    != NULL && geometry->type    == KjString) ldParamHook("geometry",    geometry->value.s);
-  if (geoproperty != NULL && geoproperty->type == KjString) ldParamHook("geoproperty", geoproperty->value.s);
+  if (georel      != NULL && georel->type      == CorString) ldParamHook("georel",     georel->value.s);
+  if (geometry    != NULL && geometry->type    == CorString) ldParamHook("geometry",   geometry->value.s);
+  if (geoproperty != NULL && geoproperty->type == CorString) ldParamHook("geoproperty", geoproperty->value.s);
 
   if (coords != NULL)
   {
-    int   bufSize = kjFastRenderSize(coords) + 1;
+    int   bufSize = corJsonFastRenderSize(coords) + 1;
     char* buf     = (char*) kaAlloc(&corRest.kalloc, bufSize);
-    kjFastRender(coords, buf);
+    corJsonFastRender(coords, buf);
     ldParamHook("coordinates", buf);
   }
 }
@@ -183,16 +183,16 @@ static void collectFromGeoQ(KjNode* geoQ)
 //
 // ldQueryBodyToParams -
 //
-bool ldQueryBodyToParams(KjNode* bodyP)
+bool ldQueryBodyToParams(CorNode* bodyP)
 {
-  if (bodyP == NULL || bodyP->type != KjObject)
+  if (bodyP == NULL || bodyP->type != CorObject)
   {
     ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Not a JSON Object",
             "Query body must be a JSON object");
     return false;
   }
 
-  KjNode* typeP = kjLookup(bodyP, "type");
+  CorNode* typeP = corTreeLookup(bodyP, "type");
   if (typeP == NULL)
   {
     ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Mandatory Field Missing",
@@ -206,7 +206,7 @@ bool ldQueryBodyToParams(KjNode* bodyP)
   // Accept both.
   //
   const char* expandedQuery = "https://uri.etsi.org/ngsi-ld/default-context/Query";
-  if (typeP->type != KjString ||
+  if (typeP->type != CorString ||
       (strcmp(typeP->value.s, "Query") != 0 &&
        strcmp(typeP->value.s, expandedQuery) != 0))
   {
@@ -215,7 +215,7 @@ bool ldQueryBodyToParams(KjNode* bodyP)
     return false;
   }
 
-  for (KjNode* fP = bodyP->value.firstChildP; fP != NULL; fP = fP->next)
+  for (CorNode* fP = bodyP->value.firstChildP; fP != NULL; fP = fP->next)
   {
     if (fP->name == NULL)                       continue;
     if (fP->name[0] == '@')                     continue;
@@ -237,15 +237,15 @@ bool ldQueryBodyToParams(KjNode* bodyP)
     // (timerel, timeAt, endTimeAt, lastN, timeproperty, aggrMethods,
     // aggrPeriodDuration). Used by POST /temporal/entityOperations/query
     // (§ 5.7.4 / § 6.24.3.1).
-    if (strcmp(fP->name, "temporalQ") == 0 && fP->type == KjObject)
+    if (strcmp(fP->name, "temporalQ") == 0 && fP->type == CorObject)
     {
-      for (KjNode* tP = fP->value.firstChildP; tP != NULL; tP = tP->next)
+      for (CorNode* tP = fP->value.firstChildP; tP != NULL; tP = tP->next)
       {
         if (tP->name == NULL || tP->name[0] == '@') continue;
 
-        if (tP->type == KjString)
+        if (tP->type == CorString)
           ldParamHook(tP->name, tP->value.s);
-        else if (tP->type == KjInt)
+        else if (tP->type == CorInt)
         {
           char buf[32];
           snprintf(buf, sizeof(buf), "%lld", tP->value.i);
@@ -266,19 +266,19 @@ bool ldQueryBodyToParams(KjNode* bodyP)
       continue;
     }
 
-    if (fP->type == KjBoolean)
+    if (fP->type == CorBoolean)
     {
       ldParamHook(fP->name, fP->value.b ? "true" : "false");
       continue;
     }
 
-    if (fP->type == KjString)
+    if (fP->type == CorString)
     {
       ldParamHook(fP->name, fP->value.s);
       continue;
     }
 
-    if (fP->type == KjInt)
+    if (fP->type == CorInt)
     {
       char buf[32];
       snprintf(buf, sizeof(buf), "%lld", fP->value.i);

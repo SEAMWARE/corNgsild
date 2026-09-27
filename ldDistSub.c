@@ -14,13 +14,14 @@
 
 #include "ktrace/kTrace.h"                             // KT_W
 #include "kalloc/kaAlloc.h"                            // kaAlloc
-#include "kjson/KjNode.h"                              // KjNode
-#include "kjson/kjson.h"                               // Kjson
-#include "kjson/kjLookup.h"                            // kjLookup
-#include "kjson/kjClone.h"                             // kjClone
-#include "kjson/kjBuilder.h"                           // kjObject, kjArray, kjString, kjInteger, kjChildAdd, kjChildRemove
-#include "kjson/kjRender.h"                            // kjFastRender
-#include "kjson/kjRenderSize.h"                        // kjFastRenderSize
+#include "kalloc/KAlloc.h"                             // KAlloc
+#include "corTree/CorNode.h"                           // CorNode
+#include "corJson/CorJson.h"                           // CorJson
+#include "corTree/corTreeLookup.h"                     // corTreeLookup
+#include "corTree/corTreeClone.h"                      // corTreeClone
+#include "corTree/corTreeBuilder.h"                    // corTreeObject, corTreeArray, corTreeString, corTreeInteger, corTreeChildAdd, corTreeChildRemove
+#include "corJson/corJsonRender.h"                     // corJsonFastRender
+#include "corJson/corJsonRenderSize.h"                 // corJsonFastRenderSize
 
 #include "corRest/CorRestState.h"                        // corRest
 #include "corRest/CorRestVerb.h"                         // CorVerbPost, CorVerbDelete, CorVerbPatch
@@ -44,25 +45,25 @@
 //
 // ldDistSubSubordinatesFragment - build {_subordinates, _subordinateRunNo}
 //
-KjNode* ldDistSubSubordinatesFragment(LdSubCacheItem* itemP, Kjson* kjsonP)
+CorNode* ldDistSubSubordinatesFragment(LdSubCacheItem* itemP, KAlloc* allocP)
 {
   if (itemP == NULL)
     return NULL;
 
-  KjNode* fragP = kjObject(kjsonP, NULL);
-  KjNode* arr   = kjArray(kjsonP, "_subordinates");
+  CorNode* fragP = corTreeObject(allocP, NULL);
+  CorNode* arr  = corTreeArray(allocP, "_subordinates");
 
   for (LdSubSubordinate* sub = itemP->subordinateP; sub != NULL; sub = sub->next)
   {
-    KjNode* entry = kjObject(kjsonP, NULL);
-    if (sub->remoteSubId != NULL) kjChildAdd(entry, kjString(kjsonP, "id",    sub->remoteSubId));
-    if (sub->regId       != NULL) kjChildAdd(entry, kjString(kjsonP, "regId", sub->regId));
-    kjChildAdd(entry, kjInteger(kjsonP, "runNo", (long long) sub->runNo));
-    kjChildAdd(arr, entry);
+    CorNode* entry = corTreeObject(allocP, NULL);
+    if (sub->remoteSubId != NULL) corTreeChildAdd(entry, corTreeString(allocP, "id", sub->remoteSubId));
+    if (sub->regId       != NULL) corTreeChildAdd(entry, corTreeString(allocP, "regId", sub->regId));
+    corTreeChildAdd(entry, corTreeInteger(allocP, "runNo", (long long) sub->runNo));
+    corTreeChildAdd(arr, entry);
   }
 
-  kjChildAdd(fragP, arr);
-  kjChildAdd(fragP, kjInteger(kjsonP, "_subordinateRunNo", (long long) itemP->subordinateRunNo));
+  corTreeChildAdd(fragP, arr);
+  corTreeChildAdd(fragP, corTreeInteger(allocP, "_subordinateRunNo", (long long) itemP->subordinateRunNo));
 
   return fragP;
 }
@@ -127,9 +128,9 @@ static bool regHasMatchingType(LdSubCacheItem* itemP, LdRegCacheItem* regP)
 //                                more strictly on its side)
 //   * neither id nor idPat     → emit type only
 //
-static KjNode* narrowEntities(LdSubCacheItem* itemP, LdRegCacheItem* regP, Kjson* kjsonP)
+static CorNode* narrowEntities(LdSubCacheItem* itemP, LdRegCacheItem* regP, KAlloc* allocP)
 {
-  KjNode* arr = kjArray(kjsonP, "entities");
+  CorNode* arr = corTreeArray(allocP, "entities");
 
   for (LdSubEntitySelector* esP = itemP->entitySelectors; esP != NULL; esP = esP->next)
   {
@@ -170,14 +171,14 @@ static KjNode* narrowEntities(LdSubCacheItem* itemP, LdRegCacheItem* regP, Kjson
         else if (eiPat != NULL)               derivedIdPattern  = eiPat->source;
         // (both-pattern case falls through esPat branch above)
 
-        KjNode* entry = kjObject(kjsonP, NULL);
-        kjChildAdd(entry, kjString(kjsonP, "type", esP->type));
+        CorNode* entry = corTreeObject(allocP, NULL);
+        corTreeChildAdd(entry, corTreeString(allocP, "type", esP->type));
         if (derivedId != NULL)
-          kjChildAdd(entry, kjString(kjsonP, "id", derivedId));
+          corTreeChildAdd(entry, corTreeString(allocP, "id", derivedId));
         else if (derivedIdPattern != NULL)
-          kjChildAdd(entry, kjString(kjsonP, "idPattern", (char*) derivedIdPattern));
+          corTreeChildAdd(entry, corTreeString(allocP, "idPattern", (char*) derivedIdPattern));
 
-        kjChildAdd(arr, entry);
+        corTreeChildAdd(arr, entry);
       }
     }
   }
@@ -191,25 +192,25 @@ static KjNode* narrowEntities(LdSubCacheItem* itemP, LdRegCacheItem* regP, Kjson
 //
 // derivedSubBody - build the JSON-LD body for the derived subscription
 //
-// kjClones the local sub tree, strips broker-internal fields ("status",
+// corTreeClones the local sub tree, strips broker-internal fields ("status",
 // "jsonldContext"), rewrites "id" and "notification.endpoint.uri",
 // replaces entities[] with the precomputed narrowed array, and prepends
 // "@context" so the remote re-expands cleanly.
 //
 static char* derivedSubBody(LdSubCacheItem* itemP,
-                            KjNode*         narrowedEntities,
+                            CorNode*        narrowedEntities,
                             const char*     remoteSubId,
                             const char*     callbackUri,
                             int*            bodyLenP)
 {
-  KjNode* clone = kjClone(corRest.kjsonP, itemP->subTree);
+  CorNode* clone = corTreeClone(corRest.kallocP, itemP->subTree);
   if (clone == NULL)
     return NULL;
 
   // Strip internal fields that should not flow to the remote.
-  KjNode* statusP = kjLookup(clone, LD_VOCAB_STATUS);
+  CorNode* statusP = corTreeLookup(clone, LD_VOCAB_STATUS);
   if (statusP != NULL)
-    kjChildRemove(clone, statusP);
+    corTreeChildRemove(clone, statusP);
 
   // § 6.4.5 — the parent's server-owned createdAt/modifiedAt must not flow to
   // the subordinate (which stamps its own); a remote create would reject them.
@@ -217,55 +218,55 @@ static char* derivedSubBody(LdSubCacheItem* itemP,
 
   // Strip both the user-facing jsonldContext (the remote will resolve its
   // own from @context) and the broker-filled `_jcResolved` (internal-only).
-  KjNode* jcP = kjLookup(clone, "jsonldContext");
+  CorNode* jcP = corTreeLookup(clone, "jsonldContext");
   if (jcP != NULL)
-    kjChildRemove(clone, jcP);
-  KjNode* jcrP = kjLookup(clone, "_jcResolved");
+    corTreeChildRemove(clone, jcP);
+  CorNode* jcrP = corTreeLookup(clone, "_jcResolved");
   if (jcrP != NULL)
-    kjChildRemove(clone, jcrP);
+    corTreeChildRemove(clone, jcrP);
 
-  KjNode* sysIdP = kjLookup(clone, "_id");
+  CorNode* sysIdP = corTreeLookup(clone, "_id");
   if (sysIdP != NULL)
-    kjChildRemove(clone, sysIdP);
+    corTreeChildRemove(clone, sysIdP);
 
   // Rewrite id
-  KjNode* idP = kjLookup(clone, "id");
-  if (idP != NULL && idP->type == KjString)
+  CorNode* idP = corTreeLookup(clone, "id");
+  if (idP != NULL && idP->type == CorString)
     idP->value.s = (char*) remoteSubId;
   else
   {
-    KjNode* newIdP = kjString(corRest.kjsonP, "id", remoteSubId);
-    kjChildAdd(clone, newIdP);
+    CorNode* newIdP = corTreeString(corRest.kallocP, "id", remoteSubId);
+    corTreeChildAdd(clone, newIdP);
   }
 
   // Rewrite notification.endpoint.uri so the remote calls back to us.
-  KjNode* notifP    = kjLookup(clone, LD_VOCAB_NOTIFICATION);
-  KjNode* endpointP = (notifP != NULL) ? kjLookup(notifP, LD_VOCAB_ENDPOINT) : NULL;
-  KjNode* uriP      = (endpointP != NULL) ? kjLookup(endpointP, LD_VOCAB_URI) : NULL;
-  if (uriP != NULL && uriP->type == KjString)
+  CorNode* notifP   = corTreeLookup(clone, LD_VOCAB_NOTIFICATION);
+  CorNode* endpointP = (notifP != NULL) ? corTreeLookup(notifP, LD_VOCAB_ENDPOINT) : NULL;
+  CorNode* uriP     = (endpointP != NULL) ? corTreeLookup(endpointP, LD_VOCAB_URI) : NULL;
+  if (uriP != NULL && uriP->type == CorString)
     uriP->value.s = (char*) callbackUri;
 
   // Filter narrowing: replace parent's entities[] with the parent×reg
   // intersection. Pre-validated non-empty by the caller.
   if (narrowedEntities != NULL)
   {
-    KjNode* oldEntities = kjLookup(clone, LD_VOCAB_ENTITIES);
+    CorNode* oldEntities = corTreeLookup(clone, LD_VOCAB_ENTITIES);
     if (oldEntities != NULL)
-      kjChildRemove(clone, oldEntities);
-    kjChildAdd(clone, narrowedEntities);
+      corTreeChildRemove(clone, oldEntities);
+    corTreeChildAdd(clone, narrowedEntities);
   }
 
   // Strip any inherited @context — the forward goes out as
   // application/json + Link header (ldDistOp/buildHeaders), and mixing
   // body @context with application/json is a 400 per
   // feedback_context_header_rules. The Link header carries the URL.
-  KjNode* atCtxP = kjLookup(clone, "@context");
+  CorNode* atCtxP = corTreeLookup(clone, "@context");
   if (atCtxP != NULL)
-    kjChildRemove(clone, atCtxP);
+    corTreeChildRemove(clone, atCtxP);
 
-  int   sz  = kjFastRenderSize(clone) + 1;
+  int   sz  = corJsonFastRenderSize(clone) + 1;
   char* buf = (char*) kaAlloc(&corRest.kalloc, sz);
-  kjFastRender(clone, buf);
+  corJsonFastRender(clone, buf);
 
   if (bodyLenP != NULL)
     *bodyLenP = (int) strlen(buf);
@@ -320,7 +321,7 @@ static bool fanoutToReg(LdSubCacheItem* itemP, LdRegCacheItem* regP, const char*
 
   // Compute the narrowed entity filter up-front. Empty intersection =
   // no slice to subscribe to on this CSR — bail before bumping runNo.
-  KjNode* narrowed = narrowEntities(itemP, regP, corRest.kjsonP);
+  CorNode* narrowed = narrowEntities(itemP, regP, corRest.kallocP);
   if (narrowed == NULL)
     return false;
 
@@ -492,30 +493,30 @@ int ldDistSubCascadeDelete(LdSubCacheItem* itemP, LdRegCache* regCacheP, const c
 // (status, jsonldContext) that don't belong on the wire — strip them
 // before render, then prepend @context for the receiver.
 //
-static char* patchBody(LdSubCacheItem* itemP, KjNode* fragmentP, int* bodyLenP)
+static char* patchBody(LdSubCacheItem* itemP, CorNode* fragmentP, int* bodyLenP)
 {
-  KjNode* clone = kjClone(corRest.kjsonP, fragmentP);
+  CorNode* clone = corTreeClone(corRest.kallocP, fragmentP);
   if (clone == NULL)
     return NULL;
 
-  KjNode* statusP = kjLookup(clone, LD_VOCAB_STATUS);
-  if (statusP != NULL) kjChildRemove(clone, statusP);
+  CorNode* statusP = corTreeLookup(clone, LD_VOCAB_STATUS);
+  if (statusP != NULL) corTreeChildRemove(clone, statusP);
 
   ldStripSysAttrs(clone);  // § 6.4.5 — never forward server-owned timestamps
 
-  KjNode* jcP = kjLookup(clone, "jsonldContext");
-  if (jcP != NULL) kjChildRemove(clone, jcP);
-  KjNode* jcrP = kjLookup(clone, "_jcResolved");
-  if (jcrP != NULL) kjChildRemove(clone, jcrP);
+  CorNode* jcP = corTreeLookup(clone, "jsonldContext");
+  if (jcP != NULL) corTreeChildRemove(clone, jcP);
+  CorNode* jcrP = corTreeLookup(clone, "_jcResolved");
+  if (jcrP != NULL) corTreeChildRemove(clone, jcrP);
 
   // Strip body @context — forward goes out as application/json + Link.
-  KjNode* atCtxP2 = kjLookup(clone, "@context");
+  CorNode* atCtxP2 = corTreeLookup(clone, "@context");
   if (atCtxP2 != NULL)
-    kjChildRemove(clone, atCtxP2);
+    corTreeChildRemove(clone, atCtxP2);
 
-  int   sz  = kjFastRenderSize(clone) + 1;
+  int   sz  = corJsonFastRenderSize(clone) + 1;
   char* buf = (char*) kaAlloc(&corRest.kalloc, sz);
-  kjFastRender(clone, buf);
+  corJsonFastRender(clone, buf);
 
   if (bodyLenP != NULL)
     *bodyLenP = (int) strlen(buf);
@@ -555,7 +556,7 @@ static char* buildSubUrl(LdRegCacheItem* regP, const char* remoteSubId)
 // ldDistSubReconcile -
 //
 int ldDistSubReconcile(LdSubCacheItem*      itemP,
-                       KjNode*              fragmentP,
+                       CorNode*             fragmentP,
                        LdRegCache*          regCacheP,
                        const char*          ownAlias,
                        LdDistSubPersistFunc persistFunc,
@@ -596,7 +597,7 @@ int ldDistSubReconcile(LdSubCacheItem*      itemP,
     bool stillMatches = false;
     if (regP != NULL && regP->endpoint != NULL)
     {
-      KjNode* narrowed = narrowEntities(itemP, regP, corRest.kjsonP);
+      CorNode* narrowed = narrowEntities(itemP, regP, corRest.kallocP);
       stillMatches = (narrowed != NULL);
     }
 

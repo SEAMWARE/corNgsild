@@ -9,8 +9,8 @@
 #include <stdbool.h>                                  // bool
 #include <stddef.h>                                   // NULL
 
-#include "kjson/KjNode.h"                             // KjNode
-#include "kjson/kjLookup.h"                           // kjLookup
+#include "corTree/CorNode.h"                          // CorNode
+#include "corTree/corTreeLookup.h"                    // corTreeLookup
 
 #include "corNgsild/LdVocab.h"                        // LD_VOCAB_MODIFIED_AT
 #include "corNgsild/ldInstanceWritten.h"              // Own interface
@@ -21,18 +21,18 @@
 //
 // ldInstanceWritten -
 //
-bool ldInstanceWritten(KjNode* preAttrP, KjNode* postAttrP, const char* dsKey)
+bool ldInstanceWritten(CorNode* preAttrP, CorNode* postAttrP, const char* dsKey)
 {
-  KjNode* preP  = (preAttrP  != NULL) ? kjLookup(preAttrP,  dsKey) : NULL;
-  KjNode* postP = (postAttrP != NULL) ? kjLookup(postAttrP, dsKey) : NULL;
+  CorNode* preP = (preAttrP  != NULL) ? corTreeLookup(preAttrP, dsKey) : NULL;
+  CorNode* postP = (postAttrP != NULL) ? corTreeLookup(postAttrP, dsKey) : NULL;
 
   if ((preP == NULL) || (postP == NULL))
     return (preP != postP);
 
-  KjNode* preModP  = kjLookup(preP,  LD_VOCAB_MODIFIED_AT);
-  KjNode* postModP = kjLookup(postP, LD_VOCAB_MODIFIED_AT);
+  CorNode* preModP = corTreeLookup(preP, LD_VOCAB_MODIFIED_AT);
+  CorNode* postModP = corTreeLookup(postP, LD_VOCAB_MODIFIED_AT);
 
-  if ((preModP == NULL) || (postModP == NULL) || (preModP->type != KjInt) || (postModP->type != KjInt))
+  if ((preModP == NULL) || (postModP == NULL) || (preModP->type != CorInt) || (postModP->type != CorInt))
     return true;  // nothing to tell them apart - a write to the Attribute counts, as for a plain name
 
   return (preModP->value.i != postModP->value.i);

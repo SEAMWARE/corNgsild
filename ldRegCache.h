@@ -15,6 +15,7 @@
 #include <stdint.h>                                    // uint64_t
 #include <regex.h>                                     // regex_t
 
+#include "kalloc/KAlloc.h"                              // KAlloc
 #include "corNgsild/LdOp.h"                             // LdOp
 #include "corNgsild/LdRegCache.h"                       // LdRegCache, LdRegCacheItem
 
@@ -68,7 +69,7 @@ extern void ldRegCacheItemUnpin(LdRegCacheItem* itemP);
 //
 // ldRegCacheItemAdd - parse a registration tree and add it to the cache
 //
-// regTree is kjClone'd internally (malloc allocator) — caller keeps ownership
+// regTree is corTreeClone'd internally (malloc allocator) — caller keeps ownership
 // of the original.
 //
 // kaP is a TRANSIENT arena used only to resolve a CSR's forwarding @context
@@ -79,7 +80,7 @@ extern void ldRegCacheItemUnpin(LdRegCacheItem* itemP);
 // May be NULL (no transient arena → the parse tree falls back to malloc and
 // leaks — every real caller passes &corRest.kalloc).
 //
-extern LdRegCacheItem* ldRegCacheItemAdd(LdRegCache* cacheP, KjNode* regTree, KAlloc* kaP);
+extern LdRegCacheItem* ldRegCacheItemAdd(LdRegCache* cacheP, CorNode* regTree, KAlloc* kaP);
 
 
 
@@ -273,7 +274,7 @@ extern const char* ldRegCacheLocalWriteConflict(LdRegCache* cacheP,
 // entity/fragment tree and runs the same § 9.3.3 local-write guard.
 extern const char* ldRegCacheLocalWriteConflictTree(LdRegCache* cacheP,
                                                     const char* entityId,
-                                                    KjNode*     fragP,
+                                                    CorNode*    fragP,
                                                     KAlloc*     kaP);
 
 // Is 'attrIri' on entity (entityId, entityTypeV) claimed by an EXCLUSIVE

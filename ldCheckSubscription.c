@@ -17,13 +17,13 @@
 #include "kalloc/KAlloc.h"                             // KAlloc
 #include "kalloc/kaAlloc.h"                            // kaAlloc
 #include "kalloc/kaStrdup.h"                           // kaStrdup
-#include "kjson/KjNode.h"                               // KjNode
-#include "kjson/kjLookup.h"                            // kjLookup
-#include "kjson/kjBuilder.h"                           // kjChildRemove
-#include "kjson/kjParse.h"                             // kjParse
-#include "kjson/kjBufferCreate.h"                      // kjBufferCreate
-#include "kjson/kjRender.h"                            // kjFastRender
-#include "kjson/kjRenderSize.h"                        // kjFastRenderSize
+#include "corTree/CorNode.h"                            // CorNode
+#include "corTree/corTreeLookup.h"                     // corTreeLookup
+#include "corTree/corTreeBuilder.h"                    // corTreeChildRemove
+#include "corJson/corJsonParse.h"                      // corJsonParse
+#include "corJson/corJsonCreate.h"                     // corJsonCreate
+#include "corJson/corJsonRender.h"                     // corJsonFastRender
+#include "corJson/corJsonRenderSize.h"                 // corJsonFastRenderSize
 
 #include "corNgsild/LdOp.h"                               // LdOp
 #include "corNgsild/CorNgsild.h"                           // corNgsild
@@ -52,23 +52,23 @@
 // Each item must be {key:string, value:string}. MQTT-QoS must be 0/1/2;
 // MQTT-Version must be mqtt3.1.1 or mqtt5.0.
 //
-static bool checkNotifierInfo(KjNode* niP)
+static bool checkNotifierInfo(CorNode* niP)
 {
   ARRAY_CHECK(niP, "Invalid Subscription", "'notification.endpoint.notifierInfo' must be an array");
 
-  for (KjNode* kvP = niP->value.firstChildP; kvP != NULL; kvP = kvP->next)
+  for (CorNode* kvP = niP->value.firstChildP; kvP != NULL; kvP = kvP->next)
   {
-    if (kvP->type != KjObject)
+    if (kvP->type != CorObject)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
               "'notification.endpoint.notifierInfo' items must be objects");
       return false;
     }
 
-    KjNode* kP = kjLookup(kvP, "key");
-    KjNode* vP = kjLookup(kvP, "value");
+    CorNode* kP = corTreeLookup(kvP, "key");
+    CorNode* vP = corTreeLookup(kvP, "value");
 
-    if (kP == NULL || kP->type != KjString || vP == NULL || vP->type != KjString)
+    if (kP == NULL || kP->type != CorString || vP == NULL || vP->type != CorString)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
               "'notification.endpoint.notifierInfo' items must be {key:string, value:string}");
@@ -125,11 +125,11 @@ static bool checkNotifierInfo(KjNode* niP)
 // sentinel cannot smuggle a reserved header through; the sentinel is rejected
 // for the two framing headers we absorb (Content-Type, Link).
 //
-static bool checkReceiverInfo(KjNode* riP, KjNode* acceptP)
+static bool checkReceiverInfo(CorNode* riP, CorNode* acceptP)
 {
   ARRAY_CHECK(riP, "Invalid Subscription", "'notification.endpoint.receiverInfo' must be an array");
 
-  bool         acceptPresent = (acceptP != NULL && acceptP->type == KjString);
+  bool         acceptPresent = (acceptP != NULL && acceptP->type == CorString);
   CorMimeType acceptType    = acceptPresent ? corAcceptParse(acceptP->value.s) : CorMimeJson;
 
   // Effective media type for the notification body: endpoint.accept if present,
@@ -137,12 +137,12 @@ static bool checkReceiverInfo(KjNode* riP, KjNode* acceptP)
   CorMimeType effectiveType = acceptType;
   if (!acceptPresent)
   {
-    for (KjNode* kvP = riP->value.firstChildP; kvP != NULL; kvP = kvP->next)
+    for (CorNode* kvP = riP->value.firstChildP; kvP != NULL; kvP = kvP->next)
     {
-      if (kvP->type != KjObject) continue;
-      KjNode* kP = kjLookup(kvP, "key");
-      KjNode* vP = kjLookup(kvP, "value");
-      if (kP == NULL || kP->type != KjString || vP == NULL || vP->type != KjString) continue;
+      if (kvP->type != CorObject) continue;
+      CorNode* kP = corTreeLookup(kvP, "key");
+      CorNode* vP = corTreeLookup(kvP, "value");
+      if (kP == NULL || kP->type != CorString || vP == NULL || vP->type != CorString) continue;
       if ((strcasecmp(kP->value.s, "Content-Type") == 0) && (strcmp(vP->value.s, "urn:ngsi-ld:request") != 0))
       {
         CorMimeType ct = corAcceptParse(vP->value.s);
@@ -153,19 +153,19 @@ static bool checkReceiverInfo(KjNode* riP, KjNode* acceptP)
     }
   }
 
-  for (KjNode* kvP = riP->value.firstChildP; kvP != NULL; kvP = kvP->next)
+  for (CorNode* kvP = riP->value.firstChildP; kvP != NULL; kvP = kvP->next)
   {
-    if (kvP->type != KjObject)
+    if (kvP->type != CorObject)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
               "'notification.endpoint.receiverInfo' items must be objects");
       return false;
     }
 
-    KjNode* kP = kjLookup(kvP, "key");
-    KjNode* vP = kjLookup(kvP, "value");
+    CorNode* kP = corTreeLookup(kvP, "key");
+    CorNode* vP = corTreeLookup(kvP, "value");
 
-    if (kP == NULL || kP->type != KjString || vP == NULL || vP->type != KjString)
+    if (kP == NULL || kP->type != CorString || vP == NULL || vP->type != CorString)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
               "'notification.endpoint.receiverInfo' items must be {key:string, value:string}");
@@ -247,16 +247,16 @@ static bool checkReceiverInfo(KjNode* riP, KjNode* acceptP)
 //
 // checkEndpoint - validate the "notification.endpoint" object
 //
-static bool checkEndpoint(KjNode* endpointP, bool complete)
+static bool checkEndpoint(CorNode* endpointP, bool complete)
 {
   OBJECT_CHECK(endpointP, "Invalid Subscription", "'notification.endpoint' must be a JSON object");
   EMPTY_OBJECT_CHECK(endpointP, "'notification.endpoint' must not be empty");
 
-  KjNode* uriP          = NULL;
-  KjNode* acceptP       = NULL;
-  KjNode* receiverInfoP = NULL;
+  CorNode* uriP         = NULL;
+  CorNode* acceptP      = NULL;
+  CorNode* receiverInfoP = NULL;
 
-  for (KjNode* childP = endpointP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = endpointP->value.firstChildP; childP != NULL; childP = childP->next)
   {
     if (strcmp(childP->name, LD_VOCAB_URI) == 0)
     {
@@ -315,19 +315,19 @@ static bool checkEndpoint(KjNode* endpointP, bool complete)
 //
 // checkNotification - validate the "notification" object
 //
-static bool checkNotification(KjNode* notifP, bool complete, bool merged, LdFormat* notifFormatP)
+static bool checkNotification(CorNode* notifP, bool complete, bool merged, LdFormat* notifFormatP)
 {
   OBJECT_CHECK(notifP, "Invalid Subscription", "'notification' must be a JSON object");
   EMPTY_OBJECT_CHECK(notifP, "'notification' must not be empty");
 
-  KjNode* endpointP    = NULL;
-  KjNode* formatP      = NULL;
-  KjNode* attributesP  = NULL;
-  KjNode* pickP        = NULL;
-  KjNode* omitP        = NULL;
-  KjNode* showChangesP = NULL;
+  CorNode* endpointP   = NULL;
+  CorNode* formatP     = NULL;
+  CorNode* attributesP = NULL;
+  CorNode* pickP       = NULL;
+  CorNode* omitP       = NULL;
+  CorNode* showChangesP = NULL;
 
-  for (KjNode* childP = notifP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = notifP->value.firstChildP; childP != NULL; childP = childP->next)
   {
     if (strcmp(childP->name, LD_VOCAB_ENDPOINT) == 0)
     {
@@ -367,9 +367,9 @@ static bool checkNotification(KjNode* notifP, bool complete, bool merged, LdForm
 
       // Each item must be a string. Per § 5.2.12 Table 5.2.12-1, the
       // attributes alias for pick disallows "id", "type", "scope".
-      for (KjNode* attrP = childP->value.firstChildP; attrP != NULL; attrP = attrP->next)
+      for (CorNode* attrP = childP->value.firstChildP; attrP != NULL; attrP = attrP->next)
       {
-        if (attrP->type != KjString)
+        if (attrP->type != CorString)
         {
           ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription", "'notification.attributes' items must be strings");
           return false;
@@ -396,9 +396,9 @@ static bool checkNotification(KjNode* notifP, bool complete, bool merged, LdForm
       DUPLICATE_CHECK(pickP, "notification.pick", childP);
       ARRAY_CHECK(childP, "Invalid Subscription", "'notification.pick' must be an array");
       EMPTY_ARRAY_CHECK(childP, "'notification.pick' must not be empty");
-      for (KjNode* itemP = childP->value.firstChildP; itemP != NULL; itemP = itemP->next)
+      for (CorNode* itemP = childP->value.firstChildP; itemP != NULL; itemP = itemP->next)
       {
-        if (itemP->type != KjString)
+        if (itemP->type != CorString)
         {
           ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
                   "'notification.pick' items must be strings");
@@ -411,9 +411,9 @@ static bool checkNotification(KjNode* notifP, bool complete, bool merged, LdForm
       DUPLICATE_CHECK(omitP, "notification.omit", childP);
       ARRAY_CHECK(childP, "Invalid Subscription", "'notification.omit' must be an array");
       EMPTY_ARRAY_CHECK(childP, "'notification.omit' must not be empty");
-      for (KjNode* itemP = childP->value.firstChildP; itemP != NULL; itemP = itemP->next)
+      for (CorNode* itemP = childP->value.firstChildP; itemP != NULL; itemP = itemP->next)
       {
-        if (itemP->type != KjString)
+        if (itemP->type != CorString)
         {
           ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
                   "'notification.omit' items must be strings");
@@ -424,7 +424,7 @@ static bool checkNotification(KjNode* notifP, bool complete, bool merged, LdForm
     else if (strcmp(childP->name, "showChanges") == 0)
     {
       DUPLICATE_CHECK(showChangesP, "notification.showChanges", childP);
-      if (childP->type != KjBoolean)
+      if (childP->type != CorBoolean)
       {
         ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
                 "'notification.showChanges' must be a boolean");
@@ -469,9 +469,9 @@ static bool checkNotification(KjNode* notifP, bool complete, bool merged, LdForm
   // pick + omit may co-occur, but no member may appear in both.
   if (pickP != NULL && omitP != NULL)
   {
-    for (KjNode* pP = pickP->value.firstChildP; pP != NULL; pP = pP->next)
+    for (CorNode* pP = pickP->value.firstChildP; pP != NULL; pP = pP->next)
     {
-      for (KjNode* oP = omitP->value.firstChildP; oP != NULL; oP = oP->next)
+      for (CorNode* oP = omitP->value.firstChildP; oP != NULL; oP = oP->next)
       {
         if (strcmp(pP->value.s, oP->value.s) == 0)
         {
@@ -488,8 +488,8 @@ static bool checkNotification(KjNode* notifP, bool complete, bool merged, LdForm
   // (keyValues is the backward-compat synonym for simplified). showChanges adds
   // previousValue / previousLanguageMap sub-attributes, which the simplified
   // representation strips, so the combination is contradictory.
-  if (showChangesP != NULL && showChangesP->type == KjBoolean && showChangesP->value.b == true &&
-      formatP != NULL && formatP->type == KjString &&
+  if (showChangesP != NULL && showChangesP->type == CorBoolean && showChangesP->value.b == true &&
+      formatP != NULL && formatP->type == CorString &&
       (strcmp(formatP->value.s, "keyValues") == 0 || strcmp(formatP->value.s, "simplified") == 0))
   {
     ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
@@ -542,7 +542,7 @@ void ldSubEntityTypeExprsRelease(void)
 //
 // checkEntitiesArray - validate the "entities" array
 //
-static bool checkEntitiesArray(KjNode* entitiesP)
+static bool checkEntitiesArray(CorNode* entitiesP)
 {
   ARRAY_CHECK(entitiesP, "Invalid Subscription", "'entities' must be a JSON array");
   EMPTY_ARRAY_CHECK(entitiesP, "'entities' must not be empty");
@@ -554,7 +554,7 @@ static bool checkEntitiesArray(KjNode* entitiesP)
   // over from a previous request on the same thread) are released
   // here.
   int entCount = 0;
-  for (KjNode* p = entitiesP->value.firstChildP; p != NULL; p = p->next)
+  for (CorNode* p = entitiesP->value.firstChildP; p != NULL; p = p->next)
     entCount++;
 
   ldSubEntityTypeExprsRelease();   // drop any leftover from a prior request on this thread
@@ -565,13 +565,13 @@ static bool checkEntitiesArray(KjNode* entitiesP)
   }
 
   int entIx = 0;
-  for (KjNode* entP = entitiesP->value.firstChildP; entP != NULL; entP = entP->next, entIx++)
+  for (CorNode* entP = entitiesP->value.firstChildP; entP != NULL; entP = entP->next, entIx++)
   {
     OBJECT_CHECK(entP, "Invalid Subscription", "'entities' items must be JSON objects");
 
     bool  hasType      = false;
 
-    for (KjNode* fieldP = entP->value.firstChildP; fieldP != NULL; fieldP = fieldP->next)
+    for (CorNode* fieldP = entP->value.firstChildP; fieldP != NULL; fieldP = fieldP->next)
     {
       if (strcmp(fieldP->name, "type") == 0)
       {
@@ -654,16 +654,16 @@ static bool checkEntitiesArray(KjNode* entitiesP)
 //
 // checkGeoQ - validate the "geoQ" object
 //
-static bool checkGeoQ(KjNode* geoQP, bool complete, KAlloc* kaP)
+static bool checkGeoQ(CorNode* geoQP, bool complete, KAlloc* kaP)
 {
   OBJECT_CHECK(geoQP, "Invalid Subscription", "'geoQ' must be a JSON object");
 
-  KjNode* geometryP    = NULL;
-  KjNode* coordinatesP = NULL;
-  KjNode* georelP      = NULL;
-  KjNode* geopropertyP = NULL;
+  CorNode* geometryP   = NULL;
+  CorNode* coordinatesP = NULL;
+  CorNode* georelP     = NULL;
+  CorNode* geopropertyP = NULL;
 
-  for (KjNode* childP = geoQP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = geoQP->value.firstChildP; childP != NULL; childP = childP->next)
   {
     const char* name = childP->name;
 
@@ -687,7 +687,7 @@ static bool checkGeoQ(KjNode* geoQP, bool complete, KAlloc* kaP)
     {
       DUPLICATE_CHECK(coordinatesP, "geoQ.coordinates", childP);
       // coordinates can be a string (JSON-encoded) or an array
-      if (childP->type != KjString && childP->type != KjArray)
+      if (childP->type != CorString && childP->type != CorArray)
       {
         ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
                 "'geoQ.coordinates' must be an array or string");
@@ -746,17 +746,17 @@ static bool checkGeoQ(KjNode* geoQP, bool complete, KAlloc* kaP)
   //
   const char* coordsStr = NULL;
 
-  if (coordinatesP->type == KjString)
+  if (coordinatesP->type == CorString)
     coordsStr = coordinatesP->value.s;
-  else  // KjArray (the primary form) — render to the JSON string the validator parses
+  else  // CorArray (the primary form) — render to the JSON string the validator parses
   {
-    // kjFastRender omits the top-level node's name, so this emits the bare array
-    // (not "coordinates":[...]) — a top-level JSON array kjParse can re-parse.
-    int   len = kjFastRenderSize(coordinatesP) + 1;
+    // corJsonFastRender omits the top-level node's name, so this emits the bare array
+    // (not "coordinates":[...]) — a top-level JSON array corJsonParse can re-parse.
+    int   len = corJsonFastRenderSize(coordinatesP) + 1;
     char* buf = (char*) kaAlloc(kaP, len);
     if (buf != NULL)
     {
-      kjFastRender(coordinatesP, buf);
+      corJsonFastRender(coordinatesP, buf);
       coordsStr = buf;
     }
   }
@@ -775,18 +775,18 @@ static bool checkGeoQ(KjNode* geoQP, bool complete, KAlloc* kaP)
   // subscription tree); the parsed array's children replace the string node in
   // place (name + sibling links preserved).
   //
-  if (coordinatesP->type == KjString)
+  if (coordinatesP->type == CorString)
   {
-    char* dup = kaStrdup(kaP, coordsStr);  // kjParse mutates its input
+    char* dup = kaStrdup(kaP, coordsStr);  // corJsonParse mutates its input
     if (dup != NULL)
     {
-      Kjson   kjson;
-      Kjson*  kjsonP = kjBufferCreate(&kjson, kaP);
-      KjNode* arrP   = kjParse(kjsonP, dup);
+      CorJson corJson;
+      CorJson* corJsonP = corJsonCreate(&corJson, kaP);
+      CorNode* arrP  = corJsonParse(corJsonP, dup);
 
-      if (arrP != NULL && arrP->type == KjArray)
+      if (arrP != NULL && arrP->type == CorArray)
       {
-        coordinatesP->type              = KjArray;
+        coordinatesP->type              = CorArray;
         coordinatesP->value.firstChildP = arrP->value.firstChildP;
         coordinatesP->lastChild         = arrP->lastChild;
       }
@@ -802,7 +802,7 @@ static bool checkGeoQ(KjNode* geoQP, bool complete, KAlloc* kaP)
 //
 // ldCheckSubscription -
 //
-bool ldCheckSubscription(KjNode* subP, LdOp op, bool merged, LdFormat* notifFormatP, KAlloc* kaP)
+bool ldCheckSubscription(CorNode* subP, LdOp op, bool merged, LdFormat* notifFormatP, KAlloc* kaP)
 {
   OBJECT_CHECK(subP, "Invalid Subscription", "Subscription payload must be a JSON object");
 
@@ -829,47 +829,47 @@ bool ldCheckSubscription(KjNode* subP, LdOp op, bool merged, LdFormat* notifForm
   // the field — that's where it's meaningful.
   if (op == LdOpCreateCsourceSubscription || op == LdOpUpdateCsourceSubscription)
   {
-    KjNode* ntP = kjLookup(subP, "notificationTrigger");
+    CorNode* ntP = corTreeLookup(subP, "notificationTrigger");
     if (ntP != NULL)
-      kjChildRemove(subP, ntP);
+      corTreeChildRemove(subP, ntP);
   }
 
-  KjNode*  typeP          = NULL;
-  KjNode*  idP            = NULL;
-  KjNode*  entitiesP      = NULL;
-  KjNode*  watchedAttrsP  = NULL;
-  KjNode*  timeIntervalP  = NULL;
-  KjNode*  notificationP  = NULL;
-  KjNode*  throttlingP    = NULL;
-  KjNode*  expiresAtP     = NULL;
-  KjNode*  isActiveP      = NULL;
-  KjNode*  notifTriggerP  = NULL;
-  KjNode*  qP             = NULL;
-  KjNode*  geoQP          = NULL;
-  KjNode*  scopeQP        = NULL;
-  KjNode*  nameP          = NULL;
-  KjNode*  descriptionP   = NULL;
+  CorNode* typeP          = NULL;
+  CorNode* idP            = NULL;
+  CorNode* entitiesP      = NULL;
+  CorNode* watchedAttrsP  = NULL;
+  CorNode* timeIntervalP  = NULL;
+  CorNode* notificationP  = NULL;
+  CorNode* throttlingP    = NULL;
+  CorNode* expiresAtP     = NULL;
+  CorNode* isActiveP      = NULL;
+  CorNode* notifTriggerP  = NULL;
+  CorNode* qP             = NULL;
+  CorNode* geoQP          = NULL;
+  CorNode* scopeQP        = NULL;
+  CorNode* nameP          = NULL;
+  CorNode* descriptionP   = NULL;
 
-  for (KjNode* childP = subP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = subP->value.firstChildP; childP != NULL; childP = childP->next)
   {
     const char* name = childP->name;
 
     //
     // Delete-markers (TS 104-175 clause-8 / § 5.8.3) — see ldCheckRegistration
     // for the rationale. On the update path the "urn:ngsi-ld:null" sentinel
-    // deletes the member (→ internal KjNull → DB plugin $unset); raw JSON null
+    // deletes the member (→ internal CorNull → DB plugin $unset); raw JSON null
     // is rejected; 'notification' is mandatory and cannot be deleted. On create
     // the sentinel is not allowed as a first-level value.
     //
     if (op == LdOpUpdateSubscription || op == LdOpUpdateCsourceSubscription)
     {
-      if (childP->type == KjNull)
+      if (childP->type == CorNull)
       {
         ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Value",
                 "JSON null is not allowed in NGSI-LD; use the 'urn:ngsi-ld:null' delete-marker (field: '%s')", name);
         return false;
       }
-      if (childP->type == KjString && strcmp(childP->value.s, LD_VOCAB_NGSILD_NULL) == 0)
+      if (childP->type == CorString && strcmp(childP->value.s, LD_VOCAB_NGSILD_NULL) == 0)
       {
         if (strcmp(name, LD_VOCAB_NOTIFICATION) == 0)
         {
@@ -877,11 +877,11 @@ bool ldCheckSubscription(KjNode* subP, LdOp op, bool merged, LdFormat* notifForm
                   "'notification' is mandatory and cannot be deleted");
           return false;
         }
-        childP->type = KjNull;   // internal delete signal honoured by the DB plugin ($unset)
+        childP->type = CorNull;  // internal delete signal honoured by the DB plugin ($unset)
         continue;
       }
     }
-    else if (childP->type == KjString && strcmp(childP->value.s, LD_VOCAB_NGSILD_NULL) == 0)
+    else if (childP->type == CorString && strcmp(childP->value.s, LD_VOCAB_NGSILD_NULL) == 0)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Value",
               "'urn:ngsi-ld:null' is not allowed as a first-level value in Create Subscription (field: '%s')", name);
@@ -913,14 +913,14 @@ bool ldCheckSubscription(KjNode* subP, LdOp op, bool merged, LdFormat* notifForm
       // the defined triggers. A non-array, or an unknown token, otherwise reaches
       // the cache where it maps to a 0 bitmask and is silently coerced to the
       // DEFAULT trigger set — firing on changes the subscriber did not ask for.
-      if (childP->type != KjArray)
+      if (childP->type != CorArray)
       {
         ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription", "'notificationTrigger' must be a JSON array");
         return false;
       }
-      for (KjNode* trigP = childP->value.firstChildP; trigP != NULL; trigP = trigP->next)
+      for (CorNode* trigP = childP->value.firstChildP; trigP != NULL; trigP = trigP->next)
       {
-        if (trigP->type != KjString)
+        if (trigP->type != CorString)
         {
           ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription", "'notificationTrigger' items must be strings");
           return false;
@@ -968,14 +968,14 @@ bool ldCheckSubscription(KjNode* subP, LdOp op, bool merged, LdFormat* notifForm
     {
       // datasetId: array of URIs + "@none" — restricts which attribute instances
       // are included in notifications (§ 5.8.6).
-      if (childP->type != KjArray)
+      if (childP->type != CorArray)
       {
         ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription", "'datasetId' must be a JSON array");
         return false;
       }
-      for (KjNode* dsP = childP->value.firstChildP; dsP != NULL; dsP = dsP->next)
+      for (CorNode* dsP = childP->value.firstChildP; dsP != NULL; dsP = dsP->next)
       {
-        if (dsP->type != KjString)
+        if (dsP->type != CorString)
         {
           ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription", "'datasetId' items must be strings");
           return false;
@@ -1079,9 +1079,9 @@ bool ldCheckSubscription(KjNode* subP, LdOp op, bool merged, LdFormat* notifForm
     ARRAY_CHECK(watchedAttrsP, "Invalid Subscription", "'watchedAttributes' must be an array");
     EMPTY_ARRAY_CHECK(watchedAttrsP, "'watchedAttributes' must not be empty");
 
-    for (KjNode* wP = watchedAttrsP->value.firstChildP; wP != NULL; wP = wP->next)
+    for (CorNode* wP = watchedAttrsP->value.firstChildP; wP != NULL; wP = wP->next)
     {
-      if (wP->type != KjString)
+      if (wP->type != CorString)
       {
         ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
                 "'watchedAttributes' items must be strings");
@@ -1122,8 +1122,8 @@ bool ldCheckSubscription(KjNode* subP, LdOp op, bool merged, LdFormat* notifForm
   {
     NUMBER_CHECK(timeIntervalP, "Invalid Subscription", "'timeInterval' must be a number");
     // § 5.2.12 — timeInterval must be "Greater than 0" (a zero period is invalid).
-    if (((timeIntervalP->type == KjInt) && (timeIntervalP->value.i <= 0)) ||
-        ((timeIntervalP->type == KjFloat) && (timeIntervalP->value.f <= 0.0)))
+    if (((timeIntervalP->type == CorInt) && (timeIntervalP->value.i <= 0)) ||
+        ((timeIntervalP->type == CorFloat) && (timeIntervalP->value.f <= 0.0)))
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription", "'timeInterval' must be greater than 0");
       return false;
@@ -1150,8 +1150,8 @@ bool ldCheckSubscription(KjNode* subP, LdOp op, bool merged, LdFormat* notifForm
   {
     NUMBER_CHECK(throttlingP, "Invalid Subscription", "'throttling' must be a number");
     // § 5.2.12 — throttling must be "Greater than 0" (fractional values allowed).
-    if (((throttlingP->type == KjInt) && (throttlingP->value.i <= 0)) ||
-        ((throttlingP->type == KjFloat) && (throttlingP->value.f <= 0.0)))
+    if (((throttlingP->type == CorInt) && (throttlingP->value.i <= 0)) ||
+        ((throttlingP->type == CorFloat) && (throttlingP->value.f <= 0.0)))
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription", "'throttling' must be greater than 0");
       return false;
@@ -1194,7 +1194,7 @@ bool ldCheckSubscription(KjNode* subP, LdOp op, bool merged, LdFormat* notifForm
   //
   if (isActiveP != NULL)
   {
-    if (isActiveP->type != KjBoolean)
+    if (isActiveP->type != CorBoolean)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription", "'isActive' must be a boolean");
       return false;

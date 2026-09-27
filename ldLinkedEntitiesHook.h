@@ -25,15 +25,15 @@
 //
 
 #include <stdbool.h>                                   // bool
-#include "kjson/KjNode.h"                              // KjNode
+#include "corTree/CorNode.h"                           // CorNode
 
 
 
-typedef void (*LdLinkedEntitiesExpandHook)(KjNode* dataArrayP, const char* mode, int joinLevel, bool sysAttrs, void* tenantP);
+typedef void (*LdLinkedEntitiesExpandHook)(CorNode* dataArrayP, const char* mode, int joinLevel, bool sysAttrs, void* tenantP);
 
 
 
 extern void ldLinkedEntitiesHookSet(LdLinkedEntitiesExpandHook fn);
-extern void ldLinkedEntitiesHookInvoke(KjNode* dataArrayP, const char* mode, int joinLevel, bool sysAttrs, void* tenantP);
+extern void ldLinkedEntitiesHookInvoke(CorNode* dataArrayP, const char* mode, int joinLevel, bool sysAttrs, void* tenantP);
 
 #endif

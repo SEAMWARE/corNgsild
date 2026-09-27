@@ -9,7 +9,7 @@
 // Copyright 2026 Seamware
 // SPDX-License-Identifier: Apache-2.0
 //
-#include "kjson/KjNode.h"                               // KjNode
+#include "corTree/CorNode.h"                            // CorNode
 #include "corNgsild/LdOrder.h"                            // LdOrderTerm
 
 
@@ -20,6 +20,6 @@
 // § 7.6.2.1 default "root" order). It only affects string ordering: an ICU
 // build honours it via the root/locale collator; a non-ICU build ignores it
 // and applies a case-insensitive ASCII approximation of root collation.
-extern void ldOrderSort(KjNode* arrayP, LdOrderTerm* terms, int termCount, const char* collation);
+extern void ldOrderSort(CorNode* arrayP, LdOrderTerm* terms, int termCount, const char* collation);
 
 #endif  // CORNGSILD_LDORDERSORT_H_

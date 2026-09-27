@@ -15,7 +15,7 @@
 // the q value in the subscription tree.
 //
 #include "kalloc/KAlloc.h"                             // KAlloc
-#include "kjson/KjNode.h"                              // KjNode
+#include "corTree/CorNode.h"                           // CorNode
 #include "corJsonld/CorLdContext.h"                      // CorLdContext
 #include "corNgsild/LdQ.h"                              // LdQNode
 
@@ -30,6 +30,6 @@
 // contextP:  @context to compact against (NULL = URL-encode all attr IRIs)
 // allocP:    allocator for the compacted string
 //
-extern void ldSubscriptionCompactQ(KjNode* subP, LdQNode* qExpr, CorLdContext* contextP, KAlloc* allocP);
+extern void ldSubscriptionCompactQ(CorNode* subP, LdQNode* qExpr, CorLdContext* contextP, KAlloc* allocP);
 
 #endif  // CORNGSILD_LDSUBSCRIPTIONCOMPACTQ_H_

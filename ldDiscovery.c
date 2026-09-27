@@ -21,9 +21,9 @@
 
 #include <string.h>                                     // strcmp
 
-#include "kjson/KjNode.h"                               // KjNode
-#include "kjson/kjBuilder.h"                            // kjArray, kjObject, kjString, kjInteger, kjChildAdd
-#include "kjson/kjLookup.h"                             // kjLookup
+#include "corTree/CorNode.h"                            // CorNode
+#include "corTree/corTreeBuilder.h"                     // corTreeArray, corTreeObject, corTreeString, corTreeInteger, corTreeChildAdd
+#include "corTree/corTreeLookup.h"                      // corTreeLookup
 #include "corRest/CorRestState.h"                         // corRest
 
 #include "corNgsild/LdRegCache.h"                        // LdRegCache, LdRegCacheItem, LdRegInfo, LdRegEntityInfo, LdRegMode
@@ -35,12 +35,12 @@
 //
 // stringArrayAddUnique -
 //
-static void stringArrayAddUnique(KjNode* arr, const char* s)
+static void stringArrayAddUnique(CorNode* arr, const char* s)
 {
-  for (KjNode* p = arr->value.firstChildP; p != NULL; p = p->next)
-    if (p->type == KjString && strcmp(p->value.s, s) == 0)
+  for (CorNode* p = arr->value.firstChildP; p != NULL; p = p->next)
+    if (p->type == CorString && strcmp(p->value.s, s) == 0)
       return;
-  kjChildAdd(arr, kjString(corRest.kjsonP, NULL, s));
+  corTreeChildAdd(arr, corTreeString(corRest.kallocP, NULL, s));
 }
 
 
@@ -49,24 +49,24 @@ static void stringArrayAddUnique(KjNode* arr, const char* s)
 //
 // typeEntryEnsure -
 //
-static KjNode* typeEntryEnsure(KjNode* agg, const char* typeIri, bool details)
+static CorNode* typeEntryEnsure(CorNode* agg, const char* typeIri, bool details)
 {
-  for (KjNode* e = agg->value.firstChildP; e != NULL; e = e->next)
+  for (CorNode* e = agg->value.firstChildP; e != NULL; e = e->next)
   {
-    KjNode* iriP = kjLookup(e, "typeIri");
-    if (iriP != NULL && iriP->type == KjString && strcmp(iriP->value.s, typeIri) == 0)
+    CorNode* iriP = corTreeLookup(e, "typeIri");
+    if (iriP != NULL && iriP->type == CorString && strcmp(iriP->value.s, typeIri) == 0)
       return e;
   }
 
-  KjNode* e = kjObject(corRest.kjsonP, NULL);
-  kjChildAdd(e, kjString(corRest.kjsonP, "typeIri", typeIri));
-  kjChildAdd(e, kjArray(corRest.kjsonP, "attrs"));
+  CorNode* e = corTreeObject(corRest.kallocP, NULL);
+  corTreeChildAdd(e, corTreeString(corRest.kallocP, "typeIri", typeIri));
+  corTreeChildAdd(e, corTreeArray(corRest.kallocP, "attrs"));
   if (details)
   {
-    kjChildAdd(e, kjObject(corRest.kjsonP,  "attrTypes"));
-    kjChildAdd(e, kjInteger(corRest.kjsonP, "entityCount", 0));
+    corTreeChildAdd(e, corTreeObject(corRest.kallocP, "attrTypes"));
+    corTreeChildAdd(e, corTreeInteger(corRest.kallocP, "entityCount", 0));
   }
-  kjChildAdd(agg, e);
+  corTreeChildAdd(agg, e);
   return e;
 }
 
@@ -76,24 +76,24 @@ static KjNode* typeEntryEnsure(KjNode* agg, const char* typeIri, bool details)
 //
 // attrEntryEnsure -
 //
-static KjNode* attrEntryEnsure(KjNode* agg, const char* attrIri, bool details)
+static CorNode* attrEntryEnsure(CorNode* agg, const char* attrIri, bool details)
 {
-  for (KjNode* e = agg->value.firstChildP; e != NULL; e = e->next)
+  for (CorNode* e = agg->value.firstChildP; e != NULL; e = e->next)
   {
-    KjNode* iriP = kjLookup(e, "attrIri");
-    if (iriP != NULL && iriP->type == KjString && strcmp(iriP->value.s, attrIri) == 0)
+    CorNode* iriP = corTreeLookup(e, "attrIri");
+    if (iriP != NULL && iriP->type == CorString && strcmp(iriP->value.s, attrIri) == 0)
       return e;
   }
 
-  KjNode* e = kjObject(corRest.kjsonP, NULL);
-  kjChildAdd(e, kjString(corRest.kjsonP, "attrIri", attrIri));
+  CorNode* e = corTreeObject(corRest.kallocP, NULL);
+  corTreeChildAdd(e, corTreeString(corRest.kallocP, "attrIri", attrIri));
   if (details)
   {
-    kjChildAdd(e, kjArray(corRest.kjsonP,  "typeNames"));
-    kjChildAdd(e, kjArray(corRest.kjsonP,  "attrTypes"));
-    kjChildAdd(e, kjInteger(corRest.kjsonP, "attrCount", 0));
+    corTreeChildAdd(e, corTreeArray(corRest.kallocP, "typeNames"));
+    corTreeChildAdd(e, corTreeArray(corRest.kallocP, "attrTypes"));
+    corTreeChildAdd(e, corTreeInteger(corRest.kallocP, "attrCount", 0));
   }
-  kjChildAdd(agg, e);
+  corTreeChildAdd(agg, e);
   return e;
 }
 
@@ -103,16 +103,16 @@ static KjNode* attrEntryEnsure(KjNode* agg, const char* attrIri, bool details)
 //
 // addAttrType -
 //
-static void addAttrType(KjNode* entry, const char* attrName, const char* at)
+static void addAttrType(CorNode* entry, const char* attrName, const char* at)
 {
-  KjNode* attrTypesObj = kjLookup(entry, "attrTypes");
+  CorNode* attrTypesObj = corTreeLookup(entry, "attrTypes");
   if (attrTypesObj == NULL) return;
 
-  KjNode* atArr = kjLookup(attrTypesObj, attrName);
+  CorNode* atArr = corTreeLookup(attrTypesObj, attrName);
   if (atArr == NULL)
   {
-    atArr = kjArray(corRest.kjsonP, attrName);
-    kjChildAdd(attrTypesObj, atArr);
+    atArr = corTreeArray(corRest.kallocP, attrName);
+    corTreeChildAdd(attrTypesObj, atArr);
   }
   stringArrayAddUnique(atArr, at);
 }
@@ -123,7 +123,7 @@ static void addAttrType(KjNode* entry, const char* attrName, const char* at)
 //
 // ldDiscoveryRegAugmentTypes -
 //
-void ldDiscoveryRegAugmentTypes(KjNode* agg, LdRegCache* cacheP, bool details)
+void ldDiscoveryRegAugmentTypes(CorNode* agg, LdRegCache* cacheP, bool details)
 {
   if (agg == NULL || cacheP == NULL) return;
 
@@ -141,9 +141,9 @@ void ldDiscoveryRegAugmentTypes(KjNode* agg, LdRegCache* cacheP, bool details)
       {
         if (ei->type == NULL) continue;
 
-        KjNode* te = typeEntryEnsure(agg, ei->type, details);
+        CorNode* te = typeEntryEnsure(agg, ei->type, details);
 
-        KjNode* attrs = kjLookup(te, "attrs");
+        CorNode* attrs = corTreeLookup(te, "attrs");
         // A registration's attributeNames carry no Property/Relationship
         // distinction (the split is deprecated), so discovery defaults the
         // reported attribute type to "Property".
@@ -167,7 +167,7 @@ void ldDiscoveryRegAugmentTypes(KjNode* agg, LdRegCache* cacheP, bool details)
 //
 // ldDiscoveryRegAugmentAttrs -
 //
-void ldDiscoveryRegAugmentAttrs(KjNode* agg, LdRegCache* cacheP, bool details)
+void ldDiscoveryRegAugmentAttrs(CorNode* agg, LdRegCache* cacheP, bool details)
 {
   if (agg == NULL || cacheP == NULL) return;
 
@@ -195,12 +195,12 @@ void ldDiscoveryRegAugmentAttrs(KjNode* agg, LdRegCache* cacheP, bool details)
       // Entity types this RegInfo declares
       for (int a = 0; a < attrN; a++)
       {
-        KjNode* ae       = attrEntryEnsure(agg, attrIris[a], details);
+        CorNode* ae      = attrEntryEnsure(agg, attrIris[a], details);
 
         if (!details) continue;
 
-        KjNode* typeArr  = kjLookup(ae, "typeNames");
-        KjNode* atArr    = kjLookup(ae, "attrTypes");
+        CorNode* typeArr = corTreeLookup(ae, "typeNames");
+        CorNode* atArr   = corTreeLookup(ae, "attrTypes");
 
         for (LdRegEntityInfo* ei = ri->entityInfoV; ei != NULL; ei = ei->next)
           if (ei->type != NULL)

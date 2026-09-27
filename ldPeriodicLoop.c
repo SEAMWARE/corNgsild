@@ -16,7 +16,7 @@
 #include "kalloc/KAlloc.h"                             // KAlloc
 #include "kalloc/kaBufferInit.h"                       // kaBufferInit
 #include "kalloc/kaBufferReset.h"                      // kaBufferReset
-#include "kjson/kjBufferCreate.h"                      // kjBufferCreate
+#include "corJson/corJsonCreate.h"                     // corJsonCreate
 
 #include "corRest/CorRestState.h"                        // corRest (__thread)
 
@@ -73,12 +73,13 @@ static void* dispatchThread(void* unused)
 
   // Per-thread corRest init — many ngsild notification helpers
   // (ldCsrSubNotify, ldSubscriptionNotify) reach into corRest.kalloc /
-  // corRest.kjsonP for builders. Init once; refresh requestStartTime per
+  // corRest.kallocP for builders. Init once; refresh requestStartTime per
   // tick. Reset corRest.kalloc per tick so it doesn't accumulate.
   memset(&corRest, 0, sizeof(corRest));
   kaBufferInit(&corRest.kalloc, corRest.kallocBuffer, sizeof(corRest.kallocBuffer),
                256 * 1024, NULL, "periodic-rest");
-  corRest.kjsonP = kjBufferCreate(&corRest.kjson, &corRest.kalloc);
+  corRest.corJsonP = corJsonCreate(&corRest.corJson, &corRest.kalloc);
+  corRest.kallocP  = &corRest.kalloc;
 
   while (loopRunning)
   {

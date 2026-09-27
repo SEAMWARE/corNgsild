@@ -13,8 +13,8 @@
 #include <stdlib.h>                                    // strtod
 #include <string.h>                                    // strcmp
 
-#include "kjson/KjNode.h"                             // KjNode
-#include "kjson/kjLookup.h"                           // kjLookup
+#include "corTree/CorNode.h"                          // CorNode
+#include "corTree/corTreeLookup.h"                    // corTreeLookup
 
 #include "corNgsild/LdQ.h"                              // LdQNode, LdQTerm
 #include "corNgsild/LdVocab.h"                         // LD_VOCAB_*
@@ -30,19 +30,19 @@
 //
 // entityHasType - check if entity has a specific type (handles both string and array)
 //
-static bool entityHasType(KjNode* typeP, const char* uri)
+static bool entityHasType(CorNode* typeP, const char* uri)
 {
   if (typeP == NULL)
     return false;
 
-  if (typeP->type == KjString)
+  if (typeP->type == CorString)
     return (strcmp(typeP->value.s, uri) == 0);
 
-  if (typeP->type == KjArray)
+  if (typeP->type == CorArray)
   {
-    for (KjNode* elemP = typeP->value.firstChildP; elemP != NULL; elemP = elemP->next)
+    for (CorNode* elemP = typeP->value.firstChildP; elemP != NULL; elemP = elemP->next)
     {
-      if (elemP->type == KjString && strcmp(elemP->value.s, uri) == 0)
+      if (elemP->type == CorString && strcmp(elemP->value.s, uri) == 0)
         return true;
     }
   }
@@ -56,7 +56,7 @@ static bool entityHasType(KjNode* typeP, const char* uri)
 //
 // ldEntityMatchType -
 //
-bool ldEntityMatchType(KjNode* typeP, LdTypeExpr* expr)
+bool ldEntityMatchType(CorNode* typeP, LdTypeExpr* expr)
 {
   for (int gix = 0; gix < expr->groupCount; gix++)
   {
@@ -85,19 +85,19 @@ bool ldEntityMatchType(KjNode* typeP, LdTypeExpr* expr)
 //
 // entityScopeMatchesPattern -
 //
-static bool entityScopeMatchesPattern(KjNode* scopeP, const char* pattern)
+static bool entityScopeMatchesPattern(CorNode* scopeP, const char* pattern)
 {
   if (scopeP == NULL)
     return false;
 
-  if (scopeP->type == KjString)
+  if (scopeP->type == CorString)
     return ldScopePatternMatch(pattern, scopeP->value.s);
 
-  if (scopeP->type == KjArray)
+  if (scopeP->type == CorArray)
   {
-    for (KjNode* elemP = scopeP->value.firstChildP; elemP != NULL; elemP = elemP->next)
+    for (CorNode* elemP = scopeP->value.firstChildP; elemP != NULL; elemP = elemP->next)
     {
-      if (elemP->type == KjString && ldScopePatternMatch(pattern, elemP->value.s))
+      if (elemP->type == CorString && ldScopePatternMatch(pattern, elemP->value.s))
         return true;
     }
   }
@@ -111,7 +111,7 @@ static bool entityScopeMatchesPattern(KjNode* scopeP, const char* pattern)
 //
 // ldEntityMatchScope -
 //
-bool ldEntityMatchScope(KjNode* scopeP, LdScopeExpr* expr)
+bool ldEntityMatchScope(CorNode* scopeP, LdScopeExpr* expr)
 {
   for (int gix = 0; gix < expr->groupCount; gix++)
   {
@@ -140,37 +140,37 @@ bool ldEntityMatchScope(KjNode* scopeP, LdScopeExpr* expr)
 //
 // getAttrValue - find the "value" node for an attribute in an entity
 //
-static KjNode* getAttrValue(KjNode* entityP, const char* attrName)
+static CorNode* getAttrValue(CorNode* entityP, const char* attrName)
 {
   if (strcmp(attrName, LD_VOCAB_CREATED_AT)  == 0 ||
       strcmp(attrName, LD_VOCAB_MODIFIED_AT) == 0 ||
       strcmp(attrName, LD_VOCAB_EXPIRES_AT)  == 0)
   {
-    return kjLookup(entityP, attrName);
+    return corTreeLookup(entityP, attrName);
   }
 
-  KjNode* wrapperP = kjLookup(entityP, attrName);
+  CorNode* wrapperP = corTreeLookup(entityP, attrName);
   if (wrapperP == NULL)
     return NULL;
 
   // Simplified scalar — CSR user-Properties are always in simplified form per § 5.2.9 (a top-level
   // `csourceProperty1: "aValue"` is the wire shape; no NGSI-LD Property wrapper). § 5.10.2.4 `?q=` filters
   // on these directly. Treat the scalar as the value itself.
-  if (wrapperP->type != KjObject)
+  if (wrapperP->type != CorObject)
     return wrapperP;
 
   // Flat API-shape wrapper: { "type": "Property", "value": X }. Try this first; it's harmless when
   // the wrapper is actually the DB-model instance-map shape because that shape has no direct "value" child.
-  KjNode* flatValueP = kjLookup(wrapperP, "value");
+  CorNode* flatValueP = corTreeLookup(wrapperP, "value");
   if (flatValueP != NULL)
     return flatValueP;
 
   // DB-model nested shape: wrapper.firstChild → instance object → "value"
-  KjNode* instP = wrapperP->value.firstChildP;
-  if (instP == NULL || instP->type != KjObject)
+  CorNode* instP = wrapperP->value.firstChildP;
+  if (instP == NULL || instP->type != CorObject)
     return NULL;
 
-  return kjLookup(instP, "value");
+  return corTreeLookup(instP, "value");
 }
 
 
@@ -184,17 +184,17 @@ static KjNode* getAttrValue(KjNode* entityP, const char* attrName)
 // instance-map shape (wrapper.firstChild → instance object). Returns the
 // raw wrapper for scalars (simplified form) and NULL when absent.
 //
-static KjNode* attrInstanceOf(KjNode* containerP, const char* attrName)
+static CorNode* attrInstanceOf(CorNode* containerP, const char* attrName)
 {
-  KjNode* wrapperP = kjLookup(containerP, attrName);
-  if (wrapperP == NULL || wrapperP->type != KjObject)
+  CorNode* wrapperP = corTreeLookup(containerP, attrName);
+  if (wrapperP == NULL || wrapperP->type != CorObject)
     return wrapperP;
 
-  if (kjLookup(wrapperP, "value") != NULL || kjLookup(wrapperP, "object") != NULL)
+  if (corTreeLookup(wrapperP, "value") != NULL || corTreeLookup(wrapperP, "object") != NULL)
     return wrapperP;   // flat API shape
 
-  KjNode* instP = wrapperP->value.firstChildP;   // DB-model: first instance
-  if (instP != NULL && instP->type == KjObject)
+  CorNode* instP = wrapperP->value.firstChildP;  // DB-model: first instance
+  if (instP != NULL && instP->type == CorObject)
     return instP;
 
   return wrapperP;
@@ -213,19 +213,19 @@ static KjNode* attrInstanceOf(KjNode* containerP, const char* attrName)
 // single instance: the flat API wrapper ({type,value,...}) and the bare scalar
 // (a CSR simplified user-Property, § 5.2.9).
 //
-static int attrInstanceCountOf(KjNode* containerP, const char* attrName)
+static int attrInstanceCountOf(CorNode* containerP, const char* attrName)
 {
-  KjNode* wrapperP = kjLookup(containerP, attrName);
+  CorNode* wrapperP = corTreeLookup(containerP, attrName);
 
   if (wrapperP == NULL)
     return 0;
-  if (wrapperP->type != KjObject)
+  if (wrapperP->type != CorObject)
     return 1;                                                  // scalar
-  if (kjLookup(wrapperP, "value") != NULL || kjLookup(wrapperP, "object") != NULL)
+  if (corTreeLookup(wrapperP, "value") != NULL || corTreeLookup(wrapperP, "object") != NULL)
     return 1;                                                  // flat API shape
 
   int n = 0;
-  for (KjNode* instP = wrapperP->value.firstChildP; instP != NULL; instP = instP->next)
+  for (CorNode* instP = wrapperP->value.firstChildP; instP != NULL; instP = instP->next)
     n++;
 
   return (n > 0) ? n : 1;
@@ -233,20 +233,20 @@ static int attrInstanceCountOf(KjNode* containerP, const char* attrName)
 
 
 
-static KjNode* attrInstanceAt(KjNode* containerP, const char* attrName, int ix)
+static CorNode* attrInstanceAt(CorNode* containerP, const char* attrName, int ix)
 {
-  KjNode* wrapperP = kjLookup(containerP, attrName);
+  CorNode* wrapperP = corTreeLookup(containerP, attrName);
 
-  if (wrapperP == NULL || wrapperP->type != KjObject)
+  if (wrapperP == NULL || wrapperP->type != CorObject)
     return wrapperP;
-  if (kjLookup(wrapperP, "value") != NULL || kjLookup(wrapperP, "object") != NULL)
+  if (corTreeLookup(wrapperP, "value") != NULL || corTreeLookup(wrapperP, "object") != NULL)
     return wrapperP;
 
   int i = 0;
-  for (KjNode* instP = wrapperP->value.firstChildP; instP != NULL; instP = instP->next, i++)
+  for (CorNode* instP = wrapperP->value.firstChildP; instP != NULL; instP = instP->next, i++)
   {
     if (i == ix)
-      return (instP->type == KjObject) ? instP : wrapperP;
+      return (instP->type == CorObject) ? instP : wrapperP;
   }
 
   return wrapperP;
@@ -256,21 +256,21 @@ static KjNode* attrInstanceAt(KjNode* containerP, const char* attrName, int ix)
 
 // getAttrValueAt - the ix-th instance's value node (see attrInstanceAt)
 //
-static KjNode* getAttrValueAt(KjNode* containerP, const char* attrName, int ix)
+static CorNode* getAttrValueAt(CorNode* containerP, const char* attrName, int ix)
 {
   if (strcmp(attrName, LD_VOCAB_CREATED_AT)  == 0 ||
       strcmp(attrName, LD_VOCAB_MODIFIED_AT) == 0 ||
       strcmp(attrName, LD_VOCAB_EXPIRES_AT)  == 0)
-    return kjLookup(containerP, attrName);
+    return corTreeLookup(containerP, attrName);
 
-  KjNode* instP = attrInstanceAt(containerP, attrName, ix);
+  CorNode* instP = attrInstanceAt(containerP, attrName, ix);
   if (instP == NULL)
     return NULL;
-  if (instP->type != KjObject)
+  if (instP->type != CorObject)
     return instP;                                              // scalar
 
-  KjNode* valueP = kjLookup(instP, "value");
-  return (valueP != NULL) ? valueP : kjLookup(instP, "object");
+  CorNode* valueP = corTreeLookup(instP, "value");
+  return (valueP != NULL) ? valueP : corTreeLookup(instP, "object");
 }
 
 
@@ -288,16 +288,16 @@ static KjNode* getAttrValueAt(KjNode* containerP, const char* attrName, int ix)
 // Existence is unaffected: `q=r` asks whether the Attribute is there, not what
 // its object compares to.
 //
-static bool attrIsRelationshipAt(KjNode* containerP, const char* attrName, int ix)
+static bool attrIsRelationshipAt(CorNode* containerP, const char* attrName, int ix)
 {
-  KjNode* instP = attrInstanceAt(containerP, attrName, ix);
+  CorNode* instP = attrInstanceAt(containerP, attrName, ix);
 
-  if ((instP == NULL) || (instP->type != KjObject))
+  if ((instP == NULL) || (instP->type != CorObject))
     return false;
 
-  KjNode* typeP = kjLookup(instP, "type");
+  CorNode* typeP = corTreeLookup(instP, "type");
 
-  if ((typeP == NULL) || (typeP->type != KjString))
+  if ((typeP == NULL) || (typeP->type != CorString))
     return false;
 
   return (strcmp(typeP->value.s, "Relationship") == 0) ||
@@ -308,7 +308,7 @@ static bool attrIsRelationshipAt(KjNode* containerP, const char* attrName, int i
 
 // qLeafCompare - compare a fully-resolved value node against a term's operator
 // (forward declaration; defined right after matchTerm).
-static bool qLeafCompare(LdQTerm* term, KjNode* valueP);
+static bool qLeafCompare(LdQTerm* term, CorNode* valueP);
 
 
 
@@ -316,7 +316,7 @@ static bool qLeafCompare(LdQTerm* term, KjNode* valueP);
 //
 // matchTerm - evaluate a single LdQTerm against an entity
 //
-static bool matchTermOnInstance(KjNode* entityP, LdQTerm* term, int instIx)
+static bool matchTermOnInstance(CorNode* entityP, LdQTerm* term, int instIx)
 {
   //
   // System temporal attributes (createdAt / modifiedAt) are stored as top-level
@@ -326,10 +326,10 @@ static bool matchTermOnInstance(KjNode* entityP, LdQTerm* term, int instIx)
   if ((term->subPathN == 0) && (term->valuePathN == 0) &&
       ((strcmp(term->attr, "createdAt") == 0) || (strcmp(term->attr, "modifiedAt") == 0)))
   {
-    KjNode* tsP = kjLookup(entityP, term->attr);
+    CorNode* tsP = corTreeLookup(entityP, term->attr);
     if (term->op == LdQExists)    return (tsP != NULL);
     if (term->op == LdQNotExists) return (tsP == NULL);
-    if (tsP == NULL || tsP->type != KjInt || term->valueType != LdQDateTime)
+    if (tsP == NULL || tsP->type != CorInt || term->valueType != LdQDateTime)
       return false;
 
     long long e = tsP->value.i;
@@ -351,7 +351,7 @@ static bool matchTermOnInstance(KjNode* entityP, LdQTerm* term, int instIx)
   // value (or existence) under test is the LAST segment's, looked up
   // inside the previous segment's instance object.
   //
-  KjNode*     containerP = entityP;
+  CorNode*    containerP = entityP;
   const char* leafName   = term->attr;
 
   if (term->subPathN > 0)
@@ -359,14 +359,14 @@ static bool matchTermOnInstance(KjNode* entityP, LdQTerm* term, int instIx)
     // A segment that isn't there means the path as a whole isn't there, so a
     // not-exists term is satisfied — an Entity without 'p' at all certainly
     // does not contain 'p.sub'. Every other term needs the element and fails.
-    KjNode* instP = attrInstanceAt(entityP, term->attr, instIx);
-    if (instP == NULL || instP->type != KjObject)
+    CorNode* instP = attrInstanceAt(entityP, term->attr, instIx);
+    if (instP == NULL || instP->type != CorObject)
       return (term->op == LdQNotExists);
 
     for (int i = 0; i < term->subPathN - 1; i++)
     {
       instP = attrInstanceOf(instP, term->subPathV[i]);
-      if (instP == NULL || instP->type != KjObject)
+      if (instP == NULL || instP->type != CorObject)
         return (term->op == LdQNotExists);
     }
 
@@ -376,7 +376,7 @@ static bool matchTermOnInstance(KjNode* entityP, LdQTerm* term, int instIx)
 
   if ((term->op == LdQExists || term->op == LdQNotExists) && term->valuePathN == 0)
   {
-    KjNode* wrapperP = kjLookup(containerP, leafName);
+    CorNode* wrapperP = corTreeLookup(containerP, leafName);
     bool    present  = (wrapperP != NULL);
     return (term->op == LdQExists) ? present : !present;
   }
@@ -388,7 +388,7 @@ static bool matchTermOnInstance(KjNode* entityP, LdQTerm* term, int instIx)
   // is where datasetId lives (§ 8.5: no multi-attribute support below it). Once
   // a sub-path has been walked, containerP is already one instance's object and
   // the leaf is resolved normally.
-  KjNode* valueP = (containerP == entityP) ? getAttrValueAt(containerP, leafName, instIx)
+  CorNode* valueP = (containerP == entityP) ? getAttrValueAt(containerP, leafName, instIx)
                                            : getAttrValue(containerP, leafName);
   if (valueP == NULL)
     return (term->op == LdQNotExists);
@@ -405,7 +405,7 @@ static bool matchTermOnInstance(KjNode* entityP, LdQTerm* term, int instIx)
   //
   for (int i = 0; i < term->valuePathN; i++)
   {
-    if (valueP->type != KjObject)
+    if (valueP->type != CorObject)
       return (term->op == LdQNotExists);
 
     // § 7.2.3.4 item 5 — "[*]" (no natural language specified) matches across
@@ -419,7 +419,7 @@ static bool matchTermOnInstance(KjNode* entityP, LdQTerm* term, int instIx)
       if (term->op == LdQNotExists) return (valueP->value.firstChildP == NULL);
 
       bool negative = (term->op == LdQUnequal) || (term->op == LdQNotPattern);
-      for (KjNode* langP = valueP->value.firstChildP; langP != NULL; langP = langP->next)
+      for (CorNode* langP = valueP->value.firstChildP; langP != NULL; langP = langP->next)
       {
         bool m = qLeafCompare(term, langP);
         if (negative && !m) return false;   // ALL keys must satisfy != / notPattern
@@ -428,7 +428,7 @@ static bool matchTermOnInstance(KjNode* entityP, LdQTerm* term, int instIx)
       return negative;   // positive: no key matched → false; negative: all matched → true
     }
 
-    valueP = kjLookup(valueP, term->valuePathV[i]);
+    valueP = corTreeLookup(valueP, term->valuePathV[i]);
     if (valueP == NULL)
       return (term->op == LdQNotExists);
   }
@@ -460,7 +460,7 @@ static bool matchTermOnInstance(KjNode* entityP, LdQTerm* term, int instIx)
 // languageMap. It is also the answer that does not surprise - `speed!=10` on an
 // Entity that does have an instance of 10 should not match.
 //
-static bool matchTerm(KjNode* entityP, LdQTerm* term)
+static bool matchTerm(CorNode* entityP, LdQTerm* term)
 {
   bool negative = (term->op == LdQUnequal) || (term->op == LdQNotPattern) || (term->op == LdQNotExists);
   int  n        = attrInstanceCountOf(entityP, term->attr);
@@ -489,13 +489,13 @@ static bool matchTerm(KjNode* entityP, LdQTerm* term)
 // element matches" for == / pattern / ordering and "no element matches" for
 // != / notPattern (§ 4.9). Existence ops are resolved by the caller.
 //
-static bool qLeafCompare(LdQTerm* term, KjNode* valueP)
+static bool qLeafCompare(LdQTerm* term, CorNode* valueP)
 {
   double entityNum = 0;
   bool   isNum     = false;
 
-  if (valueP->type == KjInt)        { entityNum = (double) valueP->value.i; isNum = true; }
-  else if (valueP->type == KjFloat) { entityNum = valueP->value.f;          isNum = true; }
+  if (valueP->type == CorInt)       { entityNum = (double) valueP->value.i; isNum = true; }
+  else if (valueP->type == CorFloat) { entityNum = valueP->value.f;         isNum = true; }
 
   //
   // § 7.2.3.3, and the asymmetry is the spec's, not a shortcut:
@@ -521,14 +521,14 @@ static bool qLeafCompare(LdQTerm* term, KjNode* valueP)
     // Array value (e.g. a ListProperty valueList of numbers): "any element
     // matches" for ==, "no element matches" for != — the array-containment
     // semantics the mongoc plugin gets natively. Mirrors the LdQString path.
-    if (valueP->type == KjArray)
+    if (valueP->type == CorArray)
     {
       bool hit = false;
-      for (KjNode* elemP = valueP->value.firstChildP; elemP != NULL; elemP = elemP->next)
+      for (CorNode* elemP = valueP->value.firstChildP; elemP != NULL; elemP = elemP->next)
       {
         double elemNum;
-        if      (elemP->type == KjInt)   elemNum = (double) elemP->value.i;
-        else if (elemP->type == KjFloat) elemNum = elemP->value.f;
+        if      (elemP->type == CorInt)  elemNum = (double) elemP->value.i;
+        else if (elemP->type == CorFloat) elemNum = elemP->value.f;
         else continue;
         if (elemNum == term->value.n) { hit = true; break; }
       }
@@ -572,13 +572,13 @@ static bool qLeafCompare(LdQTerm* term, KjNode* valueP)
       // NUMERIC array as "does not match the pattern", which it does not - it
       // has no string to match or fail against.
       //
-      bool comparable = (valueP->type == KjString);
+      bool comparable = (valueP->type == CorString);
 
-      if (valueP->type == KjArray)
+      if (valueP->type == CorArray)
       {
-        for (KjNode* elemP = valueP->value.firstChildP; elemP != NULL; elemP = elemP->next)
+        for (CorNode* elemP = valueP->value.firstChildP; elemP != NULL; elemP = elemP->next)
         {
-          if (elemP->type == KjString) { comparable = true; break; }
+          if (elemP->type == CorString) { comparable = true; break; }
         }
       }
 
@@ -591,13 +591,13 @@ static bool qLeafCompare(LdQTerm* term, KjNode* valueP)
 
       bool m = false;
 
-      if (valueP->type == KjString)
+      if (valueP->type == CorString)
         m = (regexec(&re, valueP->value.s, 0, NULL, 0) == 0);
       else
       {
-        for (KjNode* elemP = valueP->value.firstChildP; elemP != NULL; elemP = elemP->next)
+        for (CorNode* elemP = valueP->value.firstChildP; elemP != NULL; elemP = elemP->next)
         {
-          if ((elemP->type == KjString) && (regexec(&re, elemP->value.s, 0, NULL, 0) == 0))
+          if ((elemP->type == CorString) && (regexec(&re, elemP->value.s, 0, NULL, 0) == 0))
           { m = true; break; }
         }
       }
@@ -610,12 +610,12 @@ static bool qLeafCompare(LdQTerm* term, KjNode* valueP)
     // Equality / ordering. Scalar path identical to before; array path
     // checks "any element matches" for ==, "no element matches" for !=
     // (the spec's array-containment semantics, mirroring BSON $eq/$ne).
-    if (valueP->type == KjArray)
+    if (valueP->type == CorArray)
     {
       bool hit = false;
-      for (KjNode* elemP = valueP->value.firstChildP; elemP != NULL; elemP = elemP->next)
+      for (CorNode* elemP = valueP->value.firstChildP; elemP != NULL; elemP = elemP->next)
       {
-        if (elemP->type == KjString && strcmp(elemP->value.s, term->value.s) == 0)
+        if (elemP->type == CorString && strcmp(elemP->value.s, term->value.s) == 0)
         { hit = true; break; }
       }
       switch (term->op)
@@ -625,7 +625,7 @@ static bool qLeafCompare(LdQTerm* term, KjNode* valueP)
       default:         return false;   // ordering on array doesn't have a sensible semantic
       }
     }
-    if (valueP->type != KjString) return (term->op == LdQUnequal);
+    if (valueP->type != CorString) return (term->op == LdQUnequal);
     {
       int cmp = strcmp(valueP->value.s, term->value.s);
       switch (term->op)
@@ -644,12 +644,12 @@ static bool qLeafCompare(LdQTerm* term, KjNode* valueP)
     // Array value (e.g. a ListProperty valueList of booleans): "any element
     // matches" for ==, "no element matches" for !=. Mirrors the LdQString /
     // LdQNumber array paths.
-    if (valueP->type == KjArray)
+    if (valueP->type == CorArray)
     {
       bool hit = false;
-      for (KjNode* elemP = valueP->value.firstChildP; elemP != NULL; elemP = elemP->next)
+      for (CorNode* elemP = valueP->value.firstChildP; elemP != NULL; elemP = elemP->next)
       {
-        if (elemP->type == KjBoolean && elemP->value.b == term->value.b) { hit = true; break; }
+        if (elemP->type == CorBoolean && elemP->value.b == term->value.b) { hit = true; break; }
       }
       switch (term->op)
       {
@@ -658,7 +658,7 @@ static bool qLeafCompare(LdQTerm* term, KjNode* valueP)
       default:         return false;
       }
     }
-    if (valueP->type != KjBoolean) return (term->op == LdQUnequal);
+    if (valueP->type != CorBoolean) return (term->op == LdQUnequal);
     {
       bool entityBool = valueP->value.b;
       switch (term->op)
@@ -670,7 +670,7 @@ static bool qLeafCompare(LdQTerm* term, KjNode* valueP)
     }
 
   case LdQDateTime:
-    if (valueP->type != KjInt) return (term->op == LdQUnequal);
+    if (valueP->type != CorInt) return (term->op == LdQUnequal);
     {
       long long entityNs = valueP->value.i;
       long long queryNs  = term->value.ns;
@@ -687,7 +687,7 @@ static bool qLeafCompare(LdQTerm* term, KjNode* valueP)
     }
 
   case LdQNoValue:
-    if (term->op == LdQPattern && valueP->type == KjString)
+    if (term->op == LdQPattern && valueP->type == CorString)
     {
       regex_t re;
       if (regcomp(&re, term->value.s, REG_EXTENDED | REG_NOSUB) == 0)
@@ -697,7 +697,7 @@ static bool qLeafCompare(LdQTerm* term, KjNode* valueP)
         return m;
       }
     }
-    else if (term->op == LdQNotPattern && valueP->type == KjString)
+    else if (term->op == LdQNotPattern && valueP->type == CorString)
     {
       regex_t re;
       if (regcomp(&re, term->value.s, REG_EXTENDED | REG_NOSUB) == 0)
@@ -718,14 +718,14 @@ static bool qLeafCompare(LdQTerm* term, KjNode* valueP)
     // is an array does not stop being one because the query is a range, and
     // mongoc's $gte/$lte compare element-wise natively. See spec-doubts-2 #123.
     //
-    if (valueP->type == KjArray)
+    if (valueP->type == CorArray)
     {
       bool hit = false;
-      for (KjNode* elemP = valueP->value.firstChildP; elemP != NULL; elemP = elemP->next)
+      for (CorNode* elemP = valueP->value.firstChildP; elemP != NULL; elemP = elemP->next)
       {
         double elemNum;
-        if      (elemP->type == KjInt)   elemNum = (double) elemP->value.i;
-        else if (elemP->type == KjFloat) elemNum = elemP->value.f;
+        if      (elemP->type == CorInt)  elemNum = (double) elemP->value.i;
+        else if (elemP->type == CorFloat) elemNum = elemP->value.f;
         else continue;
 
         if ((elemNum >= term->value.numRange.lo) && (elemNum <= term->value.numRange.hi))
@@ -760,7 +760,7 @@ static bool qLeafCompare(LdQTerm* term, KjNode* valueP)
     // includes any of the Query Term values, and the target value is an array".
     // mongoc gets this from BSON's $in; the walk has to do it by hand.
     //
-    if (valueP->type == KjArray)
+    if (valueP->type == CorArray)
     {
       bool hit = false;
 
@@ -768,18 +768,18 @@ static bool qLeafCompare(LdQTerm* term, KjNode* valueP)
       {
         LdQValueType itemType = term->value.list.itemTypeV[i];
 
-        for (KjNode* elemP = valueP->value.firstChildP; elemP != NULL; elemP = elemP->next)
+        for (CorNode* elemP = valueP->value.firstChildP; elemP != NULL; elemP = elemP->next)
         {
-          if ((itemType == LdQNumber) && ((elemP->type == KjInt) || (elemP->type == KjFloat)))
+          if ((itemType == LdQNumber) && ((elemP->type == CorInt) || (elemP->type == CorFloat)))
           {
-            double elemNum = (elemP->type == KjInt) ? (double) elemP->value.i : elemP->value.f;
+            double elemNum = (elemP->type == CorInt) ? (double) elemP->value.i : elemP->value.f;
             if (elemNum == strtod(term->value.list.values[i], NULL)) { hit = true; break; }
           }
-          else if ((itemType == LdQString) && (elemP->type == KjString))
+          else if ((itemType == LdQString) && (elemP->type == CorString))
           {
             if (strcmp(elemP->value.s, term->value.list.values[i]) == 0) { hit = true; break; }
           }
-          else if ((itemType == LdQBool) && (elemP->type == KjBoolean))
+          else if ((itemType == LdQBool) && (elemP->type == CorBoolean))
           {
             if (elemP->value.b == (strcmp(term->value.list.values[i], "true") == 0)) { hit = true; break; }
           }
@@ -798,17 +798,17 @@ static bool qLeafCompare(LdQTerm* term, KjNode* valueP)
         if (entityNum == strtod(term->value.list.values[i], NULL))
           return (term->op == LdQEqual);
       }
-      else if ((itemType == LdQString) && (valueP->type == KjString))
+      else if ((itemType == LdQString) && (valueP->type == CorString))
       {
         if (strcmp(valueP->value.s, term->value.list.values[i]) == 0)
           return (term->op == LdQEqual);
       }
-      else if ((itemType == LdQBool) && (valueP->type == KjBoolean))
+      else if ((itemType == LdQBool) && (valueP->type == CorBoolean))
       {
         if (valueP->value.b == (strcmp(term->value.list.values[i], "true") == 0))
           return (term->op == LdQEqual);
       }
-      else if ((itemType == LdQDateTime) && (valueP->type == KjInt))
+      else if ((itemType == LdQDateTime) && (valueP->type == CorInt))
       {
         if ((long long) valueP->value.i == (long long) ldIsoToNanoseconds(term->value.list.values[i]))
           return (term->op == LdQEqual);
@@ -835,31 +835,31 @@ static bool qLeafCompare(LdQTerm* term, KjNode* valueP)
 // {type, value}) looking for the named relName whose first instance is a
 // Relationship; returns the target uri (borrowed) or NULL if absent.
 //
-static const char* findRelationshipTargetId(KjNode* entityP, const char* relName)
+static const char* findRelationshipTargetId(CorNode* entityP, const char* relName)
 {
-  if (entityP == NULL || relName == NULL || entityP->type != KjObject)
+  if (entityP == NULL || relName == NULL || entityP->type != CorObject)
     return NULL;
 
-  for (KjNode* attrP = entityP->value.firstChildP; attrP != NULL; attrP = attrP->next)
+  for (CorNode* attrP = entityP->value.firstChildP; attrP != NULL; attrP = attrP->next)
   {
-    if (attrP->name == NULL || attrP->type != KjObject)
+    if (attrP->name == NULL || attrP->type != CorObject)
       continue;
     if (strcmp(attrP->name, relName) != 0)
       continue;
 
-    for (KjNode* instP = attrP->value.firstChildP; instP != NULL; instP = instP->next)
+    for (CorNode* instP = attrP->value.firstChildP; instP != NULL; instP = instP->next)
     {
-      if (instP->type != KjObject)
+      if (instP->type != CorObject)
         continue;
 
-      KjNode* typeP = kjLookup(instP, "type");
-      if (typeP == NULL || typeP->type != KjString)
+      CorNode* typeP = corTreeLookup(instP, "type");
+      if (typeP == NULL || typeP->type != CorString)
         continue;
       if (strcmp(typeP->value.s, "Relationship") != 0)
         continue;
 
-      KjNode* valP = kjLookup(instP, "value");
-      if (valP != NULL && valP->type == KjString)
+      CorNode* valP = corTreeLookup(instP, "value");
+      if (valP != NULL && valP->type == CorString)
         return valP->value.s;
     }
   }
@@ -871,7 +871,7 @@ static const char* findRelationshipTargetId(KjNode* entityP, const char* relName
 //
 // ldEntityMatchQEx -
 //
-bool ldEntityMatchQEx(KjNode* entityP, LdQNode* node,
+bool ldEntityMatchQEx(CorNode* entityP, LdQNode* node,
                      LdQEntityFetchFunc fetcher, void* userData)
 {
   if (node == NULL)
@@ -890,7 +890,7 @@ bool ldEntityMatchQEx(KjNode* entityP, LdQNode* node,
     if (targetId == NULL || fetcher == NULL)
       return false;
 
-    KjNode* targetP = NULL;
+    CorNode* targetP = NULL;
     if (fetcher(targetId, &targetP, userData) != 0 || targetP == NULL)
       return false;
 
@@ -922,7 +922,7 @@ bool ldEntityMatchQEx(KjNode* entityP, LdQNode* node,
 
 
 
-bool ldEntityMatchQ(KjNode* entityP, LdQNode* node)
+bool ldEntityMatchQ(CorNode* entityP, LdQNode* node)
 {
   return ldEntityMatchQEx(entityP, node, NULL, NULL);
 }

@@ -9,10 +9,11 @@
 
 #include <string.h>                                    // strcmp
 
-#include "kjson/KjNode.h"                              // KjNode, Kjson
-#include "kjson/kjBuilder.h"                           // kjObject, kjChildAdd, kjChildRemove
-#include "kjson/kjClone.h"                             // kjClone
-#include "kjson/kjLookup.h"                            // kjLookup
+#include "kalloc/KAlloc.h"                             // KAlloc
+#include "corTree/CorNode.h"                           // CorNode, CorJson
+#include "corTree/corTreeBuilder.h"                    // corTreeObject, corTreeChildAdd, corTreeChildRemove
+#include "corTree/corTreeClone.h"                      // corTreeClone
+#include "corTree/corTreeLookup.h"                     // corTreeLookup
 
 #include "corNgsild/LdRegCache.h"                       // LdRegInfo
 
@@ -56,12 +57,12 @@ static bool isKeywordAttr(const char* name)
 //
 // ldEntityFragmentForInfo -
 //
-KjNode* ldEntityFragmentForInfo(KjNode*     entityP,
+CorNode* ldEntityFragmentForInfo(CorNode*   entityP,
                                 LdRegInfo*  riP,
-                                Kjson*      kjP,
+                                KAlloc*     allocP,
                                 bool        detach)
 {
-  if (entityP == NULL || riP == NULL || kjP == NULL)
+  if (entityP == NULL || riP == NULL || allocP == NULL)
     return NULL;
 
   bool wildcard = (riP->attributeNamesV == NULL);
@@ -70,7 +71,7 @@ KjNode* ldEntityFragmentForInfo(KjNode*     entityP,
   // First pass — count claimed attrs. Avoid building an empty fragment.
   //
   int matched = 0;
-  for (KjNode* curP = entityP->value.firstChildP; curP != NULL; curP = curP->next)
+  for (CorNode* curP = entityP->value.firstChildP; curP != NULL; curP = curP->next)
   {
     if (isKeywordAttr(curP->name))
       continue;
@@ -87,23 +88,23 @@ KjNode* ldEntityFragmentForInfo(KjNode*     entityP,
   // Build the fragment. id / type / @context are always cloned so they
   // remain on entityP for subsequent passes + local storage.
   //
-  KjNode* fragP = kjObject(kjP, NULL);
+  CorNode* fragP = corTreeObject(allocP, NULL);
 
-  KjNode* idP      = kjLookup(entityP, "id");
-  KjNode* typeP    = kjLookup(entityP, "type");
-  KjNode* contextP = kjLookup(entityP, "@context");
+  CorNode* idP     = corTreeLookup(entityP, "id");
+  CorNode* typeP   = corTreeLookup(entityP, "type");
+  CorNode* contextP = corTreeLookup(entityP, "@context");
 
-  if (idP      != NULL) kjChildAdd(fragP, kjClone(kjP, idP));
-  if (typeP    != NULL) kjChildAdd(fragP, kjClone(kjP, typeP));
-  if (contextP != NULL) kjChildAdd(fragP, kjClone(kjP, contextP));
+  if (idP      != NULL) corTreeChildAdd(fragP, corTreeClone(allocP, idP));
+  if (typeP    != NULL) corTreeChildAdd(fragP, corTreeClone(allocP, typeP));
+  if (contextP != NULL) corTreeChildAdd(fragP, corTreeClone(allocP, contextP));
 
   //
   // Second pass — move or link the claimed attrs.
   //
-  KjNode* curP = entityP->value.firstChildP;
+  CorNode* curP = entityP->value.firstChildP;
   while (curP != NULL)
   {
-    KjNode* nextP = curP->next;
+    CorNode* nextP = curP->next;
 
     if (isKeywordAttr(curP->name))
     {
@@ -120,13 +121,13 @@ KjNode* ldEntityFragmentForInfo(KjNode*     entityP,
 
     if (detach)
     {
-      kjChildRemove(entityP, curP);
+      corTreeChildRemove(entityP, curP);
       curP->next = NULL;
-      kjChildAdd(fragP, curP);
+      corTreeChildAdd(fragP, curP);
     }
     else
     {
-      kjChildAdd(fragP, kjClone(kjP, curP));
+      corTreeChildAdd(fragP, corTreeClone(allocP, curP));
     }
 
     curP = nextP;

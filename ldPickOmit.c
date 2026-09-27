@@ -11,8 +11,8 @@
 #include <stddef.h>                                    // NULL
 #include <string.h>                                    // strcmp
 
-#include "kjson/KjNode.h"                           // KjNode
-#include "kjson/kjBuilder.h"                    // kjChildRemove
+#include "corTree/CorNode.h"                        // CorNode
+#include "corTree/corTreeBuilder.h"             // corTreeChildRemove
 
 #include "corNgsild/ldIsEntityKeyword.h"          // ldIsEntityKeyword
 #include "corNgsild/CorNgsild.h"                   // corNgsild (geometryPropertyExpanded)
@@ -61,16 +61,16 @@ static bool inStringV(const char* name, char** strV)
 // the user didn't list them. Only `@context` is left alone (added at render
 // time, not part of the storage entity).
 //
-static void pickOmitImpl(KjNode* entityP, char** pickV, char** omitV)
+static void pickOmitImpl(CorNode* entityP, char** pickV, char** omitV)
 {
   if (entityP == NULL)
     return;
 
-  KjNode* childP = entityP->value.firstChildP;
+  CorNode* childP = entityP->value.firstChildP;
 
   while (childP != NULL)
   {
-    KjNode* nextP = childP->next;
+    CorNode* nextP = childP->next;
 
     if (childP->name != NULL && strcmp(childP->name, "@context") != 0)
     {
@@ -82,7 +82,7 @@ static void pickOmitImpl(KjNode* entityP, char** pickV, char** omitV)
         remove = true;
 
       if (remove && !isGeoJsonProtected(childP->name))
-        kjChildRemove(entityP, childP);
+        corTreeChildRemove(entityP, childP);
     }
 
     childP = nextP;
@@ -95,7 +95,7 @@ static void pickOmitImpl(KjNode* entityP, char** pickV, char** omitV)
 //
 // ldPickOmit -
 //
-void ldPickOmit(KjNode* entityP, char** pickV, char** omitV)
+void ldPickOmit(CorNode* entityP, char** pickV, char** omitV)
 {
   pickOmitImpl(entityP, pickV, omitV);
 }
@@ -111,21 +111,21 @@ void ldPickOmit(KjNode* entityP, char** pickV, char** omitV)
 // preserved. The filter walks the entity's children once and removes any
 // non-keyword child whose name is not in attrsV.
 //
-void ldAttrsFilter(KjNode* entityP, char** attrsV)
+void ldAttrsFilter(CorNode* entityP, char** attrsV)
 {
   if (entityP == NULL || attrsV == NULL)
     return;
 
-  KjNode* childP = entityP->value.firstChildP;
+  CorNode* childP = entityP->value.firstChildP;
 
   while (childP != NULL)
   {
-    KjNode* nextP = childP->next;
+    CorNode* nextP = childP->next;
 
     if (childP->name != NULL && !ldIsEntityKeyword(childP->name))
     {
       if (!inStringV(childP->name, attrsV) && !isGeoJsonProtected(childP->name))
-        kjChildRemove(entityP, childP);
+        corTreeChildRemove(entityP, childP);
     }
 
     childP = nextP;

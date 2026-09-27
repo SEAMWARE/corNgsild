@@ -19,8 +19,8 @@
 //
 #include <stdbool.h>                                     // bool
 
-#include "kjson/KjNode.h"                                // KjNode
-#include "kjson/kjson.h"                                 // Kjson
+#include "kalloc/KAlloc.h"                               // KAlloc
+#include "corTree/CorNode.h"                             // CorNode
 
 
 
@@ -37,7 +37,7 @@ extern bool ldConformanceParse(const char* str, short* majorOut, short* minorOut
 //
 // ldConformanceDowngrade - mutate `tree` in place to conform to the
 // target version. Both arrays of entities and single-entity trees are
-// supported (root may be KjArray or KjObject).
+// supported (root may be CorArray or CorObject).
 //
 // targetMajor/targetMinor 0/0 → no-op.
 //
@@ -50,9 +50,9 @@ extern bool ldConformanceParse(const char* str, short* majorOut, short* minorOut
 //            multi-instance arrays to one element; collapse multi-type
 //            arrays to first element.
 //
-// kjsonP is needed to allocate replacement nodes.
+// allocP is needed to allocate replacement nodes.
 //
-extern void ldConformanceDowngrade(KjNode* treeP, short targetMajor, short targetMinor, Kjson* kjsonP);
+extern void ldConformanceDowngrade(CorNode* treeP, short targetMajor, short targetMinor, KAlloc* allocP);
 
 
 

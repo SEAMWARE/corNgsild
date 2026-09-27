@@ -13,11 +13,11 @@
 #include <stdlib.h>                                      // calloc, free
 #include <string.h>                                      // strcmp, strdup
 
-#include "kjson/KjNode.h"                                // KjNode
-#include "kjson/kjLookup.h"                              // kjLookup
-#include "kjson/kjClone.h"                               // kjClone
-#include "kjson/kjFree.h"                                // kjFree
-#include "kjson/kjBuilder.h"                             // kjString, kjChildAdd
+#include "corTree/CorNode.h"                             // CorNode
+#include "corTree/corTreeLookup.h"                       // corTreeLookup
+#include "corTree/corTreeClone.h"                        // corTreeClone
+#include "corTree/corTreeFree.h"                         // corTreeFree
+#include "corTree/corTreeBuilder.h"                      // corTreeString, corTreeChildAdd
 
 #include "corRest/corRest.h"                               // corRest
 #include "corNgsild/LdVocab.h"                            // LD_VOCAB_*
@@ -43,12 +43,12 @@ LdSnapshotCache* ldSnapshotCacheCreate(void)
 //
 // fieldAsLong - helper
 //
-static long fieldAsLong(KjNode* tree, const char* name, long def)
+static long fieldAsLong(CorNode* tree, const char* name, long def)
 {
-  KjNode* p = kjLookup(tree, name);
+  CorNode* p = corTreeLookup(tree, name);
   if (p == NULL) return def;
-  if (p->type == KjInt)   return (long) p->value.i;
-  if (p->type == KjFloat) return (long) p->value.f;
+  if (p->type == CorInt)  return (long) p->value.i;
+  if (p->type == CorFloat) return (long) p->value.f;
   return def;
 }
 
@@ -58,12 +58,12 @@ static long fieldAsLong(KjNode* tree, const char* name, long def)
 //
 // ldSnapshotCacheItemAdd -
 //
-LdSnapshotCacheItem* ldSnapshotCacheItemAdd(LdSnapshotCache* cacheP, KjNode* snapshotTree)
+LdSnapshotCacheItem* ldSnapshotCacheItemAdd(LdSnapshotCache* cacheP, CorNode* snapshotTree)
 {
   if (cacheP == NULL || snapshotTree == NULL) return NULL;
 
-  KjNode* idP = kjLookup(snapshotTree, "id");
-  if (idP == NULL || idP->type != KjString) return NULL;
+  CorNode* idP = corTreeLookup(snapshotTree, "id");
+  if (idP == NULL || idP->type != CorString) return NULL;
 
   if (ldSnapshotCacheItemLookup(cacheP, idP->value.s) != NULL)
     return NULL;  // already exists
@@ -73,17 +73,17 @@ LdSnapshotCacheItem* ldSnapshotCacheItemAdd(LdSnapshotCache* cacheP, KjNode* sna
 
   // Clone the snapshot doc with the malloc allocator (NULL) so it survives the
   // request/worker that created it; freed in ldSnapshotCacheItemDelete via
-  // kjFree. Any later grafts (postSnapshot _snapSeq, ldSnapshotExecQueries
+  // corTreeFree. Any later grafts (postSnapshot _snapSeq, ldSnapshotExecQueries
   // details, patchSnapshot fragments) must likewise use NULL=malloc to keep
-  // the tree a single clean all-malloc tree that kjFree can release whole.
-  itemP->tree   = kjClone(NULL, snapshotTree);
-  itemP->id     = (kjLookup(itemP->tree, "id") != NULL)
-                    ? kjLookup(itemP->tree, "id")->value.s
+  // the tree a single clean all-malloc tree that corTreeFree can release whole.
+  itemP->tree   = corTreeClone(NULL, snapshotTree);
+  itemP->id     = (corTreeLookup(itemP->tree, "id") != NULL)
+                    ? corTreeLookup(itemP->tree, "id")->value.s
                     : (char*) idP->value.s;
   itemP->status = LdSnapshotPreparing;
 
-  KjNode* prio = kjLookup(itemP->tree, "snapshotPriority");
-  itemP->priority = (prio != NULL && (prio->type == KjInt || prio->type == KjFloat))
+  CorNode* prio = corTreeLookup(itemP->tree, "snapshotPriority");
+  itemP->priority = (prio != NULL && (prio->type == CorInt || prio->type == CorFloat))
                       ? (int) fieldAsLong(itemP->tree, "snapshotPriority", 5L)
                       : 5;
 
@@ -139,12 +139,12 @@ bool ldSnapshotCacheItemDelete(LdSnapshotCache* cacheP, const char* id)
       if (prev == NULL) cacheP->head = p->next;
       else              prev->next   = p->next;
       cacheP->count--;
-      // p->id points into p->tree, so kjFree reclaims it too. The snap-tenant
+      // p->id points into p->tree, so corTreeFree reclaims it too. The snap-tenant
       // (p->snapTenantP) is owned and freed by the caller (deleteSnapshot /
       // purgeSnapshots, via snapshotTenantDestroy) — it must be captured
       // before this call, as p is freed here.
       if (p->tree != NULL)
-        kjFree(p->tree);
+        corTreeFree(p->tree);
       free(p);
       return true;
     }

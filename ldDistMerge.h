@@ -29,8 +29,8 @@
 #include <stdbool.h>                                     // bool
 #include <stdint.h>                                      // uint64_t
 
-#include "kjson/kjson.h"                                 // Kjson
-#include "kjson/KjNode.h"                                // KjNode
+#include "kalloc/KAlloc.h"                               // KAlloc
+#include "corTree/CorNode.h"                             // CorNode
 
 
 
@@ -45,7 +45,7 @@
 // `nowNs` is the broker's request-start time in epoch-nanoseconds, used
 // for expiresAt comparison.
 //
-extern bool ldDistInstanceShouldReplace(KjNode* destInstP, KjNode* srcInstP, int64_t nowNs);
+extern bool ldDistInstanceShouldReplace(CorNode* destInstP, CorNode* srcInstP, int64_t nowNs);
 
 
 
@@ -54,7 +54,7 @@ extern bool ldDistInstanceShouldReplace(KjNode* destInstP, KjNode* srcInstP, int
 // ldDistInstanceIsExpired - exposed for callers that want to drop an
 // instance entirely when it's the only candidate and it's expired.
 //
-extern bool ldDistInstanceIsExpired(KjNode* instP, int64_t nowNs);
+extern bool ldDistInstanceIsExpired(CorNode* instP, int64_t nowNs);
 
 
 
@@ -82,7 +82,7 @@ extern bool ldDistInstanceIsExpired(KjNode* instP, int64_t nowNs);
 // Auxiliary sources (§ 4.3.6.2) fill gaps only and stay out of the § 4.5.5.3
 // algorithm, this reconciliation included.
 //
-extern void ldDistExpiresAtReconcile(KjNode* destP, KjNode* srcP);
+extern void ldDistExpiresAtReconcile(CorNode* destP, CorNode* srcP);
 
 
 
@@ -101,7 +101,7 @@ extern void ldDistExpiresAtReconcile(KjNode* destP, KjNode* srcP);
 // Called once per merged-in version with 'destP' the running assembly and 'srcP' the
 // further version. Auxiliary sources (§ 4.3.6.2) fill gaps only and stay out of it.
 //
-extern void ldDistScopeMerge(KjNode* destP, KjNode* srcP, Kjson* allocP);
+extern void ldDistScopeMerge(CorNode* destP, CorNode* srcP, KAlloc* allocP);
 
 
 
@@ -124,15 +124,15 @@ extern void ldDistScopeMerge(KjNode* destP, KjNode* srcP, Kjson* allocP);
 // arrives in srcP or is already sitting in destP, and an attribute left with no
 // surviving instance is removed rather than kept as an empty wrapper.
 //
-// `kjsonP` allocates the attribute wrappers and the merged Scope array.
+// `allocP` allocates the attribute wrappers and the merged Scope array.
 // `clone` picks how instances travel:
 //
 //   false - instances MOVE out of srcP into destP. Cheapest, and what the read
 //           paths want: srcP is a per-request tree that dies with the request.
 //           srcP is left half-empty afterwards and must not be reused.
-//   true  - instances are CLONED into `kjsonP`. For a destP that outlives srcP,
+//   true  - instances are CLONED into `allocP`. For a destP that outlives srcP,
 //           e.g. a snapshot frozen into the snap-tenant.
 //
-extern void ldDistMergeSourceInto(KjNode* destP, KjNode* srcP, int64_t nowNs, Kjson* kjsonP, bool clone);
+extern void ldDistMergeSourceInto(CorNode* destP, CorNode* srcP, int64_t nowNs, KAlloc* allocP, bool clone);
 
 #endif  // CORNGSILD_LDDISTMERGE_H_

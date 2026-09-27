@@ -12,15 +12,15 @@
 //
 #include <stdbool.h>                                     // bool
 
-#include "kjson/KjNode.h"                               // KjNode
+#include "corTree/CorNode.h"                            // CorNode
 
 
 
 // -----------------------------------------------------------------------------
 //
-// ldPaginationTrim - trim KjNode array to limit, return true if there were more
+// ldPaginationTrim - trim CorNode array to limit, return true if there were more
 //
-extern bool ldPaginationTrim(KjNode* arrayP, int limit);
+extern bool ldPaginationTrim(CorNode* arrayP, int limit);
 
 
 

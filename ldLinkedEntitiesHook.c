@@ -23,7 +23,7 @@ void ldLinkedEntitiesHookSet(LdLinkedEntitiesExpandHook fn)
 
 
 
-void ldLinkedEntitiesHookInvoke(KjNode* dataArrayP, const char* mode, int joinLevel, bool sysAttrs, void* tenantP)
+void ldLinkedEntitiesHookInvoke(CorNode* dataArrayP, const char* mode, int joinLevel, bool sysAttrs, void* tenantP)
 {
   if (hook != NULL && dataArrayP != NULL && mode != NULL && tenantP != NULL)
     hook(dataArrayP, mode, joinLevel, sysAttrs, tenantP);

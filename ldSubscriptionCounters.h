@@ -10,11 +10,11 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-#include "kjson/KjNode.h"                              // KjNode
+#include "corTree/CorNode.h"                           // CorNode
 #include "corNgsild/LdSubCache.h"                       // LdSubCacheItem
 #include "corNgsild/LdPernotCache.h"                    // LdPernotItem
 
-extern void ldSubscriptionCountersInject(KjNode* subP, LdSubCacheItem* itemP);
-extern void ldPernotCountersInject(KjNode* subP, LdPernotItem* itemP);
+extern void ldSubscriptionCountersInject(CorNode* subP, LdSubCacheItem* itemP);
+extern void ldPernotCountersInject(CorNode* subP, LdPernotItem* itemP);
 
 #endif  // CORNGSILD_LDSUBSCRIPTIONCOUNTERS_H_

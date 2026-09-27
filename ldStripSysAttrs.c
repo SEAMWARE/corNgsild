@@ -10,8 +10,8 @@
 #include <stdbool.h>                                     // bool
 #include <string.h>                                    // strcmp
 
-#include "kjson/KjNode.h"                             // KjNode
-#include "kjson/kjBuilder.h"                      // kjChildRemove
+#include "corTree/CorNode.h"                          // CorNode
+#include "corTree/corTreeBuilder.h"               // corTreeChildRemove
 #include "corNgsild/LdVocab.h"                          // LD_VOCAB_*
 
 #include "corNgsild/ldStripSysAttrs.h"                  // Own interface
@@ -53,24 +53,24 @@ static bool isValueKey(const char* name)
 //
 // stripObject - remove createdAt/modifiedAt, recurse into sub-attributes only
 //
-static void stripObject(KjNode* objectP)
+static void stripObject(CorNode* objectP)
 {
-  if (objectP == NULL || objectP->type != KjObject)
+  if (objectP == NULL || objectP->type != CorObject)
     return;
 
-  KjNode* childP = objectP->value.firstChildP;
+  CorNode* childP = objectP->value.firstChildP;
 
   while (childP != NULL)
   {
-    KjNode* nextP = childP->next;
+    CorNode* nextP = childP->next;
 
     if (childP->name != NULL && isSysAttr(childP->name))
-      kjChildRemove(objectP, childP);
-    else if (childP->type == KjObject && childP->name != NULL && !isValueKey(childP->name))
+      corTreeChildRemove(objectP, childP);
+    else if (childP->type == CorObject && childP->name != NULL && !isValueKey(childP->name))
       stripObject(childP);
-    else if (childP->type == KjArray)
+    else if (childP->type == CorArray)
     {
-      for (KjNode* itemP = childP->value.firstChildP; itemP != NULL; itemP = itemP->next)
+      for (CorNode* itemP = childP->value.firstChildP; itemP != NULL; itemP = itemP->next)
         stripObject(itemP);
     }
 
@@ -84,18 +84,18 @@ static void stripObject(KjNode* objectP)
 //
 // ldStripSysAttrs -
 //
-void ldStripSysAttrs(KjNode* treeP)
+void ldStripSysAttrs(CorNode* treeP)
 {
   if (treeP == NULL)
     return;
 
-  if (treeP->type == KjObject)
+  if (treeP->type == CorObject)
   {
     stripObject(treeP);
   }
-  else if (treeP->type == KjArray)
+  else if (treeP->type == CorArray)
   {
-    for (KjNode* itemP = treeP->value.firstChildP; itemP != NULL; itemP = itemP->next)
+    for (CorNode* itemP = treeP->value.firstChildP; itemP != NULL; itemP = itemP->next)
       stripObject(itemP);
   }
 }

@@ -8,8 +8,9 @@
 //
 #include <string.h>                                    // strcmp
 
-#include "kjson/KjNode.h"                              // KjNode
-#include "kjson/kjLookup.h"                            // kjLookup
+#include "kalloc/KAlloc.h"                             // KAlloc
+#include "corTree/CorNode.h"                           // CorNode
+#include "corTree/corTreeLookup.h"                     // corTreeLookup
 
 #include "corNgsild/LdQ.h"                              // LdQNode
 #include "corNgsild/ldQRender.h"                        // ldQRender
@@ -21,14 +22,14 @@
 //
 // ldSubscriptionCompactQ -
 //
-void ldSubscriptionCompactQ(KjNode* subP, LdQNode* qExpr, CorLdContext* contextP, KAlloc* allocP)
+void ldSubscriptionCompactQ(CorNode* subP, LdQNode* qExpr, CorLdContext* contextP, KAlloc* allocP)
 {
   if (qExpr == NULL)
     return;
 
-  KjNode* qP = kjLookup(subP, "q");
+  CorNode* qP = corTreeLookup(subP, "q");
 
-  if (qP == NULL || qP->type != KjString)
+  if (qP == NULL || qP->type != CorString)
     return;
 
   // Render the pre-parsed tree with compaction against the response @context

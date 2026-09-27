@@ -16,11 +16,11 @@
 
 #include "ktrace/kTrace.h"                               // KT_E
 #include "kalloc/kaAlloc.h"                              // kaAlloc
-#include "kjson/KjNode.h"                                // KjNode
-#include "kjson/kjBuilder.h"                             // kjObject, kjString, kjInteger, kjChildAdd
-#include "kjson/kjLookup.h"                              // kjLookup
-#include "kjson/kjClone.h"                               // kjClone
-#include "kjson/kjRender.h"                              // kjFastRender
+#include "corTree/CorNode.h"                             // CorNode
+#include "corTree/corTreeBuilder.h"                      // corTreeObject, corTreeString, corTreeInteger, corTreeChildAdd
+#include "corTree/corTreeLookup.h"                       // corTreeLookup
+#include "corTree/corTreeClone.h"                        // corTreeClone
+#include "corJson/corJsonRender.h"                       // corJsonFastRender
 
 #include "corRest/CorRestState.h"                          // corRest
 #include "corRest/corRestClient.h"                         // CorRestClientRequest, corRestClientSend, corRestClientRequestInit/Header/Body/Timeout
@@ -68,39 +68,39 @@ void ldSnapshotNotify(LdSnapshotCacheItem* itemP, bool deleted)
 {
   if (itemP == NULL || itemP->tree == NULL) return;
 
-  KjNode* endpointP = kjLookup(itemP->tree, "endpoint");
-  if (endpointP == NULL || endpointP->type != KjString || endpointP->value.s[0] == 0)
+  CorNode* endpointP = corTreeLookup(itemP->tree, "endpoint");
+  if (endpointP == NULL || endpointP->type != CorString || endpointP->value.s[0] == 0)
     return;
 
   // Build the SnapshotNotification body (§ 5.3.4).
-  KjNode* notifP = kjObject(corRest.kjsonP, NULL);
+  CorNode* notifP = corTreeObject(corRest.kallocP, NULL);
 
   uint64_t now    = corRest.requestStartTime;
   uint64_t expNs  = deleted ? (now > 1000000000ULL ? now - 1000000000ULL : 0)  // 1s in the past
                             : itemP->expiresAt;
 
-  kjChildAdd(notifP, kjString (corRest.kjsonP, "id",          generateNotificationId()));
-  kjChildAdd(notifP, kjString (corRest.kjsonP, "type",        "SnapshotNotification"));
-  kjChildAdd(notifP, kjString (corRest.kjsonP, "notifiedAt",  nsToIso(now)));
-  kjChildAdd(notifP, kjString (corRest.kjsonP, "expiresAt",   nsToIso(expNs)));
-  kjChildAdd(notifP, kjString (corRest.kjsonP, "snapshotId",  (char*) itemP->id));
-  kjChildAdd(notifP, kjInteger(corRest.kjsonP, "snapshotPriority", itemP->priority));
+  corTreeChildAdd(notifP, corTreeString (corRest.kallocP, "id", generateNotificationId()));
+  corTreeChildAdd(notifP, corTreeString (corRest.kallocP, "type", "SnapshotNotification"));
+  corTreeChildAdd(notifP, corTreeString (corRest.kallocP, "notifiedAt", nsToIso(now)));
+  corTreeChildAdd(notifP, corTreeString (corRest.kallocP, "expiresAt", nsToIso(expNs)));
+  corTreeChildAdd(notifP, corTreeString (corRest.kallocP, "snapshotId", (char*) itemP->id));
+  corTreeChildAdd(notifP, corTreeInteger(corRest.kallocP, "snapshotPriority", itemP->priority));
 
   // snapshotStatus — when the notification signals deletion the spec
   // doesn't constrain the status field directly; the past expiresAt
   // is the deletion signal. Emit the in-cache status either way.
-  KjNode* statusP = kjLookup(itemP->tree, "snapshotStatus");
-  const char* statusStr = (statusP != NULL && statusP->type == KjString) ? statusP->value.s : "preparing";
-  kjChildAdd(notifP, kjString(corRest.kjsonP, "snapshotStatus", (char*) statusStr));
+  CorNode* statusP = corTreeLookup(itemP->tree, "snapshotStatus");
+  const char* statusStr = (statusP != NULL && statusP->type == CorString) ? statusP->value.s : "preparing";
+  corTreeChildAdd(notifP, corTreeString(corRest.kallocP, "snapshotStatus", (char*) statusStr));
 
   // snapshotQueriesDetails — copy whatever the cache holds.
-  KjNode* detailsP = kjLookup(itemP->tree, "snapshotQueriesDetails");
+  CorNode* detailsP = corTreeLookup(itemP->tree, "snapshotQueriesDetails");
   if (detailsP != NULL)
-    kjChildAdd(notifP, kjClone(corRest.kjsonP, detailsP));
+    corTreeChildAdd(notifP, corTreeClone(corRest.kallocP, detailsP));
 
   // Render to JSON.
   char* body = (char*) kaAlloc(&corRest.kalloc, 8192);
-  kjFastRender(notifP, body);
+  corJsonFastRender(notifP, body);
 
   // POST.
   CorRestClientRequest  req;
@@ -110,15 +110,15 @@ void ldSnapshotNotify(LdSnapshotCacheItem* itemP, bool deleted)
   corRestClientRequestHeader(&req, "Content-Type", "application/json");
 
   // § 5.16.6 / § 5.2.15 receiverInfo → HTTP headers.
-  KjNode* riP = kjLookup(itemP->tree, "receiverInfo");
-  if (riP != NULL && riP->type == KjArray)
+  CorNode* riP = corTreeLookup(itemP->tree, "receiverInfo");
+  if (riP != NULL && riP->type == CorArray)
   {
-    for (KjNode* kvP = riP->value.firstChildP; kvP != NULL; kvP = kvP->next)
+    for (CorNode* kvP = riP->value.firstChildP; kvP != NULL; kvP = kvP->next)
     {
-      if (kvP->type != KjObject) continue;
-      KjNode* kP = kjLookup(kvP, "key");
-      KjNode* vP = kjLookup(kvP, "value");
-      if (kP != NULL && kP->type == KjString && vP != NULL && vP->type == KjString)
+      if (kvP->type != CorObject) continue;
+      CorNode* kP = corTreeLookup(kvP, "key");
+      CorNode* vP = corTreeLookup(kvP, "value");
+      if (kP != NULL && kP->type == CorString && vP != NULL && vP->type == CorString)
       {
         const char* hv = ldRequestSubstitute(kP->value.s, vP->value.s);
         if (hv != NULL)

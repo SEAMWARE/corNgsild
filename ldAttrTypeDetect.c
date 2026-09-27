@@ -10,7 +10,7 @@
 #include <string.h>                                      // strcmp
 
 #include "kbase/kLibLog.h"                             // KLOG_T
-#include "kjson/KjNode.h"                               // KjNode
+#include "corTree/CorNode.h"                            // CorNode
 
 #include "corNgsild/LdVocab.h"                            // LD_VOCAB_*
 #include "corNgsild/ldTypes.h"                            // ldAttrTypeFromString, ldAttrTypeToString
@@ -38,23 +38,23 @@
 // same as Property). GeoProperty detection from value key alone is not possible
 // without also checking the GeoJSON structure, which is a validation concern.
 //
-LdAttrType ldAttrTypeDetect(KjNode* attrP)
+LdAttrType ldAttrTypeDetect(CorNode* attrP)
 {
   if (attrP == NULL)
     return LdAttrNone;
 
   // If it's not an object, it could be simplified format (plain value)
-  if (attrP->type != KjObject)
+  if (attrP->type != CorObject)
     return LdAttrNone;
 
   // Walk the children looking for "type" or value keys
   LdAttrType detected = LdAttrNone;
 
-  for (KjNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
   {
     if (strcmp(childP->name, "type") == 0)
     {
-      if (childP->type == KjString)
+      if (childP->type == CorString)
       {
         LdAttrType fromType = ldAttrTypeFromString(childP->value.s);
         if (fromType != LdAttrNone)
@@ -67,7 +67,7 @@ LdAttrType ldAttrTypeDetect(KjNode* attrP)
   }
 
   // No explicit type - infer from value key (expanded IRIs)
-  for (KjNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
   {
     if      (strcmp(childP->name, LD_VOCAB_HAS_VALUE)        == 0)  detected = LdAttrProperty;
     else if (strcmp(childP->name, LD_VOCAB_HAS_OBJECT)       == 0)  detected = LdAttrRelationship;

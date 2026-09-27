@@ -9,10 +9,11 @@
 #include <stddef.h>                                      // NULL
 #include <string.h>                                      // strcmp
 
-#include "kjson/KjNode.h"                                // KjNode
-#include "kjson/kjBuilder.h"                             // kjObject, kjString, kjArray, kjChildAdd, kjNull
-#include "kjson/kjLookup.h"                              // kjLookup
-#include "kjson/kjClone.h"                               // kjClone
+#include "kalloc/KAlloc.h"                               // KAlloc
+#include "corTree/CorNode.h"                             // CorNode
+#include "corTree/corTreeBuilder.h"                      // corTreeObject, corTreeString, corTreeArray, corTreeChildAdd, corTreeNull
+#include "corTree/corTreeLookup.h"                       // corTreeLookup
+#include "corTree/corTreeClone.h"                        // corTreeClone
 
 #include "corNgsild/CorNgsild.h"                           // corNgsild (geoJsonGeomForced)
 #include "corNgsild/ldToGeoJson.h"                        // Own interface
@@ -32,9 +33,9 @@
 // if absent and the attr itself has GeoJSON shape (`type` is one of the
 // geometry types + `coordinates`), use the attr directly.
 //
-static KjNode* extractGeometry(KjNode* entityP, const char* geoPropName, Kjson* kjsonP)
+static CorNode* extractGeometry(CorNode* entityP, const char* geoPropName, KAlloc* allocP)
 {
-  KjNode* attrP = kjLookup(entityP, geoPropName);
+  CorNode* attrP = corTreeLookup(entityP, geoPropName);
 
   if (attrP == NULL)
     return NULL;
@@ -43,12 +44,12 @@ static KjNode* extractGeometry(KjNode* entityP, const char* geoPropName, Kjson* 
   // attribute arrives here as an array of instances. Select the DEFAULT instance
   // (the one without a datasetId); if there is no default, the geometry is
   // undefined. A request datasetId has already collapsed the array to one object.
-  if (attrP->type == KjArray)
+  if (attrP->type == CorArray)
   {
-    KjNode* defaultInstanceP = NULL;
-    for (KjNode* instanceP = attrP->value.firstChildP; instanceP != NULL; instanceP = instanceP->next)
+    CorNode* defaultInstanceP = NULL;
+    for (CorNode* instanceP = attrP->value.firstChildP; instanceP != NULL; instanceP = instanceP->next)
     {
-      if (instanceP->type == KjObject && kjLookup(instanceP, "datasetId") == NULL)
+      if (instanceP->type == CorObject && corTreeLookup(instanceP, "datasetId") == NULL)
       {
         defaultInstanceP = instanceP;
         break;
@@ -61,19 +62,19 @@ static KjNode* extractGeometry(KjNode* entityP, const char* geoPropName, Kjson* 
     attrP = defaultInstanceP;
   }
 
-  if (attrP->type != KjObject)
+  if (attrP->type != CorObject)
     return NULL;
 
-  KjNode* valueP = kjLookup(attrP, "value");
+  CorNode* valueP = corTreeLookup(attrP, "value");
 
-  if (valueP != NULL && valueP->type == KjObject)
-    return kjClone(kjsonP, valueP);
+  if (valueP != NULL && valueP->type == CorObject)
+    return corTreeClone(allocP, valueP);
 
   // Simplified — the attribute IS the geometry. Cheap shape check: a
   // GeoJSON geometry has a string `type` whose value is one of the
   // standard geometry kinds.
-  KjNode* typeP = kjLookup(attrP, "type");
-  if (typeP == NULL || typeP->type != KjString)
+  CorNode* typeP = corTreeLookup(attrP, "type");
+  if (typeP == NULL || typeP->type != CorString)
     return NULL;
 
   // NGSI-LD § 4.7.1 / § 4.6.1: all GeoJSON geometries are allowed
@@ -87,7 +88,7 @@ static KjNode* extractGeometry(KjNode* entityP, const char* geoPropName, Kjson* 
       strcmp(t, "MultiPolygon")    != 0)
     return NULL;
 
-  return kjClone(kjsonP, attrP);
+  return corTreeClone(allocP, attrP);
 }
 
 
@@ -96,37 +97,37 @@ static KjNode* extractGeometry(KjNode* entityP, const char* geoPropName, Kjson* 
 //
 // entityToFeature - wrap a single entity as a GeoJSON Feature
 //
-static KjNode* entityToFeature(KjNode* entityP, const char* geoPropName, Kjson* kjsonP)
+static CorNode* entityToFeature(CorNode* entityP, const char* geoPropName, KAlloc* allocP)
 {
-  KjNode* feature = kjObject(kjsonP, NULL);
+  CorNode* feature = corTreeObject(allocP, NULL);
 
   // "type": "Feature"
-  kjChildAdd(feature, kjString(kjsonP, "type", "Feature"));
+  corTreeChildAdd(feature, corTreeString(allocP, "type", "Feature"));
 
   // "id": entity id
-  KjNode* idP = kjLookup(entityP, "id");
-  if (idP != NULL && idP->type == KjString)
-    kjChildAdd(feature, kjString(kjsonP, "id", idP->value.s));
+  CorNode* idP = corTreeLookup(entityP, "id");
+  if (idP != NULL && idP->type == CorString)
+    corTreeChildAdd(feature, corTreeString(allocP, "id", idP->value.s));
 
   // "geometry": extracted from the selected GeoProperty
-  KjNode* geometry = extractGeometry(entityP, geoPropName, kjsonP);
+  CorNode* geometry = extractGeometry(entityP, geoPropName, allocP);
   if (geometry != NULL)
   {
     geometry->name = (char*) "geometry";
-    kjChildAdd(feature, geometry);
+    corTreeChildAdd(feature, geometry);
   }
   else
   {
-    kjChildAdd(feature, kjNull(kjsonP, "geometry"));
+    corTreeChildAdd(feature, corTreeNull(allocP, "geometry"));
   }
 
   // "properties": clone the entity, remove "id" (already at Feature level)
-  KjNode* properties = kjClone(kjsonP, entityP);
+  CorNode* properties = corTreeClone(allocP, entityP);
   properties->name = (char*) "properties";
 
-  KjNode* propsId = kjLookup(properties, "id");
+  CorNode* propsId = corTreeLookup(properties, "id");
   if (propsId != NULL)
-    kjChildRemove(properties, propsId);
+    corTreeChildRemove(properties, propsId);
 
   // The geometry GeoProperty was protected from the pick/omit/attrs projection
   // so the "geometry" field above could be built (§ 5.3.3.2). If the user's
@@ -134,12 +135,12 @@ static KjNode* entityToFeature(KjNode* entityP, const char* geoPropName, Kjson* 
   // "properties" (§ 5.3.3.3.1: properties honour the projection rules).
   if (corNgsild.geoJsonGeomForced)
   {
-    KjNode* geoProp = kjLookup(properties, geoPropName);
+    CorNode* geoProp = corTreeLookup(properties, geoPropName);
     if (geoProp != NULL)
-      kjChildRemove(properties, geoProp);
+      corTreeChildRemove(properties, geoProp);
   }
 
-  kjChildAdd(feature, properties);
+  corTreeChildAdd(feature, properties);
 
   return feature;
 }
@@ -150,34 +151,34 @@ static KjNode* entityToFeature(KjNode* entityP, const char* geoPropName, Kjson* 
 //
 // ldToGeoJson - transform response tree to GeoJSON
 //
-void ldToGeoJson(KjNode** treePP, const char* geometryProperty, Kjson* kjsonP)
+void ldToGeoJson(CorNode** treePP, const char* geometryProperty, KAlloc* allocP)
 {
-  KjNode* treeP = *treePP;
+  CorNode* treeP = *treePP;
   if (treeP == NULL)
     return;
 
   const char* geoPropName = (geometryProperty != NULL) ? geometryProperty : "location";
 
-  if (treeP->type == KjObject)
+  if (treeP->type == CorObject)
   {
     // Single entity -> Feature
-    *treePP = entityToFeature(treeP, geoPropName, kjsonP);
+    *treePP = entityToFeature(treeP, geoPropName, allocP);
   }
-  else if (treeP->type == KjArray)
+  else if (treeP->type == CorArray)
   {
     // Array of entities -> FeatureCollection
-    KjNode* fc = kjObject(kjsonP, NULL);
-    kjChildAdd(fc, kjString(kjsonP, "type", "FeatureCollection"));
+    CorNode* fc = corTreeObject(allocP, NULL);
+    corTreeChildAdd(fc, corTreeString(allocP, "type", "FeatureCollection"));
 
-    KjNode* features = kjArray(kjsonP, "features");
+    CorNode* features = corTreeArray(allocP, "features");
 
-    for (KjNode* entityP = treeP->value.firstChildP; entityP != NULL; entityP = entityP->next)
+    for (CorNode* entityP = treeP->value.firstChildP; entityP != NULL; entityP = entityP->next)
     {
-      KjNode* featureP = entityToFeature(entityP, geoPropName, kjsonP);
-      kjChildAdd(features, featureP);
+      CorNode* featureP = entityToFeature(entityP, geoPropName, allocP);
+      corTreeChildAdd(features, featureP);
     }
 
-    kjChildAdd(fc, features);
+    corTreeChildAdd(fc, features);
     *treePP = fc;
   }
 }

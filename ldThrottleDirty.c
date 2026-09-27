@@ -11,9 +11,9 @@
 #include <string.h>                                    // strdup, strcmp
 #include <stddef.h>                                    // NULL
 
-#include "kjson/KjNode.h"                              // KjNode
-#include "kjson/kjClone.h"                             // kjClone
-#include "kjson/kjFree.h"                              // kjFree
+#include "corTree/CorNode.h"                           // CorNode
+#include "corTree/corTreeClone.h"                      // corTreeClone
+#include "corTree/corTreeFree.h"                       // corTreeFree
 
 #include "corNgsild/ldSubscriptionNotify.h"            // LdNotifyEntityDelete
 #include "corNgsild/ldThrottleDirty.h"                 // Own interface
@@ -29,7 +29,7 @@ static void entryFreeContents(LdThrottleEntry* e)
   if (e->entityId != NULL)
     free(e->entityId);
   if (e->deleteState != NULL)
-    kjFree(e->deleteState);
+    corTreeFree(e->deleteState);
 }
 
 
@@ -43,7 +43,7 @@ void ldThrottleDirtyUpsert(LdSubCacheItem* itemP,
                            int             reasonsMask,
                            int             op,
                            uint64_t        deletedAtNs,
-                           KjNode*         entityP)
+                           CorNode*        entityP)
 {
   if (itemP == NULL || entityId == NULL)
     return;
@@ -87,8 +87,8 @@ void ldThrottleDirtyUpsert(LdSubCacheItem* itemP,
     e->op          = LdNotifyEntityDelete;
     e->deletedAtNs = deletedAtNs;
     if (e->deleteState != NULL)
-      kjFree(e->deleteState);
-    e->deleteState = (entityP != NULL) ? kjClone(NULL, entityP) : NULL;
+      corTreeFree(e->deleteState);
+    e->deleteState = (entityP != NULL) ? corTreeClone(NULL, entityP) : NULL;
   }
 
   pthread_mutex_unlock(&itemP->dirtyLock);

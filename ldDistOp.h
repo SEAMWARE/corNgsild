@@ -18,7 +18,7 @@
 //
 #include <stdbool.h>                                   // bool
 
-#include "kjson/KjNode.h"                              // KjNode
+#include "corTree/CorNode.h"                           // CorNode
 #include "corRest/CorRestVerb.h"                         // CorRestVerb
 #include "corRest/CorRestKeyValue.h"                     // CorRestKeyValue
 
@@ -191,7 +191,7 @@ typedef struct LdDistOpBatchResult
   int          statusCode;        // 0 on transport failure
   char*        responseBody;      // request-kalloc backing buffer; NULL if empty
   int          responseBodyLen;
-  KjNode*      responseTree;      // responseBody parsed once at reception; NULL if no/invalid body
+  CorNode*     responseTree;      // responseBody parsed once at reception; NULL if no/invalid body
   const char*  errorDetail;       // NULL on success; otherwise request-kalloc
   // The @context that travels WITH the response — the URL in the response's
   // json-ld#context Link header (application/json). NULL if the response
@@ -237,10 +237,10 @@ extern char* ldDistOpWarnings(LdDistOpBatchItem* itemV, LdDistOpBatchResult* res
 // carry per-CSR failures into the 207/409 response body. The error object
 // is rendered as a full ProblemDetails (RFC 7807) — type/title/status/detail.
 //
-// String fields are copied into corRest.kjsonP; callers may pass stack
+// String fields are copied into corRest.kallocP; callers may pass stack
 // buffers without lifetime concerns.
 //
-extern void ldDistOpBatchErrorAdd(KjNode*      errorsArrayP,
+extern void ldDistOpBatchErrorAdd(CorNode*     errorsArrayP,
                                   const char*  entityId,
                                   int          statusCode,
                                   const char*  errorType,
@@ -255,7 +255,7 @@ extern void ldDistOpBatchErrorAdd(KjNode*      errorsArrayP,
 // ldBatchErrorsSingleStatus - if every entry in errors[] has the same error
 // type, return the corresponding HTTP status; otherwise -1 (caller -> 207).
 //
-extern int ldBatchErrorsSingleStatus(KjNode* errorsArrayP);
+extern int ldBatchErrorsSingleStatus(CorNode* errorsArrayP);
 
 
 
@@ -265,7 +265,7 @@ extern int ldBatchErrorsSingleStatus(KjNode* errorsArrayP);
 // standalone ProblemDetails tree (type/title/detail), suitable as the body
 // of a single-status response.
 //
-extern KjNode* ldBatchErrorAsProblemDetails(KjNode* errorsArrayP);
+extern CorNode* ldBatchErrorAsProblemDetails(CorNode* errorsArrayP);
 
 
 
@@ -358,7 +358,7 @@ extern int ldDistOpEntriesBuild(
     bool                 perRi,
     const char*          riEntityIdCheck,    // non-NULL → require entityInfoCoversId
     const char*          riAttrIriCheck,     // non-NULL → require infoCoversAttr
-    KjNode*              errorsArrayP,
+    CorNode*             errorsArrayP,
     LdDistOpEntry**      entriesPP);
 
 // Dispatch the built entries concurrently via ldDistOpSendMulti.

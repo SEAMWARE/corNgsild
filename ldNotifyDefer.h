@@ -11,7 +11,7 @@
 
 #include <stdint.h>                              // uint64_t
 
-#include "kjson/KjNode.h"                        // KjNode
+#include "corTree/CorNode.h"                     // CorNode
 #include "corNgsild/ldSubCache.h"                 // LdSubCache
 #include "corNgsild/ldSubscriptionNotify.h"       // LdNotifyOp, LdNotifyPendingEntry
 #include "corNgsild/ldEntityMerge.h"              // LdMergeReport
@@ -35,7 +35,7 @@
 // copied by value so the caller's stack frame can go out of scope.
 //
 extern void ldNotifyDefer(LdSubCache*     cacheP,
-                          KjNode*         entityP,
+                          CorNode*        entityP,
                           LdNotifyOp      op,
                           LdMergeReport*  reportP);
 
@@ -50,7 +50,7 @@ extern void ldNotifyDefer(LdSubCache*     cacheP,
 // deletedAtNs is the epoch-ns timestamp to emit on the notification.
 //
 extern void ldNotifyDeferDelete(LdSubCache* cacheP,
-                                KjNode*     entityP,
+                                CorNode*    entityP,
                                 uint64_t    deletedAtNs);
 
 

@@ -10,8 +10,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 #include "kalloc/KAlloc.h"                              // KAlloc
-#include "kjson/kjson.h"                                // Kjson
-#include "kjson/KjNode.h"                               // KjNode
+#include "corTree/CorNode.h"                            // CorNode
 
 
 
@@ -19,7 +18,7 @@
 //
 // ldToTemporalValues - § 4.5.8 simplified temporal representation.
 //
-// Transforms the temporal entity tree (each attribute is a KjArray of
+// Transforms the temporal entity tree (each attribute is a CorArray of
 // instance objects with type/value/observedAt/...) into:
 //
 //   "<attrName>": {
@@ -29,12 +28,12 @@
 //
 // Relationship → "objects", LanguageProperty → "languageMaps".
 //
-// Single-entity tree (KjObject) and multi-entity tree (KjArray of entities)
+// Single-entity tree (CorObject) and multi-entity tree (CorArray of entities)
 // are both handled — the caller passes the responseTree as-is.
 //
 // timeProp picks which timestamp goes into each [value, ts] pair:
 // "observedAt" (default) | "modifiedAt" | "createdAt".
 //
-extern void ldToTemporalValues(KjNode* treeP, const char* timeProp, Kjson* kjsonP, KAlloc* faP);
+extern void ldToTemporalValues(CorNode* treeP, const char* timeProp, KAlloc* allocP, KAlloc* faP);
 
 #endif  // CORNGSILD_LDTOTEMPORALVALUES_H_

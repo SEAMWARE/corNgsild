@@ -12,8 +12,8 @@
 #include <stdio.h>                                // vsnprintf
 
 #include "ktrace/ktOut.h"                       // ktOut
-#include "kjson/KjNode.h"                       // KjNode
-#include "kjson/kjBuilder.h"                    // kjObject, kjString, kjChildAdd
+#include "corTree/CorNode.h"                    // CorNode
+#include "corTree/corTreeBuilder.h"             // corTreeObject, corTreeString, corTreeChildAdd
 #include "corRest/corRest.h"                      // corRest
 
 #include "corNgsild/CorNgsild.h"                   // corNgsild (geoConflictAttr)
@@ -73,9 +73,9 @@ void ldErrorExtraString(const char* name, const char* value)
     return;
 
   if (corRest.out.problemExtras == NULL)
-    corRest.out.problemExtras = kjObject(corRest.kjsonP, NULL);
+    corRest.out.problemExtras = corTreeObject(corRest.kallocP, NULL);
 
-  kjChildAdd(corRest.out.problemExtras, kjString(corRest.kjsonP, name, value));
+  corTreeChildAdd(corRest.out.problemExtras, corTreeString(corRest.kallocP, name, value));
 }
 
 
@@ -87,9 +87,9 @@ void ldErrorExtraString(const char* name, const char* value)
 void ldErrorExtraInt(const char* name, int value)
 {
   if (corRest.out.problemExtras == NULL)
-    corRest.out.problemExtras = kjObject(corRest.kjsonP, NULL);
+    corRest.out.problemExtras = corTreeObject(corRest.kallocP, NULL);
 
-  kjChildAdd(corRest.out.problemExtras, kjInteger(corRest.kjsonP, name, value));
+  corTreeChildAdd(corRest.out.problemExtras, corTreeInteger(corRest.kallocP, name, value));
 }
 
 

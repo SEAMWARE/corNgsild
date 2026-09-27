@@ -11,7 +11,7 @@
 // 
 //
 #include "kalloc/KAlloc.h"                             // KAlloc
-#include "kjson/KjNode.h"                               // KjNode
+#include "corTree/CorNode.h"                            // CorNode
 
 
 
@@ -19,6 +19,6 @@
 //
 // ldLangReduce - reduce LanguageProperty attributes to Property with matching language
 //
-extern void ldLangReduce(KjNode* entityP, const char* lang, KAlloc* faP);
+extern void ldLangReduce(CorNode* entityP, const char* lang, KAlloc* faP);
 
 #endif  // CORNGSILD_LDLANGREDUCE_H_

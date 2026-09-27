@@ -15,13 +15,14 @@
 #include "ktrace/kTrace.h"                             // KT_RE
 #include "kalloc/kaBufferInit.h"                       // kaBufferInit
 #include "kalloc/kaAlloc.h"                            // kaAlloc
-#include "kjson/KjNode.h"                              // KjNode
-#include "kjson/kjClone.h"                             // kjClone
-#include "kjson/kjFree.h"                              // kjFree
-#include "kjson/kjLookup.h"                            // kjLookup
-#include "kjson/kjBuilder.h"                           // kjChildRemove
-#include "kjson/kjRender.h"                            // kjFastRender
-#include "kjson/kjRenderSize.h"                        // kjFastRenderSize
+#include "kalloc/KAlloc.h"                             // KAlloc
+#include "corTree/CorNode.h"                           // CorNode
+#include "corTree/corTreeClone.h"                      // corTreeClone
+#include "corTree/corTreeFree.h"                       // corTreeFree
+#include "corTree/corTreeLookup.h"                     // corTreeLookup
+#include "corTree/corTreeBuilder.h"                    // corTreeChildRemove
+#include "corJson/corJsonRender.h"                     // corJsonFastRender
+#include "corJson/corJsonRenderSize.h"                 // corJsonFastRenderSize
 
 #include "corNgsild/ldTypes.h"                          // ldFormatFromString
 #include "corRest/CorRestIn.h"                    // corAcceptParse
@@ -45,9 +46,9 @@
 //
 // entitySelectorsExtract - parse the entities[] array into a linked list
 //
-static LdSubEntitySelector* entitySelectorsExtract(KjNode* entitiesP)
+static LdSubEntitySelector* entitySelectorsExtract(CorNode* entitiesP)
 {
-  if (entitiesP == NULL || entitiesP->type != KjArray)
+  if (entitiesP == NULL || entitiesP->type != CorArray)
     return NULL;
 
   LdSubEntitySelector* head = NULL;
@@ -57,9 +58,9 @@ static LdSubEntitySelector* entitySelectorsExtract(KjNode* entitiesP)
   // malloc-allocated LdTypeExpr and stashed it on corNgsild. Claim the
   // tree here (zero the slot so corNgsildReset doesn't free-double).
   int selIx = 0;
-  for (KjNode* selP = entitiesP->value.firstChildP; selP != NULL; selP = selP->next, selIx++)
+  for (CorNode* selP = entitiesP->value.firstChildP; selP != NULL; selP = selP->next, selIx++)
   {
-    if (selP->type != KjObject)
+    if (selP->type != CorObject)
       continue;
 
     LdSubEntitySelector* esP = (LdSubEntitySelector*) calloc(1, sizeof(LdSubEntitySelector));
@@ -67,8 +68,8 @@ static LdSubEntitySelector* entitySelectorsExtract(KjNode* entitiesP)
     // type — raw text kept for diagnostics. The parsed §4.17 tree
     // comes from the parse-once side channel populated during
     // validation; the cache owns it from here on.
-    KjNode* typeP = kjLookup(selP, "type");
-    if (typeP != NULL && typeP->type == KjString)
+    CorNode* typeP = corTreeLookup(selP, "type");
+    if (typeP != NULL && typeP->type == CorString)
     {
       esP->type = typeP->value.s;
       if (corNgsild.subEntityTypeExprsV != NULL && selIx < corNgsild.subEntityTypeExprsN)
@@ -79,13 +80,13 @@ static LdSubEntitySelector* entitySelectorsExtract(KjNode* entitiesP)
     }
 
     // id (borrowed pointer)
-    KjNode* idP = kjLookup(selP, "id");
-    if (idP != NULL && idP->type == KjString)
+    CorNode* idP = corTreeLookup(selP, "id");
+    if (idP != NULL && idP->type == CorString)
       esP->id = idP->value.s;
 
     // idPattern — compile regex
-    KjNode* patP = kjLookup(selP, LD_VOCAB_ID_PATTERN);
-    if (patP != NULL && patP->type == KjString)
+    CorNode* patP = corTreeLookup(selP, LD_VOCAB_ID_PATTERN);
+    if (patP != NULL && patP->type == CorString)
     {
       LdSubIdPattern* ripP = (LdSubIdPattern*) calloc(1, sizeof(LdSubIdPattern));
 
@@ -169,15 +170,15 @@ static char** watchedDatasetSplit(char** watchedV, KAlloc* kaP)
 // Returns NULL if watchedAttributes is absent (meaning all attributes are watched).
 // Strings are borrowed pointers into the cloned subTree.
 //
-static char** watchedAttrsExtract(KjNode* watchedP)
+static char** watchedAttrsExtract(CorNode* watchedP)
 {
-  if (watchedP == NULL || watchedP->type != KjArray)
+  if (watchedP == NULL || watchedP->type != CorArray)
     return NULL;
 
   // Count elements
   int count = 0;
-  for (KjNode* wP = watchedP->value.firstChildP; wP != NULL; wP = wP->next)
-    if (wP->type == KjString)
+  for (CorNode* wP = watchedP->value.firstChildP; wP != NULL; wP = wP->next)
+    if (wP->type == CorString)
       count++;
 
   if (count == 0)
@@ -186,9 +187,9 @@ static char** watchedAttrsExtract(KjNode* watchedP)
   char** v = (char**) malloc((count + 1) * sizeof(char*));
   int ix = 0;
 
-  for (KjNode* wP = watchedP->value.firstChildP; wP != NULL; wP = wP->next)
+  for (CorNode* wP = watchedP->value.firstChildP; wP != NULL; wP = wP->next)
   {
-    if (wP->type == KjString)
+    if (wP->type == CorString)
       v[ix++] = wP->value.s;  // borrowed pointer
   }
 
@@ -347,17 +348,17 @@ static void cacheItemRetireOrFree(LdSubCache* cacheP, LdSubCacheItem* itemP)
 // Returns NULL if absent or set to the urn:ngsi-ld:request substitution sentinel
 // (a per-notification value, not usable as a static notification parameter).
 //
-static const char* riHeaderValue(KjNode* riP, const char* name)
+static const char* riHeaderValue(CorNode* riP, const char* name)
 {
-  if (riP == NULL || riP->type != KjArray)
+  if (riP == NULL || riP->type != CorArray)
     return NULL;
 
-  for (KjNode* kvP = riP->value.firstChildP; kvP != NULL; kvP = kvP->next)
+  for (CorNode* kvP = riP->value.firstChildP; kvP != NULL; kvP = kvP->next)
   {
-    if (kvP->type != KjObject) continue;
-    KjNode* kP = kjLookup(kvP, "key");
-    KjNode* vP = kjLookup(kvP, "value");
-    if (kP == NULL || kP->type != KjString || vP == NULL || vP->type != KjString) continue;
+    if (kvP->type != CorObject) continue;
+    CorNode* kP = corTreeLookup(kvP, "key");
+    CorNode* vP = corTreeLookup(kvP, "value");
+    if (kP == NULL || kP->type != CorString || vP == NULL || vP->type != CorString) continue;
     if (strcasecmp(kP->value.s, name) == 0)
       return (strcmp(vP->value.s, "urn:ngsi-ld:request") == 0) ? NULL : vP->value.s;
   }
@@ -370,7 +371,7 @@ static const char* riHeaderValue(KjNode* riP, const char* name)
 //
 // ldSubCacheItemAdd -
 //
-LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* qExpr, LdFormat format)
+LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, CorNode* subTree, LdQNode* qExpr, LdFormat format)
 {
   if (cacheP == NULL || subTree == NULL)
     return NULL;
@@ -386,21 +387,21 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
   //
   // Clone the subscription tree (malloc allocator — persists across requests)
   //
-  itemP->subTree = kjClone(NULL, subTree);
+  itemP->subTree = corTreeClone(NULL, subTree);
 
   //
   // Extract subscription ID
   //
-  KjNode* idP = kjLookup(itemP->subTree, "id");
-  itemP->subId = (idP != NULL && idP->type == KjString) ? strdup(idP->value.s) : NULL;
+  CorNode* idP = corTreeLookup(itemP->subTree, "id");
+  itemP->subId = (idP != NULL && idP->type == CorString) ? strdup(idP->value.s) : NULL;
 
   //
   // Pre-parse matching fields from the cloned tree
   //
-  KjNode* entitiesP = kjLookup(itemP->subTree, LD_VOCAB_ENTITIES);
+  CorNode* entitiesP = corTreeLookup(itemP->subTree, LD_VOCAB_ENTITIES);
   itemP->entitySelectors = entitySelectorsExtract(entitiesP);
 
-  KjNode* watchedP = kjLookup(itemP->subTree, LD_VOCAB_WATCHED_ATTRS);
+  CorNode* watchedP = corTreeLookup(itemP->subTree, LD_VOCAB_WATCHED_ATTRS);
   itemP->watchedAttrsV = watchedAttrsExtract(watchedP);
   itemP->watchedDsV    = watchedDatasetSplit(itemP->watchedAttrsV, &cacheP->alloc);  // before the expansion: it is the NAME that expands
 
@@ -438,51 +439,51 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
   }
   else
   {
-    KjNode* qNodeP = kjLookup(itemP->subTree, "q");
-    if (qNodeP != NULL && qNodeP->type == KjString)
+    CorNode* qNodeP = corTreeLookup(itemP->subTree, "q");
+    if (qNodeP != NULL && qNodeP->type == CorString)
       itemP->qExpr = ldQParse(qNodeP->value.s, &cacheP->alloc);
   }
 
   // csf — the Context Source Filter. Only a Context Source Registration
   // Subscription consults it (§ 5.2.12); parsing it is harmless either way.
-  KjNode* csfNodeP = kjLookup(itemP->subTree, "csf");
-  if (csfNodeP != NULL && csfNodeP->type == KjString)
+  CorNode* csfNodeP = corTreeLookup(itemP->subTree, "csf");
+  if (csfNodeP != NULL && csfNodeP->type == CorString)
     itemP->csfExpr = ldQParse(csfNodeP->value.s, &cacheP->alloc);
 
   //
   // geoQ: { georel: "near;maxDistance==1000", geometry: "Point", coordinates: "[-3.7,40.4]", geoproperty: "location" }
   //
-  KjNode* geoQP = kjLookup(itemP->subTree, "geoQ");
-  if (geoQP != NULL && geoQP->type == KjObject)
+  CorNode* geoQP = corTreeLookup(itemP->subTree, "geoQ");
+  if (geoQP != NULL && geoQP->type == CorObject)
   {
-    KjNode* georelP   = kjLookup(geoQP, "georel");
-    KjNode* geomP     = kjLookup(geoQP, "geometry");
-    KjNode* coordsP   = kjLookup(geoQP, "coordinates");
-    KjNode* geopropP  = kjLookup(geoQP, "geoproperty");
+    CorNode* georelP  = corTreeLookup(geoQP, "georel");
+    CorNode* geomP    = corTreeLookup(geoQP, "geometry");
+    CorNode* coordsP  = corTreeLookup(geoQP, "coordinates");
+    CorNode* geopropP = corTreeLookup(geoQP, "geoproperty");
 
-    if (georelP != NULL && georelP->type == KjString)
+    if (georelP != NULL && georelP->type == CorString)
       itemP->geoRel = ldGeoRelParse(georelP->value.s, &cacheP->alloc);
 
-    if (geomP != NULL && geomP->type == KjString)
+    if (geomP != NULL && geomP->type == CorString)
       itemP->geoGeometry = geomP->value.s;  // borrowed pointer
 
-    if (coordsP != NULL && coordsP->type == KjString)
+    if (coordsP != NULL && coordsP->type == CorString)
       itemP->geoCoordinates = coordsP->value.s;  // borrowed pointer
-    else if (coordsP != NULL && coordsP->type == KjArray)
+    else if (coordsP != NULL && coordsP->type == CorArray)
     {
       // coordinates given as a native JSON array (GeoJSON form, e.g.
       // [[[lon,lat],...]]) — render it to the JSON-array string that
       // geoMatchFunc/geojsonToGeos expects. Stored in the cache alloc.
-      int   len = kjFastRenderSize(coordsP) + 1;
+      int   len = corJsonFastRenderSize(coordsP) + 1;
       char* buf = (char*) kaAlloc(&cacheP->alloc, len);
       if (buf != NULL)
       {
-        kjFastRender(coordsP, buf);
+        corJsonFastRender(coordsP, buf);
         itemP->geoCoordinates = buf;
       }
     }
 
-    if (geopropP != NULL && geopropP->type == KjString)
+    if (geopropP != NULL && geopropP->type == CorString)
     {
       // The value may be a short name (e.g. "location") — expand it
       if (corLdAlreadyExpanded(geopropP->value.s))
@@ -496,17 +497,17 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
     }
   }
 
-  KjNode* scopeQP = kjLookup(itemP->subTree, "scopeQ");
-  if (scopeQP != NULL && scopeQP->type == KjString)
+  CorNode* scopeQP = corTreeLookup(itemP->subTree, "scopeQ");
+  if (scopeQP != NULL && scopeQP->type == CorString)
     itemP->scopeExpr = ldScopeExprParse(scopeQP->value.s, &cacheP->alloc);
 
-  KjNode* triggerP = kjLookup(itemP->subTree, "notificationTrigger");
-  if (triggerP != NULL && triggerP->type == KjArray)
+  CorNode* triggerP = corTreeLookup(itemP->subTree, "notificationTrigger");
+  if (triggerP != NULL && triggerP->type == CorArray)
   {
     itemP->triggerMask = 0;
-    for (KjNode* tP = triggerP->value.firstChildP; tP != NULL; tP = tP->next)
+    for (CorNode* tP = triggerP->value.firstChildP; tP != NULL; tP = tP->next)
     {
-      if (tP->type == KjString)
+      if (tP->type == CorString)
         itemP->triggerMask |= ldTriggerFromString(tP->value.s);
     }
   }
@@ -515,90 +516,90 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
   //
   // Extract state fields (borrowed pointers into cloned tree)
   //
-  KjNode* statusP = kjLookup(itemP->subTree, LD_VOCAB_STATUS);
-  itemP->status = ldSubStatusFromString((statusP != NULL && statusP->type == KjString) ? statusP->value.s : NULL);
+  CorNode* statusP = corTreeLookup(itemP->subTree, LD_VOCAB_STATUS);
+  itemP->status = ldSubStatusFromString((statusP != NULL && statusP->type == CorString) ? statusP->value.s : NULL);
 
   // 'notification' is mandatory (validated on every write). A subscription that
   // reaches the cache without one means the stored document is corrupt — refuse
   // to cache it rather than silently fabricate defaults for the missing members.
-  KjNode* notifP = kjLookup(itemP->subTree, LD_VOCAB_NOTIFICATION);
+  CorNode* notifP = corTreeLookup(itemP->subTree, LD_VOCAB_NOTIFICATION);
   if (notifP == NULL)
     KT_RE(NULL, "Corrupted DB: subscription '%s' has no 'notification' (a mandatory member) — refusing to cache it",
           itemP->subId ? itemP->subId : "?");
 
-  KjNode* endpointP = kjLookup(notifP, LD_VOCAB_ENDPOINT);
-  KjNode* uriP      = (endpointP != NULL) ? kjLookup(endpointP, LD_VOCAB_URI) : NULL;
-  itemP->endpointUri = (uriP != NULL && uriP->type == KjString) ? uriP->value.s : NULL;
+  CorNode* endpointP = corTreeLookup(notifP, LD_VOCAB_ENDPOINT);
+  CorNode* uriP     = (endpointP != NULL) ? corTreeLookup(endpointP, LD_VOCAB_URI) : NULL;
+  itemP->endpointUri = (uriP != NULL && uriP->type == CorString) ? uriP->value.s : NULL;
 
   // § 5.2.15 endpoint.accept — application/json | application/ld+json |
   // application/geo+json. Accepted both expanded and short forms.
-  KjNode* acceptP = NULL;
+  CorNode* acceptP = NULL;
   if (endpointP != NULL)
   {
-    acceptP = kjLookup(endpointP, "https://uri.etsi.org/ngsi-ld/accept");
-    if (acceptP == NULL) acceptP = kjLookup(endpointP, "accept");
+    acceptP = corTreeLookup(endpointP, "https://uri.etsi.org/ngsi-ld/accept");
+    if (acceptP == NULL) acceptP = corTreeLookup(endpointP, "accept");
   }
-  itemP->endpointAccept = corAcceptParse((acceptP != NULL && acceptP->type == KjString) ? acceptP->value.s : NULL);
+  itemP->endpointAccept = corAcceptParse((acceptP != NULL && acceptP->type == CorString) ? acceptP->value.s : NULL);
 
   // A receiverInfo Content-Type acts as endpoint.accept when accept is absent
   // (validated consistent in ldCheckSubscription). It is then NOT re-emitted as
   // a receiverInfo header — the broker emits this single Content-Type.
   if (acceptP == NULL && endpointP != NULL)
   {
-    const char* riCt = riHeaderValue(kjLookup(endpointP, "receiverInfo"), "Content-Type");
+    const char* riCt = riHeaderValue(corTreeLookup(endpointP, "receiverInfo"), "Content-Type");
     if (riCt != NULL)
       itemP->endpointAccept = corAcceptParse(riCt);
   }
 
   // § 5.2.12 / § 4.3.6.8 ngsildConformance — back-compat target version
-  KjNode* ncP = kjLookup(itemP->subTree, "ngsildConformance");
+  CorNode* ncP = corTreeLookup(itemP->subTree, "ngsildConformance");
   itemP->conformanceMajor = 0;
   itemP->conformanceMinor = 0;
-  if (ncP != NULL && ncP->type == KjString)
+  if (ncP != NULL && ncP->type == CorString)
     ldConformanceParse(ncP->value.s, &itemP->conformanceMajor, &itemP->conformanceMinor);
 
   // § 5.2.15 endpoint.cooldown — minimum delay (ms) before retrying after
   // a failure on the same endpoint. Convert to ns; 0 means "use the default".
-  KjNode* coolP = (endpointP != NULL) ? kjLookup(endpointP, "cooldown") : NULL;
-  if (coolP != NULL && (coolP->type == KjInt || coolP->type == KjFloat))
+  CorNode* coolP = (endpointP != NULL) ? corTreeLookup(endpointP, "cooldown") : NULL;
+  if (coolP != NULL && (coolP->type == CorInt || coolP->type == CorFloat))
   {
-    double ms = (coolP->type == KjInt) ? (double) coolP->value.i : coolP->value.f;
+    double ms = (coolP->type == CorInt) ? (double) coolP->value.i : coolP->value.f;
     if (ms > 0)
       itemP->cooldownNs = (uint64_t) (ms * 1000000.0);
   }
 
   // § 5.2.15 endpoint.timeout — maximum ms to wait for a notification reply.
-  KjNode* tmoP = (endpointP != NULL) ? kjLookup(endpointP, "timeout") : NULL;
-  if (tmoP != NULL && (tmoP->type == KjInt || tmoP->type == KjFloat))
+  CorNode* tmoP = (endpointP != NULL) ? corTreeLookup(endpointP, "timeout") : NULL;
+  if (tmoP != NULL && (tmoP->type == CorInt || tmoP->type == CorFloat))
   {
-    double ms = (tmoP->type == KjInt) ? (double) tmoP->value.i : tmoP->value.f;
+    double ms = (tmoP->type == CorInt) ? (double) tmoP->value.i : tmoP->value.f;
     if (ms > 0)
       itemP->timeoutMs = (int) ms;
   }
 
   // § 5.2.15 endpoint.receiverInfo — KeyValuePair[] forwarded as outbound headers.
-  KjNode* riP = (endpointP != NULL) ? kjLookup(endpointP, "receiverInfo") : NULL;
-  if (riP != NULL && riP->type == KjArray)
+  CorNode* riP = (endpointP != NULL) ? corTreeLookup(endpointP, "receiverInfo") : NULL;
+  if (riP != NULL && riP->type == CorArray)
     itemP->receiverInfo = riP;
 
   // § 5.2.15 endpoint.notifierInfo — KeyValuePair[] used by transport-
   // specific protocol parameters (e.g. MQTT-QoS, MQTT-Version per § 7.2).
-  KjNode* niP = (endpointP != NULL) ? kjLookup(endpointP, "notifierInfo") : NULL;
-  if (niP != NULL && niP->type == KjArray)
+  CorNode* niP = (endpointP != NULL) ? corTreeLookup(endpointP, "notifierInfo") : NULL;
+  if (niP != NULL && niP->type == CorArray)
     itemP->notifierInfo = niP;
 
   // § 5.2.14 notification.join + notification.joinLevel — linked-entity retrieval (§ 4.5.23)
-  KjNode* joinP      = (notifP != NULL) ? kjLookup(notifP, "join")      : NULL;
-  KjNode* joinLevelP = (notifP != NULL) ? kjLookup(notifP, "joinLevel") : NULL;
-  if (joinP != NULL && joinP->type == KjString)
+  CorNode* joinP     = (notifP != NULL) ? corTreeLookup(notifP, "join") : NULL;
+  CorNode* joinLevelP = (notifP != NULL) ? corTreeLookup(notifP, "joinLevel") : NULL;
+  if (joinP != NULL && joinP->type == CorString)
   {
     itemP->notifJoin       = joinP->value.s;
     itemP->notifJoinActive = (strcmp(joinP->value.s, "@none") != 0);
   }
-  if (joinLevelP != NULL && joinLevelP->type == KjInt && joinLevelP->value.i > 0)
+  if (joinLevelP != NULL && joinLevelP->type == CorInt && joinLevelP->value.i > 0)
     itemP->notifJoinLevel = (int) joinLevelP->value.i;
 
-  KjNode* notifAttrsP = (notifP != NULL) ? kjLookup(notifP, LD_VOCAB_ATTRIBUTES) : NULL;
+  CorNode* notifAttrsP = (notifP != NULL) ? corTreeLookup(notifP, LD_VOCAB_ATTRIBUTES) : NULL;
   itemP->notifAttrsV = watchedAttrsExtract(notifAttrsP);  // reuse same helper (NULL-term string array)
 
   // Expand short names in notifAttrsV using the request's @context — see
@@ -616,8 +617,8 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
   // notification.pick / notification.omit (§ 5.2.14, § 4.21). Same expansion
   // semantics as notifAttrsV — short attribute names get IRI-expanded; the
   // "id"/"type"/"scope" keywords pass through unchanged.
-  KjNode* pickP = (notifP != NULL) ? kjLookup(notifP, "pick") : NULL;
-  KjNode* omitP = (notifP != NULL) ? kjLookup(notifP, "omit") : NULL;
+  CorNode* pickP = (notifP != NULL) ? corTreeLookup(notifP, "pick") : NULL;
+  CorNode* omitP = (notifP != NULL) ? corTreeLookup(notifP, "omit") : NULL;
   itemP->notifPickV = watchedAttrsExtract(pickP);
   itemP->notifOmitV = watchedAttrsExtract(omitP);
   for (int j = 0; j < 2; j++)
@@ -633,16 +634,16 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
   }
 
   // Subscription-level lang (§ 4.15) — applied to LanguageMap attrs at notify time.
-  KjNode* langP = kjLookup(itemP->subTree, "lang");
-  itemP->lang = (langP != NULL && langP->type == KjString) ? langP->value.s : NULL;
+  CorNode* langP = corTreeLookup(itemP->subTree, "lang");
+  itemP->lang = (langP != NULL && langP->type == CorString) ? langP->value.s : NULL;
 
   // datasetId: list of dataset IDs to include in notifications (NULL = all instances)
   // Values are URIs or "@none" (default instance) — no expansion needed.
-  KjNode* datasetIdP = kjLookup(itemP->subTree, LD_VOCAB_DATASET_ID);
+  CorNode* datasetIdP = corTreeLookup(itemP->subTree, LD_VOCAB_DATASET_ID);
   itemP->datasetIdV = watchedAttrsExtract(datasetIdP);  // reuse: builds NULL-term string array
 
-  KjNode* expiresP = kjLookup(itemP->subTree, LD_VOCAB_EXPIRES_AT);
-  if (expiresP != NULL && expiresP->type == KjString)
+  CorNode* expiresP = corTreeLookup(itemP->subTree, LD_VOCAB_EXPIRES_AT);
+  if (expiresP != NULL && expiresP->type == CorString)
     itemP->expiresAt = ldIsoToNanoseconds(expiresP->value.s);
 
   // The write paths pass the format already parsed (and value-checked) by
@@ -654,8 +655,8 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
     itemP->format = format;
   else
   {
-    KjNode* formatP = kjLookup(notifP, LD_VOCAB_FORMAT);
-    if (formatP != NULL && formatP->type != KjString)
+    CorNode* formatP = corTreeLookup(notifP, LD_VOCAB_FORMAT);
+    if (formatP != NULL && formatP->type != CorString)
       KT_RE(NULL, "Corrupted DB: subscription '%s' has a non-string 'notification.format' — refusing to cache it",
             itemP->subId ? itemP->subId : "?");
     // A subscription notification format is always an entity representation,
@@ -665,10 +666,10 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
 
   if (notifP != NULL)
   {
-    KjNode* sysP  = kjLookup(notifP, "sysAttrs");
-    KjNode* showP = kjLookup(notifP, "showChanges");
-    itemP->sysAttrs    = (sysP  != NULL && sysP->type  == KjBoolean && sysP->value.b  == true);
-    itemP->showChanges = (showP != NULL && showP->type == KjBoolean && showP->value.b == true);
+    CorNode* sysP = corTreeLookup(notifP, "sysAttrs");
+    CorNode* showP = corTreeLookup(notifP, "showChanges");
+    itemP->sysAttrs    = (sysP  != NULL && sysP->type  == CorBoolean && sysP->value.b == true);
+    itemP->showChanges = (showP != NULL && showP->type == CorBoolean && showP->value.b == true);
   }
 
   // User-provided `jsonldContext` (the spec-visible field) wins; otherwise a
@@ -676,11 +677,11 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
   // fall back to `_jcResolved`, the broker-filled internal URL written by
   // postSubscriptions when the user didn't supply one. (Precedence:
   // jsonldContext > receiverInfo Link > _jcResolved.)
-  KjNode* jcP        = kjLookup(itemP->subTree, "jsonldContext");
-  bool    explicitJc = (jcP != NULL && jcP->type == KjString);
+  CorNode* jcP       = corTreeLookup(itemP->subTree, "jsonldContext");
+  bool    explicitJc = (jcP != NULL && jcP->type == CorString);
   if (!explicitJc)
-    jcP = kjLookup(itemP->subTree, "_jcResolved");
-  itemP->contextUrl = (jcP != NULL && jcP->type == KjString) ? jcP->value.s : NULL;
+    jcP = corTreeLookup(itemP->subTree, "_jcResolved");
+  itemP->contextUrl = (jcP != NULL && jcP->type == CorString) ? jcP->value.s : NULL;
 
   if (!explicitJc)
   {
@@ -705,11 +706,11 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
     }
   }
 
-  KjNode* throttlingP = kjLookup(itemP->subTree, LD_VOCAB_THROTTLING);
+  CorNode* throttlingP = corTreeLookup(itemP->subTree, LD_VOCAB_THROTTLING);
   if (throttlingP != NULL)
   {
-    if (throttlingP->type == KjFloat)  itemP->throttling = throttlingP->value.f;
-    if (throttlingP->type == KjInt)    itemP->throttling = (double) throttlingP->value.i;
+    if (throttlingP->type == CorFloat) itemP->throttling = throttlingP->value.f;
+    if (throttlingP->type == CorInt)   itemP->throttling = (double) throttlingP->value.i;
   }
 
   //
@@ -717,32 +718,32 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
   // flush persisted them). Extract into cache fields and remove from the
   // stored subTree so nothing downstream produces duplicates.
   //
-  if (notifP != NULL && notifP->type == KjObject)
+  if (notifP != NULL && notifP->type == CorObject)
   {
-    KjNode* tsP = kjLookup(notifP, "timesSent");
-    KjNode* tfP = kjLookup(notifP, "timesFailed");
-    KjNode* lnP = kjLookup(notifP, "lastNotification");
-    KjNode* lsP = kjLookup(notifP, "lastSuccess");
-    KjNode* lfP = kjLookup(notifP, "lastFailure");
+    CorNode* tsP = corTreeLookup(notifP, "timesSent");
+    CorNode* tfP = corTreeLookup(notifP, "timesFailed");
+    CorNode* lnP = corTreeLookup(notifP, "lastNotification");
+    CorNode* lsP = corTreeLookup(notifP, "lastSuccess");
+    CorNode* lfP = corTreeLookup(notifP, "lastFailure");
 
-    if (tsP != NULL && tsP->type == KjInt) itemP->timesSent   = (int) tsP->value.i;
-    if (tfP != NULL && tfP->type == KjInt) itemP->timesFailed = (int) tfP->value.i;
+    if (tsP != NULL && tsP->type == CorInt) itemP->timesSent  = (int) tsP->value.i;
+    if (tfP != NULL && tfP->type == CorInt) itemP->timesFailed = (int) tfP->value.i;
     // last* timestamps are stored as int64 nanoseconds in mongo; tolerate
     // ISO strings for any older persisted docs.
     if (lnP != NULL)
     {
-      if      (lnP->type == KjInt)    itemP->lastNotification = (uint64_t) lnP->value.i;
-      else if (lnP->type == KjString) itemP->lastNotification = ldIsoToNanoseconds(lnP->value.s);
+      if      (lnP->type == CorInt)   itemP->lastNotification = (uint64_t) lnP->value.i;
+      else if (lnP->type == CorString) itemP->lastNotification = ldIsoToNanoseconds(lnP->value.s);
     }
     if (lsP != NULL)
     {
-      if      (lsP->type == KjInt)    itemP->lastSuccess = (uint64_t) lsP->value.i;
-      else if (lsP->type == KjString) itemP->lastSuccess = ldIsoToNanoseconds(lsP->value.s);
+      if      (lsP->type == CorInt)   itemP->lastSuccess = (uint64_t) lsP->value.i;
+      else if (lsP->type == CorString) itemP->lastSuccess = ldIsoToNanoseconds(lsP->value.s);
     }
     if (lfP != NULL)
     {
-      if      (lfP->type == KjInt)    itemP->lastFailure = (uint64_t) lfP->value.i;
-      else if (lfP->type == KjString) itemP->lastFailure = ldIsoToNanoseconds(lfP->value.s);
+      if      (lfP->type == CorInt)   itemP->lastFailure = (uint64_t) lfP->value.i;
+      else if (lfP->type == CorString) itemP->lastFailure = ldIsoToNanoseconds(lfP->value.s);
     }
 
     // Seed the "last flushed" watermarks to match what was just loaded —
@@ -750,14 +751,14 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
     itemP->lastFlushedSent   = itemP->timesSent;
     itemP->lastFlushedFailed = itemP->timesFailed;
 
-    // kjChildRemove only unlinks; subTree is a malloc clone (kjClone), so free
+    // corTreeChildRemove only unlinks; subTree is a malloc clone (corTreeClone), so free
     // each stripped stat node or it leaks (definite-lost on reload of a sub that
     // had persisted stats — i.e. was flushed before a restart).
-    if (tsP != NULL) { kjChildRemove(notifP, tsP); kjFree(tsP); }
-    if (tfP != NULL) { kjChildRemove(notifP, tfP); kjFree(tfP); }
-    if (lnP != NULL) { kjChildRemove(notifP, lnP); kjFree(lnP); }
-    if (lsP != NULL) { kjChildRemove(notifP, lsP); kjFree(lsP); }
-    if (lfP != NULL) { kjChildRemove(notifP, lfP); kjFree(lfP); }
+    if (tsP != NULL) { corTreeChildRemove(notifP, tsP); corTreeFree(tsP); }
+    if (tfP != NULL) { corTreeChildRemove(notifP, tfP); corTreeFree(tfP); }
+    if (lnP != NULL) { corTreeChildRemove(notifP, lnP); corTreeFree(lnP); }
+    if (lsP != NULL) { corTreeChildRemove(notifP, lsP); corTreeFree(lsP); }
+    if (lfP != NULL) { corTreeChildRemove(notifP, lfP); corTreeFree(lfP); }
   }
 
   //
@@ -767,27 +768,27 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
   // alongside the rest of the sub doc. Read into cache fields and strip
   // from subTree so the GET path doesn't echo them.
   //
-  KjNode* subListP = kjLookup(itemP->subTree, "_subordinates");
+  CorNode* subListP = corTreeLookup(itemP->subTree, "_subordinates");
   if (subListP != NULL)
   {
-    if (subListP->type == KjArray)
+    if (subListP->type == CorArray)
     {
       LdSubSubordinate* tail = NULL;
-      for (KjNode* entryP = subListP->value.firstChildP; entryP != NULL; entryP = entryP->next)
+      for (CorNode* entryP = subListP->value.firstChildP; entryP != NULL; entryP = entryP->next)
       {
-        if (entryP->type != KjObject) continue;
+        if (entryP->type != CorObject) continue;
 
-        KjNode* idP    = kjLookup(entryP, "id");
-        KjNode* regIdP = kjLookup(entryP, "regId");
-        KjNode* runP   = kjLookup(entryP, "runNo");
+        CorNode* idP   = corTreeLookup(entryP, "id");
+        CorNode* regIdP = corTreeLookup(entryP, "regId");
+        CorNode* runP  = corTreeLookup(entryP, "runNo");
 
-        if (idP    == NULL || idP->type    != KjString) continue;
-        if (regIdP == NULL || regIdP->type != KjString) continue;
+        if (idP    == NULL || idP->type    != CorString) continue;
+        if (regIdP == NULL || regIdP->type != CorString) continue;
 
         LdSubSubordinate* node = (LdSubSubordinate*) calloc(1, sizeof(LdSubSubordinate));
         node->remoteSubId = strdup(idP->value.s);
         node->regId       = strdup(regIdP->value.s);
-        node->runNo       = (runP != NULL && runP->type == KjInt) ? (int) runP->value.i : 0;
+        node->runNo       = (runP != NULL && runP->type == CorInt) ? (int) runP->value.i : 0;
         node->next        = NULL;
 
         if (tail == NULL) itemP->subordinateP = node;
@@ -795,20 +796,20 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* 
         tail = node;
       }
     }
-    // kjChildRemove only unlinks; subTree is a malloc clone, so free the
+    // corTreeChildRemove only unlinks; subTree is a malloc clone, so free the
     // stripped subordinate-list subtree or it is orphaned (definite-lost on
     // every add/reload of a sub that carried persisted subordinate data).
-    kjChildRemove(itemP->subTree, subListP);
-    kjFree(subListP);
+    corTreeChildRemove(itemP->subTree, subListP);
+    corTreeFree(subListP);
   }
 
-  KjNode* runNoP = kjLookup(itemP->subTree, "_subordinateRunNo");
+  CorNode* runNoP = corTreeLookup(itemP->subTree, "_subordinateRunNo");
   if (runNoP != NULL)
   {
-    if (runNoP->type == KjInt)
+    if (runNoP->type == CorInt)
       itemP->subordinateRunNo = (int) runNoP->value.i;
-    kjChildRemove(itemP->subTree, runNoP);
-    kjFree(runNoP);
+    corTreeChildRemove(itemP->subTree, runNoP);
+    corTreeFree(runNoP);
   }
 
   //
@@ -855,7 +856,7 @@ static void cacheItemFree(LdSubCacheItem* itemP)
     free(itemP->subId);
 
   if (itemP->subTree != NULL)
-    kjFree(itemP->subTree);
+    corTreeFree(itemP->subTree);
 
   entitySelectorsFree(itemP->entitySelectors);
 

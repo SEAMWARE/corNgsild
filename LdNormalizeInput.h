@@ -13,7 +13,7 @@
 #include <stdbool.h>                                   // bool
 
 #include "kalloc/KAlloc.h"                             // KAlloc
-#include "kjson/KjNode.h"                               // KjNode
+#include "corTree/CorNode.h"                            // CorNode
 
 
 
@@ -22,7 +22,7 @@
 // ldNormalizeInput - convert simplified/concise attributes to normalized format
 //
 // Called after JSON-LD expansion in ldParseHook.  Walks the entity tree and
-// ensures every attribute is an KjObject with an explicit "type" field and
+// ensures every attribute is an CorObject with an explicit "type" field and
 // the appropriate value key (hasValue, hasObject, etc.).
 //
 // mergeMode: set to true for PATCH /entities/{id} (Merge Entity § 5.6.17) so
@@ -40,7 +40,7 @@
 // against the target. Undeclared, the body is normalized or concise, where
 // § 5.3.2.3 admits no such target-dependence: a JSON primitive is a Property.
 //
-extern bool ldNormalizeInput(KjNode* entityP, KAlloc* kaP, bool mergeMode, bool simplified);
+extern bool ldNormalizeInput(CorNode* entityP, KAlloc* kaP, bool mergeMode, bool simplified);
 
 
 
@@ -55,6 +55,6 @@ extern bool ldNormalizeInput(KjNode* entityP, KAlloc* kaP, bool mergeMode, bool 
 // arrive as bare GeoJSON Geometry on the wire (§ 5.2.9) but live as
 // normalized GeoProperty wrappers in storage and on output.
 //
-extern void ldWrapAsGeoProperty(KjNode* entityP, KjNode* childP, KAlloc* kaP);
+extern void ldWrapAsGeoProperty(CorNode* entityP, CorNode* childP, KAlloc* kaP);
 
 #endif  // CORNGSILD_LDNORMALIZEINPUT_H_

@@ -12,10 +12,9 @@
 
 #include "kbase/kLibLog.h"                             // KLOG_T
 #include "kalloc/KAlloc.h"                             // KAlloc
-#include "kjson/KjNode.h"                               // KjNode
-#include "kjson/kjBuilder.h"                             // kjChildAdd, kjChildRemove, kjObject
-#include "kjson/kjBufferCreate.h"                        // kjBufferCreate
-#include "kjson/kjLookup.h"                              // kjLookup
+#include "corTree/CorNode.h"                             // CorNode
+#include "corTree/corTreeBuilder.h"                      // corTreeChildAdd, corTreeChildRemove, corTreeObject
+#include "corTree/corTreeLookup.h"                       // corTreeLookup
 
 #include "corNgsild/LdAttrType.h"                         // LdAttrType
 #include "corNgsild/LdVocab.h"                            // LD_VOCAB_*
@@ -86,9 +85,9 @@ static bool attrTypeCanBeInferred(LdAttrType attrType)
 //
 // attrToConcise -
 //
-static void attrToConcise(KjNode* attrP)
+static void attrToConcise(CorNode* attrP)
 {
-  if (attrP->type != KjObject)
+  if (attrP->type != CorObject)
     return;
 
   LdAttrType attrType = ldAttrTypeDetect(attrP);
@@ -98,8 +97,8 @@ static void attrToConcise(KjNode* attrP)
   // Remove "type" if it can be inferred
   if (attrTypeCanBeInferred(attrType) == true)
   {
-    KjNode* prevP = NULL;
-    for (KjNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
+    CorNode* prevP = NULL;
+    for (CorNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
     {
       if (strcmp(childP->name, "type") == 0)
       {
@@ -118,7 +117,7 @@ static void attrToConcise(KjNode* attrP)
   }
 
   // Recurse into sub-attributes
-  for (KjNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
   {
     if (isAttrKeyword(childP->name) == false)
       attrToConcise(childP);
@@ -134,10 +133,10 @@ static void attrToConcise(KjNode* attrP)
   // when checking value-only, then discard it by replacing the attr with value.
   if ((attrType == LdAttrProperty) || (attrType == LdAttrGeoProperty))
   {
-    KjNode*  valueP    = NULL;
+    CorNode* valueP    = NULL;
     bool     valueOnly = true;
 
-    for (KjNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
+    for (CorNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
     {
       if (strcmp(childP->name, "type") == 0)
         continue;
@@ -161,12 +160,12 @@ static void attrToConcise(KjNode* attrP)
 //
 // ldToConcise -
 //
-bool ldToConcise(KjNode* entityP, KAlloc* faP)
+bool ldToConcise(CorNode* entityP, KAlloc* faP)
 {
-  if (entityP == NULL || entityP->type != KjObject)
+  if (entityP == NULL || entityP->type != CorObject)
     return false;
 
-  for (KjNode* childP = entityP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = entityP->value.firstChildP; childP != NULL; childP = childP->next)
   {
     if (ldIsEntityKeyword(childP->name) == true)
       continue;
@@ -181,9 +180,9 @@ bool ldToConcise(KjNode* entityP, KAlloc* faP)
     // Skipping the array is what left every instance carrying its "type" while
     // the single-instance attribute beside it had dropped it.
     //
-    if (childP->type == KjArray)
+    if (childP->type == CorArray)
     {
-      for (KjNode* instP = childP->value.firstChildP; instP != NULL; instP = instP->next)
+      for (CorNode* instP = childP->value.firstChildP; instP != NULL; instP = instP->next)
         attrToConcise(instP);
     }
     else
@@ -212,12 +211,12 @@ bool ldToConcise(KjNode* entityP, KAlloc* faP)
 // attribute type: value / object / languageMap / vocab / valueList / objectList /
 // json. NULL if none present.
 //
-KjNode* ldAttrValueNode(KjNode* attrP)
+CorNode* ldAttrValueNode(CorNode* attrP)
 {
-  if (attrP->type != KjObject)
+  if (attrP->type != CorObject)
     return NULL;
 
-  for (KjNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
   {
     if (strcmp(childP->name, LD_VOCAB_HAS_VALUE)        == 0)  return childP;
     if (strcmp(childP->name, LD_VOCAB_HAS_OBJECT)       == 0)  return childP;
@@ -237,25 +236,24 @@ KjNode* ldAttrValueNode(KjNode* attrP)
 //
 // ldToSimplified -
 //
-bool ldToSimplified(KjNode* entityP, KAlloc* faP)
+bool ldToSimplified(CorNode* entityP, KAlloc* faP)
 {
-  if (entityP == NULL || entityP->type != KjObject)
+  if (entityP == NULL || entityP->type != CorObject)
     return false;
 
   //
   // The multi-attribute branch below is the only part of this file that CREATES
   // nodes, and faP is here for exactly that. It used to pass NULL, which makes
-  // kjson fall back to malloc - so every simplified multi-attribute response
+  // the builders fall back to malloc - so every simplified multi-attribute response
   // leaked its dataset wrapper for the life of the process.
   //
-  Kjson  kj;
-  Kjson* kjP = (faP != NULL) ? kjBufferCreate(&kj, faP) : NULL;
+  KAlloc* allocP = faP;
 
-  KjNode* childP = entityP->value.firstChildP;
+  CorNode* childP = entityP->value.firstChildP;
 
   while (childP != NULL)
   {
-    KjNode* nextP = childP->next;
+    CorNode* nextP = childP->next;
 
     //
     // § 5.3.2.4 "Multi-Attribute Representation": a multi-attribute does NOT
@@ -267,23 +265,23 @@ bool ldToSimplified(KjNode* entityP, KAlloc* faP)
     // "@none" (annex C.2.2.4.2). Leaving the array alone shipped the fully
     // NORMALIZED instances - type, value key and all - in a simplified response.
     //
-    if (ldIsEntityKeyword(childP->name) == false && childP->type == KjArray)
+    if (ldIsEntityKeyword(childP->name) == false && childP->type == CorArray)
     {
-      KjNode* datasetMap = kjObject(kjP, "dataset");
+      CorNode* datasetMap = corTreeObject(allocP, "dataset");
 
-      for (KjNode* instP = childP->value.firstChildP; instP != NULL; instP = instP->next)
+      for (CorNode* instP = childP->value.firstChildP; instP != NULL; instP = instP->next)
       {
-        if (instP->type != KjObject)
+        if (instP->type != CorObject)
           continue;
 
-        KjNode* valueP = ldAttrValueNode(instP);
+        CorNode* valueP = ldAttrValueNode(instP);
         if (valueP == NULL)
           continue;
 
-        KjNode*     dsP   = kjLookup(instP, "datasetId");
-        const char* dsKey = (dsP != NULL && dsP->type == KjString) ? dsP->value.s : "@none";
+        CorNode*    dsP   = corTreeLookup(instP, "datasetId");
+        const char* dsKey = (dsP != NULL && dsP->type == CorString) ? dsP->value.s : "@none";
 
-        kjChildRemove(instP, valueP);
+        corTreeChildRemove(instP, valueP);
 
         if ((strcmp(valueP->name, LD_VOCAB_HAS_LANGUAGE_MAP) == 0) ||
             (strcmp(valueP->name, LD_VOCAB_HAS_VOCAB)        == 0) ||
@@ -291,34 +289,34 @@ bool ldToSimplified(KjNode* entityP, KAlloc* faP)
         {
           // Same carve-out as the single-instance path below: these three keep
           // their { languageMap | vocab | json : ... } wrapper in simplified form.
-          KjNode* wrapP = kjObject(kjP, dsKey);
-          kjChildAdd(wrapP, valueP);
-          kjChildAdd(datasetMap, wrapP);
+          CorNode* wrapP = corTreeObject(allocP, dsKey);
+          corTreeChildAdd(wrapP, valueP);
+          corTreeChildAdd(datasetMap, wrapP);
         }
         else
         {
           valueP->name = (char*) dsKey;
-          kjChildAdd(datasetMap, valueP);
+          corTreeChildAdd(datasetMap, valueP);
         }
       }
 
-      childP->type              = KjObject;
+      childP->type              = CorObject;
       childP->value.firstChildP = NULL;
       childP->lastChild         = NULL;
-      kjChildAdd(childP, datasetMap);
+      corTreeChildAdd(childP, datasetMap);
 
       childP = nextP;
       continue;
     }
 
-    if (ldIsEntityKeyword(childP->name) == false && childP->type == KjObject)
+    if (ldIsEntityKeyword(childP->name) == false && childP->type == CorObject)
     {
       // § 4.5.23 + § 4.5.4: join=inline attaches the linked Entity under
       // `entity` on the Relationship instance. In simplified format with
       // join, the value of the Relationship is the inlined Entity (itself
       // simplified) — not the URI in `object`.
-      KjNode* entityValP = kjLookup(childP, "entity");
-      if (entityValP != NULL && entityValP->type == KjObject)
+      CorNode* entityValP = corTreeLookup(childP, "entity");
+      if (entityValP != NULL && entityValP->type == CorObject)
       {
         ldToSimplified(entityValP, faP);
         childP->type  = entityValP->type;
@@ -326,11 +324,11 @@ bool ldToSimplified(KjNode* entityP, KAlloc* faP)
         childP = nextP;
         continue;
       }
-      if (entityValP != NULL && entityValP->type == KjArray)
+      if (entityValP != NULL && entityValP->type == CorArray)
       {
         // Multivalued join (§ C.2.2.1.2): the Relationship's value becomes the
         // ARRAY of inlined Entities, each itself simplified — not the object URIs.
-        for (KjNode* linkedP = entityValP->value.firstChildP; linkedP != NULL; linkedP = linkedP->next)
+        for (CorNode* linkedP = entityValP->value.firstChildP; linkedP != NULL; linkedP = linkedP->next)
           ldToSimplified(linkedP, faP);
         childP->type  = entityValP->type;
         childP->value = entityValP->value;
@@ -338,7 +336,7 @@ bool ldToSimplified(KjNode* entityP, KAlloc* faP)
         continue;
       }
 
-      KjNode* valueP = ldAttrValueNode(childP);
+      CorNode* valueP = ldAttrValueNode(childP);
 
       if (valueP != NULL)
       {

@@ -10,7 +10,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // 
 //
-#include "kjson/KjNode.h"                               // KjNode
+#include "corTree/CorNode.h"                            // CorNode
 #include "corNgsild/LdAttrType.h"                         // LdAttrType
 
 
@@ -19,6 +19,6 @@
 //
 // ldAttrTypeDetect -
 //
-extern LdAttrType ldAttrTypeDetect(KjNode* attrP);
+extern LdAttrType ldAttrTypeDetect(CorNode* attrP);
 
 #endif  // CORNGSILD_LDATTRTYPEDETECT_H_

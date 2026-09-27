@@ -24,7 +24,7 @@
 #include <stdbool.h>                                     // bool
 #include <stdint.h>                                      // uint64_t
 
-#include "kjson/KjNode.h"                                // KjNode
+#include "corTree/CorNode.h"                             // CorNode
 
 
 
@@ -50,7 +50,7 @@ typedef enum LdSnapshotStatus
 typedef struct LdSnapshotCacheItem
 {
   char*                         id;             // URI; either client-supplied or auto-generated
-  KjNode*                       tree;           // canonical Snapshot doc (all-malloc clone; freed on delete)
+  CorNode*                      tree;           // canonical Snapshot doc (all-malloc clone; freed on delete)
   void*                         snapTenantP;    // Tenant* — the snapshot's own DB tenant (entity store)
   int                           snapSeq;        // monotonic per-tenant sequence; suffixes the snap-tenant name
   LdSnapshotStatus              status;
@@ -84,7 +84,7 @@ typedef struct LdSnapshotCache
 extern LdSnapshotCache*      ldSnapshotCacheCreate(void);
 
 extern LdSnapshotCacheItem*  ldSnapshotCacheItemAdd(LdSnapshotCache*  cacheP,
-                                                    KjNode*           snapshotTree);
+                                                    CorNode*          snapshotTree);
 
 extern LdSnapshotCacheItem*  ldSnapshotCacheItemLookup(LdSnapshotCache* cacheP,
                                                        const char*      id);

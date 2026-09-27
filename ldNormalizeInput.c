@@ -20,10 +20,10 @@
 
 #include "kalloc/KAlloc.h"                             // KAlloc
 #include "kalloc/kaAlloc.h"                            // kaAlloc
-#include "kjson/KjNode.h"                               // KjNode
-#include "kjson/kjBuilder.h"                             // kjObject
-#include "kjson/kjChildReplace.h"                       // kjChildReplace
-#include "kjson/kjLookup.h"                             // kjLookup
+#include "corTree/CorNode.h"                            // CorNode
+#include "corTree/corTreeBuilder.h"                      // corTreeObject
+#include "corTree/corTreeChildReplace.h"                // corTreeChildReplace
+#include "corTree/corTreeLookup.h"                      // corTreeLookup
 
 #include "corJsonld/corLdExpand.h"                          // KJF_CORE_TERM
 #include "corNgsild/ldError.h"                            // ldError
@@ -51,7 +51,7 @@
 // Note: a sub-attribute may itself be a core-context term, so this tests the
 // specific KJF_ATTR_TERM marking, not a generic "from core context" flag.
 //
-static bool isAttrKeyword(const KjNode* nodeP)
+static bool isAttrKeyword(const CorNode* nodeP)
 {
   return ((nodeP->flags & KJF_ATTR_TERM) != 0);
 }
@@ -62,9 +62,9 @@ static bool isAttrKeyword(const KjNode* nodeP)
 //
 // hasValueKey - check if an object has any NGSI-LD value key
 //
-static bool hasValueKey(KjNode* objP)
+static bool hasValueKey(CorNode* objP)
 {
-  for (KjNode* childP = objP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = objP->value.firstChildP; childP != NULL; childP = childP->next)
   {
     if (strcmp(childP->name, LD_VOCAB_HAS_VALUE)        == 0)  return true;
     if (strcmp(childP->name, LD_VOCAB_HAS_OBJECT)       == 0)  return true;
@@ -105,21 +105,21 @@ static bool isGeoJsonTypeName(const char* s)
 
 // -----------------------------------------------------------------------------
 //
-// isGeoJsonObject - check if an KjObject looks like a GeoJSON geometry
+// isGeoJsonObject - check if an CorObject looks like a GeoJSON geometry
 //
 // A GeoJSON geometry has:
 //   - A "type" child with a GeoJSON geometry type name
 //   - A coordinates child (LD_VOCAB_COORDINATES)
 //   - No NGSI-LD value keys (hasValue, hasObject, etc.)
 //
-static bool isGeoJsonObject(KjNode* objP)
+static bool isGeoJsonObject(CorNode* objP)
 {
   bool        hasGeoType   = false;
   bool        hasCoords    = false;
 
-  for (KjNode* childP = objP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = objP->value.firstChildP; childP != NULL; childP = childP->next)
   {
-    if (strcmp(childP->name, "type") == 0 && childP->type == KjString && isGeoJsonTypeName(childP->value.s))
+    if (strcmp(childP->name, "type") == 0 && childP->type == CorString && isGeoJsonTypeName(childP->value.s))
       hasGeoType = true;
     else if (strcmp(childP->name, LD_VOCAB_COORDINATES) == 0)
       hasCoords = true;
@@ -146,20 +146,20 @@ static bool isGeoJsonObject(KjNode* objP)
 // normalized format by Case 1 ({"type":"Property","coordinates":[]} → "Missing
 // value", not a geometry).
 //
-static bool isSimplifiedGeoProperty(KjNode* objP)
+static bool isSimplifiedGeoProperty(CorNode* objP)
 {
-  KjNode*  typeP   = NULL;
-  KjNode*  coordsP = NULL;
+  CorNode* typeP   = NULL;
+  CorNode* coordsP = NULL;
   int      count   = 0;
 
-  for (KjNode* childP = objP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = objP->value.firstChildP; childP != NULL; childP = childP->next)
   {
     ++count;
     if      (strcmp(childP->name, "type")              == 0)  typeP   = childP;
     else if (strcmp(childP->name, LD_VOCAB_COORDINATES) == 0)  coordsP = childP;
   }
 
-  return (count == 2 && typeP != NULL && typeP->type == KjString && coordsP != NULL);
+  return (count == 2 && typeP != NULL && typeP->type == CorString && coordsP != NULL);
 }
 
 
@@ -177,11 +177,11 @@ static bool isSimplifiedGeoProperty(KjNode* objP)
 // members being merged in as sub-attributes (which corrupted the attribute — the
 // json-literal-null merge splice).
 //
-static bool isJsonLiteral(KjNode* objP)
+static bool isJsonLiteral(CorNode* objP)
 {
-  for (KjNode* childP = objP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = objP->value.firstChildP; childP != NULL; childP = childP->next)
   {
-    if ((strcmp(childP->name, "@type") == 0) && (childP->type == KjString) && (strcmp(childP->value.s, "@json") == 0))
+    if ((strcmp(childP->name, "@type") == 0) && (childP->type == CorString) && (strcmp(childP->value.s, "@json") == 0))
       return true;
   }
   return false;
@@ -193,9 +193,9 @@ static bool isJsonLiteral(KjNode* objP)
 //
 // isGeoJsonValue - check if a value node (child of hasValue) is GeoJSON
 //
-static bool isGeoJsonValue(KjNode* valueP)
+static bool isGeoJsonValue(CorNode* valueP)
 {
-  if (valueP->type != KjObject)
+  if (valueP->type != CorObject)
     return false;
 
   return isGeoJsonObject(valueP);
@@ -221,11 +221,11 @@ static bool isGeoJsonValue(KjNode* valueP)
 // during corLdExpandTree), and stamping here closes that off for good - whatever
 // route the object took to get here.
 //
-static bool hasExplicitAttrType(KjNode* objP)
+static bool hasExplicitAttrType(CorNode* objP)
 {
-  for (KjNode* childP = objP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = objP->value.firstChildP; childP != NULL; childP = childP->next)
   {
-    if (strcmp(childP->name, "type") == 0 && childP->type == KjString)
+    if (strcmp(childP->name, "type") == 0 && childP->type == CorString)
     {
       const char* v = childP->value.s;
 
@@ -280,9 +280,9 @@ static bool hasExplicitAttrType(KjNode* objP)
 //
 // addTypeField - prepend a "type" string field to an attribute object
 //
-static void addTypeField(KjNode* attrP, const char* typeName, KAlloc* kaP)
+static void addTypeField(CorNode* attrP, const char* typeName, KAlloc* kaP)
 {
-  KjNode* typeNodeP = kjString(corRest.kjsonP, "type", typeName);
+  CorNode* typeNodeP = corTreeString(corRest.kallocP, "type", typeName);
   if (typeNodeP != NULL)
   {
     // Structural member created here (after expansion) — stamp it so the
@@ -302,28 +302,28 @@ static void addTypeField(KjNode* attrP, const char* typeName, KAlloc* kaP)
 // Input:   entityP has child  "attrName": <value>
 // Output:  entityP has child  "attrName": { "type": "Property", LD_VOCAB_HAS_VALUE: <value> }
 //
-static void wrapAsProperty(KjNode* entityP, KjNode* childP, KAlloc* kaP)
+static void wrapAsProperty(CorNode* entityP, CorNode* childP, KAlloc* kaP)
 {
-  KjNode* wrapperP = kjObject(corRest.kjsonP, childP->name);
+  CorNode* wrapperP = corTreeObject(corRest.kallocP, childP->name);
   if (wrapperP == NULL)
     return;
 
   // Create a value node that copies the original's type+value
-  KjNode* valueNodeP = (KjNode*) kaAlloc(kaP, sizeof(KjNode));
+  CorNode* valueNodeP = (CorNode*) kaAlloc(kaP, sizeof(CorNode));
   if (valueNodeP == NULL)
     return;
 
-  memset(valueNodeP, 0, sizeof(KjNode));
+  memset(valueNodeP, 0, sizeof(CorNode));
   valueNodeP->name  = (char*) LD_VOCAB_HAS_VALUE;
   valueNodeP->type  = childP->type;
   valueNodeP->value = childP->value;
   valueNodeP->next  = NULL;
   valueNodeP->flags = KJF_CORE_TERM | KJF_ATTR_TERM | (KJF_VK_VALUE << KJF_VK_SHIFT);
 
-  kjChildAdd(wrapperP, valueNodeP);
+  corTreeChildAdd(wrapperP, valueNodeP);
   addTypeField(wrapperP, "Property", kaP);
 
-  kjChildReplace(entityP, childP, wrapperP);
+  corTreeChildReplace(entityP, childP, wrapperP);
 }
 
 
@@ -337,33 +337,33 @@ static void wrapAsProperty(KjNode* entityP, KjNode* childP, KAlloc* kaP)
 // bare GeoJSON on the wire per § 5.2.9, but stored and rendered as the
 // normalized GeoProperty wrapper).
 //
-void ldWrapAsGeoProperty(KjNode* entityP, KjNode* childP, KAlloc* kaP)
+void ldWrapAsGeoProperty(CorNode* entityP, CorNode* childP, KAlloc* kaP)
 {
-  KjNode* wrapperP = kjObject(corRest.kjsonP, childP->name);
+  CorNode* wrapperP = corTreeObject(corRest.kallocP, childP->name);
   if (wrapperP == NULL)
     return;
 
   // Create hasValue node pointing to the GeoJSON object's children
-  KjNode* valueNodeP = (KjNode*) kaAlloc(kaP, sizeof(KjNode));
+  CorNode* valueNodeP = (CorNode*) kaAlloc(kaP, sizeof(CorNode));
   if (valueNodeP == NULL)
     return;
 
-  memset(valueNodeP, 0, sizeof(KjNode));
+  memset(valueNodeP, 0, sizeof(CorNode));
   valueNodeP->name  = (char*) LD_VOCAB_HAS_VALUE;
   valueNodeP->type  = childP->type;
   valueNodeP->value = childP->value;
   valueNodeP->next  = NULL;
   valueNodeP->flags = KJF_CORE_TERM | KJF_ATTR_TERM | (KJF_VK_VALUE << KJF_VK_SHIFT);
 
-  kjChildAdd(wrapperP, valueNodeP);
+  corTreeChildAdd(wrapperP, valueNodeP);
   addTypeField(wrapperP, "GeoProperty", kaP);
 
-  kjChildReplace(entityP, childP, wrapperP);
+  corTreeChildReplace(entityP, childP, wrapperP);
 }
 
 
 
-static bool normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool mergeMode, bool simplified);
+static bool normalizeAttr(CorNode* containerP, CorNode* attrP, KAlloc* kaP, bool mergeMode, bool simplified);
 
 
 
@@ -371,18 +371,18 @@ static bool normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool m
 //
 // normalizeAttr - normalize a single attribute (may be object, scalar, or array)
 //
-// containerP: the parent node (entity or attribute object) — needed for kjChildReplace
+// containerP: the parent node (entity or attribute object) — needed for corTreeChildReplace
 // attrP:      the attribute node to normalize
 //
-static bool normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool mergeMode, bool simplified)
+static bool normalizeAttr(CorNode* containerP, CorNode* attrP, KAlloc* kaP, bool mergeMode, bool simplified)
 {
   // ---  Scalar children → simplified Property  ---
-  if (attrP->type == KjInt || attrP->type == KjFloat || attrP->type == KjString || attrP->type == KjBoolean || attrP->type == KjNull)
+  if (attrP->type == CorInt || attrP->type == CorFloat || attrP->type == CorString || attrP->type == CorBoolean || attrP->type == CorNull)
   {
     // Leave NGSI-LD null delete-markers alone: they are never a Property value.
     // In Merge Entity (PATCH § 5.6.17) they indicate deletion of the named
     // (sub-)attribute; in Create Entity they are rejected later by ldCheckEntity.
-    if (attrP->type == KjString && strcmp(attrP->value.s, LD_VOCAB_NGSILD_NULL) == 0)
+    if (attrP->type == CorString && strcmp(attrP->value.s, LD_VOCAB_NGSILD_NULL) == 0)
       return true;
 
     // A simplified merge (§ 10.2.9.4) is the one case where a bare scalar does NOT
@@ -400,22 +400,22 @@ static bool normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool m
   }
 
   // ---  Array children  ---
-  if (attrP->type == KjArray)
+  if (attrP->type == CorArray)
   {
-    KjNode* firstP = attrP->value.firstChildP;
+    CorNode* firstP = attrP->value.firstChildP;
 
     if (firstP == NULL)
       return true;  // empty array — leave for ldCheckEntity to reject
 
-    if (firstP->type == KjObject)
+    if (firstP->type == CorObject)
     {
       // Multi-attribute array — normalize each element
-      KjNode* elemP = firstP;
+      CorNode* elemP = firstP;
       while (elemP != NULL)
       {
-        KjNode* elemNextP = elemP->next;
+        CorNode* elemNextP = elemP->next;
 
-        if (elemP->type == KjObject)
+        if (elemP->type == CorObject)
         {
           if (normalizeAttr(attrP, elemP, kaP, mergeMode, simplified) == false)
             return false;
@@ -454,7 +454,7 @@ static bool normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool m
   }
 
   // ---  Object children  ---
-  if (attrP->type != KjObject)
+  if (attrP->type != CorObject)
     return true;
 
   // A JSON literal {"@type":"@json","@value":X} is a single opaque value (clause 5),
@@ -470,10 +470,10 @@ static bool normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool m
   if (hasExplicitAttrType(attrP))
   {
     // Recurse into sub-attributes
-    KjNode* subP = attrP->value.firstChildP;
+    CorNode* subP = attrP->value.firstChildP;
     while (subP != NULL)
     {
-      KjNode* subNextP = subP->next;
+      CorNode* subNextP = subP->next;
       if (isAttrKeyword(subP) == false)
         //
         // NOT mergeMode: leaving a simplified scalar raw is a rule about the ATTRIBUTE, whose
@@ -516,11 +516,11 @@ static bool normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool m
   // a fragment carrying only sub-attributes and wrong for a bogus type.
   //
   {
-    KjNode* typeP = kjLookup(attrP, "type");
+    CorNode* typeP = corTreeLookup(attrP, "type");
 
     if ((typeP != NULL) && (isGeoJsonObject(attrP) == false) && (isSimplifiedGeoProperty(attrP) == false))
     {
-      if (typeP->type != KjString)
+      if (typeP->type != CorString)
         ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Attribute Type",
                 "attribute '%s': 'type' must be a string naming an NGSI-LD Attribute type", attrP->name);
       else
@@ -536,8 +536,8 @@ static bool normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool m
   {
     // Need to detect type and add it
     // Special case: hasValue with GeoJSON value → GeoProperty
-    KjNode* hasValueP = NULL;
-    for (KjNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
+    CorNode* hasValueP = NULL;
+    for (CorNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
     {
       if (strcmp(childP->name, LD_VOCAB_HAS_VALUE) == 0)
       {
@@ -558,10 +558,10 @@ static bool normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool m
     }
 
     // Recurse into sub-attributes
-    KjNode* subP = attrP->value.firstChildP;
+    CorNode* subP = attrP->value.firstChildP;
     while (subP != NULL)
     {
-      KjNode* subNextP = subP->next;
+      CorNode* subNextP = subP->next;
       if (isAttrKeyword(subP) == false)
         //
         // NOT mergeMode: leaving a simplified scalar raw is a rule about the ATTRIBUTE, whose
@@ -599,10 +599,10 @@ static bool normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool m
   //
   if (mergeMode)
   {
-    KjNode* subP = attrP->value.firstChildP;
+    CorNode* subP = attrP->value.firstChildP;
     while (subP != NULL)
     {
-      KjNode* subNextP = subP->next;
+      CorNode* subNextP = subP->next;
       if (isAttrKeyword(subP) == false)
         //
         // NOT mergeMode: leaving a simplified scalar raw is a rule about the ATTRIBUTE, whose
@@ -630,16 +630,16 @@ static bool normalizeAttr(KjNode* containerP, KjNode* attrP, KAlloc* kaP, bool m
 //
 // ldNormalizeInput -
 //
-bool ldNormalizeInput(KjNode* entityP, KAlloc* kaP, bool mergeMode, bool simplified)
+bool ldNormalizeInput(CorNode* entityP, KAlloc* kaP, bool mergeMode, bool simplified)
 {
-  if (entityP == NULL || entityP->type != KjObject)
+  if (entityP == NULL || entityP->type != CorObject)
     return true;
 
-  KjNode* childP = entityP->value.firstChildP;
+  CorNode* childP = entityP->value.firstChildP;
 
   while (childP != NULL)
   {
-    KjNode* nextP = childP->next;  // save before normalizeAttr may replace childP
+    CorNode* nextP = childP->next; // save before normalizeAttr may replace childP
 
     if (ldIsEntityKeyword(childP->name) == false)
     {

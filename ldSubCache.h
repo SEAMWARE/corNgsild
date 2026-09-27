@@ -43,7 +43,7 @@ extern void ldSubCacheItemUnpin(LdSubCacheItem* itemP);
 //
 // ldSubCacheItemAdd - parse a subscription tree and add it to the cache
 //
-// subTree is kjClone'd internally (malloc allocator) — the caller keeps ownership
+// subTree is corTreeClone'd internally (malloc allocator) — the caller keeps ownership
 // of the original.
 // qExpr:  pre-parsed q-filter tree (NULL if no q). Ownership transferred to cache.
 //         If NULL and the subscription has a q field, it will NOT be re-parsed
@@ -52,7 +52,7 @@ extern void ldSubCacheItemUnpin(LdSubCacheItem* itemP);
 //         get it from ldCheckSubscription, so the string isn't matched twice).
 //         Pass LdFormatUnset to have it derived from the subTree (cache-reload path).
 //
-extern LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, KjNode* subTree, LdQNode* qExpr, LdFormat format);
+extern LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, CorNode* subTree, LdQNode* qExpr, LdFormat format);
 
 
 

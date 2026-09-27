@@ -18,8 +18,8 @@
 #include <string.h>                                      // strcmp
 
 #include "corRest/CorRestState.h"                          // corRest
-#include "kjson/KjNode.h"                                // KjNode
-#include "kjson/kjLookup.h"                              // kjLookup
+#include "corTree/CorNode.h"                             // CorNode
+#include "corTree/corTreeLookup.h"                       // corTreeLookup
 
 #include "corNgsild/corNgsild.h"                           // ldError, LD_ERROR_*
 #include "corNgsild/ldQParse.h"                           // ldQParse
@@ -41,7 +41,7 @@
 //
 // LdField - one entry of a payload-body field descriptor table
 //
-// 'typeMask' is a bitmask of allowed KjValueType values (1 << KjString, ...).
+// 'typeMask' is a bitmask of allowed CorValueType values (1 << CorString, ...).
 // 'nodeP' is filled in by ldFieldsExtract with the matched body node (NULL if
 // the field is absent) — also used to detect duplicates.
 //
@@ -50,7 +50,7 @@ typedef struct LdField
   const char*  name;
   int          typeMask;
   int          flags;
-  KjNode*      nodeP;
+  CorNode*     nodeP;
 } LdField;
 
 
@@ -61,10 +61,10 @@ typedef struct LdField
 //
 static const char* typeTitle(int typeMask)
 {
-  if (typeMask == (1 << KjString))   return "Not a JSON String";
-  if (typeMask == (1 << KjArray))    return "Not a JSON Array";
-  if (typeMask == (1 << KjObject))   return "Not a JSON Object";
-  if (typeMask == (1 << KjBoolean))  return "Not a JSON Boolean";
+  if (typeMask == (1 << CorString))  return "Not a JSON String";
+  if (typeMask == (1 << CorArray))   return "Not a JSON Array";
+  if (typeMask == (1 << CorObject))  return "Not a JSON Object";
+  if (typeMask == (1 << CorBoolean)) return "Not a JSON Boolean";
   return "Invalid JSON type";
 }
 
@@ -79,9 +79,9 @@ static const char* typeTitle(int typeMask)
 // sets the ProblemDetails (ldError) and returns false; on success every present
 // field is recorded in its descriptor's 'nodeP'.
 //
-static bool ldFieldsExtract(KjNode* objP, LdField* fieldV, int fields, bool errorOnUnknown)
+static bool ldFieldsExtract(CorNode* objP, LdField* fieldV, int fields, bool errorOnUnknown)
 {
-  for (KjNode* nodeP = objP->value.firstChildP; nodeP != NULL; nodeP = nodeP->next)
+  for (CorNode* nodeP = objP->value.firstChildP; nodeP != NULL; nodeP = nodeP->next)
   {
     if (nodeP->name == NULL || nodeP->name[0] == '@')   // skip @context et al.
       continue;
@@ -113,12 +113,12 @@ static bool ldFieldsExtract(KjNode* objP, LdField* fieldV, int fields, bool erro
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, typeTitle(fP->typeMask), "%s", nodeP->name);
       return false;
     }
-    if ((nodeP->type == KjArray || nodeP->type == KjObject) && nodeP->value.firstChildP == NULL)
+    if ((nodeP->type == CorArray || nodeP->type == CorObject) && nodeP->value.firstChildP == NULL)
     {
-      ldError(400, LD_ERROR_BAD_REQUEST_DATA, (nodeP->type == KjArray) ? "Empty Array" : "Empty Object", "%s", nodeP->name);
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, (nodeP->type == CorArray) ? "Empty Array" : "Empty Object", "%s", nodeP->name);
       return false;
     }
-    if (nodeP->type == KjString && nodeP->value.s[0] == 0)
+    if (nodeP->type == CorString && nodeP->value.s[0] == 0)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Empty String", "%s", nodeP->name);
       return false;
@@ -145,7 +145,7 @@ static bool ldFieldsExtract(KjNode* objP, LdField* fieldV, int fields, bool erro
 //
 // findField - the body node for a descriptor field by name (NULL if absent)
 //
-static KjNode* findField(LdField* fieldV, int fields, const char* name)
+static CorNode* findField(LdField* fieldV, int fields, const char* name)
 {
   for (int ix = 0; ix < fields; ix++)
     if (strcmp(fieldV[ix].name, name) == 0)
@@ -159,11 +159,11 @@ static KjNode* findField(LdField* fieldV, int fields, const char* name)
 //
 // pCheckEntities - each member of the Query 'entities' array is a valid selector
 //
-static bool pCheckEntities(KjNode* entitiesP)
+static bool pCheckEntities(CorNode* entitiesP)
 {
-  for (KjNode* entityP = entitiesP->value.firstChildP; entityP != NULL; entityP = entityP->next)
+  for (CorNode* entityP = entitiesP->value.firstChildP; entityP != NULL; entityP = entityP->next)
   {
-    if (entityP->type != KjObject)
+    if (entityP->type != CorObject)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Not a JSON Object", "entities array member");
       return false;
@@ -171,9 +171,9 @@ static bool pCheckEntities(KjNode* entitiesP)
 
     LdField selV[] =
     {
-      { "id",        (1 << KjString), 0,            NULL },
-      { "idPattern", (1 << KjString), 0,            NULL },
-      { "type",      (1 << KjString), PC_MANDATORY, NULL }
+      { "id",        (1 << CorString), 0,           NULL },
+      { "idPattern", (1 << CorString), 0,           NULL },
+      { "type",      (1 << CorString), PC_MANDATORY, NULL }
     };
 
     if (ldFieldsExtract(entityP, selV, 3, true) == false)
@@ -198,14 +198,14 @@ static bool pCheckEntities(KjNode* entitiesP)
 // URL-param path (ldParamHook) — here we own the structure (mandatory/type/
 // unknown/duplicate) plus the georel parse, which the handler does not check.
 //
-static bool pCheckGeoQ(KjNode* geoQP)
+static bool pCheckGeoQ(CorNode* geoQP)
 {
   LdField geoV[] =
   {
-    { "geometry",    (1 << KjString),                  PC_MANDATORY, NULL },
-    { "coordinates", (1 << KjString) | (1 << KjArray), PC_MANDATORY, NULL },
-    { "georel",      (1 << KjString),                  PC_MANDATORY, NULL },
-    { "geoproperty", (1 << KjString),                  0,            NULL }
+    { "geometry",    (1 << CorString),                 PC_MANDATORY, NULL },
+    { "coordinates", (1 << CorString) | (1 << CorArray), PC_MANDATORY, NULL },
+    { "georel",      (1 << CorString),                 PC_MANDATORY, NULL },
+    { "geoproperty", (1 << CorString),                 0,            NULL }
   };
 
   if (ldFieldsExtract(geoQP, geoV, 4, true) == false)
@@ -231,11 +231,11 @@ static bool pCheckGeoQ(KjNode* geoQP)
 //
 // The reserved keyword '@none' (instances without the field) is exempt.
 //
-static bool pCheckUriArray(KjNode* arrayP, const char* what)
+static bool pCheckUriArray(CorNode* arrayP, const char* what)
 {
-  for (KjNode* memberP = arrayP->value.firstChildP; memberP != NULL; memberP = memberP->next)
+  for (CorNode* memberP = arrayP->value.firstChildP; memberP != NULL; memberP = memberP->next)
   {
-    if (memberP->type != KjString)
+    if (memberP->type != CorString)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Not a JSON String", "%s array member", what);
       return false;
@@ -255,11 +255,11 @@ static bool pCheckUriArray(KjNode* arrayP, const char* what)
 //
 // pCheckAttrs - each member of the Query 'attrs' array is a non-empty string
 //
-static bool pCheckAttrs(KjNode* attrsP)
+static bool pCheckAttrs(CorNode* attrsP)
 {
-  for (KjNode* attrP = attrsP->value.firstChildP; attrP != NULL; attrP = attrP->next)
+  for (CorNode* attrP = attrsP->value.firstChildP; attrP != NULL; attrP = attrP->next)
   {
-    if (attrP->type != KjString)
+    if (attrP->type != CorString)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Not a JSON String", "attrs array member");
       return false;
@@ -282,12 +282,12 @@ static bool pCheckAttrs(KjNode* attrsP)
 //
 bool pCheckQuery(void)
 {
-  KjNode* bodyP = corRest.in.requestTree;
+  CorNode* bodyP = corRest.in.requestTree;
 
   if (bodyP == NULL)                                     // dispatcher already 400s an empty POST body
     return true;
 
-  if (bodyP->type != KjObject)
+  if (bodyP->type != CorObject)
   {
     ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Not a JSON Object", "the POST Query payload body must be a JSON object");
     return false;
@@ -299,11 +299,11 @@ bool pCheckQuery(void)
   // geometryProperty and local are URL-param filters the body may mirror. Any
   // field not in this set is rejected as unknown (catches typos that would
   // otherwise silently widen the query).
-  #define PC_STR  (1 << KjString)
-  #define PC_ARR  (1 << KjArray)
-  #define PC_OBJ  (1 << KjObject)
-  #define PC_BOOL (1 << KjBoolean)
-  #define PC_NUM  ((1 << KjInt) | (1 << KjFloat))
+  #define PC_STR  (1 << CorString)
+  #define PC_ARR  (1 << CorArray)
+  #define PC_OBJ  (1 << CorObject)
+  #define PC_BOOL (1 << CorBoolean)
+  #define PC_NUM  ((1 << CorInt) | (1 << CorFloat))
   LdField fieldV[] =
   {
     { "type",              PC_STR,  PC_MANDATORY, NULL },
@@ -347,11 +347,11 @@ bool pCheckQuery(void)
     return false;
   }
 
-  KjNode* entitiesP  = findField(fieldV, fields, "entities");
-  KjNode* attrsP     = findField(fieldV, fields, "attrs");
-  KjNode* qP         = findField(fieldV, fields, "q");
-  KjNode* geoQP      = findField(fieldV, fields, "geoQ");
-  KjNode* datasetIdP = findField(fieldV, fields, "datasetId");
+  CorNode* entitiesP = findField(fieldV, fields, "entities");
+  CorNode* attrsP    = findField(fieldV, fields, "attrs");
+  CorNode* qP        = findField(fieldV, fields, "q");
+  CorNode* geoQP     = findField(fieldV, fields, "geoQ");
+  CorNode* datasetIdP = findField(fieldV, fields, "datasetId");
 
   if (entitiesP != NULL && pCheckEntities(entitiesP) == false)  return false;
   if (attrsP    != NULL && pCheckAttrs(attrsP)        == false)  return false;

@@ -9,7 +9,7 @@
 // Copyright 2026 Seamware
 // SPDX-License-Identifier: Apache-2.0
 //
-#include "kjson/KjNode.h"                              // KjNode
+#include "corTree/CorNode.h"                           // CorNode
 #include "kalloc/KAlloc.h"                             // KAlloc
 
 #include "corNgsild/LdPernotCache.h"                    // LdPernotCache, LdPernotItem
@@ -21,7 +21,7 @@
 extern LdPernotCache* ldPernotCacheCreate(void);
 
 // ldPernotCacheItemAdd - add a subscription to the pernot cache
-extern LdPernotItem* ldPernotCacheItemAdd(LdPernotCache* cacheP, KjNode* subTree,
+extern LdPernotItem* ldPernotCacheItemAdd(LdPernotCache* cacheP, CorNode* subTree,
                                            LdQNode* qExpr, void* tenantP);
 
 // ldPernotCacheItemLookup - find by subscription ID

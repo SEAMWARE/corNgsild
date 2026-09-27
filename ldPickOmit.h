@@ -10,7 +10,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // 
 //
-#include "kjson/KjNode.h"                           // KjNode
+#include "corTree/CorNode.h"                        // CorNode
 
 
 
@@ -24,7 +24,7 @@
 // time, not part of the stored entity) survives. This is the key difference
 // vs. ldAttrsFilter (the deprecated `attrs`), which always keeps id/type/scope.
 //
-extern void ldPickOmit(KjNode* entityP, char** pickV, char** omitV);
+extern void ldPickOmit(CorNode* entityP, char** pickV, char** omitV);
 
 
 
@@ -37,6 +37,6 @@ extern void ldPickOmit(KjNode* entityP, char** pickV, char** omitV);
 // preserved. This is the key difference vs. ldPickOmit, which strips
 // id/type/scope when not listed in pickV.
 //
-extern void ldAttrsFilter(KjNode* entityP, char** attrsV);
+extern void ldAttrsFilter(CorNode* entityP, char** attrsV);
 
 #endif  // CORNGSILD_LDPICKOMIT_H_

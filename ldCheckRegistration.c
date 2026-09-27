@@ -20,9 +20,9 @@
 
 #include "kbase/kLibLog.h"                             // KLOG_T
 #include "kalloc/KAlloc.h"                             // KAlloc
-#include "kjson/KjNode.h"                               // KjNode
-#include "kjson/kjLookup.h"                             // kjLookup
-#include "kjson/kjBuilder.h"                            // kjChildAdd, kjChildRemove
+#include "corTree/CorNode.h"                            // CorNode
+#include "corTree/corTreeLookup.h"                      // corTreeLookup
+#include "corTree/corTreeBuilder.h"                     // corTreeChildAdd, corTreeChildRemove
 
 #include "corRest/CorRestState.h"                          // corRest (requestStartTime)
 
@@ -46,15 +46,15 @@
 // type is mandatory (string or string[]); id and idPattern are optional.
 // id takes precedence over idPattern.
 //
-static bool checkEntityInfo(KjNode* entP)
+static bool checkEntityInfo(CorNode* entP)
 {
   OBJECT_CHECK(entP, "Invalid Registration", "'information[].entities[]' items must be JSON objects");
 
-  KjNode* typeP    = NULL;
-  KjNode* idP      = NULL;
-  KjNode* idPatP   = NULL;
+  CorNode* typeP   = NULL;
+  CorNode* idP     = NULL;
+  CorNode* idPatP  = NULL;
 
-  for (KjNode* fP = entP->value.firstChildP; fP != NULL; fP = fP->next)
+  for (CorNode* fP = entP->value.firstChildP; fP != NULL; fP = fP->next)
   {
     if      (strcmp(fP->name, "type") == 0)                    typeP  = fP;
     else if (strcmp(fP->name, "id") == 0)                      idP    = fP;
@@ -70,7 +70,7 @@ static bool checkEntityInfo(KjNode* entP)
 
   MANDATORY_CHECK(typeP, "Invalid Registration", "'entities[].type' is mandatory");
 
-  if (typeP->type == KjString)
+  if (typeP->type == CorString)
   {
     if (typeP->value.s[0] == 0)
     {
@@ -78,10 +78,10 @@ static bool checkEntityInfo(KjNode* entP)
       return false;
     }
   }
-  else if (typeP->type == KjArray)
+  else if (typeP->type == CorArray)
   {
     EMPTY_ARRAY_CHECK(typeP, "'entities[].type' array must not be empty");
-    for (KjNode* tP = typeP->value.firstChildP; tP != NULL; tP = tP->next)
+    for (CorNode* tP = typeP->value.firstChildP; tP != NULL; tP = tP->next)
     {
       STRING_CHECK(tP, "Invalid Registration", "'entities[].type' array items must be strings");
     }
@@ -129,9 +129,9 @@ static bool checkEntityInfo(KjNode* entP)
 //
 // checkStringArrayNonEmpty - non-empty array of non-empty strings
 //
-static bool checkStringArrayNonEmpty(KjNode* arrP, const char* fieldName)
+static bool checkStringArrayNonEmpty(CorNode* arrP, const char* fieldName)
 {
-  if (arrP->type != KjArray)
+  if (arrP->type != CorArray)
   {
     ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration", "'%s' must be an array of strings", fieldName);
     return false;
@@ -139,9 +139,9 @@ static bool checkStringArrayNonEmpty(KjNode* arrP, const char* fieldName)
 
   EMPTY_ARRAY_CHECK(arrP, "'information[].attributeNames' must not be empty");
 
-  for (KjNode* sP = arrP->value.firstChildP; sP != NULL; sP = sP->next)
+  for (CorNode* sP = arrP->value.firstChildP; sP != NULL; sP = sP->next)
   {
-    if (sP->type != KjString || sP->value.s[0] == 0)
+    if (sP->type != CorString || sP->value.s[0] == 0)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration", "'%s' items must be non-empty strings", fieldName);
       return false;
@@ -169,12 +169,12 @@ static bool checkStringArrayNonEmpty(KjNode* arrP, const char* fieldName)
 // relationshipNames have been folded into attributeNames, and `entities` (if
 // present) is a non-empty array of objects with at least `type`.
 //
-static bool checkExclusiveStructure(KjNode* infoArrayP)
+static bool checkExclusiveStructure(CorNode* infoArrayP)
 {
-  for (KjNode* infoP = infoArrayP->value.firstChildP; infoP != NULL; infoP = infoP->next)
+  for (CorNode* infoP = infoArrayP->value.firstChildP; infoP != NULL; infoP = infoP->next)
   {
-    KjNode* entitiesP = kjLookup(infoP, LD_VOCAB_ENTITIES);
-    KjNode* attrNamesP = kjLookup(infoP, "attributeNames");
+    CorNode* entitiesP = corTreeLookup(infoP, LD_VOCAB_ENTITIES);
+    CorNode* attrNamesP = corTreeLookup(infoP, "attributeNames");
 
     if (entitiesP == NULL)
     {
@@ -184,10 +184,10 @@ static bool checkExclusiveStructure(KjNode* infoArrayP)
       return false;
     }
 
-    for (KjNode* entP = entitiesP->value.firstChildP; entP != NULL; entP = entP->next)
+    for (CorNode* entP = entitiesP->value.firstChildP; entP != NULL; entP = entP->next)
     {
-      KjNode* idP    = kjLookup(entP, "id");
-      KjNode* idPatP = kjLookup(entP, LD_VOCAB_ID_PATTERN);
+      CorNode* idP   = corTreeLookup(entP, "id");
+      CorNode* idPatP = corTreeLookup(entP, LD_VOCAB_ID_PATTERN);
 
       if (idP == NULL || idPatP != NULL)
       {
@@ -222,21 +222,21 @@ static bool checkExclusiveStructure(KjNode* infoArrayP)
 // with attributeNames in the same element is an error. Empty sub-arrays are
 // not allowed.
 //
-static bool checkInformationArray(KjNode* infoArrayP)
+static bool checkInformationArray(CorNode* infoArrayP)
 {
   ARRAY_CHECK(infoArrayP, "Invalid Registration", "'information' must be a JSON array");
   EMPTY_ARRAY_CHECK(infoArrayP, "'information' must have at least one element");
 
-  for (KjNode* infoP = infoArrayP->value.firstChildP; infoP != NULL; infoP = infoP->next)
+  for (CorNode* infoP = infoArrayP->value.firstChildP; infoP != NULL; infoP = infoP->next)
   {
     OBJECT_CHECK(infoP, "Invalid Registration", "'information' items must be JSON objects");
 
-    KjNode* entitiesP  = NULL;
-    KjNode* attrNamesP = NULL;
-    KjNode* propsP     = NULL;
-    KjNode* relsP      = NULL;
+    CorNode* entitiesP = NULL;
+    CorNode* attrNamesP = NULL;
+    CorNode* propsP    = NULL;
+    CorNode* relsP     = NULL;
 
-    for (KjNode* fP = infoP->value.firstChildP; fP != NULL; fP = fP->next)
+    for (CorNode* fP = infoP->value.firstChildP; fP != NULL; fP = fP->next)
     {
       if      (strcmp(fP->name, LD_VOCAB_ENTITIES)   == 0)  entitiesP  = fP;
       else if (strcmp(fP->name, "attributeNames")    == 0)  attrNamesP = fP;
@@ -272,7 +272,7 @@ static bool checkInformationArray(KjNode* infoArrayP)
       ARRAY_CHECK(entitiesP, "Invalid Registration", "'information[].entities' must be an array");
       EMPTY_ARRAY_CHECK(entitiesP, "'information[].entities' must not be empty");
 
-      for (KjNode* entP = entitiesP->value.firstChildP; entP != NULL; entP = entP->next)
+      for (CorNode* entP = entitiesP->value.firstChildP; entP != NULL; entP = entP->next)
       {
         if (checkEntityInfo(entP) == false)
           return false;
@@ -301,34 +301,34 @@ static bool checkInformationArray(KjNode* infoArrayP)
 // validated each as a non-empty string array, so at most one form is present
 // here and both are well-formed.
 //
-static void regInfoMergeAttributeNames(KjNode* infoArrayP)
+static void regInfoMergeAttributeNames(CorNode* infoArrayP)
 {
-  for (KjNode* infoP = infoArrayP->value.firstChildP; infoP != NULL; infoP = infoP->next)
+  for (CorNode* infoP = infoArrayP->value.firstChildP; infoP != NULL; infoP = infoP->next)
   {
-    if (infoP->type != KjObject)
+    if (infoP->type != CorObject)
       continue;
 
-    KjNode* propsP = kjLookup(infoP, "propertyNames");
-    KjNode* relsP  = kjLookup(infoP, "relationshipNames");
+    CorNode* propsP = corTreeLookup(infoP, "propertyNames");
+    CorNode* relsP = corTreeLookup(infoP, "relationshipNames");
 
     if (propsP == NULL && relsP == NULL)
       continue;   // already 'attributeNames' (or no attribute restriction at all)
 
-    KjNode* mergedP = (propsP != NULL) ? propsP : relsP;
+    CorNode* mergedP = (propsP != NULL) ? propsP : relsP;
     mergedP->name = (char*) "attributeNames";
 
     // both forms present — append every relationshipNames item to attributeNames
     if (propsP != NULL && relsP != NULL)
     {
-      KjNode* itemP = relsP->value.firstChildP;
+      CorNode* itemP = relsP->value.firstChildP;
       while (itemP != NULL)
       {
-        KjNode* nextP = itemP->next;
-        kjChildRemove(relsP, itemP);
-        kjChildAdd(mergedP, itemP);
+        CorNode* nextP = itemP->next;
+        corTreeChildRemove(relsP, itemP);
+        corTreeChildAdd(mergedP, itemP);
         itemP = nextP;
       }
-      kjChildRemove(infoP, relsP);
+      corTreeChildRemove(infoP, relsP);
     }
   }
 }
@@ -343,18 +343,18 @@ static void regInfoMergeAttributeNames(KjNode* infoArrayP)
 // keys (accept, contentType, jsonldContext, ngsildConformance) have specific
 // allowed values per § 4.3.6.6.
 //
-static bool checkContextSourceInfo(KjNode* arrP)
+static bool checkContextSourceInfo(CorNode* arrP)
 {
   ARRAY_CHECK(arrP, "Invalid Registration", "'contextSourceInfo' must be an array");
 
-  for (KjNode* kvP = arrP->value.firstChildP; kvP != NULL; kvP = kvP->next)
+  for (CorNode* kvP = arrP->value.firstChildP; kvP != NULL; kvP = kvP->next)
   {
     OBJECT_CHECK(kvP, "Invalid Registration", "'contextSourceInfo' items must be {key,value} objects");
 
-    KjNode* keyP   = NULL;
-    KjNode* valueP = NULL;
+    CorNode* keyP  = NULL;
+    CorNode* valueP = NULL;
 
-    for (KjNode* fP = kvP->value.firstChildP; fP != NULL; fP = fP->next)
+    for (CorNode* fP = kvP->value.firstChildP; fP != NULL; fP = fP->next)
     {
       if      (strcmp(fP->name, "key")   == 0)  keyP   = fP;
       else if (strcmp(fP->name, "value") == 0)  valueP = fP;
@@ -470,18 +470,18 @@ static bool isIsoDuration(const char* s)
 // the post-merge re-validation). The fragment stage just well-forms the members
 // actually provided.
 //
-static bool checkTimeInterval(KjNode* tiP, const char* fieldName, bool complete)
+static bool checkTimeInterval(CorNode* tiP, const char* fieldName, bool complete)
 {
-  if (tiP->type != KjObject)
+  if (tiP->type != CorObject)
   {
     ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
             "'%s' must be a JSON object", fieldName);
     return false;
   }
 
-  KjNode* startP = NULL;
-  KjNode* endP   = NULL;
-  for (KjNode* fP = tiP->value.firstChildP; fP != NULL; fP = fP->next)
+  CorNode* startP = NULL;
+  CorNode* endP  = NULL;
+  for (CorNode* fP = tiP->value.firstChildP; fP != NULL; fP = fP->next)
   {
     if      (strcmp(fP->name, "startAt") == 0) startP = fP;
     else if (strcmp(fP->name, "endAt")   == 0) endP   = fP;
@@ -496,7 +496,7 @@ static bool checkTimeInterval(KjNode* tiP, const char* fieldName, bool complete)
 
   if (startP != NULL)
   {
-    if (startP->type != KjString)
+    if (startP->type != CorString)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
               "'%s.startAt' must be a DateTime string", fieldName);
@@ -512,7 +512,7 @@ static bool checkTimeInterval(KjNode* tiP, const char* fieldName, bool complete)
 
   if (endP != NULL)
   {
-    if (endP->type != KjString)
+    if (endP->type != CorString)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
               "'%s.endAt' must be a DateTime string", fieldName);
@@ -541,9 +541,9 @@ static bool checkTimeInterval(KjNode* tiP, const char* fieldName, bool complete)
 //
 // checkScope - validate scope: string or array of strings
 //
-static bool checkScope(KjNode* scopeP)
+static bool checkScope(CorNode* scopeP)
 {
-  if (scopeP->type == KjString)
+  if (scopeP->type == CorString)
   {
     if (scopeP->value.s[0] == 0)
     {
@@ -552,12 +552,12 @@ static bool checkScope(KjNode* scopeP)
     }
     return true;
   }
-  if (scopeP->type == KjArray)
+  if (scopeP->type == CorArray)
   {
     EMPTY_ARRAY_CHECK(scopeP, "'scope' array must not be empty");
-    for (KjNode* sP = scopeP->value.firstChildP; sP != NULL; sP = sP->next)
+    for (CorNode* sP = scopeP->value.firstChildP; sP != NULL; sP = sP->next)
     {
-      if (sP->type != KjString || sP->value.s[0] == 0)
+      if (sP->type != CorString || sP->value.s[0] == 0)
       {
         ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
                 "'scope' array items must be non-empty strings");
@@ -580,20 +580,20 @@ static bool checkScope(KjNode* scopeP)
 // Optional members: cacheDuration (ISO 8601 duration), timeout (positive
 // number), cooldown (positive number), localOnly (boolean).
 //
-static bool checkManagement(KjNode* mgmtP)
+static bool checkManagement(CorNode* mgmtP)
 {
-  if (mgmtP->type != KjObject)
+  if (mgmtP->type != CorObject)
   {
     ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
             "'management' must be a JSON object");
     return false;
   }
 
-  for (KjNode* fP = mgmtP->value.firstChildP; fP != NULL; fP = fP->next)
+  for (CorNode* fP = mgmtP->value.firstChildP; fP != NULL; fP = fP->next)
   {
     if (strcmp(fP->name, "cacheDuration") == 0)
     {
-      if (fP->type != KjString || !isIsoDuration(fP->value.s))
+      if (fP->type != CorString || !isIsoDuration(fP->value.s))
       {
         ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
                 "'management.cacheDuration' must be an ISO 8601 duration string");
@@ -603,8 +603,8 @@ static bool checkManagement(KjNode* mgmtP)
     else if (strcmp(fP->name, "timeout") == 0 || strcmp(fP->name, "cooldown") == 0)
     {
       double v = 0;
-      if      (fP->type == KjInt)   v = (double) fP->value.i;
-      else if (fP->type == KjFloat) v = fP->value.f;
+      if      (fP->type == CorInt)  v = (double) fP->value.i;
+      else if (fP->type == CorFloat) v = fP->value.f;
       else
       {
         ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
@@ -621,7 +621,7 @@ static bool checkManagement(KjNode* mgmtP)
     }
     else if (strcmp(fP->name, "localOnly") == 0)
     {
-      if (fP->type != KjBoolean)
+      if (fP->type != CorBoolean)
       {
         ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
                 "'management.localOnly' must be a boolean");
@@ -649,12 +649,12 @@ static bool checkManagement(KjNode* mgmtP)
 // Array of valid URIs; the literal "@none" is also accepted to denote the
 // default Attribute instance (§ 4.5.5).
 //
-static bool checkDatasetIdArray(KjNode* dsP)
+static bool checkDatasetIdArray(CorNode* dsP)
 {
   ARRAY_CHECK(dsP, "Invalid Registration", "'datasetId' must be a JSON array");
   EMPTY_ARRAY_CHECK(dsP, "'datasetId' array must not be empty");
 
-  for (KjNode* sP = dsP->value.firstChildP; sP != NULL; sP = sP->next)
+  for (CorNode* sP = dsP->value.firstChildP; sP != NULL; sP = sP->next)
   {
     STRING_CHECK(sP, "Invalid Registration", "'datasetId' items must be strings");
 
@@ -733,14 +733,14 @@ static bool isKnownRegistrationOp(const char* name)
 // For auxiliary mode the subset is restricted (retrieve-only). For other
 // modes every item must be a name listed in Table 4.20-1 or Table 4.20-2.
 //
-static bool checkOperations(KjNode* opsP, const char* modeStr)
+static bool checkOperations(CorNode* opsP, const char* modeStr)
 {
   ARRAY_CHECK(opsP, "Invalid Registration", "'operations' must be an array of strings");
   EMPTY_ARRAY_CHECK(opsP, "'operations' array must not be empty");
 
   bool isAux = (strcmp(modeStr, "auxiliary") == 0);
 
-  for (KjNode* sP = opsP->value.firstChildP; sP != NULL; sP = sP->next)
+  for (CorNode* sP = opsP->value.firstChildP; sP != NULL; sP = sP->next)
   {
     STRING_CHECK(sP, "Invalid Registration", "'operations' items must be strings");
 
@@ -775,7 +775,7 @@ static bool checkOperations(KjNode* opsP, const char* modeStr)
 //
 // ldCheckRegistration -
 //
-bool ldCheckRegistration(KjNode* regP, LdOp op, bool merged, KAlloc* faP)
+bool ldCheckRegistration(CorNode* regP, LdOp op, bool merged, KAlloc* faP)
 {
   (void) faP;  // reserved for future use (e.g. allocating expanded names)
 
@@ -793,39 +793,39 @@ bool ldCheckRegistration(KjNode* regP, LdOp op, bool merged, KAlloc* faP)
     static const char* readOnly[] = { "status", "lastFailure", "lastSuccess", "timesFailed", "timesSent", "createdAt", "modifiedAt", NULL };
     for (int i = 0; readOnly[i] != NULL; i++)
     {
-      KjNode* roP = kjLookup(regP, readOnly[i]);
+      CorNode* roP = corTreeLookup(regP, readOnly[i]);
       if (roP != NULL)
-        kjChildRemove(regP, roP);
+        corTreeChildRemove(regP, roP);
     }
   }
 
-  KjNode* typeP                = NULL;
-  KjNode* infoP                = NULL;
-  KjNode* endpointP            = NULL;
-  KjNode* modeP                = NULL;
-  KjNode* expiresAtP           = NULL;
-  KjNode* operationsP          = NULL;
-  KjNode* contextSrcInfoP      = NULL;
-  KjNode* descriptionP         = NULL;
-  KjNode* registrationNameP    = NULL;
-  KjNode* csourceAliasP        = NULL;
-  KjNode* tenantP              = NULL;
-  KjNode* scopeP               = NULL;
-  KjNode* refreshRateP         = NULL;
-  KjNode* observationIntervalP = NULL;
-  KjNode* managementIntervalP  = NULL;
-  KjNode* managementP          = NULL;
-  KjNode* datasetIdP           = NULL;
-  KjNode* locationP            = NULL;
-  KjNode* observationSpaceP    = NULL;
-  KjNode* operationSpaceP      = NULL;
+  CorNode* typeP               = NULL;
+  CorNode* infoP               = NULL;
+  CorNode* endpointP           = NULL;
+  CorNode* modeP               = NULL;
+  CorNode* expiresAtP          = NULL;
+  CorNode* operationsP         = NULL;
+  CorNode* contextSrcInfoP     = NULL;
+  CorNode* descriptionP        = NULL;
+  CorNode* registrationNameP   = NULL;
+  CorNode* csourceAliasP       = NULL;
+  CorNode* tenantP             = NULL;
+  CorNode* scopeP              = NULL;
+  CorNode* refreshRateP        = NULL;
+  CorNode* observationIntervalP = NULL;
+  CorNode* managementIntervalP = NULL;
+  CorNode* managementP         = NULL;
+  CorNode* datasetIdP          = NULL;
+  CorNode* locationP           = NULL;
+  CorNode* observationSpaceP   = NULL;
+  CorNode* operationSpaceP     = NULL;
 
-  for (KjNode* childP = regP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = regP->value.firstChildP; childP != NULL; childP = childP->next)
   {
     //
     // Delete-markers (TS 104-175 clause-8 / § 5.9.3). On the update path the
     // "urn:ngsi-ld:null" sentinel string means "delete this member": convert it
-    // to an internal KjNull (which the DB plugin turns into a $unset) and skip
+    // to an internal CorNull (which the DB plugin turns into a $unset) and skip
     // the per-field type validation below — the marker node persists in the
     // fragment for the plugin. Raw JSON null is never a valid value (JSON-LD
     // drops nulls). Mandatory members (information, endpoint) can't be deleted.
@@ -833,13 +833,13 @@ bool ldCheckRegistration(KjNode* regP, LdOp op, bool merged, KAlloc* faP)
     //
     if (op == LdOpUpdateRegistration)
     {
-      if (childP->type == KjNull)
+      if (childP->type == CorNull)
       {
         ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Value",
                 "JSON null is not allowed in NGSI-LD; use the 'urn:ngsi-ld:null' delete-marker (field: '%s')", childP->name);
         return false;
       }
-      if (childP->type == KjString && strcmp(childP->value.s, LD_VOCAB_NGSILD_NULL) == 0)
+      if (childP->type == CorString && strcmp(childP->value.s, LD_VOCAB_NGSILD_NULL) == 0)
       {
         if (strcmp(childP->name, LD_VOCAB_INFORMATION) == 0 || strcmp(childP->name, LD_VOCAB_ENDPOINT) == 0)
         {
@@ -847,11 +847,11 @@ bool ldCheckRegistration(KjNode* regP, LdOp op, bool merged, KAlloc* faP)
                   "'%s' is mandatory and cannot be deleted", childP->name);
           return false;
         }
-        childP->type = KjNull;   // internal delete signal honoured by the DB plugin ($unset)
+        childP->type = CorNull;  // internal delete signal honoured by the DB plugin ($unset)
         continue;
       }
     }
-    else if (childP->type == KjString && strcmp(childP->value.s, LD_VOCAB_NGSILD_NULL) == 0)
+    else if (childP->type == CorString && strcmp(childP->value.s, LD_VOCAB_NGSILD_NULL) == 0)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Value",
               "'urn:ngsi-ld:null' is not allowed as a first-level value in Create Registration (field: '%s')", childP->name);

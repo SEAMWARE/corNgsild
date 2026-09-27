@@ -11,7 +11,7 @@
 #include <string.h>                                      // strcmp, strstr, strlen, strrchr
 
 #include "kbase/kLibLog.h"                             // KLOG_T
-#include "kjson/KjNode.h"                              // KjNode
+#include "corTree/CorNode.h"                           // CorNode
 #include "corJsonld/corLdExpand.h"                       // corLdSetVocabExpandCheck, corLdSetValueCheck, corLdSetKeywordCheck, corLdSetVocabValueSuffix
 
 #include "corNgsild/ldTraceLevels.h"                      // LdTInit
@@ -215,20 +215,20 @@ static bool valueError(bool attrContext, const char* subject, const char* dataty
 //
 // ldTypedValueCheck - see ldInit.h.
 //
-bool ldTypedValueCheck(const char* subject, const char* datatype, KjNode* valueP, bool attrContext)
+bool ldTypedValueCheck(const char* subject, const char* datatype, CorNode* valueP, bool attrContext)
 {
   if (valueP == NULL || subject == NULL || datatype == NULL) return true;
 
   if (datatypeMatches(datatype, "dateTime") || datatypeMatches(datatype, "dateTimeStamp"))
   {
-    if (valueP->type != KjString || !ldCheckDateTime(valueP->value.s, NULL))
+    if (valueP->type != CorString || !ldCheckDateTime(valueP->value.s, NULL))
       return valueError(attrContext, subject, datatype, "a valid ISO 8601 dateTime");
     return true;
   }
 
   if (datatypeMatches(datatype, "date"))
   {
-    if (valueP->type != KjString || valueP->value.s == NULL || strlen(valueP->value.s) != 10
+    if (valueP->type != CorString || valueP->value.s == NULL || strlen(valueP->value.s) != 10
         || valueP->value.s[4] != '-' || valueP->value.s[7] != '-')
       return valueError(attrContext, subject, datatype, "a valid xsd:date (YYYY-MM-DD)");
     return true;
@@ -236,7 +236,7 @@ bool ldTypedValueCheck(const char* subject, const char* datatype, KjNode* valueP
 
   if (datatypeMatches(datatype, "time"))
   {
-    if (valueP->type != KjString || valueP->value.s == NULL
+    if (valueP->type != CorString || valueP->value.s == NULL
         || strlen(valueP->value.s) < 8 || valueP->value.s[2] != ':' || valueP->value.s[5] != ':')
       return valueError(attrContext, subject, datatype, "a valid xsd:time (HH:MM:SS)");
     return true;
@@ -247,23 +247,23 @@ bool ldTypedValueCheck(const char* subject, const char* datatype, KjNode* valueP
       datatypeMatches(datatype, "byte")    || datatypeMatches(datatype, "nonNegativeInteger") ||
       datatypeMatches(datatype, "positiveInteger"))
   {
-    if (valueP->type == KjInt) return true;
-    if (valueP->type == KjString && isIntegerString(valueP->value.s)) return true;
+    if (valueP->type == CorInt) return true;
+    if (valueP->type == CorString && isIntegerString(valueP->value.s)) return true;
     return valueError(attrContext, subject, datatype, "a valid integer");
   }
 
   if (datatypeMatches(datatype, "double")  || datatypeMatches(datatype, "decimal") ||
       datatypeMatches(datatype, "float"))
   {
-    if (valueP->type == KjInt || valueP->type == KjFloat) return true;
-    if (valueP->type == KjString && isNumberString(valueP->value.s)) return true;
+    if (valueP->type == CorInt || valueP->type == CorFloat) return true;
+    if (valueP->type == CorString && isNumberString(valueP->value.s)) return true;
     return valueError(attrContext, subject, datatype, "a valid number");
   }
 
   if (datatypeMatches(datatype, "boolean"))
   {
-    if (valueP->type == KjBoolean) return true;
-    if (valueP->type == KjString && valueP->value.s != NULL &&
+    if (valueP->type == CorBoolean) return true;
+    if (valueP->type == CorString && valueP->value.s != NULL &&
         (strcmp(valueP->value.s, "true") == 0 || strcmp(valueP->value.s, "false") == 0))
       return true;
     return valueError(attrContext, subject, datatype, "'true' or 'false'");
@@ -271,7 +271,7 @@ bool ldTypedValueCheck(const char* subject, const char* datatype, KjNode* valueP
 
   if (datatypeMatches(datatype, "anyURI"))
   {
-    if (valueP->type != KjString || ldCheckUri(valueP->value.s) == false)
+    if (valueP->type != CorString || ldCheckUri(valueP->value.s) == false)
       return valueError(attrContext, subject, datatype, "a valid URI");
     return true;
   }
@@ -286,7 +286,7 @@ bool ldTypedValueCheck(const char* subject, const char* datatype, KjNode* valueP
 //
 // ldValueCheck - the registered CorLdValueCheck callback (JSON-LD expansion path).
 //
-static bool ldValueCheck(const char* term, const char* datatype, KjNode* valueP)
+static bool ldValueCheck(const char* term, const char* datatype, CorNode* valueP)
 {
   return ldTypedValueCheck(term, datatype, valueP, /*attrContext*/false);
 }

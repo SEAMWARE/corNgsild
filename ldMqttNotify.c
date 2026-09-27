@@ -18,12 +18,12 @@
 
 #include "kbase/kLibLog.h"                               // kLogFunction
 #include "kalloc/kaAlloc.h"                              // kaAlloc
-#include "kjson/KjNode.h"                                // KjNode
-#include "kjson/kjBuilder.h"                             // kjObject, kjArray, kjString, kjChildAdd
-#include "kjson/kjLookup.h"                              // kjLookup
-#include "kjson/kjParse.h"                               // kjParse
-#include "kjson/kjRender.h"                              // kjFastRender
-#include "kjson/kjRenderSize.h"                          // kjFastRenderSize
+#include "corTree/CorNode.h"                             // CorNode
+#include "corTree/corTreeBuilder.h"                      // corTreeObject, corTreeArray, corTreeString, corTreeChildAdd
+#include "corTree/corTreeLookup.h"                       // corTreeLookup
+#include "corJson/corJsonParse.h"                        // corJsonParse
+#include "corJson/corJsonRender.h"                       // corJsonFastRender
+#include "corJson/corJsonRenderSize.h"                   // corJsonFastRenderSize
 
 #include "corRest/corRest.h"                               // corRest
 
@@ -194,16 +194,16 @@ static bool parseMqttUri(const char* uri, MqttUri* out)
 //
 // notifierInfoLookup - find a key (case-insensitive) in a notifierInfo array.
 //
-static const char* notifierInfoLookup(KjNode* arr, const char* key)
+static const char* notifierInfoLookup(CorNode* arr, const char* key)
 {
-  if (arr == NULL || arr->type != KjArray) return NULL;
-  for (KjNode* kvP = arr->value.firstChildP; kvP != NULL; kvP = kvP->next)
+  if (arr == NULL || arr->type != CorArray) return NULL;
+  for (CorNode* kvP = arr->value.firstChildP; kvP != NULL; kvP = kvP->next)
   {
-    if (kvP->type != KjObject) continue;
-    KjNode* kP = kjLookup(kvP, "key");
-    KjNode* vP = kjLookup(kvP, "value");
-    if (kP == NULL || kP->type != KjString)   continue;
-    if (vP == NULL || vP->type != KjString)   continue;
+    if (kvP->type != CorObject) continue;
+    CorNode* kP = corTreeLookup(kvP, "key");
+    CorNode* vP = corTreeLookup(kvP, "value");
+    if (kP == NULL || kP->type != CorString)  continue;
+    if (vP == NULL || vP->type != CorString)  continue;
     if (strcasecmp(kP->value.s, key) == 0)    return vP->value.s;
   }
   return NULL;
@@ -220,42 +220,42 @@ static const char* notifierInfoLookup(KjNode* arr, const char* key)
 static char* buildMqttMessage(const char* notifBodyJson,
                               const char* contentType,
                               const char* linkHeader,
-                              KjNode*     receiverInfo)
+                              CorNode*    receiverInfo)
 {
-  KjNode* root     = kjObject(corRest.kjsonP, NULL);
-  KjNode* metadata = kjObject(corRest.kjsonP, "metadata");
+  CorNode* root    = corTreeObject(corRest.kallocP, NULL);
+  CorNode* metadata = corTreeObject(corRest.kallocP, "metadata");
 
   if (contentType != NULL)
-    kjChildAdd(metadata, kjString(corRest.kjsonP, "Content-Type", (char*) contentType));
+    corTreeChildAdd(metadata, corTreeString(corRest.kallocP, "Content-Type", (char*) contentType));
 
   if (linkHeader != NULL)
-    kjChildAdd(metadata, kjString(corRest.kjsonP, "Link", (char*) linkHeader));
+    corTreeChildAdd(metadata, corTreeString(corRest.kallocP, "Link", (char*) linkHeader));
 
   // Copy receiverInfo entries into metadata as plain key/value strings.
-  if (receiverInfo != NULL && receiverInfo->type == KjArray)
+  if (receiverInfo != NULL && receiverInfo->type == CorArray)
   {
-    for (KjNode* kvP = receiverInfo->value.firstChildP; kvP != NULL; kvP = kvP->next)
+    for (CorNode* kvP = receiverInfo->value.firstChildP; kvP != NULL; kvP = kvP->next)
     {
-      if (kvP->type != KjObject) continue;
-      KjNode* kP = kjLookup(kvP, "key");
-      KjNode* vP = kjLookup(kvP, "value");
-      if (kP == NULL || kP->type != KjString) continue;
-      if (vP == NULL || vP->type != KjString) continue;
-      kjChildAdd(metadata, kjString(corRest.kjsonP, kP->value.s, vP->value.s));
+      if (kvP->type != CorObject) continue;
+      CorNode* kP = corTreeLookup(kvP, "key");
+      CorNode* vP = corTreeLookup(kvP, "value");
+      if (kP == NULL || kP->type != CorString) continue;
+      if (vP == NULL || vP->type != CorString) continue;
+      corTreeChildAdd(metadata, corTreeString(corRest.kallocP, kP->value.s, vP->value.s));
     }
   }
 
-  kjChildAdd(root, metadata);
+  corTreeChildAdd(root, metadata);
 
   // body: parse the notification JSON and graft as a tree.
-  KjNode* bodyTree = kjParse(corRest.kjsonP, (char*) notifBodyJson);
+  CorNode* bodyTree = corJsonParse(corRest.corJsonP, (char*) notifBodyJson);
   if (bodyTree == NULL) return NULL;
   bodyTree->name = (char*) "body";
-  kjChildAdd(root, bodyTree);
+  corTreeChildAdd(root, bodyTree);
 
-  int    sz  = kjFastRenderSize(root) + 1;
+  int    sz  = corJsonFastRenderSize(root) + 1;
   char*  buf = (char*) kaAlloc(&corRest.kalloc, sz);
-  kjFastRender(root, buf);
+  corJsonFastRender(root, buf);
   return buf;
 }
 
@@ -269,8 +269,8 @@ bool ldMqttNotify(const char* uri,
                   const char* notifBodyJson,
                   const char* contentType,
                   const char* linkHeader,
-                  KjNode*     receiverInfo,
-                  KjNode*     notifierInfo)
+                  CorNode*    receiverInfo,
+                  CorNode*    notifierInfo)
 {
   if (!mqttInitDone && ldMqttInit() != 0) return false;
 

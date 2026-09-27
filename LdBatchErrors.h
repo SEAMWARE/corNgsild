@@ -15,15 +15,14 @@
 // replaceEntity, ...) gather per-CSR / per-leg failures into an "errors[]"
 // list, then at finalize time the decision matrix picks 204 / 207 / 409
 // and — only in the 207 / 409 branches — serialises the list to a
-// KjNode tree to ship as the response body.
+// CorNode tree to ship as the response body.
 //
 // Holding the list as a plain struct array means the 204 / 201 "no error"
 // path pays zero JSON-tree allocation cost.
 //
 
 #include "kalloc/KAlloc.h"                             // KAlloc
-#include "kjson/KjNode.h"                              // KjNode
-#include "kjson/kjson.h"                               // Kjson
+#include "corTree/CorNode.h"                           // CorNode
 
 
 
@@ -87,13 +86,13 @@ static inline int ldBatchErrorListCount(const LdBatchErrorList* listP)
 // -----------------------------------------------------------------------------
 //
 // ldBatchErrorListToTree - materialise the list into the canonical
-// `"errors": [ … ]` KjArray with one BatchEntityError per entry. Called once
+// `"errors": [ … ]` CorArray with one BatchEntityError per entry. Called once
 // at response time when the decision matrix has settled on 207 / 409. Each
 // BatchEntityError carries a ProblemDetails (`error`) with `type`, `title`,
 // `status` and `detail` per § 5.2.17.
 //
-extern KjNode* ldBatchErrorListToTree(const LdBatchErrorList* listP,
-                                      Kjson*                  kjsonP);
+extern CorNode* ldBatchErrorListToTree(const LdBatchErrorList* listP,
+                                      KAlloc*                 allocP);
 
 
 

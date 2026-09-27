@@ -12,11 +12,11 @@
 #include <stdio.h>                                       // sscanf
 #include <string.h>                                      // strcmp, strchr
 
-#include "kjson/KjNode.h"                                // KjNode, KjType
-#include "kjson/kjson.h"                                 // Kjson
-#include "kjson/kjBuilder.h"                             // kjString, kjChildAdd, kjChildRemove
-#include "kjson/kjLookup.h"                              // kjLookup
-#include "kjson/kjChildReplace.h"                        // kjChildReplace
+#include "kalloc/KAlloc.h"                               // KAlloc
+#include "corTree/CorNode.h"                             // CorNode, CorValueType
+#include "corTree/corTreeBuilder.h"                      // corTreeString, corTreeChildAdd, corTreeChildRemove
+#include "corTree/corTreeLookup.h"                       // corTreeLookup
+#include "corTree/corTreeChildReplace.h"                 // corTreeChildReplace
 
 #include "corNgsild/ldConformanceDowngrade.h"             // Own interface
 
@@ -59,10 +59,10 @@ static bool olderThan(short targetMajor, short targetMinor, short cmpMajor, shor
 
 // attrType - read "type" from an attribute / instance object
 //
-static const char* attrType(KjNode* attrP)
+static const char* attrType(CorNode* attrP)
 {
-  KjNode* tP = kjLookup(attrP, "type");
-  if (tP != NULL && tP->type == KjString)
+  CorNode* tP = corTreeLookup(attrP, "type");
+  if (tP != NULL && tP->type == CorString)
     return tP->value.s;
   return NULL;
 }
@@ -78,13 +78,13 @@ static const char* attrType(KjNode* attrP)
 // ListRelationship → Relationship: rename "objectList" to "object" (single-string
 //                    or array — keep as-is; the consumer treats it as Relationship)
 //
-static void reformatAttr(KjNode* attrP)
+static void reformatAttr(CorNode* attrP)
 {
-  if (attrP == NULL || attrP->type != KjObject)
+  if (attrP == NULL || attrP->type != CorObject)
     return;
 
-  KjNode* typeP = kjLookup(attrP, "type");
-  if (typeP == NULL || typeP->type != KjString)
+  CorNode* typeP = corTreeLookup(attrP, "type");
+  if (typeP == NULL || typeP->type != CorString)
     return;
 
   const char* t = typeP->value.s;
@@ -100,7 +100,7 @@ static void reformatAttr(KjNode* attrP)
   else
     return;
 
-  KjNode* srcP = kjLookup(attrP, renameKey);
+  CorNode* srcP = corTreeLookup(attrP, renameKey);
   if (srcP != NULL)
     srcP->name = (char*) renameDest;
 
@@ -109,14 +109,14 @@ static void reformatAttr(KjNode* attrP)
 
 
 
-// stripField - remove a named child from a KjObject if present
+// stripField - remove a named child from a CorObject if present
 //
-static void stripField(KjNode* parentP, const char* name)
+static void stripField(CorNode* parentP, const char* name)
 {
-  if (parentP == NULL || parentP->type != KjObject || name == NULL) return;
-  KjNode* p = kjLookup(parentP, name);
+  if (parentP == NULL || parentP->type != CorObject || name == NULL) return;
+  CorNode* p = corTreeLookup(parentP, name);
   if (p != NULL)
-    kjChildRemove(parentP, p);
+    corTreeChildRemove(parentP, p);
 }
 
 
@@ -125,9 +125,9 @@ static void stripField(KjNode* parentP, const char* name)
 //
 // (Both single-attr and multi-instance array elements share the same shape.)
 //
-static void downgradeAttrInstance(KjNode* instP, short tMajor, short tMinor)
+static void downgradeAttrInstance(CorNode* instP, short tMajor, short tMinor)
 {
-  if (instP == NULL || instP->type != KjObject) return;
+  if (instP == NULL || instP->type != CorObject) return;
 
   // < 1.9: strip attr expiresAt, valueType
   if (olderThan(tMajor, tMinor, 1, 9))
@@ -171,25 +171,25 @@ static void downgradeAttrInstance(KjNode* instP, short tMajor, short tMinor)
 // arrays to a single instance object (lifted in place of the array — pre-1.3
 // didn't have attribute arrays at all).
 //
-static void downgradeAttr(KjNode* entityP, KjNode* attrP, short tMajor, short tMinor)
+static void downgradeAttr(CorNode* entityP, CorNode* attrP, short tMajor, short tMinor)
 {
   if (attrP == NULL) return;
 
-  if (attrP->type == KjArray)
+  if (attrP->type == CorArray)
   {
     // Per-instance downgrade first
-    for (KjNode* instP = attrP->value.firstChildP; instP != NULL; instP = instP->next)
+    for (CorNode* instP = attrP->value.firstChildP; instP != NULL; instP = instP->next)
       downgradeAttrInstance(instP, tMajor, tMinor);
 
     // < 1.3: lift first instance object in place of the array.
     if (olderThan(tMajor, tMinor, 1, 3))
     {
-      KjNode* firstP = attrP->value.firstChildP;
-      if (firstP != NULL && firstP->type == KjObject && entityP != NULL)
+      CorNode* firstP = attrP->value.firstChildP;
+      if (firstP != NULL && firstP->type == CorObject && entityP != NULL)
       {
         firstP->name = attrP->name;
         firstP->next = NULL;
-        kjChildReplace(entityP, attrP, firstP);
+        corTreeChildReplace(entityP, attrP, firstP);
       }
     }
   }
@@ -203,9 +203,9 @@ static void downgradeAttr(KjNode* entityP, KjNode* attrP, short tMajor, short tM
 
 // downgradeEntity - apply entity-level + per-attr downgrades
 //
-static void downgradeEntity(KjNode* entityP, short tMajor, short tMinor)
+static void downgradeEntity(CorNode* entityP, short tMajor, short tMinor)
 {
-  if (entityP == NULL || entityP->type != KjObject) return;
+  if (entityP == NULL || entityP->type != CorObject) return;
 
   // < 1.9: strip entity-level expiresAt
   if (olderThan(tMajor, tMinor, 1, 9))
@@ -218,14 +218,14 @@ static void downgradeEntity(KjNode* entityP, short tMajor, short tMinor)
   // < 1.3: collapse multi-type to first element
   if (olderThan(tMajor, tMinor, 1, 3))
   {
-    KjNode* typeP = kjLookup(entityP, "type");
-    if (typeP != NULL && typeP->type == KjArray && typeP->value.firstChildP != NULL)
+    CorNode* typeP = corTreeLookup(entityP, "type");
+    if (typeP != NULL && typeP->type == CorArray && typeP->value.firstChildP != NULL)
     {
-      KjNode* firstP = typeP->value.firstChildP;
-      if (firstP->type == KjString)
+      CorNode* firstP = typeP->value.firstChildP;
+      if (firstP->type == CorString)
       {
         // Replace the array node with a string node holding firstP's value
-        typeP->type    = KjString;
+        typeP->type    = CorString;
         typeP->value.s = firstP->value.s;
       }
     }
@@ -234,10 +234,10 @@ static void downgradeEntity(KjNode* entityP, short tMajor, short tMinor)
   // Recurse into attrs. downgradeAttr may replace a child (multi-instance
   // → single object collapse on < 1.3); capture next pointer up front so
   // iteration is safe across replacement.
-  KjNode* attrP = entityP->value.firstChildP;
+  CorNode* attrP = entityP->value.firstChildP;
   while (attrP != NULL)
   {
-    KjNode* nextP = attrP->next;
+    CorNode* nextP = attrP->next;
 
     bool skip = (attrP->name == NULL || attrP->name[0] == '@')              ||
                 (strcmp(attrP->name, "id")         == 0)                    ||
@@ -257,19 +257,19 @@ static void downgradeEntity(KjNode* entityP, short tMajor, short tMinor)
 
 // ldConformanceDowngrade -
 //
-void ldConformanceDowngrade(KjNode* treeP, short targetMajor, short targetMinor, Kjson* kjsonP)
+void ldConformanceDowngrade(CorNode* treeP, short targetMajor, short targetMinor, KAlloc* allocP)
 {
-  (void) kjsonP;  // reserved for future replacement allocations
+  (void) allocP;  // reserved for future replacement allocations
 
   if (treeP == NULL) return;
   if (targetMajor == 0 && targetMinor == 0) return;  // unset → no-op
 
-  if (treeP->type == KjArray)
+  if (treeP->type == CorArray)
   {
-    for (KjNode* entP = treeP->value.firstChildP; entP != NULL; entP = entP->next)
+    for (CorNode* entP = treeP->value.firstChildP; entP != NULL; entP = entP->next)
       downgradeEntity(entP, targetMajor, targetMinor);
   }
-  else if (treeP->type == KjObject)
+  else if (treeP->type == CorObject)
   {
     downgradeEntity(treeP, targetMajor, targetMinor);
   }

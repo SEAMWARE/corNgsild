@@ -31,13 +31,14 @@
 #include <time.h>                                      // clock_gettime
 
 #include "kalloc/kaAlloc.h"                            // kaAlloc
+#include "kalloc/KAlloc.h"                             // KAlloc
 #include "ktrace/kTrace.h"                             // KT_T, KT_W, KT_RVE
-#include "kjson/KjNode.h"                              // KjNode
-#include "kjson/kjBuilder.h"                           // kjObject, kjString, kjArray, kjChildAdd
-#include "kjson/kjClone.h"                             // kjClone
-#include "kjson/kjLookup.h"                            // kjLookup
-#include "kjson/kjRenderSize.h"                        // kjFastRenderSize
-#include "kjson/kjRender.h"                            // kjFastRender
+#include "corTree/CorNode.h"                           // CorNode
+#include "corTree/corTreeBuilder.h"                    // corTreeObject, corTreeString, corTreeArray, corTreeChildAdd
+#include "corTree/corTreeClone.h"                      // corTreeClone
+#include "corTree/corTreeLookup.h"                     // corTreeLookup
+#include "corJson/corJsonRenderSize.h"                 // corJsonFastRenderSize
+#include "corJson/corJsonRender.h"                     // corJsonFastRender
 
 #include "corRest/CorRestState.h"                        // corRest
 #include "corRest/corRestClient.h"                       // CorRestClientRequest, etc.
@@ -260,26 +261,26 @@ static const char* notifIdGenerate(void)
 // request may delete them before a deferred send fires, so the data
 // array is cloned here, not at send time).
 //
-static KjNode* csourceNotificationBuild(LdSubCacheItem* subItemP,
+static CorNode* csourceNotificationBuild(LdSubCacheItem* subItemP,
                                         LdRegCacheItem** matchV, int matchN,
                                         const char* triggerReason)
 {
   char isoTimeBuf[64];
   isoNow(isoTimeBuf, sizeof(isoTimeBuf));
 
-  KjNode* notification = kjObject(corRest.kjsonP, NULL);
-  kjChildAdd(notification, kjString(corRest.kjsonP, "id",             (char*) notifIdGenerate()));
-  kjChildAdd(notification, kjString(corRest.kjsonP, "type",           "ContextSourceNotification"));
-  kjChildAdd(notification, kjString(corRest.kjsonP, "subscriptionId", subItemP->subId));
-  kjChildAdd(notification, kjString(corRest.kjsonP, "notifiedAt",     isoTimeBuf));
-  kjChildAdd(notification, kjString(corRest.kjsonP, "triggerReason",  (char*) triggerReason));
+  CorNode* notification = corTreeObject(corRest.kallocP, NULL);
+  corTreeChildAdd(notification, corTreeString(corRest.kallocP, "id",  (char*) notifIdGenerate()));
+  corTreeChildAdd(notification, corTreeString(corRest.kallocP, "type", "ContextSourceNotification"));
+  corTreeChildAdd(notification, corTreeString(corRest.kallocP, "subscriptionId", subItemP->subId));
+  corTreeChildAdd(notification, corTreeString(corRest.kallocP, "notifiedAt", isoTimeBuf));
+  corTreeChildAdd(notification, corTreeString(corRest.kallocP, "triggerReason", (char*) triggerReason));
 
-  KjNode* dataArray = kjArray(corRest.kjsonP, "data");
+  CorNode* dataArray = corTreeArray(corRest.kallocP, "data");
   for (int i = 0; i < matchN; i++)
   {
     if (matchV[i]->regTree == NULL) continue;
 
-    KjNode* regClone = kjClone(corRest.kjsonP, matchV[i]->regTree);
+    CorNode* regClone = corTreeClone(corRest.kallocP, matchV[i]->regTree);
 
     // § 6.4.5 — the registration's server-owned createdAt/modifiedAt (stored as
     // nanosecond integers) are not part of a CsourceNotification payload; strip
@@ -295,26 +296,26 @@ static KjNode* csourceNotificationBuild(LdSubCacheItem* subItemP,
     // surviving array is what the subscriber actually cares about.
     if (subItemP->entitySelectors != NULL)
     {
-      KjNode* infoArrP = kjLookup(regClone, "information");
-      if (infoArrP != NULL && infoArrP->type == KjArray)
+      CorNode* infoArrP = corTreeLookup(regClone, "information");
+      if (infoArrP != NULL && infoArrP->type == CorArray)
       {
-        KjNode*    jsonInfo = infoArrP->value.firstChildP;
+        CorNode*   jsonInfo = infoArrP->value.firstChildP;
         LdRegInfo* regInfo  = matchV[i]->infoV;
         while (jsonInfo != NULL && regInfo != NULL)
         {
-          KjNode*    jsonNext = jsonInfo->next;
+          CorNode*   jsonNext = jsonInfo->next;
           LdRegInfo* regNext  = regInfo->next;
           if (!subEntitySideMatchesInfo(subItemP, regInfo))
-            kjChildRemove(infoArrP, jsonInfo);
+            corTreeChildRemove(infoArrP, jsonInfo);
           jsonInfo = jsonNext;
           regInfo  = regNext;
         }
       }
     }
 
-    kjChildAdd(dataArray, regClone);
+    corTreeChildAdd(dataArray, regClone);
   }
-  kjChildAdd(notification, dataArray);
+  corTreeChildAdd(notification, dataArray);
 
   return notification;
 }
@@ -325,7 +326,7 @@ static KjNode* csourceNotificationBuild(LdSubCacheItem* subItemP,
 //
 // csourceNotificationPost - compact and POST a built notification
 //
-static void csourceNotificationPost(LdSubCacheItem* subItemP, KjNode* notification)
+static void csourceNotificationPost(LdSubCacheItem* subItemP, CorNode* notification)
 {
   if (subItemP->endpointUri == NULL || notification == NULL)
     return;
@@ -354,20 +355,20 @@ static void csourceNotificationPost(LdSubCacheItem* subItemP, KjNode* notificati
 
   if (acceptLdJson && subItemP->contextUrl != NULL)
   {
-    KjNode* dataP = kjLookup(notification, "data");
-    if (dataP != NULL && dataP->type == KjArray)
+    CorNode* dataP = corTreeLookup(notification, "data");
+    if (dataP != NULL && dataP->type == CorArray)
     {
-      for (KjNode* ep = dataP->value.firstChildP; ep != NULL; ep = ep->next)
+      for (CorNode* ep = dataP->value.firstChildP; ep != NULL; ep = ep->next)
       {
-        if (ep->type == KjObject && kjLookup(ep, "@context") == NULL)
-          kjChildAdd(ep, kjString(corRest.kjsonP, "@context", subItemP->contextUrl));
+        if (ep->type == CorObject && corTreeLookup(ep, "@context") == NULL)
+          corTreeChildAdd(ep, corTreeString(corRest.kallocP, "@context", subItemP->contextUrl));
       }
     }
   }
 
-  int   bodySize = kjFastRenderSize(notification) + 1;
+  int   bodySize = corJsonFastRenderSize(notification) + 1;
   char* body     = (char*) kaAlloc(&corRest.kalloc, bodySize);
-  kjFastRender(notification, body);
+  corJsonFastRender(notification, body);
 
   CorRestClientRequest  req;
   CorRestClientResponse resp;
@@ -394,14 +395,14 @@ static void csourceNotificationPost(LdSubCacheItem* subItemP, KjNode* notificati
   }
 
   // § 5.2.15 endpoint.receiverInfo — emit each {key,value} as a request header
-  if (subItemP->receiverInfo != NULL && subItemP->receiverInfo->type == KjArray)
+  if (subItemP->receiverInfo != NULL && subItemP->receiverInfo->type == CorArray)
   {
-    for (KjNode* kvP = subItemP->receiverInfo->value.firstChildP; kvP != NULL; kvP = kvP->next)
+    for (CorNode* kvP = subItemP->receiverInfo->value.firstChildP; kvP != NULL; kvP = kvP->next)
     {
-      if (kvP->type != KjObject) continue;
-      KjNode* kP = kjLookup(kvP, "key");
-      KjNode* vP = kjLookup(kvP, "value");
-      if (kP != NULL && kP->type == KjString && vP != NULL && vP->type == KjString)
+      if (kvP->type != CorObject) continue;
+      CorNode* kP = corTreeLookup(kvP, "key");
+      CorNode* vP = corTreeLookup(kvP, "value");
+      if (kP != NULL && kP->type == CorString && vP != NULL && vP->type == CorString)
       {
         const char* hv = ldRequestSubstitute(kP->value.s, vP->value.s);
         if (hv != NULL)

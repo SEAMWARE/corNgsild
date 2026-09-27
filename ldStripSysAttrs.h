@@ -10,12 +10,12 @@
 #ifndef LD_STRIP_SYSATTRS_H
 #define LD_STRIP_SYSATTRS_H
 
-#include "kjson/KjNode.h"                           // KjNode
+#include "corTree/CorNode.h"                        // CorNode
 
 // -----------------------------------------------------------------------------
 //
 // ldStripSysAttrs - remove createdAt/modifiedAt from entity tree (recursively)
 //
-extern void ldStripSysAttrs(KjNode* treeP);
+extern void ldStripSysAttrs(CorNode* treeP);
 
 #endif

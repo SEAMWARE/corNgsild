@@ -8,8 +8,8 @@
 // Copyright 2026 Seamware
 // SPDX-License-Identifier: Apache-2.0
 //
-#include "kjson/kjson.h"                              // Kjson
-#include "kjson/KjNode.h"                              // KjNode
+#include "kalloc/KAlloc.h"                            // KAlloc
+#include "corTree/CorNode.h"                           // CorNode
 
 
 
@@ -19,7 +19,7 @@
 //                 stored document (shallow JSON Merge Patch, RFC 7396 first level)
 //
 // For each first-level member of `fragment`:
-//   - KjNull            → delete the same-named member from `target` (the
+//   - CorNull           → delete the same-named member from `target` (the
 //                         delete-marker, already resolved from "urn:ngsi-ld:null"
 //                         by the validator),
 //   - any other value   → replace/add it in `target` (cloned into `allocP`).
@@ -28,6 +28,6 @@
 // The merge is done broker-side so the DB plugins only ever STORE a complete
 // document — the NGSI-LD merge/delete semantics live here, not in each plugin.
 //
-extern void ldRegSubMerge(KjNode* target, KjNode* fragment, Kjson* allocP);
+extern void ldRegSubMerge(CorNode* target, CorNode* fragment, KAlloc* allocP);
 
 #endif  // COR_NGSILD_LD_REG_SUB_MERGE_H

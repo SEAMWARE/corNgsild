@@ -20,7 +20,8 @@
 //
 #include <stdbool.h>                                   // bool
 
-#include "kjson/KjNode.h"                              // KjNode, Kjson
+#include "kalloc/KAlloc.h"                             // KAlloc
+#include "corTree/CorNode.h"                           // CorNode, CorJson
 #include "corNgsild/LdRegCache.h"                       // LdRegInfo
 
 
@@ -39,14 +40,14 @@
 // If no attrs match, returns NULL — nothing to forward.
 //
 // detach == true:
-//   Claimed attrs are moved (kjChildRemove + kjChildAdd) from entityP into
+//   Claimed attrs are moved (corTreeChildRemove + corTreeChildAdd) from entityP into
 //   the fragment. After the call, entityP no longer holds them. Use for
 //   exclusive / redirect passes where the broker must not keep or re-forward
 //   the chopped attrs.
 //
 // detach == false:
 //   Claimed attrs are shallow-linked into the fragment without being
-//   removed from entityP (the fragment borrows KjNodes from entityP).
+//   removed from entityP (the fragment borrows CorNodes from entityP).
 //   Use for inclusive where the local broker keeps the attrs AND forwards.
 //   Caller must not mutate the fragment's children, and the fragment's
 //   lifetime must not outlive entityP.
@@ -54,9 +55,9 @@
 // id / type / @context are always cloned — they appear in every fragment
 // but must stay on entityP too.
 //
-extern KjNode* ldEntityFragmentForInfo(KjNode*     entityP,
+extern CorNode* ldEntityFragmentForInfo(CorNode*   entityP,
                                        LdRegInfo*  riP,
-                                       Kjson*      kjP,
+                                       KAlloc*     allocP,
                                        bool        detach);
 
 #endif  // CORNGSILD_LDENTITYFRAGMENT_H_

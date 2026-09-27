@@ -98,7 +98,7 @@ uint64_t ldDefaultCooldownNs = 30000000000ULL;   // --cooldownMillis (default 30
 const char* ldCsourceAliasBase   = NULL;
 long long   ldBrokerStartTimeSec = 0;
 const char* ldBrokerHttpEndpoint = NULL;
-KjNode*     ldContextSourceExtras = NULL;
+CorNode*    ldContextSourceExtras = NULL;
 
 
 

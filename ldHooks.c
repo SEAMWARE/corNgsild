@@ -12,10 +12,11 @@
 #include <string.h>                                      // strcmp, strncasecmp, memset
 
 #include "kalloc/kaAlloc.h"                             // kaAlloc
-#include "kjson/KjNode.h"                               // KjNode
-#include "kjson/kjLookup.h"                             // kjLookup
-#include "kjson/kjBuilder.h"                        // kjChildRemove, kjChildAdd
-#include "kjson/kjNodeDecouple.h"                   // kjNodeDecouple
+#include "kalloc/KAlloc.h"                              // KAlloc
+#include "corTree/CorNode.h"                             // CorNode
+#include "corTree/corTreeLookup.h"                       // corTreeLookup
+#include "corTree/corTreeBuilder.h"                      // corTreeChildRemove, corTreeChildAdd
+#include "corTree/corTreeNodeDecouple.h"                 // corTreeNodeDecouple
 #include "corRest/corRest.h"                             // corRest
 #include "corRest/CorRestService.h"                      // CorRestService.ldOp
 #include "corJsonld/corLdInit.h"                             // corLdCoreContext
@@ -77,34 +78,34 @@ static void ldPreDispatchHook(void)
 // On reject: ldError raised + corNgsild.contextError set; caller
 // returns immediately. Returns true if a rejection was raised.
 //
-static bool preExpandCheckCsrEntityTypes(KjNode* bodyP)
+static bool preExpandCheckCsrEntityTypes(CorNode* bodyP)
 {
-  if (bodyP == NULL || bodyP->type != KjObject)
+  if (bodyP == NULL || bodyP->type != CorObject)
     return false;
 
-  KjNode* infoP = kjLookup(bodyP, "information");
-  if (infoP == NULL || infoP->type != KjArray)
+  CorNode* infoP = corTreeLookup(bodyP, "information");
+  if (infoP == NULL || infoP->type != CorArray)
     return false;
 
-  for (KjNode* infoElP = infoP->value.firstChildP; infoElP != NULL; infoElP = infoElP->next)
+  for (CorNode* infoElP = infoP->value.firstChildP; infoElP != NULL; infoElP = infoElP->next)
   {
-    if (infoElP->type != KjObject)
+    if (infoElP->type != CorObject)
       continue;
 
-    KjNode* entitiesP = kjLookup(infoElP, "entities");
-    if (entitiesP == NULL || entitiesP->type != KjArray)
+    CorNode* entitiesP = corTreeLookup(infoElP, "entities");
+    if (entitiesP == NULL || entitiesP->type != CorArray)
       continue;
 
-    for (KjNode* entP = entitiesP->value.firstChildP; entP != NULL; entP = entP->next)
+    for (CorNode* entP = entitiesP->value.firstChildP; entP != NULL; entP = entP->next)
     {
-      if (entP->type != KjObject)
+      if (entP->type != CorObject)
         continue;
 
-      KjNode* typeP = kjLookup(entP, "type");
+      CorNode* typeP = corTreeLookup(entP, "type");
       if (typeP == NULL)
         continue;
 
-      if (typeP->type == KjString)
+      if (typeP->type == CorString)
       {
         if (typeP->value.s[0] == 0)
         {
@@ -113,11 +114,11 @@ static bool preExpandCheckCsrEntityTypes(KjNode* bodyP)
           return true;
         }
       }
-      else if (typeP->type == KjArray)
+      else if (typeP->type == CorArray)
       {
-        for (KjNode* elemP = typeP->value.firstChildP; elemP != NULL; elemP = elemP->next)
+        for (CorNode* elemP = typeP->value.firstChildP; elemP != NULL; elemP = elemP->next)
         {
-          if (elemP->type == KjString && elemP->value.s[0] == 0)
+          if (elemP->type == CorString && elemP->value.s[0] == 0)
           {
             ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
                     "'entities[].type' array items must be non-empty strings");
@@ -147,16 +148,16 @@ static bool preExpandCheckCsrEntityTypes(KjNode* bodyP)
 //
 // Returns true (and raises ldError) if an empty type was found.
 //
-static bool preExpandCheckEntityType(KjNode* entP)
+static bool preExpandCheckEntityType(CorNode* entP)
 {
-  if (entP == NULL || entP->type != KjObject)
+  if (entP == NULL || entP->type != CorObject)
     return false;
 
-  KjNode* typeP = kjLookup(entP, "type");
+  CorNode* typeP = corTreeLookup(entP, "type");
   if (typeP == NULL)
     return false;
 
-  if (typeP->type == KjString)
+  if (typeP->type == CorString)
   {
     if (typeP->value.s[0] == 0)
     {
@@ -164,11 +165,11 @@ static bool preExpandCheckEntityType(KjNode* entP)
       return true;
     }
   }
-  else if (typeP->type == KjArray)
+  else if (typeP->type == CorArray)
   {
-    for (KjNode* elemP = typeP->value.firstChildP; elemP != NULL; elemP = elemP->next)
+    for (CorNode* elemP = typeP->value.firstChildP; elemP != NULL; elemP = elemP->next)
     {
-      if (elemP->type == KjString && elemP->value.s[0] == 0)
+      if (elemP->type == CorString && elemP->value.s[0] == 0)
       {
         ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Entity Type", "Entity 'type' array elements must not be empty strings");
         return true;
@@ -189,19 +190,19 @@ static bool preExpandCheckEntityType(KjNode* entP)
 // batch-delete body is an array of id strings — the non-object elements are
 // simply skipped.
 //
-static bool preExpandCheckEntityTypes(KjNode* bodyP)
+static bool preExpandCheckEntityTypes(CorNode* bodyP)
 {
   if (bodyP == NULL)
     return false;
 
-  if (bodyP->type == KjObject)
+  if (bodyP->type == CorObject)
     return preExpandCheckEntityType(bodyP);
 
-  if (bodyP->type == KjArray)
+  if (bodyP->type == CorArray)
   {
-    for (KjNode* entP = bodyP->value.firstChildP; entP != NULL; entP = entP->next)
+    for (CorNode* entP = bodyP->value.firstChildP; entP != NULL; entP = entP->next)
     {
-      if (entP->type == KjObject && preExpandCheckEntityType(entP))
+      if (entP->type == CorObject && preExpandCheckEntityType(entP))
         return true;
     }
   }
@@ -222,27 +223,27 @@ static bool preExpandCheckEntityTypes(KjNode* bodyP)
 //
 // Returns the offending node, or NULL if none found.
 //
-static KjNode* ldFindEmbeddedAtContext(KjNode* nodeP)
+static CorNode* ldFindEmbeddedAtContext(CorNode* nodeP)
 {
   if (nodeP == NULL)
     return NULL;
 
-  if (nodeP->type == KjObject)
+  if (nodeP->type == CorObject)
   {
-    for (KjNode* c = nodeP->value.firstChildP; c != NULL; c = c->next)
+    for (CorNode* c = nodeP->value.firstChildP; c != NULL; c = c->next)
     {
       if (c->name != NULL && strcmp(c->name, "@context") == 0)
         return c;
-      KjNode* inner = ldFindEmbeddedAtContext(c);
+      CorNode* inner = ldFindEmbeddedAtContext(c);
       if (inner != NULL)
         return inner;
     }
   }
-  else if (nodeP->type == KjArray)
+  else if (nodeP->type == CorArray)
   {
-    for (KjNode* c = nodeP->value.firstChildP; c != NULL; c = c->next)
+    for (CorNode* c = nodeP->value.firstChildP; c != NULL; c = c->next)
     {
-      KjNode* inner = ldFindEmbeddedAtContext(c);
+      CorNode* inner = ldFindEmbeddedAtContext(c);
       if (inner != NULL)
         return inner;
     }
@@ -282,14 +283,14 @@ static KjNode* ldFindEmbeddedAtContext(KjNode* nodeP)
 // pruning (an all-missing-@context batch must still yield a 207, not a false
 // "empty array"). The duplicate-member check always applies.
 //
-static bool checkRawInputTree(KjNode* nodeP, bool checkEmpty)
+static bool checkRawInputTree(CorNode* nodeP, bool checkEmpty)
 {
-  if (checkEmpty && (nodeP->type == KjObject || nodeP->type == KjArray))
+  if (checkEmpty && (nodeP->type == CorObject || nodeP->type == CorArray))
   {
     bool empty = true;
-    for (KjNode* cP = nodeP->value.firstChildP; cP != NULL; cP = cP->next)
+    for (CorNode* cP = nodeP->value.firstChildP; cP != NULL; cP = cP->next)
     {
-      if ((nodeP->type == KjObject) && (cP->name != NULL) &&
+      if ((nodeP->type == CorObject) && (cP->name != NULL) &&
           ((strcmp(cP->name, "@context") == 0) || (strcmp(cP->name, "@graph") == 0)))
         continue;  // JSON-LD scaffolding, not content
       empty = false;
@@ -297,17 +298,17 @@ static bool checkRawInputTree(KjNode* nodeP, bool checkEmpty)
     }
     if (empty)
     {
-      const char* what = (nodeP->type == KjArray) ? "array" : "object";
+      const char* what = (nodeP->type == CorArray) ? "array" : "object";
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Empty Structure", "an empty %s is not valid NGSI-LD input", what);
       return false;
     }
   }
 
-  if (nodeP->type == KjObject)
+  if (nodeP->type == CorObject)
   {
-    for (KjNode* aP = nodeP->value.firstChildP; aP != NULL; aP = aP->next)
+    for (CorNode* aP = nodeP->value.firstChildP; aP != NULL; aP = aP->next)
     {
-      for (KjNode* bP = aP->next; bP != NULL; bP = bP->next)
+      for (CorNode* bP = aP->next; bP != NULL; bP = bP->next)
       {
         if ((aP->name != NULL) && (bP->name != NULL) && (strcmp(aP->name, bP->name) == 0))
         {
@@ -318,7 +319,7 @@ static bool checkRawInputTree(KjNode* nodeP, bool checkEmpty)
       }
     }
 
-    for (KjNode* cP = nodeP->value.firstChildP; cP != NULL; cP = cP->next)
+    for (CorNode* cP = nodeP->value.firstChildP; cP != NULL; cP = cP->next)
     {
       if ((cP->name != NULL) && ((strcmp(cP->name, LD_VOCAB_HAS_JSON) == 0) || (strcmp(cP->name, "@context") == 0)))
         continue;  // opaque JSON literal / JSON-LD context — not NGSI-LD structure
@@ -327,9 +328,9 @@ static bool checkRawInputTree(KjNode* nodeP, bool checkEmpty)
         return false;
     }
   }
-  else if (nodeP->type == KjArray)
+  else if (nodeP->type == CorArray)
   {
-    for (KjNode* cP = nodeP->value.firstChildP; cP != NULL; cP = cP->next)
+    for (CorNode* cP = nodeP->value.firstChildP; cP != NULL; cP = cP->next)
       if (checkRawInputTree(cP, checkEmpty) == false)
         return false;
   }
@@ -432,7 +433,7 @@ static void ldParseHook(void)
     return;
   }
 
-  KjNode* atCtx    = kjLookup(corRest.in.requestTree, "@context");
+  CorNode* atCtx   = corTreeLookup(corRest.in.requestTree, "@context");
   char*   ct       = corRest.in.contentType;
   bool    isLdJson = (ct != NULL && strncasecmp(ct, "application/ld+json", 19) == 0);
 
@@ -445,7 +446,7 @@ static void ldParseHook(void)
   // matches established NGSI-LD listing behaviour.
   //
   bool isArrayBody = (corRest.in.requestTree != NULL &&
-                      corRest.in.requestTree->type == KjArray);
+                      corRest.in.requestTree->type == CorArray);
 
   // Per-element check policy:
   //   non-batch  → whole request 400 (one missing @context = whole body bad)
@@ -456,21 +457,21 @@ static void ldParseHook(void)
 
   // @graph: a JSON-LD keyword we do not act on — remove it (no error) so it does
   // not linger in the stored entity. Top-level and per batch-array element.
-  if (corRest.in.requestTree->type == KjObject)
+  if (corRest.in.requestTree->type == CorObject)
   {
-    KjNode* g = kjLookup(corRest.in.requestTree, "@graph");
+    CorNode* g = corTreeLookup(corRest.in.requestTree, "@graph");
     if (g != NULL)
-      kjChildRemove(corRest.in.requestTree, g);
+      corTreeChildRemove(corRest.in.requestTree, g);
   }
   else if (isArrayBody)
   {
-    for (KjNode* elemP = corRest.in.requestTree->value.firstChildP; elemP != NULL; elemP = elemP->next)
+    for (CorNode* elemP = corRest.in.requestTree->value.firstChildP; elemP != NULL; elemP = elemP->next)
     {
-      if (elemP->type != KjObject)
+      if (elemP->type != CorObject)
         continue;
-      KjNode* g = kjLookup(elemP, "@graph");
+      CorNode* g = corTreeLookup(elemP, "@graph");
       if (g != NULL)
-        kjChildRemove(elemP, g);
+        corTreeChildRemove(elemP, g);
     }
   }
 
@@ -526,11 +527,11 @@ static void ldParseHook(void)
 
     if (isArrayBody && isEntityArrayOp)
     {
-      for (KjNode* elemP = corRest.in.requestTree->value.firstChildP; elemP != NULL; elemP = elemP->next)
+      for (CorNode* elemP = corRest.in.requestTree->value.firstChildP; elemP != NULL; elemP = elemP->next)
       {
-        if (elemP->type != KjObject)
+        if (elemP->type != CorObject)
           continue;
-        if (kjLookup(elemP, "@context") == NULL)
+        if (corTreeLookup(elemP, "@context") == NULL)
         {
           ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Missing @context",
                   "every entity of an application/ld+json array body must carry an @context member");
@@ -551,11 +552,11 @@ static void ldParseHook(void)
   {
     if (isArrayBody && isEntityArrayOp)
     {
-      for (KjNode* elemP = corRest.in.requestTree->value.firstChildP; elemP != NULL; elemP = elemP->next)
+      for (CorNode* elemP = corRest.in.requestTree->value.firstChildP; elemP != NULL; elemP = elemP->next)
       {
-        if (elemP->type != KjObject)
+        if (elemP->type != CorObject)
           continue;
-        if (kjLookup(elemP, "@context") != NULL)
+        if (corTreeLookup(elemP, "@context") != NULL)
         {
           ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Unexpected @context",
                   "@context in body not allowed for Content-Type application/json");
@@ -623,8 +624,8 @@ static void ldParseHook(void)
       if (!isArrayBody)
       {
         // Single-object body: inject @context so corLdExpandTree picks it up.
-        KjNode* ctxNode = kjString(corRest.kjsonP, "@context", contextUrl);
-        kjChildAdd(corRest.in.requestTree, ctxNode);
+        CorNode* ctxNode = corTreeString(corRest.kallocP, "@context", contextUrl);
+        corTreeChildAdd(corRest.in.requestTree, ctxNode);
       }
       else
       {
@@ -647,9 +648,9 @@ static void ldParseHook(void)
   //
   const char* recordTypeValue = NULL;
   const char* recordLabel     = NULL;
-  KjNode*     typeP           = NULL;
-  KjNode*     typePrevP       = NULL;
-  if (corRest.in.urlPath != NULL && corRest.in.requestTree != NULL && corRest.in.requestTree->type == KjObject)
+  CorNode*    typeP           = NULL;
+  CorNode*    typePrevP       = NULL;
+  if (corRest.in.urlPath != NULL && corRest.in.requestTree != NULL && corRest.in.requestTree->type == CorObject)
   {
     const char* p = corRest.in.urlPath;
     if      (strncmp(p, "/ngsi-ld/v1/subscriptions",         25) == 0) { recordTypeValue = "Subscription";              recordLabel = "Subscription"; }
@@ -658,8 +659,8 @@ static void ldParseHook(void)
 
     if (recordTypeValue != NULL)
     {
-      KjNode* prev = NULL;
-      for (KjNode* c = corRest.in.requestTree->value.firstChildP; c != NULL; c = c->next)
+      CorNode* prev = NULL;
+      for (CorNode* c = corRest.in.requestTree->value.firstChildP; c != NULL; c = c->next)
       {
         if (c->name != NULL && strcmp(c->name, "type") == 0) { typeP = c; typePrevP = prev; break; }
         prev = c;
@@ -683,13 +684,13 @@ static void ldParseHook(void)
       }
       if (typeP != NULL)
       {
-        if (typeP->type != KjString || strcmp(typeP->value.s, recordTypeValue) != 0)
+        if (typeP->type != CorString || strcmp(typeP->value.s, recordTypeValue) != 0)
         {
           ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Type", "%s 'type' must be '%s'", recordLabel, recordTypeValue);
           corNgsild.contextError = true;
           return;
         }
-        kjNodeDecouple(corRest.in.requestTree, typeP, typePrevP);
+        corTreeNodeDecouple(corRest.in.requestTree, typeP, typePrevP);
       }
     }
   }
@@ -743,26 +744,26 @@ static void ldParseHook(void)
   if (atCtx != NULL)
   {
     const char* offendingUrl = NULL;
-    KjNode* itemArr[1] = { atCtx };
+    CorNode* itemArr[1] = { atCtx };
     int     arrCount   = 1;
-    if (atCtx->type == KjArray) { itemArr[0] = atCtx; }   // walk children
+    if (atCtx->type == CorArray) { itemArr[0] = atCtx; }  // walk children
     for (int ai = 0; ai < arrCount && offendingUrl == NULL; ai++)
     {
-      KjNode* node = itemArr[ai];
-      if (node->type == KjString)
+      CorNode* node = itemArr[ai];
+      if (node->type == CorString)
       {
         if (corLdContextFromUrl(node->value.s, &corRest.kalloc) == NULL)
           offendingUrl = node->value.s;
       }
-      else if (node->type == KjArray)
+      else if (node->type == CorArray)
       {
-        for (KjNode* c = node->value.firstChildP; c != NULL; c = c->next)
+        for (CorNode* c = node->value.firstChildP; c != NULL; c = c->next)
         {
-          if (c->type == KjString && corLdContextFromUrl(c->value.s, &corRest.kalloc) == NULL)
+          if (c->type == CorString && corLdContextFromUrl(c->value.s, &corRest.kalloc) == NULL)
           { offendingUrl = c->value.s; break; }
         }
       }
-      // KjObject (inline @context) needs no fetch.
+      // CorObject (inline @context) needs no fetch.
     }
     if (offendingUrl != NULL)
     {
@@ -790,49 +791,49 @@ static void ldParseHook(void)
   // overall status is 207.
   if (isArrayBody && isBatchOp)
   {
-    KjNode* prev = NULL;
-    KjNode* elemP = corRest.in.requestTree->value.firstChildP;
+    CorNode* prev = NULL;
+    CorNode* elemP = corRest.in.requestTree->value.firstChildP;
     while (elemP != NULL)
     {
-      KjNode* nextP = elemP->next;
-      if (elemP->type == KjObject)
+      CorNode* nextP = elemP->next;
+      if (elemP->type == CorObject)
       {
-        KjNode* elemCtx = kjLookup(elemP, "@context");
+        CorNode* elemCtx = corTreeLookup(elemP, "@context");
         const char* badUrl = NULL;
-        if (elemCtx != NULL && elemCtx->type == KjString)
+        if (elemCtx != NULL && elemCtx->type == CorString)
         {
           if (corLdContextFromUrl(elemCtx->value.s, &corRest.kalloc) == NULL)
             badUrl = elemCtx->value.s;
         }
-        else if (elemCtx != NULL && elemCtx->type == KjArray)
+        else if (elemCtx != NULL && elemCtx->type == CorArray)
         {
-          for (KjNode* c = elemCtx->value.firstChildP; c != NULL; c = c->next)
+          for (CorNode* c = elemCtx->value.firstChildP; c != NULL; c = c->next)
           {
-            if (c->type == KjString && corLdContextFromUrl(c->value.s, &corRest.kalloc) == NULL)
+            if (c->type == CorString && corLdContextFromUrl(c->value.s, &corRest.kalloc) == NULL)
             { badUrl = c->value.s; break; }
           }
         }
         if (badUrl != NULL)
         {
           if (corNgsild.batchPreErrors == NULL)
-            corNgsild.batchPreErrors = kjArray(corRest.kjsonP, NULL);
+            corNgsild.batchPreErrors = corTreeArray(corRest.kallocP, NULL);
 
           const char* eid = "";
-          KjNode* idP = kjLookup(elemP, "id");
-          if (idP != NULL && idP->type == KjString) eid = idP->value.s;
+          CorNode* idP = corTreeLookup(elemP, "id");
+          if (idP != NULL && idP->type == CorString) eid = idP->value.s;
 
-          KjNode* entry = kjObject(corRest.kjsonP, NULL);
-          kjChildAdd(entry, kjString(corRest.kjsonP, "entityId", eid));
-          KjNode* errObj = kjObject(corRest.kjsonP, "error");
-          kjChildAdd(errObj, kjString(corRest.kjsonP, "type",   LD_ERROR_LD_CONTEXT_NOT_AVAILABLE));
-          kjChildAdd(errObj, kjString(corRest.kjsonP, "title",  "Context Not Available"));
+          CorNode* entry = corTreeObject(corRest.kallocP, NULL);
+          corTreeChildAdd(entry, corTreeString(corRest.kallocP, "entityId", eid));
+          CorNode* errObj = corTreeObject(corRest.kallocP, "error");
+          corTreeChildAdd(errObj, corTreeString(corRest.kallocP, "type", LD_ERROR_LD_CONTEXT_NOT_AVAILABLE));
+          corTreeChildAdd(errObj, corTreeString(corRest.kallocP, "title", "Context Not Available"));
           char detail[512];
           snprintf(detail, sizeof(detail), "unable to retrieve @context from '%s'", badUrl);
-          kjChildAdd(errObj, kjString(corRest.kjsonP, "detail", detail));
-          kjChildAdd(entry, errObj);
-          kjChildAdd(corNgsild.batchPreErrors, entry);
+          corTreeChildAdd(errObj, corTreeString(corRest.kallocP, "detail", detail));
+          corTreeChildAdd(entry, errObj);
+          corTreeChildAdd(corNgsild.batchPreErrors, entry);
 
-          kjNodeDecouple(corRest.in.requestTree, elemP, prev);
+          corTreeNodeDecouple(corRest.in.requestTree, elemP, prev);
         }
         else
         {
@@ -854,7 +855,7 @@ static void ldParseHook(void)
   // reads userContextBody to do that auto-population. A bare-string
   // @context already carries its own URL, so we don't need to capture
   // anything for that case.
-  if (atCtx != NULL && (atCtx->type == KjArray || atCtx->type == KjObject))
+  if (atCtx != NULL && (atCtx->type == CorArray || atCtx->type == CorObject))
     corNgsild.userContextBody = atCtx;
 
   // § 4.17 — for Subscription bodies, an entities[].type may carry a
@@ -866,29 +867,29 @@ static void ldParseHook(void)
   // never sees it, then reattach after. Same pattern the top-level
   // `type` field uses above.
   struct {
-    KjNode* parentP;
-    KjNode* prevP;
-    KjNode* typeP;
+    CorNode* parentP;
+    CorNode* prevP;
+    CorNode* typeP;
   } typeExprNodesV[16];
   int typeExprNodeN = 0;
   if (recordTypeValue != NULL && strcmp(recordTypeValue, "Subscription") == 0)
   {
-    KjNode* entitiesP = kjLookup(corRest.in.requestTree, "entities");
-    if (entitiesP != NULL && entitiesP->type == KjArray)
+    CorNode* entitiesP = corTreeLookup(corRest.in.requestTree, "entities");
+    if (entitiesP != NULL && entitiesP->type == CorArray)
     {
-      for (KjNode* selP = entitiesP->value.firstChildP;
+      for (CorNode* selP = entitiesP->value.firstChildP;
            selP != NULL && typeExprNodeN < (int)(sizeof(typeExprNodesV)/sizeof(typeExprNodesV[0]));
            selP = selP->next)
       {
-        if (selP->type != KjObject) continue;
-        KjNode* prev = NULL;
-        KjNode* tP   = NULL;
-        for (KjNode* c = selP->value.firstChildP; c != NULL; c = c->next)
+        if (selP->type != CorObject) continue;
+        CorNode* prev = NULL;
+        CorNode* tP  = NULL;
+        for (CorNode* c = selP->value.firstChildP; c != NULL; c = c->next)
         {
           if (c->name != NULL && strcmp(c->name, "type") == 0) { tP = c; break; }
           prev = c;
         }
-        if (tP == NULL || tP->type != KjString || tP->value.s == NULL) continue;
+        if (tP == NULL || tP->type != CorString || tP->value.s == NULL) continue;
         // A bare "*" (§ 4.17 match-any wildcard) and any value carrying a
         // type-selection operator must be shielded from JSON-LD @vocab
         // expansion, which would otherwise rewrite them to a polluted IRI.
@@ -900,7 +901,7 @@ static void ldParseHook(void)
         typeExprNodesV[typeExprNodeN].prevP   = prev;
         typeExprNodesV[typeExprNodeN].typeP   = tP;
         typeExprNodeN++;
-        kjNodeDecouple(selP, tP, prev);
+        corTreeNodeDecouple(selP, tP, prev);
       }
     }
   }
@@ -916,9 +917,9 @@ static void ldParseHook(void)
   // original positions inside each selector object.
   for (int i = 0; i < typeExprNodeN; i++)
   {
-    KjNode* parentP = typeExprNodesV[i].parentP;
-    KjNode* prevP   = typeExprNodesV[i].prevP;
-    KjNode* tP      = typeExprNodesV[i].typeP;
+    CorNode* parentP = typeExprNodesV[i].parentP;
+    CorNode* prevP  = typeExprNodesV[i].prevP;
+    CorNode* tP     = typeExprNodesV[i].typeP;
     if (prevP == NULL)
     {
       tP->next = parentP->value.firstChildP;
@@ -967,7 +968,7 @@ static void ldParseHook(void)
   //
   if (corRest.in.requestTree != NULL)
   {
-    KjNode* offender = ldFindEmbeddedAtContext(corRest.in.requestTree);
+    CorNode* offender = ldFindEmbeddedAtContext(corRest.in.requestTree);
     if (offender != NULL)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Embedded @context",
@@ -1104,19 +1105,19 @@ static void ldParseHook(void)
 // (e.g. "@none", "urn:x").  We remove children not in datasetIdV.
 // If all children are removed, remove the attribute from the entity.
 //
-static void filterDatasetId(KjNode* entityP, char** datasetIdV)
+static void filterDatasetId(CorNode* entityP, char** datasetIdV)
 {
-  if (entityP == NULL || entityP->type != KjObject)
+  if (entityP == NULL || entityP->type != CorObject)
     return;
 
-  KjNode* childP = entityP->value.firstChildP;
+  CorNode* childP = entityP->value.firstChildP;
 
   while (childP != NULL)
   {
-    KjNode* nextP = childP->next;
+    CorNode* nextP = childP->next;
 
     // Skip entity-level keywords (id, type, @context, scope, timestamps)
-    if (childP->type != KjObject || childP->name == NULL
+    if (childP->type != CorObject || childP->name == NULL
         || strcmp(childP->name, "id")   == 0 || strcmp(childP->name, "@id")   == 0
         || strcmp(childP->name, "type") == 0 || strcmp(childP->name, "@type") == 0
         || strcmp(childP->name, "@context") == 0
@@ -1129,11 +1130,11 @@ static void filterDatasetId(KjNode* entityP, char** datasetIdV)
     }
 
     // childP is a dataset-keyed attribute wrapper — filter its children
-    KjNode* instP = childP->value.firstChildP;
+    CorNode* instP = childP->value.firstChildP;
 
     while (instP != NULL)
     {
-      KjNode* instNextP = instP->next;
+      CorNode* instNextP = instP->next;
       bool    keep      = false;
 
       for (int i = 0; datasetIdV[i] != NULL; i++)
@@ -1146,14 +1147,14 @@ static void filterDatasetId(KjNode* entityP, char** datasetIdV)
       }
 
       if (!keep)
-        kjChildRemove(childP, instP);
+        corTreeChildRemove(childP, instP);
 
       instP = instNextP;
     }
 
     // If no instances left, remove the attribute entirely
     if (childP->value.firstChildP == NULL)
-      kjChildRemove(entityP, childP);
+      corTreeChildRemove(entityP, childP);
 
     childP = nextP;
   }
@@ -1223,21 +1224,21 @@ static void ldRenderHook(void)
   if ((corRest.out.httpStatusCode == 207) && (corRest.out.problemType == NULL) && (corRest.out.responseTree != NULL) &&
       (corRest.serviceP != NULL) && ((corRest.serviceP->ldOp & LD_OP_GROUP_BATCH) == 0))
   {
-    KjNode* successP = kjLookup(corRest.out.responseTree, "success");
-    KjNode* errorsP  = kjLookup(corRest.out.responseTree, "errors");
+    CorNode* successP = corTreeLookup(corRest.out.responseTree, "success");
+    CorNode* errorsP = corTreeLookup(corRest.out.responseTree, "errors");
 
-    if ((successP != NULL) && (successP->type == KjArray) && (successP->value.firstChildP == NULL) &&
-        (errorsP  != NULL) && (errorsP->type  == KjArray) && (errorsP->value.firstChildP  != NULL))
+    if ((successP != NULL) && (successP->type == CorArray) && (successP->value.firstChildP == NULL) &&
+        (errorsP  != NULL) && (errorsP->type  == CorArray) && (errorsP->value.firstChildP != NULL))
     {
       int  status  = -1;
       int  count   = 0;
       bool uniform = true;
 
-      for (KjNode* eP = errorsP->value.firstChildP; eP != NULL; eP = eP->next)
+      for (CorNode* eP = errorsP->value.firstChildP; eP != NULL; eP = eP->next)
       {
-        KjNode* errObjP = kjLookup(eP, "error");
-        KjNode* stP     = (errObjP != NULL) ? kjLookup(errObjP, "status") : NULL;
-        int     st      = ((stP != NULL) && (stP->type == KjInt)) ? (int) stP->value.i : -1;
+        CorNode* errObjP = corTreeLookup(eP, "error");
+        CorNode* stP    = (errObjP != NULL) ? corTreeLookup(errObjP, "status") : NULL;
+        int     st      = ((stP != NULL) && (stP->type == CorInt)) ? (int) stP->value.i : -1;
 
         count++;
         if      (status == -1) status = st;
@@ -1252,14 +1253,14 @@ static void ldRenderHook(void)
       //
       if (uniform && (status > 0) && ((count == 1) || (status == 404)))
       {
-        KjNode* errObjP = kjLookup(errorsP->value.firstChildP, "error");
-        KjNode* typeP   = kjLookup(errObjP, "type");
-        KjNode* titleP  = kjLookup(errObjP, "title");
-        KjNode* detailP = kjLookup(errObjP, "detail");
+        CorNode* errObjP = corTreeLookup(errorsP->value.firstChildP, "error");
+        CorNode* typeP  = corTreeLookup(errObjP, "type");
+        CorNode* titleP = corTreeLookup(errObjP, "title");
+        CorNode* detailP = corTreeLookup(errObjP, "detail");
 
-        corRest.out.problemType    = ((typeP  != NULL) && (typeP->type  == KjString)) ? typeP->value.s  : NULL;
-        corRest.out.problemTitle   = ((titleP != NULL) && (titleP->type == KjString)) ? titleP->value.s : NULL;
-        if ((detailP != NULL) && (detailP->type == KjString))
+        corRest.out.problemType    = ((typeP  != NULL) && (typeP->type  == CorString)) ? typeP->value.s : NULL;
+        corRest.out.problemTitle   = ((titleP != NULL) && (titleP->type == CorString)) ? titleP->value.s : NULL;
+        if ((detailP != NULL) && (detailP->type == CorString))
           snprintf(corRest.out.problemDetail, sizeof(corRest.out.problemDetail), "%s", detailP->value.s);
         corRest.out.httpStatusCode = status;
         corRest.out.responseTree   = NULL;
@@ -1309,7 +1310,7 @@ static void ldRenderHook(void)
     return;
   }
 
-  KjNode* treeP = corRest.out.responseTree;
+  CorNode* treeP = corRest.out.responseTree;
 
   //
   // Entity-specific transforms (skip for rawResponse, e.g. subscription responses)
@@ -1319,9 +1320,9 @@ static void ldRenderHook(void)
     // Apply datasetId filtering on storage-format tree (before ldEntityToApi)
     if (corNgsild.datasetIdV != NULL)
     {
-      if (treeP != NULL && treeP->type == KjArray)
+      if (treeP != NULL && treeP->type == CorArray)
       {
-        for (KjNode* itemP = treeP->value.firstChildP; itemP != NULL; itemP = itemP->next)
+        for (CorNode* itemP = treeP->value.firstChildP; itemP != NULL; itemP = itemP->next)
           filterDatasetId(itemP, corNgsild.datasetIdV);
       }
       else
@@ -1331,9 +1332,9 @@ static void ldRenderHook(void)
     }
 
     // Convert storage format to API format
-    if (treeP != NULL && treeP->type == KjArray)
+    if (treeP != NULL && treeP->type == CorArray)
     {
-      for (KjNode* itemP = treeP->value.firstChildP; itemP != NULL; itemP = itemP->next)
+      for (CorNode* itemP = treeP->value.firstChildP; itemP != NULL; itemP = itemP->next)
         ldEntityToApi(itemP, &corRest.kalloc);
     }
     else
@@ -1358,9 +1359,9 @@ static void ldRenderHook(void)
     // Reducing afterwards would have nothing to reduce.
     if (corNgsild.lang != NULL)
     {
-      if (treeP != NULL && treeP->type == KjArray)
+      if (treeP != NULL && treeP->type == CorArray)
       {
-        for (KjNode* itemP = treeP->value.firstChildP; itemP != NULL; itemP = itemP->next)
+        for (CorNode* itemP = treeP->value.firstChildP; itemP != NULL; itemP = itemP->next)
           ldLangReduce(itemP, corNgsild.lang, &corRest.kalloc);
       }
       else
@@ -1372,11 +1373,11 @@ static void ldRenderHook(void)
     // Apply representation format (simplified/concise/normalized)
     if (corNgsild.format == LdFormatSimplified || corNgsild.format == LdFormatConcise)
     {
-      void (*formatFn)(KjNode*, KAlloc*) = (corNgsild.format == LdFormatSimplified) ? (void(*)(KjNode*, KAlloc*)) ldToSimplified : (void(*)(KjNode*, KAlloc*)) ldToConcise;
+      void (*formatFn)(CorNode*, KAlloc*) = (corNgsild.format == LdFormatSimplified) ? (void(*)(CorNode*, KAlloc*)) ldToSimplified : (void(*)(CorNode*, KAlloc*)) ldToConcise;
 
-      if (treeP != NULL && treeP->type == KjArray)
+      if (treeP != NULL && treeP->type == CorArray)
       {
-        for (KjNode* itemP = treeP->value.firstChildP; itemP != NULL; itemP = itemP->next)
+        for (CorNode* itemP = treeP->value.firstChildP; itemP != NULL; itemP = itemP->next)
           formatFn(itemP, &corRest.kalloc);
       }
       else
@@ -1386,10 +1387,10 @@ static void ldRenderHook(void)
     }
 
     // § 4.5.8: simplified temporal representation. Runs after ldEntityToApi
-    // (which is a no-op on temporal trees — attrs are KjArrays, skipped) so
+    // (which is a no-op on temporal trees — attrs are CorArrays, skipped) so
     // the resulting object-shaped attrs aren't re-mangled by ldEntityToApi.
     if (corNgsild.format == LdFormatTemporalValues)
-      ldToTemporalValues(treeP, corNgsild.timeproperty, corRest.kjsonP, &corRest.kalloc);
+      ldToTemporalValues(treeP, corNgsild.timeproperty, corRest.kallocP, &corRest.kalloc);
 
     // § 4.5.20: aggregated temporal representation. Numeric Property only
     // for now. Same renderHook position as temporalValues — runs after
@@ -1407,7 +1408,7 @@ static void ldRenderHook(void)
       uint64_t startNs  = corNgsild.timeAtNs;       // 0 → ldToAggregatedValues uses earliest sample seen
       uint64_t endNs    = corNgsild.endTimeAtNs;    // 0 → ldToAggregatedValues uses latest sample seen
       ldToAggregatedValues(treeP, corNgsild.aggrMethodsV, period.months, period.ns, startNs, endNs,
-                           corNgsild.timeproperty, corRest.kjsonP, &corRest.kalloc);
+                           corNgsild.timeproperty, corRest.kallocP, &corRest.kalloc);
     }
 
     // The strip postponed above, now that the timestamps have been read
@@ -1422,7 +1423,7 @@ static void ldRenderHook(void)
   bool         acceptGeoJson = (acceptType == CorMimeGeoJson);
   if (acceptGeoJson && treeP != NULL)
   {
-    ldToGeoJson(&corRest.out.responseTree, corNgsild.geometryProperty, corRest.kjsonP);
+    ldToGeoJson(&corRest.out.responseTree, corNgsild.geometryProperty, corRest.kallocP);
     treeP = corRest.out.responseTree;
     corRest.out.contentType = (char*) corMimeString(CorMimeGeoJson);
   }
@@ -1542,21 +1543,21 @@ static void ldRenderHook(void)
 
   if (injectCtxIntoBody && ctxUrl != NULL)
   {
-    if (treeP->type == KjArray)
+    if (treeP->type == CorArray)
     {
-      for (KjNode* itemP = treeP->value.firstChildP; itemP != NULL; itemP = itemP->next)
+      for (CorNode* itemP = treeP->value.firstChildP; itemP != NULL; itemP = itemP->next)
       {
-        if (itemP->type == KjObject)
+        if (itemP->type == CorObject)
         {
-          KjNode* ctxNode = kjString(corRest.kjsonP, "@context", ctxUrl);
-          kjChildAdd(itemP, ctxNode);
+          CorNode* ctxNode = corTreeString(corRest.kallocP, "@context", ctxUrl);
+          corTreeChildAdd(itemP, ctxNode);
         }
       }
     }
-    else if (treeP->type == KjObject)
+    else if (treeP->type == CorObject)
     {
-      KjNode* ctxNode = kjString(corRest.kjsonP, "@context", ctxUrl);
-      kjChildAdd(treeP, ctxNode);
+      CorNode* ctxNode = corTreeString(corRest.kallocP, "@context", ctxUrl);
+      corTreeChildAdd(treeP, ctxNode);
     }
 
     if (acceptLdJson)

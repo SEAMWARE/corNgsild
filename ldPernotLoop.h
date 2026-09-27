@@ -11,7 +11,7 @@
 //
 // Background thread for periodic notification subscriptions.
 //
-#include "kjson/KjNode.h"                              // KjNode
+#include "corTree/CorNode.h"                           // CorNode
 #include "corNgsild/LdPernotCache.h"                    // LdPernotCache
 
 
@@ -21,14 +21,14 @@
 // LdPernotQueryFunc - callback for querying entities
 //
 // The broker registers this at startup. The pernot loop calls it to get
-// matching entities for a periodic subscription. Returns a KjArray of
+// matching entities for a periodic subscription. Returns a CorArray of
 // entities in storage format, or NULL if none match.
 //
 // tenantP:  opaque tenant pointer (from LdPernotItem.tenantP)
 // itemP:    the pernot subscription item (carries entity selectors, q, etc.)
 // allocP:   arena for the result tree
 //
-typedef KjNode* (*LdPernotQueryFunc)(void* tenantP, LdPernotItem* itemP, void* allocP);
+typedef CorNode* (*LdPernotQueryFunc)(void* tenantP, LdPernotItem* itemP, void* allocP);
 
 
 

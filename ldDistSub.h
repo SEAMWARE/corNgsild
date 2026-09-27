@@ -21,7 +21,8 @@
 // derived sub goes out with our own alias appended, so a remote that has
 // us in its own reg-cache won't forward back to us.
 //
-#include "kjson/KjNode.h"                              // KjNode
+#include "kalloc/KAlloc.h"                              // KAlloc
+#include "corTree/CorNode.h"                            // CorNode
 #include "corNgsild/LdSubCache.h"                       // LdSubCache, LdSubCacheItem
 #include "corNgsild/LdRegCache.h"                       // LdRegCache
 
@@ -45,13 +46,13 @@ typedef void (*LdDistSubPersistFunc)(LdSubCacheItem* itemP, void* userData);
 //
 // ldDistSubSubordinatesFragment - build {_subordinates, _subordinateRunNo}
 //
-// Returns a KjObject in the supplied Kjson buffer that, when applied as a
+// Returns a CorObject in the supplied CorJson buffer that, when applied as a
 // JSON-merge-patch via db.subscriptionUpdate, replaces the sub doc's
 // subordinate list with the current in-memory state. Suitable for direct
 // hand-off to the persist callback.
 //
-struct Kjson;
-extern KjNode* ldDistSubSubordinatesFragment(LdSubCacheItem* itemP, struct Kjson* kjsonP);
+struct CorJson;
+extern CorNode* ldDistSubSubordinatesFragment(LdSubCacheItem* itemP, struct KAlloc* allocP);
 
 
 
@@ -126,7 +127,7 @@ extern int ldDistSubCascadeDelete(LdSubCacheItem* itemP,
 // subordinate list changed.
 //
 extern int ldDistSubReconcile(LdSubCacheItem*      itemP,
-                              KjNode*              fragmentP,
+                              CorNode*             fragmentP,
                               LdRegCache*          regCacheP,
                               const char*          ownAlias,
                               LdDistSubPersistFunc persistFunc,

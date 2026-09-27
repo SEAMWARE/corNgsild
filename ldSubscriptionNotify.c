@@ -23,14 +23,15 @@
 #include <time.h>                                      // time
 
 #include "kalloc/kaAlloc.h"                            // kaAlloc
+#include "kalloc/KAlloc.h"                             // KAlloc
 #include "ktrace/kTrace.h"                             // KT_T
-#include "kjson/KjNode.h"                              // KjNode
-#include "kjson/kjBuilder.h"                           // kjObject, kjString, kjArray, kjChildAdd
-#include "kjson/kjChildReplace.h"                      // kjChildReplace
-#include "kjson/kjClone.h"                             // kjClone
-#include "kjson/kjLookup.h"                            // kjLookup
-#include "kjson/kjRenderSize.h"                        // kjFastRenderSize
-#include "kjson/kjRender.h"                            // kjFastRender
+#include "corTree/CorNode.h"                           // CorNode
+#include "corTree/corTreeBuilder.h"                    // corTreeObject, corTreeString, corTreeArray, corTreeChildAdd
+#include "corTree/corTreeChildReplace.h"               // corTreeChildReplace
+#include "corTree/corTreeClone.h"                      // corTreeClone
+#include "corTree/corTreeLookup.h"                     // corTreeLookup
+#include "corJson/corJsonRenderSize.h"                 // corJsonFastRenderSize
+#include "corJson/corJsonRender.h"                     // corJsonFastRender
 
 #include "corRest/CorRestState.h"                        // corRest
 #include "corRest/corRestClient.h"                       // CorRestClientRequest, etc.
@@ -153,7 +154,7 @@ static bool triggerMatches(LdSubCacheItem* itemP, LdNotifyOp op, int reasonsMask
 //
 // selectorMatches - check entity against a pre-parsed EntitySelector
 //
-static bool selectorMatches(LdSubEntitySelector* selP, const char* entityId, KjNode* entityTypeP)
+static bool selectorMatches(LdSubEntitySelector* selP, const char* entityId, CorNode* entityTypeP)
 {
   // Type check — use the parsed § 4.17 expression so (A|B), A&B and
   // !A operators match correctly. typeExpr is set whenever type is.
@@ -184,7 +185,7 @@ static bool selectorMatches(LdSubEntitySelector* selP, const char* entityId, KjN
 //
 // entitiesMatch - check entity against the cached entity selectors
 //
-static bool entitiesMatch(LdSubCacheItem* itemP, const char* entityId, KjNode* entityTypeP)
+static bool entitiesMatch(LdSubCacheItem* itemP, const char* entityId, CorNode* entityTypeP)
 {
   if (itemP->entitySelectors == NULL)
     return true;  // no filter — matches all
@@ -207,7 +208,7 @@ static bool entitiesMatch(LdSubCacheItem* itemP, const char* entityId, KjNode* e
 // An entry of watchedDsV names ONE instance ("attr@datasetId"): the change must
 // then have written that instance, not just the Attribute.
 //
-static bool watchedAttrsMatch(LdSubCacheItem* itemP, KjNode* entityP, LdNotifyOp op, LdMergeReport* reportP)
+static bool watchedAttrsMatch(LdSubCacheItem* itemP, CorNode* entityP, LdNotifyOp op, LdMergeReport* reportP)
 {
   char** watchedV = itemP->watchedAttrsV;
   char** dsV      = itemP->watchedDsV;
@@ -219,12 +220,12 @@ static bool watchedAttrsMatch(LdSubCacheItem* itemP, KjNode* entityP, LdNotifyOp
   {
     for (int i = 0; watchedV[i] != NULL; i++)
     {
-      KjNode* attrP = kjLookup(entityP, watchedV[i]);
+      CorNode* attrP = corTreeLookup(entityP, watchedV[i]);
 
       if (attrP == NULL)
         continue;
 
-      if ((dsV == NULL) || (dsV[i] == NULL) || (kjLookup(attrP, dsV[i]) != NULL))
+      if ((dsV == NULL) || (dsV[i] == NULL) || (corTreeLookup(attrP, dsV[i]) != NULL))
         return true;
     }
     return false;
@@ -232,10 +233,10 @@ static bool watchedAttrsMatch(LdSubCacheItem* itemP, KjNode* entityP, LdNotifyOp
 
   if (reportP != NULL && reportP->changes != NULL)
   {
-    for (KjNode* chP = reportP->changes->value.firstChildP; chP != NULL; chP = chP->next)
+    for (CorNode* chP = reportP->changes->value.firstChildP; chP != NULL; chP = chP->next)
     {
-      KjNode* attrP = kjLookup(chP, "attr");
-      if (attrP == NULL || attrP->type != KjString) continue;
+      CorNode* attrP = corTreeLookup(chP, "attr");
+      if (attrP == NULL || attrP->type != CorString) continue;
 
       for (int i = 0; watchedV[i] != NULL; i++)
       {
@@ -250,7 +251,7 @@ static bool watchedAttrsMatch(LdSubCacheItem* itemP, KjNode* entityP, LdNotifyOp
         // removed it entirely. The reason cannot tell: deleting ONE instance is an
         // attributeDeleted too, with the Attribute's other instances still there.
         //
-        if (ldInstanceWritten(kjLookup(chP, "preValue"), kjLookup(entityP, watchedV[i]), dsV[i]))
+        if (ldInstanceWritten(corTreeLookup(chP, "preValue"), corTreeLookup(entityP, watchedV[i]), dsV[i]))
           return true;
       }
     }
@@ -267,7 +268,7 @@ static bool watchedAttrsMatch(LdSubCacheItem* itemP, KjNode* entityP, LdNotifyOp
 //
 // Applies, in order: datasetId filter, ldEntityToApi, strip sys attrs,
 // notification.attributes filter, notification.format. Returns a fresh
-// KjNode suitable for direct insertion into the notification's data[].
+// CorNode suitable for direct insertion into the notification's data[].
 //
 static void nsToIsoLocal(uint64_t epochNs, char* buf, int bufSize)
 {
@@ -287,10 +288,10 @@ static void nsToIsoLocal(uint64_t epochNs, char* buf, int bufSize)
 }
 
 
-static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
+static CorNode* buildNotifDataEntry(LdSubCacheItem*      itemP,
                                    LdNotifyPendingEntry* penP)
 {
-  KjNode*         entityP     = penP->entityP;
+  CorNode*        entityP     = penP->entityP;
   LdNotifyOp      op          = penP->op;
   LdMergeReport*  reportP     = penP->hasReport ? &penP->report : NULL;
   uint64_t        deletedAtNs = penP->deletedAtNs;
@@ -309,45 +310,45 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
   //
   if (op == LdNotifyEntityDelete)
   {
-    KjNode* out = kjObject(corRest.kjsonP, NULL);
+    CorNode* out = corTreeObject(corRest.kallocP, NULL);
 
-    KjNode* srcId   = kjLookup(entityP, "id");
-    KjNode* srcType = kjLookup(entityP, "type");
-    if (srcId   != NULL) kjChildAdd(out, kjClone(corRest.kjsonP, srcId));
-    if (srcType != NULL) kjChildAdd(out, kjClone(corRest.kjsonP, srcType));
+    CorNode* srcId  = corTreeLookup(entityP, "id");
+    CorNode* srcType = corTreeLookup(entityP, "type");
+    if (srcId   != NULL) corTreeChildAdd(out, corTreeClone(corRest.kallocP, srcId));
+    if (srcType != NULL) corTreeChildAdd(out, corTreeClone(corRest.kallocP, srcType));
 
     char     deletedIso[48];
     deletedIso[0] = 0;
     if (deletedAtNs != 0)
     {
       nsToIsoLocal(deletedAtNs, deletedIso, sizeof(deletedIso));
-      kjChildAdd(out, kjString(corRest.kjsonP, "deletedAt", deletedIso));
+      corTreeChildAdd(out, corTreeString(corRest.kallocP, "deletedAt", deletedIso));
     }
 
     if (itemP->sysAttrs)
     {
-      // Storage holds createdAt/modifiedAt as KjInt (nanoseconds since
+      // Storage holds createdAt/modifiedAt as CorInt (nanoseconds since
       // epoch); the entity-delete body skips the ldEntityToApi pipeline
       // that normally rewrites these to ISO 8601 strings, so do the
       // conversion inline here.
-      KjNode* srcCreated  = kjLookup(entityP, LD_VOCAB_CREATED_AT);
-      KjNode* srcModified = kjLookup(entityP, LD_VOCAB_MODIFIED_AT);
-      if (srcCreated != NULL && srcCreated->type == KjInt)
+      CorNode* srcCreated = corTreeLookup(entityP, LD_VOCAB_CREATED_AT);
+      CorNode* srcModified = corTreeLookup(entityP, LD_VOCAB_MODIFIED_AT);
+      if (srcCreated != NULL && srcCreated->type == CorInt)
       {
         char iso[48];
         nsToIsoLocal((uint64_t) srcCreated->value.i, iso, sizeof(iso));
-        kjChildAdd(out, kjString(corRest.kjsonP, LD_VOCAB_CREATED_AT, iso));
+        corTreeChildAdd(out, corTreeString(corRest.kallocP, LD_VOCAB_CREATED_AT, iso));
       }
       else if (srcCreated != NULL)
-        kjChildAdd(out, kjClone(corRest.kjsonP, srcCreated));
-      if (srcModified != NULL && srcModified->type == KjInt)
+        corTreeChildAdd(out, corTreeClone(corRest.kallocP, srcCreated));
+      if (srcModified != NULL && srcModified->type == CorInt)
       {
         char iso[48];
         nsToIsoLocal((uint64_t) srcModified->value.i, iso, sizeof(iso));
-        kjChildAdd(out, kjString(corRest.kjsonP, LD_VOCAB_MODIFIED_AT, iso));
+        corTreeChildAdd(out, corTreeString(corRest.kallocP, LD_VOCAB_MODIFIED_AT, iso));
       }
       else if (srcModified != NULL)
-        kjChildAdd(out, kjClone(corRest.kjsonP, srcModified));
+        corTreeChildAdd(out, corTreeClone(corRest.kallocP, srcModified));
     }
 
     int triggerMask = (itemP->triggerMask != 0) ? itemP->triggerMask : LD_TRIGGER_DEFAULT;
@@ -357,9 +358,9 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
     // each attribute rendered with its previous value (ETSI 046_37..39).
     if (((triggerMask & LD_TRIGGER_ATTR_DELETED) != 0) || itemP->showChanges)
     {
-      for (KjNode* attrP = entityP->value.firstChildP; attrP != NULL; attrP = attrP->next)
+      for (CorNode* attrP = entityP->value.firstChildP; attrP != NULL; attrP = attrP->next)
       {
-        if (attrP->name == NULL || attrP->type != KjObject) continue;
+        if (attrP->name == NULL || attrP->type != CorObject) continue;
         if (ldIsEntityKeyword(attrP->name))                 continue;
 
         // watchedAttributes filter (already-expanded IRIs in the cache).
@@ -375,16 +376,16 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
 
         // Pull the type from any instance (all share the same type).
         const char* typeStr = "Property";
-        KjNode* anyInstP = attrP->value.firstChildP;
-        if (anyInstP != NULL && anyInstP->type == KjObject)
+        CorNode* anyInstP = attrP->value.firstChildP;
+        if (anyInstP != NULL && anyInstP->type == CorObject)
         {
-          KjNode* tNodeP = kjLookup(anyInstP, "type");
-          if (tNodeP != NULL && tNodeP->type == KjString)
+          CorNode* tNodeP = corTreeLookup(anyInstP, "type");
+          if (tNodeP != NULL && tNodeP->type == CorString)
             typeStr = tNodeP->value.s;
         }
 
-        KjNode* nullAttr = kjObject(corRest.kjsonP, attrP->name);
-        kjChildAdd(nullAttr, kjString(corRest.kjsonP, "type", typeStr));
+        CorNode* nullAttr = corTreeObject(corRest.kallocP, attrP->name);
+        corTreeChildAdd(nullAttr, corTreeString(corRest.kallocP, "type", typeStr));
         // Entity-delete fixtures (ETSI 046_37) want the bare null marker
         // even for LanguageProperty (`"languageMap": "urn:ngsi-ld:null"`),
         // matching § 5.8.6's bare form. The attribute-delete branch above
@@ -405,45 +406,45 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
           else if (typeStr[4] == 'R') primaryKey = "objectList";   // ListRelationship
           break;
         }
-        kjChildAdd(nullAttr, kjString(corRest.kjsonP, primaryKey, LD_VOCAB_NGSILD_NULL));
+        corTreeChildAdd(nullAttr, corTreeString(corRest.kallocP, primaryKey, LD_VOCAB_NGSILD_NULL));
 
-        if (itemP->sysAttrs && anyInstP != NULL && anyInstP->type == KjObject)
+        if (itemP->sysAttrs && anyInstP != NULL && anyInstP->type == CorObject)
         {
           // Per-attribute sysAttrs: pull createdAt/modifiedAt from the
-          // pre-delete instance (storage form is KjInt nanoseconds — convert
+          // pre-delete instance (storage form is CorInt nanoseconds — convert
           // to ISO 8601 here since the entity-delete branch bypasses
           // ldEntityToApi). Attach a fresh deletedAt mirroring the
           // entity-level one.
-          KjNode* aCreated  = kjLookup(anyInstP, LD_VOCAB_CREATED_AT);
-          KjNode* aModified = kjLookup(anyInstP, LD_VOCAB_MODIFIED_AT);
-          if (aCreated != NULL && aCreated->type == KjInt)
+          CorNode* aCreated = corTreeLookup(anyInstP, LD_VOCAB_CREATED_AT);
+          CorNode* aModified = corTreeLookup(anyInstP, LD_VOCAB_MODIFIED_AT);
+          if (aCreated != NULL && aCreated->type == CorInt)
           {
             char iso[48];
             nsToIsoLocal((uint64_t) aCreated->value.i, iso, sizeof(iso));
-            kjChildAdd(nullAttr, kjString(corRest.kjsonP, LD_VOCAB_CREATED_AT, iso));
+            corTreeChildAdd(nullAttr, corTreeString(corRest.kallocP, LD_VOCAB_CREATED_AT, iso));
           }
           else if (aCreated != NULL)
-            kjChildAdd(nullAttr, kjClone(corRest.kjsonP, aCreated));
-          if (aModified != NULL && aModified->type == KjInt)
+            corTreeChildAdd(nullAttr, corTreeClone(corRest.kallocP, aCreated));
+          if (aModified != NULL && aModified->type == CorInt)
           {
             char iso[48];
             nsToIsoLocal((uint64_t) aModified->value.i, iso, sizeof(iso));
-            kjChildAdd(nullAttr, kjString(corRest.kjsonP, LD_VOCAB_MODIFIED_AT, iso));
+            corTreeChildAdd(nullAttr, corTreeString(corRest.kallocP, LD_VOCAB_MODIFIED_AT, iso));
           }
           else if (aModified != NULL)
-            kjChildAdd(nullAttr, kjClone(corRest.kjsonP, aModified));
+            corTreeChildAdd(nullAttr, corTreeClone(corRest.kallocP, aModified));
           if (deletedIso[0] != 0)
-            kjChildAdd(nullAttr, kjString(corRest.kjsonP, "deletedAt", deletedIso));
+            corTreeChildAdd(nullAttr, corTreeString(corRest.kallocP, "deletedAt", deletedIso));
         }
 
         // showChanges (§ 5.8.6 / § 5.2.14.1): on entity-delete, every
         // attribute carries previous<X> sourced from the pre-delete
         // instance's `value`. Storage normalises typed primary keys to
         // "value", so the previousX label comes from typeStr.
-        if (itemP->showChanges && anyInstP != NULL && anyInstP->type == KjObject &&
+        if (itemP->showChanges && anyInstP != NULL && anyInstP->type == CorObject &&
             (itemP->format != LdFormatSimplified))
         {
-          KjNode* preVal = kjLookup(anyInstP, "value");
+          CorNode* preVal = corTreeLookup(anyInstP, "value");
           if (preVal != NULL)
           {
             const char* prevKey = "previousValue";
@@ -458,20 +459,20 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
               else if (typeStr[4] == 'R') prevKey = "previousObjectList";   // ListRelationship
               break;
             }
-            KjNode* prev = kjClone(corRest.kjsonP, preVal);
+            CorNode* prev = corTreeClone(corRest.kallocP, preVal);
             prev->name = (char*) prevKey;
-            kjChildAdd(nullAttr, prev);
+            corTreeChildAdd(nullAttr, prev);
           }
         }
 
-        kjChildAdd(out, nullAttr);
+        corTreeChildAdd(out, nullAttr);
       }
     }
 
     return out;
   }
 
-  KjNode* entityClone = kjClone(corRest.kjsonP, entityP);
+  CorNode* entityClone = corTreeClone(corRest.kallocP, entityP);
 
   //
   // Attribute-delete markers (§ 5.8.6): for every attributeDeleted change
@@ -503,61 +504,61 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
   //
   if (op == LdNotifyEntityUpdate && reportP != NULL && reportP->changes != NULL)
   {
-    KjNode*   modAtP    = kjLookup(entityClone, LD_VOCAB_MODIFIED_AT);
-    long long deletedNs = (modAtP != NULL && modAtP->type == KjInt) ? modAtP->value.i : 0;
+    CorNode*  modAtP    = corTreeLookup(entityClone, LD_VOCAB_MODIFIED_AT);
+    long long deletedNs = (modAtP != NULL && modAtP->type == CorInt) ? modAtP->value.i : 0;
 
-    for (KjNode* chP = reportP->changes->value.firstChildP; chP != NULL; chP = chP->next)
+    for (CorNode* chP = reportP->changes->value.firstChildP; chP != NULL; chP = chP->next)
     {
-      KjNode* reasonP = kjLookup(chP, "reason");
-      KjNode* attrP   = kjLookup(chP, "attr");
-      if (reasonP == NULL || reasonP->type != KjString) continue;
-      if (attrP   == NULL || attrP->type   != KjString) continue;
+      CorNode* reasonP = corTreeLookup(chP, "reason");
+      CorNode* attrP  = corTreeLookup(chP, "attr");
+      if (reasonP == NULL || reasonP->type != CorString) continue;
+      if (attrP   == NULL || attrP->type   != CorString) continue;
       if (strcmp(reasonP->value.s, "attributeDeleted") != 0) continue;
 
       // "datasetIds" lists the dsKey of every instance the change removed.
-      KjNode* dsKeysP = kjLookup(chP, "datasetIds");
-      if ((dsKeysP != NULL) && ((dsKeysP->type != KjArray) || (dsKeysP->value.firstChildP == NULL)))
+      CorNode* dsKeysP = corTreeLookup(chP, "datasetIds");
+      if ((dsKeysP != NULL) && ((dsKeysP->type != CorArray) || (dsKeysP->value.firstChildP == NULL)))
         dsKeysP = NULL;
 
-      KjNode* existingAttr = kjLookup(entityClone, attrP->value.s);
+      CorNode* existingAttr = corTreeLookup(entityClone, attrP->value.s);
 
       // Determine the attribute type. preValue (when present) is the
       // pre-merge wrapper; otherwise read from a surviving instance.
       const char* typeStr = "Property";
-      KjNode*     preValP = kjLookup(chP, "preValue");
-      if (preValP != NULL && preValP->type == KjObject && preValP->value.firstChildP != NULL)
+      CorNode*    preValP = corTreeLookup(chP, "preValue");
+      if (preValP != NULL && preValP->type == CorObject && preValP->value.firstChildP != NULL)
       {
-        KjNode* anyInstP = preValP->value.firstChildP;
-        KjNode* tNodeP   = (anyInstP->type == KjObject) ? kjLookup(anyInstP, "type") : NULL;
-        if (tNodeP != NULL && tNodeP->type == KjString)
+        CorNode* anyInstP = preValP->value.firstChildP;
+        CorNode* tNodeP  = (anyInstP->type == CorObject) ? corTreeLookup(anyInstP, "type") : NULL;
+        if (tNodeP != NULL && tNodeP->type == CorString)
           typeStr = tNodeP->value.s;
       }
-      else if (existingAttr != NULL && existingAttr->type == KjObject && existingAttr->value.firstChildP != NULL)
+      else if (existingAttr != NULL && existingAttr->type == CorObject && existingAttr->value.firstChildP != NULL)
       {
-        KjNode* anyInstP = existingAttr->value.firstChildP;
-        KjNode* tNodeP   = (anyInstP->type == KjObject) ? kjLookup(anyInstP, "type") : NULL;
-        if (tNodeP != NULL && tNodeP->type == KjString)
+        CorNode* anyInstP = existingAttr->value.firstChildP;
+        CorNode* tNodeP  = (anyInstP->type == CorObject) ? corTreeLookup(anyInstP, "type") : NULL;
+        if (tNodeP != NULL && tNodeP->type == CorString)
           typeStr = tNodeP->value.s;
       }
 
       // Build the deleted-instance node: { type, value/lmap=null, [deletedAt] }.
-      KjNode* inst = kjObject(corRest.kjsonP, NULL);
-      kjChildAdd(inst, kjString(corRest.kjsonP, "type", typeStr));
+      CorNode* inst = corTreeObject(corRest.kallocP, NULL);
+      corTreeChildAdd(inst, corTreeString(corRest.kallocP, "type", typeStr));
       // Per § 5.8.6, LanguageProperty deletion uses `languageMap:
       // {"@none": "urn:ngsi-ld:null"}`, not the bare null marker. All
       // other types put the null marker directly as the value.
       if (strcmp(typeStr, "LanguageProperty") == 0)
       {
-        KjNode* lmap = kjObject(corRest.kjsonP, "value");
-        kjChildAdd(lmap, kjString(corRest.kjsonP, "@none", LD_VOCAB_NGSILD_NULL));
-        kjChildAdd(inst, lmap);
+        CorNode* lmap = corTreeObject(corRest.kallocP, "value");
+        corTreeChildAdd(lmap, corTreeString(corRest.kallocP, "@none", LD_VOCAB_NGSILD_NULL));
+        corTreeChildAdd(inst, lmap);
       }
       else
       {
-        kjChildAdd(inst, kjString(corRest.kjsonP, "value", LD_VOCAB_NGSILD_NULL));
+        corTreeChildAdd(inst, corTreeString(corRest.kallocP, "value", LD_VOCAB_NGSILD_NULL));
       }
       if (itemP->sysAttrs == true && deletedNs != 0)
-        kjChildAdd(inst, kjInteger(corRest.kjsonP, LD_VOCAB_DELETED_AT, deletedNs));
+        corTreeChildAdd(inst, corTreeInteger(corRest.kallocP, LD_VOCAB_DELETED_AT, deletedNs));
 
       if (dsKeysP != NULL)
       {
@@ -565,20 +566,20 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
         // ("@none" for the default instance). Surviving instances, if any,
         // are already in the wrapper - the markers join them and the array
         // form rendered downstream carries a datasetId on each keyed entry.
-        for (KjNode* keyP = dsKeysP->value.firstChildP; keyP != NULL; keyP = keyP->next)
+        for (CorNode* keyP = dsKeysP->value.firstChildP; keyP != NULL; keyP = keyP->next)
         {
-          if (keyP->type != KjString)
+          if (keyP->type != CorString)
             continue;
 
-          KjNode* marker = kjClone(corRest.kjsonP, inst);
+          CorNode* marker = corTreeClone(corRest.kallocP, inst);
           marker->name   = keyP->value.s;
 
           if (existingAttr == NULL)
           {
-            existingAttr = kjObject(corRest.kjsonP, attrP->value.s);
-            kjChildAdd(entityClone, existingAttr);
+            existingAttr = corTreeObject(corRest.kallocP, attrP->value.s);
+            corTreeChildAdd(entityClone, existingAttr);
           }
-          kjChildAdd(existingAttr, marker);
+          corTreeChildAdd(existingAttr, marker);
         }
       }
       else if (existingAttr == NULL)
@@ -586,9 +587,9 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
         // Whole-attribute deletion reported without instance detail (batch
         // and merge paths): a single @none instance carrying the marker.
         inst->name = (char*) "@none";
-        KjNode* wrapper = kjObject(corRest.kjsonP, attrP->value.s);
-        kjChildAdd(wrapper, inst);
-        kjChildAdd(entityClone, wrapper);
+        CorNode* wrapper = corTreeObject(corRest.kallocP, attrP->value.s);
+        corTreeChildAdd(wrapper, inst);
+        corTreeChildAdd(entityClone, wrapper);
       }
       // else: attribute still present and no instance detail — nothing to inject.
     }
@@ -602,22 +603,22 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
   //
   if (itemP->datasetIdV != NULL)
   {
-    KjNode* attrP = entityClone->value.firstChildP;
+    CorNode* attrP = entityClone->value.firstChildP;
     while (attrP != NULL)
     {
-      KjNode* nextAttr = attrP->next;
+      CorNode* nextAttr = attrP->next;
 
-      if (attrP->type != KjObject || attrP->name == NULL ||
+      if (attrP->type != CorObject || attrP->name == NULL ||
           strcmp(attrP->name, "id") == 0 || strcmp(attrP->name, "type") == 0)
       {
         attrP = nextAttr;
         continue;
       }
 
-      KjNode* instP = attrP->value.firstChildP;
+      CorNode* instP = attrP->value.firstChildP;
       while (instP != NULL)
       {
-        KjNode* nextInst = instP->next;
+        CorNode* nextInst = instP->next;
         bool keep = false;
 
         for (int i = 0; itemP->datasetIdV[i] != NULL; i++)
@@ -630,13 +631,13 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
         }
 
         if (!keep)
-          kjChildRemove(attrP, instP);
+          corTreeChildRemove(attrP, instP);
 
         instP = nextInst;
       }
 
       if (attrP->value.firstChildP == NULL)
-        kjChildRemove(entityClone, attrP);
+        corTreeChildRemove(entityClone, attrP);
 
       attrP = nextAttr;
     }
@@ -656,28 +657,28 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
   if (itemP->showChanges && reportP != NULL && reportP->changes != NULL &&
       (itemP->format != LdFormatSimplified))
   {
-    for (KjNode* chP = reportP->changes->value.firstChildP; chP != NULL; chP = chP->next)
+    for (CorNode* chP = reportP->changes->value.firstChildP; chP != NULL; chP = chP->next)
     {
-      KjNode* attrNameP = kjLookup(chP, "attr");
-      KjNode* preValueP = kjLookup(chP, "preValue");
-      if (attrNameP == NULL || attrNameP->type != KjString) continue;
+      CorNode* attrNameP = corTreeLookup(chP, "attr");
+      CorNode* preValueP = corTreeLookup(chP, "preValue");
+      if (attrNameP == NULL || attrNameP->type != CorString) continue;
       if (preValueP == NULL) continue;
 
       // preValue is the pre-change dataset-keyed wrapper
       // ({"@none":{type:..,value:..}, ...}). Storage form keeps the raw
       // value under "value" regardless of attr type — pick the right
       // previousX key based on the per-instance "type".
-      KjNode* preInst = kjLookup(preValueP, "@none");
-      if (preInst == NULL && preValueP->type == KjObject)
+      CorNode* preInst = corTreeLookup(preValueP, "@none");
+      if (preInst == NULL && preValueP->type == CorObject)
         preInst = preValueP->value.firstChildP;
-      if (preInst == NULL || preInst->type != KjObject) continue;
+      if (preInst == NULL || preInst->type != CorObject) continue;
 
-      KjNode* preVal  = kjLookup(preInst, "value");
-      KjNode* preType = kjLookup(preInst, "type");
+      CorNode* preVal = corTreeLookup(preInst, "value");
+      CorNode* preType = corTreeLookup(preInst, "type");
       if (preVal == NULL) continue;
 
       const char* prevKey = "previousValue";
-      if (preType != NULL && preType->type == KjString && preType->value.s != NULL)
+      if (preType != NULL && preType->type == CorString && preType->value.s != NULL)
       {
         const char* t = preType->value.s;
         switch (t[0])
@@ -693,29 +694,29 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
         }
       }
 
-      KjNode* attrOutP = kjLookup(entityClone, attrNameP->value.s);
+      CorNode* attrOutP = corTreeLookup(entityClone, attrNameP->value.s);
       if (attrOutP == NULL)
       {
         // attribute was deleted from entity — add a minimal wrapper
         // carrying only the previousX marker so showChanges sees it.
-        attrOutP = kjObject(corRest.kjsonP, attrNameP->value.s);
-        kjChildAdd(entityClone, attrOutP);
-        if (preType != NULL) kjChildAdd(attrOutP, kjClone(corRest.kjsonP, preType));
+        attrOutP = corTreeObject(corRest.kallocP, attrNameP->value.s);
+        corTreeChildAdd(entityClone, attrOutP);
+        if (preType != NULL) corTreeChildAdd(attrOutP, corTreeClone(corRest.kallocP, preType));
       }
-      if (attrOutP->type != KjObject) continue;
+      if (attrOutP->type != CorObject) continue;
 
-      KjNode* c = kjClone(corRest.kjsonP, preVal);
+      CorNode* c = corTreeClone(corRest.kallocP, preVal);
       c->name = (char*) prevKey;
-      kjChildAdd(attrOutP, c);
+      corTreeChildAdd(attrOutP, c);
     }
   }
 
   if (itemP->notifAttrsV != NULL)
   {
-    KjNode* childP = entityClone->value.firstChildP;
+    CorNode* childP = entityClone->value.firstChildP;
     while (childP != NULL)
     {
-      KjNode* nextP = childP->next;
+      CorNode* nextP = childP->next;
 
       if (childP->name != NULL &&
           strcmp(childP->name, "id")    != 0 &&
@@ -732,7 +733,7 @@ static KjNode* buildNotifDataEntry(LdSubCacheItem*       itemP,
           }
         }
         if (!keep)
-          kjChildRemove(entityClone, childP);
+          corTreeChildRemove(entityClone, childP);
       }
 
       childP = nextP;
@@ -782,16 +783,16 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   char isoTimeBuf[64];
   isoNow(isoTimeBuf, sizeof(isoTimeBuf));
 
-  KjNode* notification = kjObject(corRest.kjsonP, NULL);
-  kjChildAdd(notification, kjString(corRest.kjsonP, "id",             notifIdGenerate()));
-  kjChildAdd(notification, kjString(corRest.kjsonP, "type",           "Notification"));
-  kjChildAdd(notification, kjString(corRest.kjsonP, "subscriptionId", itemP->subId));
-  kjChildAdd(notification, kjString(corRest.kjsonP, "notifiedAt",     isoTimeBuf));
+  CorNode* notification = corTreeObject(corRest.kallocP, NULL);
+  corTreeChildAdd(notification, corTreeString(corRest.kallocP, "id",  notifIdGenerate()));
+  corTreeChildAdd(notification, corTreeString(corRest.kallocP, "type", "Notification"));
+  corTreeChildAdd(notification, corTreeString(corRest.kallocP, "subscriptionId", itemP->subId));
+  corTreeChildAdd(notification, corTreeString(corRest.kallocP, "notifiedAt", isoTimeBuf));
 
-  KjNode* dataArray = kjArray(corRest.kjsonP, "data");
+  CorNode* dataArray = corTreeArray(corRest.kallocP, "data");
   for (int i = 0; i < n; i++)
-    kjChildAdd(dataArray, buildNotifDataEntry(itemP, entries[i]));
-  kjChildAdd(notification, dataArray);
+    corTreeChildAdd(dataArray, buildNotifDataEntry(itemP, entries[i]));
+  corTreeChildAdd(notification, dataArray);
 
   // § 5.2.14 notification.join — linked-entity retrieval (§ 4.5.23).
   // Hook is installed by the broker (it owns db.* and the reg cache);
@@ -816,7 +817,7 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   //
   if (itemP->format != LdFormatNone)
   {
-    for (KjNode* eP = dataArray->value.firstChildP; eP != NULL; eP = eP->next)
+    for (CorNode* eP = dataArray->value.firstChildP; eP != NULL; eP = eP->next)
     {
       if (itemP->format == LdFormatSimplified)
         ldToSimplified(eP, &corRest.kalloc);
@@ -841,9 +842,9 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   // when the subscription requested an older NGSI-LD version.
   if (itemP->conformanceMajor != 0 || itemP->conformanceMinor != 0)
   {
-    KjNode* dataP = kjLookup(notification, "data");
+    CorNode* dataP = corTreeLookup(notification, "data");
     if (dataP != NULL)
-      ldConformanceDowngrade(dataP, itemP->conformanceMajor, itemP->conformanceMinor, corRest.kjsonP);
+      ldConformanceDowngrade(dataP, itemP->conformanceMajor, itemP->conformanceMinor, corRest.kallocP);
   }
 
   // § 5.2.14: when endpoint.accept is application/geo+json, replace the
@@ -861,14 +862,14 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   // § 6.5.2: a receiverInfo Prefer "body=json" moves the geo+json @context from
   // the body to the Link header (validated geo+json-only in ldCheckSubscription).
   bool notifPreferBodyJson = false;
-  if (acceptGeoJson && itemP->receiverInfo != NULL && itemP->receiverInfo->type == KjArray)
+  if (acceptGeoJson && itemP->receiverInfo != NULL && itemP->receiverInfo->type == CorArray)
   {
-    for (KjNode* kvP = itemP->receiverInfo->value.firstChildP; kvP != NULL; kvP = kvP->next)
+    for (CorNode* kvP = itemP->receiverInfo->value.firstChildP; kvP != NULL; kvP = kvP->next)
     {
-      if (kvP->type != KjObject) continue;
-      KjNode* kP = kjLookup(kvP, "key");
-      KjNode* vP = kjLookup(kvP, "value");
-      if (kP != NULL && kP->type == KjString && vP != NULL && vP->type == KjString && strcasecmp(kP->value.s, "Prefer") == 0)
+      if (kvP->type != CorObject) continue;
+      CorNode* kP = corTreeLookup(kvP, "key");
+      CorNode* vP = corTreeLookup(kvP, "value");
+      if (kP != NULL && kP->type == CorString && vP != NULL && vP->type == CorString && strcasecmp(kP->value.s, "Prefer") == 0)
       {
         const char* p = strstr(vP->value.s, "body=");
         if (p != NULL && strncmp(p + 5, "json", 4) == 0 && (p[9] == 0 || p[9] == ';' || p[9] == ' ' || p[9] == ','))
@@ -886,45 +887,45 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   // ld+json: @context inline on each entity in data[] (§ 5.8.6 / § 6.3.5).
   if (acceptLdJson && itemP->contextUrl != NULL)
   {
-    KjNode* dataP = kjLookup(notification, "data");
-    if (dataP != NULL && dataP->type == KjArray)
+    CorNode* dataP = corTreeLookup(notification, "data");
+    if (dataP != NULL && dataP->type == CorArray)
     {
-      for (KjNode* ep = dataP->value.firstChildP; ep != NULL; ep = ep->next)
+      for (CorNode* ep = dataP->value.firstChildP; ep != NULL; ep = ep->next)
       {
-        if (ep->type == KjObject && kjLookup(ep, "@context") == NULL)
-          kjChildAdd(ep, kjString(corRest.kjsonP, "@context", itemP->contextUrl));
+        if (ep->type == CorObject && corTreeLookup(ep, "@context") == NULL)
+          corTreeChildAdd(ep, corTreeString(corRest.kallocP, "@context", itemP->contextUrl));
       }
     }
   }
 
   if (acceptGeoJson)
   {
-    KjNode* oldDataP = kjLookup(notification, "data");
-    if (oldDataP != NULL && oldDataP->type == KjArray)
+    CorNode* oldDataP = corTreeLookup(notification, "data");
+    if (oldDataP != NULL && oldDataP->type == CorArray)
     {
-      KjNode* newDataP = oldDataP;
-      ldToGeoJson(&newDataP, NULL /* default "location" */, corRest.kjsonP);
+      CorNode* newDataP = oldDataP;
+      ldToGeoJson(&newDataP, NULL /* default "location" */, corRest.kallocP);
       if (newDataP != NULL && newDataP != oldDataP)
       {
         newDataP->name = (char*) "data";
-        kjChildReplace(notification, oldDataP, newDataP);
+        corTreeChildReplace(notification, oldDataP, newDataP);
       }
       // § 5.2.6.11.2: ONE @context as a top-level FeatureCollection member
       // (an RFC 7946 § 6.1 foreign member) when @context belongs in the body —
       // not copied into each Feature, and no Link header (see below).
       if (ctxInBody && itemP->contextUrl != NULL && newDataP != NULL &&
-          newDataP->type == KjObject && kjLookup(newDataP, "@context") == NULL)
-        kjChildAdd(newDataP, kjString(corRest.kjsonP, "@context", itemP->contextUrl));
+          newDataP->type == CorObject && corTreeLookup(newDataP, "@context") == NULL)
+        corTreeChildAdd(newDataP, corTreeString(corRest.kallocP, "@context", itemP->contextUrl));
     }
   }
 
   //
   // Render to JSON
   //
-  int   bodySize = kjFastRenderSize(notification) + 1;
+  int   bodySize = corJsonFastRenderSize(notification) + 1;
   char* body     = (char*) kaAlloc(&corRest.kalloc, bodySize);
 
-  kjFastRender(notification, body);
+  corJsonFastRender(notification, body);
 
   //
   // Compute Link header — needed for both HTTP and MQTT paths.
@@ -1021,14 +1022,14 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
     corRestClientRequestHeader(&req, "Link", linkBuf);
 
   // § 5.2.15 endpoint.receiverInfo — emit each {key,value} as a request header
-  if (itemP->receiverInfo != NULL && itemP->receiverInfo->type == KjArray)
+  if (itemP->receiverInfo != NULL && itemP->receiverInfo->type == CorArray)
   {
-    for (KjNode* kvP = itemP->receiverInfo->value.firstChildP; kvP != NULL; kvP = kvP->next)
+    for (CorNode* kvP = itemP->receiverInfo->value.firstChildP; kvP != NULL; kvP = kvP->next)
     {
-      if (kvP->type != KjObject) continue;
-      KjNode* kP = kjLookup(kvP, "key");
-      KjNode* vP = kjLookup(kvP, "value");
-      if (kP != NULL && kP->type == KjString && vP != NULL && vP->type == KjString)
+      if (kvP->type != CorObject) continue;
+      CorNode* kP = corTreeLookup(kvP, "key");
+      CorNode* vP = corTreeLookup(kvP, "value");
+      if (kP != NULL && kP->type == CorString && vP != NULL && vP->type == CorString)
       {
         // Content-Type and an @context Link are absorbed into endpointAccept /
         // contextUrl (ldSubCache) and emitted once by the broker above. Prefer
@@ -1166,9 +1167,9 @@ void ldSubscriptionNotifyBatch(LdSubCache*           cacheP,
 
       LdMergeReport* reportP = p->hasReport ? &p->report : NULL;
 
-      KjNode*     entityIdP   = kjLookup(p->entityP, "id");
-      KjNode*     entityTypeP = kjLookup(p->entityP, "type");
-      const char* entityId    = (entityIdP != NULL && entityIdP->type == KjString) ? entityIdP->value.s : NULL;
+      CorNode*    entityIdP   = corTreeLookup(p->entityP, "id");
+      CorNode*    entityTypeP = corTreeLookup(p->entityP, "type");
+      const char* entityId    = (entityIdP != NULL && entityIdP->type == CorString) ? entityIdP->value.s : NULL;
 
       if (!triggerMatches(itemP, p->op, p->reasonsMask))
         continue;
@@ -1181,7 +1182,7 @@ void ldSubscriptionNotifyBatch(LdSubCache*           cacheP,
 
       if (itemP->scopeExpr != NULL)
       {
-        KjNode* scopeP = kjLookup(p->entityP, LD_VOCAB_SCOPE);
+        CorNode* scopeP = corTreeLookup(p->entityP, LD_VOCAB_SCOPE);
         if (!ldEntityMatchScope(scopeP, itemP->scopeExpr))
           continue;
       }
@@ -1308,7 +1309,7 @@ static void throttleFlushTick(void* ctx, uint64_t now, KAlloc* kaP)
     for (int i = 0; i < entriesN; i++)
     {
       LdThrottleEntry* e     = &entriesV[i];
-      KjNode*          state = NULL;
+      CorNode*         state = NULL;
       LdNotifyOp       op    = LdNotifyEntityUpdate;
       uint64_t         delNs = 0;
 

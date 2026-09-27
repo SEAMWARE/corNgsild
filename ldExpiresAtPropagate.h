@@ -22,9 +22,10 @@
 // rather than an ISO string (the Snapshot capture path). An instance
 // inherits the shape of the Entity-level value it copies. Idempotent.
 //
-#include "kjson/KjNode.h"                                 // KjNode
+#include "kalloc/KAlloc.h"                                   // KAlloc
+#include "corTree/CorNode.h"                                 // CorNode
 
-struct Kjson;
-extern void ldExpiresAtPropagate(KjNode* entityP, struct Kjson* kjsonP);
+struct CorJson;
+extern void ldExpiresAtPropagate(CorNode* entityP, struct KAlloc* allocP);
 
 #endif

@@ -8,12 +8,12 @@
 //
 #include <string.h>                                   // strcmp
 
-#include "kjson/kjson.h"                               // Kjson
-#include "kjson/KjNode.h"                              // KjNode
-#include "kjson/kjLookup.h"                            // kjLookup
-#include "kjson/kjBuilder.h"                           // kjChildAdd, kjChildRemove
-#include "kjson/kjChildReplace.h"                      // kjChildReplace
-#include "kjson/kjClone.h"                             // kjClone
+#include "kalloc/KAlloc.h"                             // KAlloc
+#include "corTree/CorNode.h"                           // CorNode
+#include "corTree/corTreeLookup.h"                     // corTreeLookup
+#include "corTree/corTreeBuilder.h"                    // corTreeChildAdd, corTreeChildRemove
+#include "corTree/corTreeChildReplace.h"               // corTreeChildReplace
+#include "corTree/corTreeClone.h"                      // corTreeClone
 
 #include "corNgsild/LdVocab.h"                          // LD_VOCAB_NGSILD_NULL
 #include "corNgsild/ldRegSubMerge.h"                    // Own interface
@@ -29,18 +29,18 @@
 // here and replaces the member wholesale, leaving any "urn:ngsi-ld:null" inside
 // it as the literal data it is.
 //
-static bool isOpaqueValueObject(KjNode* nodeP)
+static bool isOpaqueValueObject(CorNode* nodeP)
 {
-  if (nodeP == NULL || nodeP->type != KjObject)
+  if (nodeP == NULL || nodeP->type != CorObject)
     return false;
 
-  for (KjNode* c = nodeP->value.firstChildP; c != NULL; c = c->next)
+  for (CorNode* c = nodeP->value.firstChildP; c != NULL; c = c->next)
   {
     if (c->name == NULL)
       continue;
     if (strcmp(c->name, "@value") == 0)
       return true;
-    if (strcmp(c->name, "@type") == 0 && c->type == KjString && strcmp(c->value.s, "@json") == 0)
+    if (strcmp(c->name, "@type") == 0 && c->type == CorString && strcmp(c->value.s, "@json") == 0)
       return true;
   }
   return false;
@@ -50,15 +50,15 @@ static bool isOpaqueValueObject(KjNode* nodeP)
 
 // -----------------------------------------------------------------------------
 //
-// isDeleteMarker - the delete signal at any depth: the internal KjNull the
+// isDeleteMarker - the delete signal at any depth: the internal CorNull the
 // top-level validator produces from a "urn:ngsi-ld:null" sentinel, or — for a
 // NESTED member the validator never visited — the raw "urn:ngsi-ld:null" string.
 //
-static bool isDeleteMarker(KjNode* fP)
+static bool isDeleteMarker(CorNode* fP)
 {
-  if (fP->type == KjNull)
+  if (fP->type == CorNull)
     return true;
-  if (fP->type == KjString && strcmp(fP->value.s, LD_VOCAB_NGSILD_NULL) == 0)
+  if (fP->type == CorString && strcmp(fP->value.s, LD_VOCAB_NGSILD_NULL) == 0)
     return true;
   return false;
 }
@@ -77,12 +77,12 @@ static bool isDeleteMarker(KjNode* fP)
 // the merged result is still valid — e.g. a mandatory member was deleted — is
 // the caller's post-merge re-validation, not this mechanical merge.
 //
-void ldRegSubMerge(KjNode* target, KjNode* fragment, Kjson* allocP)
+void ldRegSubMerge(CorNode* target, CorNode* fragment, KAlloc* allocP)
 {
   if (target == NULL || fragment == NULL)
     return;
 
-  for (KjNode* fP = fragment->value.firstChildP; fP != NULL; fP = fP->next)
+  for (CorNode* fP = fragment->value.firstChildP; fP != NULL; fP = fP->next)
   {
     if (fP->name == NULL)
       continue;
@@ -92,18 +92,18 @@ void ldRegSubMerge(KjNode* target, KjNode* fragment, Kjson* allocP)
     if (strcmp(fP->name, "id") == 0 || strcmp(fP->name, "type") == 0)
       continue;
 
-    KjNode* existingP = kjLookup(target, fP->name);
+    CorNode* existingP = corTreeLookup(target, fP->name);
 
     if (isDeleteMarker(fP))
     {
       if (existingP != NULL)
-        kjChildRemove(target, existingP);
+        corTreeChildRemove(target, existingP);
       continue;
     }
 
     // Deep-merge two structural objects (recurse); stop at arrays and opaque
     // value objects, which replace wholesale.
-    if (fP->type == KjObject && existingP != NULL && existingP->type == KjObject
+    if (fP->type == CorObject && existingP != NULL && existingP->type == CorObject
         && (isOpaqueValueObject(fP) == false) && (isOpaqueValueObject(existingP) == false))
     {
       ldRegSubMerge(existingP, fP, allocP);
@@ -112,11 +112,11 @@ void ldRegSubMerge(KjNode* target, KjNode* fragment, Kjson* allocP)
 
     // Otherwise replace an existing member IN PLACE (preserving field order) or
     // append if new.
-    KjNode* cloneP = kjClone(allocP, fP);
+    CorNode* cloneP = corTreeClone(allocP, fP);
 
     if (existingP != NULL)
-      kjChildReplace(target, existingP, cloneP);
+      corTreeChildReplace(target, existingP, cloneP);
     else
-      kjChildAdd(target, cloneP);
+      corTreeChildAdd(target, cloneP);
   }
 }

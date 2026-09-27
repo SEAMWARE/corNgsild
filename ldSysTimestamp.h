@@ -16,7 +16,7 @@
 // so a future temporal filter can compare them numerically), rendered to ISO
 // 8601 strings only when the client asks for system attributes.
 //
-#include "kjson/KjNode.h"                                // KjNode
+#include "corTree/CorNode.h"                             // CorNode
 #include "kalloc/KAlloc.h"                               // KAlloc
 
 
@@ -34,7 +34,7 @@ extern void ldSysTimestampToIso(long long nsec, char* buf, int bufSize);
 // ldSysTimestampsToIso - convert a tree's top-level createdAt/modifiedAt
 //                        integer members to ISO 8601 strings, in place
 //
-extern void ldSysTimestampsToIso(KjNode* treeP, KAlloc* allocP);
+extern void ldSysTimestampsToIso(CorNode* treeP, KAlloc* allocP);
 
 
 
@@ -43,7 +43,7 @@ extern void ldSysTimestampsToIso(KjNode* treeP, KAlloc* allocP);
 // ldSysTimestampCreate - stamp createdAt AND modifiedAt = now (request time)
 //                        onto a resource tree as nanosecond integers
 //
-extern void ldSysTimestampCreate(KjNode* treeP);
+extern void ldSysTimestampCreate(CorNode* treeP);
 
 
 
@@ -52,6 +52,6 @@ extern void ldSysTimestampCreate(KjNode* treeP);
 // ldSysTimestampModify - set/replace modifiedAt = now on a resource tree
 //                        (createdAt, if present, is left untouched)
 //
-extern void ldSysTimestampModify(KjNode* treeP);
+extern void ldSysTimestampModify(CorNode* treeP);
 
 #endif  // CORNGSILD_LD_SYS_TIMESTAMP_H

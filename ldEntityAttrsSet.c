@@ -9,11 +9,12 @@
 
 #include <string.h>                                   // strcmp
 
-#include "kjson/KjNode.h"                             // KjNode
-#include "kjson/kjBuilder.h"                          // kjObject, kjString, kjInteger, kjChildAdd, kjChildRemove
-#include "kjson/kjLookup.h"                           // kjLookup
-#include "kjson/kjClone.h"                            // kjClone
-#include "kjson/kjFree.h"                             // kjFree
+#include "kalloc/KAlloc.h"                            // KAlloc
+#include "corTree/CorNode.h"                          // CorNode
+#include "corTree/corTreeBuilder.h"                   // corTreeObject, corTreeString, corTreeInteger, corTreeChildAdd, corTreeChildRemove
+#include "corTree/corTreeLookup.h"                    // corTreeLookup
+#include "corTree/corTreeClone.h"                     // corTreeClone
+#include "corTree/corTreeFree.h"                      // corTreeFree
 #include "corRest/corRest.h"                            // corRest (request-scoped allocator for the report)
 
 #include "corNgsild/LdVocab.h"                         // LD_VOCAB_*
@@ -30,11 +31,11 @@
 // would be wrong. The node must not be referenced elsewhere — every call site
 // here replaces it wholesale (report entries hold separate clones).
 //
-static void removeChild(KjNode* container, KjNode* node, Kjson* allocP)
+static void removeChild(CorNode* container, CorNode* node, KAlloc* allocP)
 {
-  kjChildRemove(container, node);
+  corTreeChildRemove(container, node);
   if (allocP == NULL)
-    kjFree(node);
+    corTreeFree(node);
 }
 
 
@@ -43,10 +44,10 @@ static void removeChild(KjNode* container, KjNode* node, Kjson* allocP)
 //
 // isNgsildNull - true if node is the "urn:ngsi-ld:null" delete-marker string
 //
-static inline bool isNgsildNull(const KjNode* nodeP)
+static inline bool isNgsildNull(const CorNode* nodeP)
 {
   return (nodeP != NULL &&
-          nodeP->type == KjString &&
+          nodeP->type == CorString &&
           strcmp(nodeP->value.s, LD_VOCAB_NGSILD_NULL) == 0);
 }
 
@@ -68,21 +69,21 @@ static inline bool isNgsildNull(const KjNode* nodeP)
 //     marker; presence of that single entry means the attribute is being
 //     deleted.
 //
-static bool instanceValueIsNull(KjNode* instP)
+static bool instanceValueIsNull(CorNode* instP)
 {
-  if (instP == NULL || instP->type != KjObject)
+  if (instP == NULL || instP->type != CorObject)
     return false;
 
-  KjNode* valP = kjLookup(instP, "value");
+  CorNode* valP = corTreeLookup(instP, "value");
   if (valP == NULL)
     return false;
 
   if (isNgsildNull(valP))
     return true;
 
-  if (valP->type == KjObject)
+  if (valP->type == CorObject)
   {
-    KjNode* noneP = kjLookup(valP, "@none");
+    CorNode* noneP = corTreeLookup(valP, "@none");
     if (isNgsildNull(noneP))
       return true;
   }
@@ -96,19 +97,19 @@ static bool instanceValueIsNull(KjNode* instP)
 //
 // bumpModifiedAt - set modifiedAt on an object (replace in-place or add)
 //
-static void bumpModifiedAt(KjNode* objP, uint64_t ts, Kjson* allocP)
+static void bumpModifiedAt(CorNode* objP, uint64_t ts, KAlloc* allocP)
 {
-  if (objP == NULL || objP->type != KjObject)
+  if (objP == NULL || objP->type != CorObject)
     return;
 
-  KjNode* mP = kjLookup(objP, LD_VOCAB_MODIFIED_AT);
+  CorNode* mP = corTreeLookup(objP, LD_VOCAB_MODIFIED_AT);
   if (mP != NULL)
   {
-    mP->type    = KjInt;
+    mP->type    = CorInt;
     mP->value.i = (long long) ts;
     return;
   }
-  kjChildAdd(objP, kjInteger(allocP, LD_VOCAB_MODIFIED_AT, (long long) ts));
+  corTreeChildAdd(objP, corTreeInteger(allocP, LD_VOCAB_MODIFIED_AT, (long long) ts));
 }
 
 
@@ -117,13 +118,13 @@ static void bumpModifiedAt(KjNode* objP, uint64_t ts, Kjson* allocP)
 //
 // stampCreatedAtIfMissing -
 //
-static void stampCreatedAtIfMissing(KjNode* objP, uint64_t ts, Kjson* allocP)
+static void stampCreatedAtIfMissing(CorNode* objP, uint64_t ts, KAlloc* allocP)
 {
-  if (objP == NULL || objP->type != KjObject)
+  if (objP == NULL || objP->type != CorObject)
     return;
 
-  if (kjLookup(objP, LD_VOCAB_CREATED_AT) == NULL)
-    kjChildAdd(objP, kjInteger(allocP, LD_VOCAB_CREATED_AT, (long long) ts));
+  if (corTreeLookup(objP, LD_VOCAB_CREATED_AT) == NULL)
+    corTreeChildAdd(objP, corTreeInteger(allocP, LD_VOCAB_CREATED_AT, (long long) ts));
 }
 
 
@@ -133,28 +134,28 @@ static void stampCreatedAtIfMissing(KjNode* objP, uint64_t ts, Kjson* allocP)
 // addReportEntry - append one per-attr change record
 //
 // Matches LdMergeReport's shape (used by subscription matcher): each
-// record is a KjObject with "attr", "reason", and optional "preValue".
-// Report nodes live on the request-scoped allocator (corRest.kjsonP).
+// record is a CorObject with "attr", "reason", and optional "preValue".
+// Report nodes live on the request-scoped allocator (corRest.kallocP).
 //
 static void addReportEntry(LdMergeReport* reportP, const char* attrName,
-                           const char* reason, KjNode* preValue)
+                           const char* reason, CorNode* preValue)
 {
   if (reportP == NULL)
     return;
 
   if (reportP->changes == NULL)
-    reportP->changes = kjArray(corRest.kjsonP, "changes");
+    reportP->changes = corTreeArray(corRest.kallocP, "changes");
 
-  KjNode* entry = kjObject(corRest.kjsonP, NULL);
-  kjChildAdd(entry, kjString(corRest.kjsonP, "attr",   attrName));
-  kjChildAdd(entry, kjString(corRest.kjsonP, "reason", reason));
+  CorNode* entry = corTreeObject(corRest.kallocP, NULL);
+  corTreeChildAdd(entry, corTreeString(corRest.kallocP, "attr", attrName));
+  corTreeChildAdd(entry, corTreeString(corRest.kallocP, "reason", reason));
   if (preValue != NULL)
   {
-    KjNode* clone = kjClone(corRest.kjsonP, preValue);
+    CorNode* clone = corTreeClone(corRest.kallocP, preValue);
     clone->name = (char*) "preValue";
-    kjChildAdd(entry, clone);
+    corTreeChildAdd(entry, clone);
   }
-  kjChildAdd(reportP->changes, entry);
+  corTreeChildAdd(reportP->changes, entry);
 }
 
 
@@ -163,64 +164,64 @@ static void addReportEntry(LdMergeReport* reportP, const char* attrName,
 //
 // applyType - union fragment's type values into target's type
 //
-// target's "type" may be KjString (single) or KjArray. Fragment's likewise.
-// Result is KjString if only one value, else a KjArray containing all
+// target's "type" may be CorString (single) or CorArray. Fragment's likewise.
+// Result is CorString if only one value, else a CorArray containing all
 // unique values.
 //
-static void applyType(KjNode* target, KjNode* fragType, Kjson* allocP)
+static void applyType(CorNode* target, CorNode* fragType, KAlloc* allocP)
 {
   if (fragType == NULL)
     return;
 
-  KjNode* tType = kjLookup(target, "type");
+  CorNode* tType = corTreeLookup(target, "type");
 
   //
-  // Normalize target->type to a KjArray so we can append without caring
-  // about the prior shape. Restore to KjString at the end if only one.
+  // Normalize target->type to a CorArray so we can append without caring
+  // about the prior shape. Restore to CorString at the end if only one.
   //
   if (tType == NULL)
   {
     // Fragment's type becomes target's type wholesale (clone).
-    KjNode* clone = kjClone(allocP, fragType);
+    CorNode* clone = corTreeClone(allocP, fragType);
     clone->name = (char*) "type";
-    kjChildAdd(target, clone);
+    corTreeChildAdd(target, clone);
     return;
   }
 
   // Collect existing values into an array form
-  KjNode* arrayP = kjArray(allocP, "type");
-  if (tType->type == KjString)
+  CorNode* arrayP = corTreeArray(allocP, "type");
+  if (tType->type == CorString)
   {
-    kjChildAdd(arrayP, kjString(allocP, NULL, tType->value.s));
+    corTreeChildAdd(arrayP, corTreeString(allocP, NULL, tType->value.s));
   }
-  else if (tType->type == KjArray)
+  else if (tType->type == CorArray)
   {
-    for (KjNode* c = tType->value.firstChildP; c != NULL; c = c->next)
-      if (c->type == KjString)
-        kjChildAdd(arrayP, kjString(allocP, NULL, c->value.s));
+    for (CorNode* c = tType->value.firstChildP; c != NULL; c = c->next)
+      if (c->type == CorString)
+        corTreeChildAdd(arrayP, corTreeString(allocP, NULL, c->value.s));
   }
 
   // Union in the fragment values (skip duplicates)
   const char* toAdd[32];
   int         toAddN = 0;
-  if (fragType->type == KjString)
+  if (fragType->type == CorString)
   {
     toAdd[toAddN++] = fragType->value.s;
   }
-  else if (fragType->type == KjArray)
+  else if (fragType->type == CorArray)
   {
-    for (KjNode* c = fragType->value.firstChildP; c != NULL; c = c->next)
-      if (c->type == KjString && toAddN < 32)
+    for (CorNode* c = fragType->value.firstChildP; c != NULL; c = c->next)
+      if (c->type == CorString && toAddN < 32)
         toAdd[toAddN++] = c->value.s;
   }
 
   for (int i = 0; i < toAddN; i++)
   {
     bool present = false;
-    for (KjNode* c = arrayP->value.firstChildP; c != NULL; c = c->next)
-      if (c->type == KjString && strcmp(c->value.s, toAdd[i]) == 0) { present = true; break; }
+    for (CorNode* c = arrayP->value.firstChildP; c != NULL; c = c->next)
+      if (c->type == CorString && strcmp(c->value.s, toAdd[i]) == 0) { present = true; break; }
     if (!present)
-      kjChildAdd(arrayP, kjString(allocP, NULL, toAdd[i]));
+      corTreeChildAdd(arrayP, corTreeString(allocP, NULL, toAdd[i]));
   }
 
   // Replace target.type
@@ -228,16 +229,16 @@ static void applyType(KjNode* target, KjNode* fragType, Kjson* allocP)
 
   // Count elements in arrayP
   int n = 0;
-  for (KjNode* c = arrayP->value.firstChildP; c != NULL; c = c->next) n++;
+  for (CorNode* c = arrayP->value.firstChildP; c != NULL; c = c->next) n++;
 
   if (n == 1)
   {
-    KjNode* only = arrayP->value.firstChildP;
-    kjChildAdd(target, kjString(allocP, "type", only->value.s));
+    CorNode* only = arrayP->value.firstChildP;
+    corTreeChildAdd(target, corTreeString(allocP, "type", only->value.s));
   }
   else
   {
-    kjChildAdd(target, arrayP);
+    corTreeChildAdd(target, arrayP);
   }
 }
 
@@ -251,12 +252,12 @@ static void applyType(KjNode* target, KjNode* fragType, Kjson* allocP)
 // DB model, or the NGSI-LD Null string it deliberately does not convert. Either way this is
 // an Entity member, not an Attribute - it never grows dataset-keyed instances.
 //
-static void applyExpiresAt(KjNode* target, KjNode* fragExpiresAt, Kjson* allocP)
+static void applyExpiresAt(CorNode* target, CorNode* fragExpiresAt, KAlloc* allocP)
 {
   if (fragExpiresAt == NULL)
     return;
 
-  KjNode* tExpiresAt = kjLookup(target, LD_VOCAB_EXPIRES_AT);
+  CorNode* tExpiresAt = corTreeLookup(target, LD_VOCAB_EXPIRES_AT);
 
   if (isNgsildNull(fragExpiresAt))
   {
@@ -266,14 +267,14 @@ static void applyExpiresAt(KjNode* target, KjNode* fragExpiresAt, Kjson* allocP)
     return;
   }
 
-  KjNode* cloneP = kjClone(allocP, fragExpiresAt);
+  CorNode* cloneP = corTreeClone(allocP, fragExpiresAt);
 
   cloneP->name = (char*) LD_VOCAB_EXPIRES_AT;
 
   if (tExpiresAt != NULL)
     removeChild(target, tExpiresAt, allocP);
 
-  kjChildAdd(target, cloneP);
+  corTreeChildAdd(target, cloneP);
 }
 
 
@@ -282,19 +283,19 @@ static void applyExpiresAt(KjNode* target, KjNode* fragExpiresAt, Kjson* allocP)
 //
 // applyScope - replace or union fragment's scope into target's scope
 //
-static void applyScope(KjNode* target, KjNode* fragScope, bool overwrite, Kjson* allocP)
+static void applyScope(CorNode* target, CorNode* fragScope, bool overwrite, KAlloc* allocP)
 {
   if (fragScope == NULL)
     return;
 
-  KjNode* tScope = kjLookup(target, LD_VOCAB_SCOPE);
+  CorNode* tScope = corTreeLookup(target, LD_VOCAB_SCOPE);
 
   //
   // § 5.4.1 — a member whose value is the NGSI-LD Null is removed from the target, and § 10.2.7.4
   // has scope among the Entity members that can be deleted. Removing it is the point: storing the
   // marker would leave the Entity in a Scope that is not a Scope.
   //
-  if ((fragScope->type == KjString) && (strcmp(fragScope->value.s, LD_VOCAB_NGSILD_NULL) == 0))
+  if ((fragScope->type == CorString) && (strcmp(fragScope->value.s, LD_VOCAB_NGSILD_NULL) == 0))
   {
     if (tScope != NULL)
       removeChild(target, tScope, allocP);
@@ -307,39 +308,39 @@ static void applyScope(KjNode* target, KjNode* fragScope, bool overwrite, Kjson*
     if (tScope != NULL)
       removeChild(target, tScope, allocP);
 
-    KjNode* clone = kjClone(allocP, fragScope);
+    CorNode* clone = corTreeClone(allocP, fragScope);
     clone->name = (char*) LD_VOCAB_SCOPE;
-    kjChildAdd(target, clone);
+    corTreeChildAdd(target, clone);
     return;
   }
 
   //
   // Union: merge fragment scope values into target scope (string or array).
   //
-  KjNode* arrayP = kjArray(allocP, LD_VOCAB_SCOPE);
-  if (tScope->type == KjString)
-    kjChildAdd(arrayP, kjString(allocP, NULL, tScope->value.s));
-  else if (tScope->type == KjArray)
-    for (KjNode* c = tScope->value.firstChildP; c != NULL; c = c->next)
-      if (c->type == KjString)
-        kjChildAdd(arrayP, kjString(allocP, NULL, c->value.s));
+  CorNode* arrayP = corTreeArray(allocP, LD_VOCAB_SCOPE);
+  if (tScope->type == CorString)
+    corTreeChildAdd(arrayP, corTreeString(allocP, NULL, tScope->value.s));
+  else if (tScope->type == CorArray)
+    for (CorNode* c = tScope->value.firstChildP; c != NULL; c = c->next)
+      if (c->type == CorString)
+        corTreeChildAdd(arrayP, corTreeString(allocP, NULL, c->value.s));
 
   const char* toAdd[32];
   int         toAddN = 0;
-  if (fragScope->type == KjString)
+  if (fragScope->type == CorString)
     toAdd[toAddN++] = fragScope->value.s;
-  else if (fragScope->type == KjArray)
-    for (KjNode* c = fragScope->value.firstChildP; c != NULL; c = c->next)
-      if (c->type == KjString && toAddN < 32)
+  else if (fragScope->type == CorArray)
+    for (CorNode* c = fragScope->value.firstChildP; c != NULL; c = c->next)
+      if (c->type == CorString && toAddN < 32)
         toAdd[toAddN++] = c->value.s;
 
   for (int i = 0; i < toAddN; i++)
   {
     bool present = false;
-    for (KjNode* c = arrayP->value.firstChildP; c != NULL; c = c->next)
-      if (c->type == KjString && strcmp(c->value.s, toAdd[i]) == 0) { present = true; break; }
+    for (CorNode* c = arrayP->value.firstChildP; c != NULL; c = c->next)
+      if (c->type == CorString && strcmp(c->value.s, toAdd[i]) == 0) { present = true; break; }
     if (!present)
-      kjChildAdd(arrayP, kjString(allocP, NULL, toAdd[i]));
+      corTreeChildAdd(arrayP, corTreeString(allocP, NULL, toAdd[i]));
   }
 
   removeChild(target, tScope, allocP);
@@ -349,11 +350,11 @@ static void applyScope(KjNode* target, KjNode* fragScope, bool overwrite, Kjson*
   // as a bare String, not a one-element Array. Collapse when the union left
   // exactly one value (e.g. target "/x" ∪ fragment "/x").
   //
-  KjNode* firstP = arrayP->value.firstChildP;
+  CorNode* firstP = arrayP->value.firstChildP;
   if ((firstP != NULL) && (firstP->next == NULL))
-    kjChildAdd(target, kjString(allocP, LD_VOCAB_SCOPE, firstP->value.s));
+    corTreeChildAdd(target, corTreeString(allocP, LD_VOCAB_SCOPE, firstP->value.s));
   else
-    kjChildAdd(target, arrayP);
+    corTreeChildAdd(target, arrayP);
 }
 
 
@@ -362,11 +363,11 @@ static void applyScope(KjNode* target, KjNode* fragScope, bool overwrite, Kjson*
 //
 // ldEntityAttrsSet -
 //
-void ldEntityAttrsSet(KjNode* target, KjNode* fragment,
+void ldEntityAttrsSet(CorNode* target, CorNode* fragment,
                       bool overwriteScope, uint64_t ts,
-                      LdMergeReport* reportP, Kjson* targetAllocP)
+                      LdMergeReport* reportP, KAlloc* targetAllocP)
 {
-  if (target == NULL || fragment == NULL || fragment->type != KjObject)
+  if (target == NULL || fragment == NULL || fragment->type != CorObject)
     return;
 
   bool anyChange = false;
@@ -375,7 +376,7 @@ void ldEntityAttrsSet(KjNode* target, KjNode* fragment,
   // First pass: handle top-level keywords (type, scope). id is not
   // copied over — entity id is immutable on append.
   //
-  for (KjNode* fP = fragment->value.firstChildP; fP != NULL; fP = fP->next)
+  for (CorNode* fP = fragment->value.firstChildP; fP != NULL; fP = fP->next)
   {
     if (fP->name == NULL)
       continue;
@@ -405,7 +406,7 @@ void ldEntityAttrsSet(KjNode* target, KjNode* fragment,
       applyExpiresAt(target, fP, targetAllocP);
       anyChange = true;
       addReportEntry(reportP, LD_VOCAB_EXPIRES_AT,
-                     (kjLookup(target, LD_VOCAB_EXPIRES_AT) == NULL) ? "attributeDeleted" : "entityModified",
+                     (corTreeLookup(target, LD_VOCAB_EXPIRES_AT) == NULL) ? "attributeDeleted" : "entityModified",
                      NULL);
     }
   }
@@ -413,7 +414,7 @@ void ldEntityAttrsSet(KjNode* target, KjNode* fragment,
   //
   // Second pass: top-level attributes (anything not a keyword).
   //
-  for (KjNode* fAttrP = fragment->value.firstChildP; fAttrP != NULL; fAttrP = fAttrP->next)
+  for (CorNode* fAttrP = fragment->value.firstChildP; fAttrP != NULL; fAttrP = fAttrP->next)
   {
     // type, scope and expiresAt were handled in the first pass - and are Entity members anyway
     if (ldIsNotAttributeName(fAttrP->name))
@@ -426,10 +427,10 @@ void ldEntityAttrsSet(KjNode* target, KjNode* fragment,
     //
     if (isNgsildNull(fAttrP))
     {
-      KjNode* tAttrP = kjLookup(target, fAttrP->name);
+      CorNode* tAttrP = corTreeLookup(target, fAttrP->name);
       if (tAttrP != NULL)
       {
-        KjNode* preClone = (reportP != NULL) ? kjClone(corRest.kjsonP, tAttrP) : NULL;
+        CorNode* preClone = (reportP != NULL) ? corTreeClone(corRest.kallocP, tAttrP) : NULL;
         removeChild(target, tAttrP, targetAllocP);
         addReportEntry(reportP, fAttrP->name, "attributeDeleted", preClone);
         anyChange = true;
@@ -437,9 +438,9 @@ void ldEntityAttrsSet(KjNode* target, KjNode* fragment,
       continue;
     }
 
-    if (fAttrP->type != KjObject)                  continue;
+    if (fAttrP->type != CorObject)                 continue;
 
-    KjNode* tAttrP = kjLookup(target, fAttrP->name);
+    CorNode* tAttrP = corTreeLookup(target, fAttrP->name);
 
     if (tAttrP == NULL)
     {
@@ -447,15 +448,15 @@ void ldEntityAttrsSet(KjNode* target, KjNode* fragment,
       // New attribute — clone the wrapper with all its dsKey instances.
       // Stamp createdAt/modifiedAt on every instance.
       //
-      KjNode* clone = kjClone(targetAllocP, fAttrP);
-      for (KjNode* instP = clone->value.firstChildP; instP != NULL; instP = instP->next)
+      CorNode* clone = corTreeClone(targetAllocP, fAttrP);
+      for (CorNode* instP = clone->value.firstChildP; instP != NULL; instP = instP->next)
       {
-        if (instP->type != KjObject)
+        if (instP->type != CorObject)
           continue;
         stampCreatedAtIfMissing(instP, ts, targetAllocP);
         bumpModifiedAt(instP, ts, targetAllocP);
       }
-      kjChildAdd(target, clone);
+      corTreeChildAdd(target, clone);
 
       addReportEntry(reportP, fAttrP->name, "attributeCreated", NULL);
       anyChange = true;
@@ -465,21 +466,21 @@ void ldEntityAttrsSet(KjNode* target, KjNode* fragment,
     //
     // Existing attribute — set or append per dsKey instance.
     //
-    KjNode* preClone = NULL;
+    CorNode* preClone = NULL;
     if (reportP != NULL)
-      preClone = kjClone(corRest.kjsonP, tAttrP);
+      preClone = corTreeClone(corRest.kallocP, tAttrP);
 
-    KjNode* fInstP = fAttrP->value.firstChildP;
+    CorNode* fInstP = fAttrP->value.firstChildP;
     while (fInstP != NULL)
     {
-      KjNode* nextInst = fInstP->next;
-      if (fInstP->type != KjObject)
+      CorNode* nextInst = fInstP->next;
+      if (fInstP->type != CorObject)
       {
         fInstP = nextInst;
         continue;
       }
 
-      KjNode* tInstP = kjLookup(tAttrP, fInstP->name);
+      CorNode* tInstP = corTreeLookup(tAttrP, fInstP->name);
 
       //
       // Instance-level null-marker (§ 5.6.2.4 Update Attributes): the
@@ -505,36 +506,36 @@ void ldEntityAttrsSet(KjNode* target, KjNode* fragment,
       if (tInstP == NULL)
       {
         // Add this dsKey instance
-        KjNode* clone = kjClone(targetAllocP, fInstP);
+        CorNode* clone = corTreeClone(targetAllocP, fInstP);
         stampCreatedAtIfMissing(clone, ts, targetAllocP);
         bumpModifiedAt(clone, ts, targetAllocP);
-        kjChildAdd(tAttrP, clone);
+        corTreeChildAdd(tAttrP, clone);
       }
       else
       {
         // Replace instance preserving createdAt
-        KjNode* oldCreatedAt = kjLookup(tInstP, LD_VOCAB_CREATED_AT);
-        long long createdAtNs = (oldCreatedAt != NULL && oldCreatedAt->type == KjInt)
+        CorNode* oldCreatedAt = corTreeLookup(tInstP, LD_VOCAB_CREATED_AT);
+        long long createdAtNs = (oldCreatedAt != NULL && oldCreatedAt->type == CorInt)
                                 ? oldCreatedAt->value.i
                                 : (long long) ts;
 
-        KjNode* newInst = kjClone(targetAllocP, fInstP);
+        CorNode* newInst = corTreeClone(targetAllocP, fInstP);
         // Make sure newInst has createdAt (from old) and modifiedAt=ts
-        KjNode* nCreated = kjLookup(newInst, LD_VOCAB_CREATED_AT);
+        CorNode* nCreated = corTreeLookup(newInst, LD_VOCAB_CREATED_AT);
         if (nCreated != NULL)
         {
-          nCreated->type    = KjInt;
+          nCreated->type    = CorInt;
           nCreated->value.i = createdAtNs;
         }
         else
         {
-          kjChildAdd(newInst, kjInteger(targetAllocP, LD_VOCAB_CREATED_AT, createdAtNs));
+          corTreeChildAdd(newInst, corTreeInteger(targetAllocP, LD_VOCAB_CREATED_AT, createdAtNs));
         }
         bumpModifiedAt(newInst, ts, targetAllocP);
 
         // Swap: remove old, add new (keeps the name key)
         removeChild(tAttrP, tInstP, targetAllocP);
-        kjChildAdd(tAttrP, newInst);
+        corTreeChildAdd(tAttrP, newInst);
       }
 
       fInstP = nextInst;

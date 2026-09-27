@@ -24,10 +24,10 @@
 #include <stdio.h>                                    // snprintf
 #include <string.h>                                   // strcmp, strchr
 
-#include "kjson/KjNode.h"                             // KjNode
-#include "kjson/kjBuilder.h"                          // kjArray, kjObject, kjString, kjInteger, kjChildAdd
-#include "kjson/kjLookup.h"                           // kjLookup
-#include "kjson/kjParse.h"                            // kjParse
+#include "corTree/CorNode.h"                          // CorNode
+#include "corTree/corTreeBuilder.h"                   // corTreeArray, corTreeObject, corTreeString, corTreeInteger, corTreeChildAdd
+#include "corTree/corTreeLookup.h"                    // corTreeLookup
+#include "corJson/corJsonParse.h"                     // corJsonParse
 #include "corRest/CorRestState.h"                       // corRest
 #include "corRest/CorRestVerb.h"                        // CorVerbGet
 
@@ -92,72 +92,72 @@ bool ldDiscoveryShouldForward(void)
 // local to avoid exposing them; the augment path and the forward path
 // share the same aggregation shape.
 //
-static void stringArrayAddUnique(KjNode* arr, const char* s)
+static void stringArrayAddUnique(CorNode* arr, const char* s)
 {
-  for (KjNode* p = arr->value.firstChildP; p != NULL; p = p->next)
-    if (p->type == KjString && strcmp(p->value.s, s) == 0)
+  for (CorNode* p = arr->value.firstChildP; p != NULL; p = p->next)
+    if (p->type == CorString && strcmp(p->value.s, s) == 0)
       return;
-  kjChildAdd(arr, kjString(corRest.kjsonP, NULL, s));
+  corTreeChildAdd(arr, corTreeString(corRest.kallocP, NULL, s));
 }
 
 
 
-static KjNode* typeEntryEnsure(KjNode* agg, const char* typeIri, bool details)
+static CorNode* typeEntryEnsure(CorNode* agg, const char* typeIri, bool details)
 {
-  for (KjNode* e = agg->value.firstChildP; e != NULL; e = e->next)
+  for (CorNode* e = agg->value.firstChildP; e != NULL; e = e->next)
   {
-    KjNode* iriP = kjLookup(e, "typeIri");
-    if (iriP != NULL && iriP->type == KjString && strcmp(iriP->value.s, typeIri) == 0)
+    CorNode* iriP = corTreeLookup(e, "typeIri");
+    if (iriP != NULL && iriP->type == CorString && strcmp(iriP->value.s, typeIri) == 0)
       return e;
   }
 
-  KjNode* e = kjObject(corRest.kjsonP, NULL);
-  kjChildAdd(e, kjString(corRest.kjsonP, "typeIri", typeIri));
-  kjChildAdd(e, kjArray(corRest.kjsonP, "attrs"));
+  CorNode* e = corTreeObject(corRest.kallocP, NULL);
+  corTreeChildAdd(e, corTreeString(corRest.kallocP, "typeIri", typeIri));
+  corTreeChildAdd(e, corTreeArray(corRest.kallocP, "attrs"));
   if (details)
   {
-    kjChildAdd(e, kjObject(corRest.kjsonP,  "attrTypes"));
-    kjChildAdd(e, kjInteger(corRest.kjsonP, "entityCount", 0));
+    corTreeChildAdd(e, corTreeObject(corRest.kallocP, "attrTypes"));
+    corTreeChildAdd(e, corTreeInteger(corRest.kallocP, "entityCount", 0));
   }
-  kjChildAdd(agg, e);
+  corTreeChildAdd(agg, e);
   return e;
 }
 
 
 
-static KjNode* attrEntryEnsure(KjNode* agg, const char* attrIri, bool details)
+static CorNode* attrEntryEnsure(CorNode* agg, const char* attrIri, bool details)
 {
-  for (KjNode* e = agg->value.firstChildP; e != NULL; e = e->next)
+  for (CorNode* e = agg->value.firstChildP; e != NULL; e = e->next)
   {
-    KjNode* iriP = kjLookup(e, "attrIri");
-    if (iriP != NULL && iriP->type == KjString && strcmp(iriP->value.s, attrIri) == 0)
+    CorNode* iriP = corTreeLookup(e, "attrIri");
+    if (iriP != NULL && iriP->type == CorString && strcmp(iriP->value.s, attrIri) == 0)
       return e;
   }
 
-  KjNode* e = kjObject(corRest.kjsonP, NULL);
-  kjChildAdd(e, kjString(corRest.kjsonP, "attrIri", attrIri));
+  CorNode* e = corTreeObject(corRest.kallocP, NULL);
+  corTreeChildAdd(e, corTreeString(corRest.kallocP, "attrIri", attrIri));
   if (details)
   {
-    kjChildAdd(e, kjArray(corRest.kjsonP,  "typeNames"));
-    kjChildAdd(e, kjArray(corRest.kjsonP,  "attrTypes"));
-    kjChildAdd(e, kjInteger(corRest.kjsonP, "attrCount", 0));
+    corTreeChildAdd(e, corTreeArray(corRest.kallocP, "typeNames"));
+    corTreeChildAdd(e, corTreeArray(corRest.kallocP, "attrTypes"));
+    corTreeChildAdd(e, corTreeInteger(corRest.kallocP, "attrCount", 0));
   }
-  kjChildAdd(agg, e);
+  corTreeChildAdd(agg, e);
   return e;
 }
 
 
 
-static void addAttrType(KjNode* typeEntry, const char* attrName, const char* at)
+static void addAttrType(CorNode* typeEntry, const char* attrName, const char* at)
 {
-  KjNode* attrTypesObj = kjLookup(typeEntry, "attrTypes");
+  CorNode* attrTypesObj = corTreeLookup(typeEntry, "attrTypes");
   if (attrTypesObj == NULL) return;
 
-  KjNode* atArr = kjLookup(attrTypesObj, attrName);
+  CorNode* atArr = corTreeLookup(attrTypesObj, attrName);
   if (atArr == NULL)
   {
-    atArr = kjArray(corRest.kjsonP, attrName);
-    kjChildAdd(attrTypesObj, atArr);
+    atArr = corTreeArray(corRest.kallocP, attrName);
+    corTreeChildAdd(attrTypesObj, atArr);
   }
   stringArrayAddUnique(atArr, at);
 }
@@ -187,7 +187,7 @@ static const char* expandShort(const char* name)
 //
 // Returns NULL on any failure (status not 2xx, empty body, non-JSON).
 //
-static KjNode* forwardGet(LdRegCacheItem* csr, const char* path, bool details, int hops,
+static CorNode* forwardGet(LdRegCacheItem* csr, const char* path, bool details, int hops,
                            const char* ownAlias)
 {
   char url[1024];
@@ -213,7 +213,7 @@ static KjNode* forwardGet(LdRegCacheItem* csr, const char* path, bool details, i
   if (status < 200 || status >= 300 || respBody == NULL)
     return NULL;
 
-  KjNode* treeP = kjParse(corRest.kjsonP, respBody);
+  CorNode* treeP = corJsonParse(corRest.corJsonP, respBody);
   if (treeP != NULL)
     ldStripAtContext(treeP);
   return treeP;
@@ -225,24 +225,24 @@ static KjNode* forwardGet(LdRegCacheItem* csr, const char* path, bool details, i
 //
 // mergeEntityTypeArray - merge EntityType[] response into agg
 //
-static void mergeEntityTypeArray(KjNode* agg, KjNode* respP, bool details)
+static void mergeEntityTypeArray(CorNode* agg, CorNode* respP, bool details)
 {
-  if (respP == NULL || respP->type != KjArray) return;
+  if (respP == NULL || respP->type != CorArray) return;
 
-  for (KjNode* et = respP->value.firstChildP; et != NULL; et = et->next)
+  for (CorNode* et = respP->value.firstChildP; et != NULL; et = et->next)
   {
-    KjNode* idP = kjLookup(et, "id");
-    if (idP == NULL || idP->type != KjString) continue;
+    CorNode* idP = corTreeLookup(et, "id");
+    if (idP == NULL || idP->type != CorString) continue;
 
-    KjNode* te = typeEntryEnsure(agg, idP->value.s, details);
-    KjNode* attrs = kjLookup(te, "attrs");
+    CorNode* te = typeEntryEnsure(agg, idP->value.s, details);
+    CorNode* attrs = corTreeLookup(te, "attrs");
 
-    KjNode* anArr = kjLookup(et, "attributeNames");
-    if (anArr != NULL && anArr->type == KjArray)
+    CorNode* anArr = corTreeLookup(et, "attributeNames");
+    if (anArr != NULL && anArr->type == CorArray)
     {
-      for (KjNode* an = anArr->value.firstChildP; an != NULL; an = an->next)
+      for (CorNode* an = anArr->value.firstChildP; an != NULL; an = an->next)
       {
-        if (an->type != KjString) continue;
+        if (an->type != CorString) continue;
         const char* iri = expandShort(an->value.s);
         stringArrayAddUnique(attrs, iri);
       }
@@ -256,40 +256,40 @@ static void mergeEntityTypeArray(KjNode* agg, KjNode* respP, bool details)
 //
 // mergeEntityTypeInfo - merge a single EntityTypeInfo (§ 5.2.26) into agg
 //
-static void mergeEntityTypeInfo(KjNode* agg, KjNode* respP)
+static void mergeEntityTypeInfo(CorNode* agg, CorNode* respP)
 {
-  if (respP == NULL || respP->type != KjObject) return;
+  if (respP == NULL || respP->type != CorObject) return;
 
-  KjNode* idP = kjLookup(respP, "id");
-  if (idP == NULL || idP->type != KjString) return;
+  CorNode* idP = corTreeLookup(respP, "id");
+  if (idP == NULL || idP->type != CorString) return;
 
-  KjNode* te = typeEntryEnsure(agg, idP->value.s, true);
+  CorNode* te = typeEntryEnsure(agg, idP->value.s, true);
 
-  KjNode* countP = kjLookup(respP, "entityCount");
-  if (countP != NULL && countP->type == KjInt)
+  CorNode* countP = corTreeLookup(respP, "entityCount");
+  if (countP != NULL && countP->type == CorInt)
   {
-    KjNode* teCount = kjLookup(te, "entityCount");
+    CorNode* teCount = corTreeLookup(te, "entityCount");
     if (teCount != NULL) teCount->value.i += countP->value.i;
   }
 
-  KjNode* attrs = kjLookup(te, "attrs");
+  CorNode* attrs = corTreeLookup(te, "attrs");
 
-  KjNode* adArr = kjLookup(respP, "attributeDetails");
-  if (adArr != NULL && adArr->type == KjArray)
+  CorNode* adArr = corTreeLookup(respP, "attributeDetails");
+  if (adArr != NULL && adArr->type == CorArray)
   {
-    for (KjNode* ad = adArr->value.firstChildP; ad != NULL; ad = ad->next)
+    for (CorNode* ad = adArr->value.firstChildP; ad != NULL; ad = ad->next)
     {
-      if (ad->type != KjObject) continue;
-      KjNode* adIdP = kjLookup(ad, "id");
-      if (adIdP == NULL || adIdP->type != KjString) continue;
+      if (ad->type != CorObject) continue;
+      CorNode* adIdP = corTreeLookup(ad, "id");
+      if (adIdP == NULL || adIdP->type != CorString) continue;
 
       stringArrayAddUnique(attrs, adIdP->value.s);
 
-      KjNode* atArr = kjLookup(ad, "attributeTypes");
-      if (atArr != NULL && atArr->type == KjArray)
+      CorNode* atArr = corTreeLookup(ad, "attributeTypes");
+      if (atArr != NULL && atArr->type == CorArray)
       {
-        for (KjNode* at = atArr->value.firstChildP; at != NULL; at = at->next)
-          if (at->type == KjString)
+        for (CorNode* at = atArr->value.firstChildP; at != NULL; at = at->next)
+          if (at->type == CorString)
             addAttrType(te, adIdP->value.s, at->value.s);
       }
     }
@@ -302,24 +302,24 @@ static void mergeEntityTypeInfo(KjNode* agg, KjNode* respP)
 //
 // mergeAttributeArray - merge Attribute[] response into agg
 //
-static void mergeAttributeArray(KjNode* agg, KjNode* respP, bool details)
+static void mergeAttributeArray(CorNode* agg, CorNode* respP, bool details)
 {
-  if (respP == NULL || respP->type != KjArray) return;
+  if (respP == NULL || respP->type != CorArray) return;
 
-  for (KjNode* at = respP->value.firstChildP; at != NULL; at = at->next)
+  for (CorNode* at = respP->value.firstChildP; at != NULL; at = at->next)
   {
-    KjNode* idP = kjLookup(at, "id");
-    if (idP == NULL || idP->type != KjString) continue;
+    CorNode* idP = corTreeLookup(at, "id");
+    if (idP == NULL || idP->type != CorString) continue;
 
-    KjNode* ae = attrEntryEnsure(agg, idP->value.s, details);
+    CorNode* ae = attrEntryEnsure(agg, idP->value.s, details);
     if (!details) continue;
 
-    KjNode* tnArr = kjLookup(at, "typeNames");
-    KjNode* typeNamesAgg = kjLookup(ae, "typeNames");
-    if (tnArr != NULL && tnArr->type == KjArray && typeNamesAgg != NULL)
+    CorNode* tnArr = corTreeLookup(at, "typeNames");
+    CorNode* typeNamesAgg = corTreeLookup(ae, "typeNames");
+    if (tnArr != NULL && tnArr->type == CorArray && typeNamesAgg != NULL)
     {
-      for (KjNode* tn = tnArr->value.firstChildP; tn != NULL; tn = tn->next)
-        if (tn->type == KjString)
+      for (CorNode* tn = tnArr->value.firstChildP; tn != NULL; tn = tn->next)
+        if (tn->type == CorString)
           stringArrayAddUnique(typeNamesAgg, expandShort(tn->value.s));
     }
   }
@@ -331,37 +331,37 @@ static void mergeAttributeArray(KjNode* agg, KjNode* respP, bool details)
 //
 // mergeAttributeInfo - merge a single Attribute (§ 5.2.28) into agg
 //
-static void mergeAttributeInfo(KjNode* agg, KjNode* respP)
+static void mergeAttributeInfo(CorNode* agg, CorNode* respP)
 {
-  if (respP == NULL || respP->type != KjObject) return;
+  if (respP == NULL || respP->type != CorObject) return;
 
-  KjNode* idP = kjLookup(respP, "id");
-  if (idP == NULL || idP->type != KjString) return;
+  CorNode* idP = corTreeLookup(respP, "id");
+  if (idP == NULL || idP->type != CorString) return;
 
-  KjNode* ae = attrEntryEnsure(agg, idP->value.s, true);
+  CorNode* ae = attrEntryEnsure(agg, idP->value.s, true);
 
-  KjNode* countP = kjLookup(respP, "attributeCount");
-  if (countP != NULL && countP->type == KjInt)
+  CorNode* countP = corTreeLookup(respP, "attributeCount");
+  if (countP != NULL && countP->type == CorInt)
   {
-    KjNode* aeCount = kjLookup(ae, "attrCount");
+    CorNode* aeCount = corTreeLookup(ae, "attrCount");
     if (aeCount != NULL) aeCount->value.i += countP->value.i;
   }
 
-  KjNode* atArr = kjLookup(respP, "attributeTypes");
-  KjNode* attrTypesAgg = kjLookup(ae, "attrTypes");
-  if (atArr != NULL && atArr->type == KjArray && attrTypesAgg != NULL)
+  CorNode* atArr = corTreeLookup(respP, "attributeTypes");
+  CorNode* attrTypesAgg = corTreeLookup(ae, "attrTypes");
+  if (atArr != NULL && atArr->type == CorArray && attrTypesAgg != NULL)
   {
-    for (KjNode* at = atArr->value.firstChildP; at != NULL; at = at->next)
-      if (at->type == KjString)
+    for (CorNode* at = atArr->value.firstChildP; at != NULL; at = at->next)
+      if (at->type == CorString)
         stringArrayAddUnique(attrTypesAgg, at->value.s);
   }
 
-  KjNode* tnArr = kjLookup(respP, "typeNames");
-  KjNode* typeNamesAgg = kjLookup(ae, "typeNames");
-  if (tnArr != NULL && tnArr->type == KjArray && typeNamesAgg != NULL)
+  CorNode* tnArr = corTreeLookup(respP, "typeNames");
+  CorNode* typeNamesAgg = corTreeLookup(ae, "typeNames");
+  if (tnArr != NULL && tnArr->type == CorArray && typeNamesAgg != NULL)
   {
-    for (KjNode* tn = tnArr->value.firstChildP; tn != NULL; tn = tn->next)
-      if (tn->type == KjString)
+    for (CorNode* tn = tnArr->value.firstChildP; tn != NULL; tn = tn->next)
+      if (tn->type == CorString)
         stringArrayAddUnique(typeNamesAgg, expandShort(tn->value.s));
   }
 }
@@ -372,7 +372,7 @@ static void mergeAttributeInfo(KjNode* agg, KjNode* respP)
 //
 // ldDiscoveryForwardTypes -
 //
-void ldDiscoveryForwardTypes(KjNode* agg, LdRegCache* cacheP, bool details, const char* ownAlias)
+void ldDiscoveryForwardTypes(CorNode* agg, LdRegCache* cacheP, bool details, const char* ownAlias)
 {
   if (!ldDiscoveryShouldForward()) return;
   if (cacheP == NULL) return;
@@ -390,7 +390,7 @@ void ldDiscoveryForwardTypes(KjNode* agg, LdRegCache* cacheP, bool details, cons
     // the details one since we always request ?details=true below).
     if (!ldRegOpSupported(it, LdOpRetrieveEntityTypeDetails)) continue;
 
-    KjNode* respP = forwardGet(it, "/ngsi-ld/v1/types", true, hops, ownAlias);
+    CorNode* respP = forwardGet(it, "/ngsi-ld/v1/types", true, hops, ownAlias);
     mergeEntityTypeArray(agg, respP, details);
   }
 }
@@ -401,7 +401,7 @@ void ldDiscoveryForwardTypes(KjNode* agg, LdRegCache* cacheP, bool details, cons
 //
 // ldDiscoveryForwardType -
 //
-void ldDiscoveryForwardType(KjNode* agg, LdRegCache* cacheP, const char* typeIri,
+void ldDiscoveryForwardType(CorNode* agg, LdRegCache* cacheP, const char* typeIri,
                             const char* typeShort, const char* ownAlias)
 {
   if (!ldDiscoveryShouldForward()) return;
@@ -419,7 +419,7 @@ void ldDiscoveryForwardType(KjNode* agg, LdRegCache* cacheP, const char* typeIri
     if (ldDistOpCsrWouldLoop(it, ownAlias))           continue;
     if (!ldRegOpSupported(it, LdOpRetrieveEntityTypeInfo)) continue;
 
-    KjNode* respP = forwardGet(it, path, false, hops, ownAlias);
+    CorNode* respP = forwardGet(it, path, false, hops, ownAlias);
     mergeEntityTypeInfo(agg, respP);
   }
 }
@@ -430,7 +430,7 @@ void ldDiscoveryForwardType(KjNode* agg, LdRegCache* cacheP, const char* typeIri
 //
 // ldDiscoveryForwardAttrs -
 //
-void ldDiscoveryForwardAttrs(KjNode* agg, LdRegCache* cacheP, bool details, const char* ownAlias)
+void ldDiscoveryForwardAttrs(CorNode* agg, LdRegCache* cacheP, bool details, const char* ownAlias)
 {
   if (!ldDiscoveryShouldForward()) return;
   if (cacheP == NULL) return;
@@ -443,7 +443,7 @@ void ldDiscoveryForwardAttrs(KjNode* agg, LdRegCache* cacheP, bool details, cons
     if (ldDistOpCsrWouldLoop(it, ownAlias))             continue;
     if (!ldRegOpSupported(it, LdOpRetrieveAttrTypeDetails)) continue;
 
-    KjNode* respP = forwardGet(it, "/ngsi-ld/v1/attributes", true, hops, ownAlias);
+    CorNode* respP = forwardGet(it, "/ngsi-ld/v1/attributes", true, hops, ownAlias);
     mergeAttributeArray(agg, respP, details);
   }
 }
@@ -454,7 +454,7 @@ void ldDiscoveryForwardAttrs(KjNode* agg, LdRegCache* cacheP, bool details, cons
 //
 // ldDiscoveryForwardAttr -
 //
-void ldDiscoveryForwardAttr(KjNode* agg, LdRegCache* cacheP, const char* attrIri,
+void ldDiscoveryForwardAttr(CorNode* agg, LdRegCache* cacheP, const char* attrIri,
                             const char* attrShort, const char* ownAlias)
 {
   if (!ldDiscoveryShouldForward()) return;
@@ -472,7 +472,7 @@ void ldDiscoveryForwardAttr(KjNode* agg, LdRegCache* cacheP, const char* attrIri
     if (ldDistOpCsrWouldLoop(it, ownAlias))           continue;
     if (!ldRegOpSupported(it, LdOpRetrieveAttrTypeInfo)) continue;
 
-    KjNode* respP = forwardGet(it, path, false, hops, ownAlias);
+    CorNode* respP = forwardGet(it, path, false, hops, ownAlias);
     mergeAttributeInfo(agg, respP);
   }
 }

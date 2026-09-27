@@ -9,7 +9,7 @@
 // Copyright 2026 Seamware
 // SPDX-License-Identifier: Apache-2.0
 //
-#include "kjson/KjNode.h"                              // KjNode
+#include "corTree/CorNode.h"                           // CorNode
 #include "corNgsild/LdEntityMap.h"                      // LdEntityMap, LdEntityMapStore
 
 
@@ -46,8 +46,8 @@ extern bool ldEntityMapRemove(LdEntityMapStore* storeP, const char* mapId);
 // ldEntityMapSetExpiresAt - overwrite a map's expiresAt (§ 5.14.2)
 extern void ldEntityMapSetExpiresAt(LdEntityMap* mapP, uint64_t expiresAtNs);
 
-// ldEntityMapToTree - render an EntityMap as a KjNode tree for API output
-extern KjNode* ldEntityMapToTree(LdEntityMap* mapP);
+// ldEntityMapToTree - render an EntityMap as a CorNode tree for API output
+extern CorNode* ldEntityMapToTree(LdEntityMap* mapP);
 
 // ldEntityMapPurgeExpired - remove all expired maps from the store
 extern void ldEntityMapPurgeExpired(LdEntityMapStore* storeP);

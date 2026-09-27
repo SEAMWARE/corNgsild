@@ -14,13 +14,12 @@
 #include <stdlib.h>                                    // malloc, free
 
 #include "kalloc/KAlloc.h"                             // KAlloc, kaAlloc
-#include "kjson/KjNode.h"                              // KjNode
-#include "kjson/kjBuilder.h"                           // kjObject, kjString, kjArray, kjChildAdd
-#include "kjson/kjRenderSize.h"                        // kjFastRenderSize
-#include "kjson/kjRender.h"                            // kjFastRender
-#include "kjson/kjClone.h"                             // kjClone
-#include "kjson/kjBufferCreate.h"                      // kjBufferCreate (+ Kjson type)
-#include "kjson/kjLookup.h"                            // kjLookup
+#include "corTree/CorNode.h"                           // CorNode
+#include "corTree/corTreeBuilder.h"                    // corTreeObject, corTreeString, corTreeArray, corTreeChildAdd
+#include "corJson/corJsonRenderSize.h"                 // corJsonFastRenderSize
+#include "corJson/corJsonRender.h"                     // corJsonFastRender
+#include "corTree/corTreeClone.h"                      // corTreeClone
+#include "corTree/corTreeLookup.h"                     // corTreeLookup
 
 #include "corRest/CorRestState.h"                        // corRest (for thread-local init)
 #include "corRest/corRestClient.h"                       // CorRestClientRequest, corRestClientSend
@@ -81,19 +80,18 @@ static void isoFromNanos(uint64_t ns, char* buf, int bufLen)
 //
 // pernotSendNotification - build + send a periodic notification for one sub
 //
-static bool pernotSendNotification(LdPernotItem* itemP, KjNode* entityArray, KAlloc* kaP)
+static bool pernotSendNotification(LdPernotItem* itemP, CorNode* entityArray, KAlloc* kaP)
 {
   if (itemP->endpointUri == NULL)
     return false;
 
   // Build the notification tree in the per-tick engine arena (kaP) — this runs
-  // on the periodic-dispatch thread where corRest.kjsonP is not our arena. kaP is
+  // on the periodic-dispatch thread where corRest.allocP is not our arena. kaP is
   // reset by the engine after the tick, freeing the whole tree.
-  Kjson   kjBuf;
-  Kjson*  kjP = kjBufferCreate(&kjBuf, kaP);
+  KAlloc*  allocP = kaP;
 
   // Build notification tree
-  KjNode* notification = kjObject(kjP, NULL);
+  CorNode* notification = corTreeObject(allocP, NULL);
 
   char notifId[80];
   snprintf(notifId, sizeof(notifId), "urn:ngsi-ld:Notification:%08x:%04x",
@@ -102,21 +100,21 @@ static bool pernotSendNotification(LdPernotItem* itemP, KjNode* entityArray, KAl
   char isoTimeBuf[64];
   isoFromNanos(nowNanos(), isoTimeBuf, sizeof(isoTimeBuf));
 
-  kjChildAdd(notification, kjString(kjP, "id", notifId));
-  kjChildAdd(notification, kjString(kjP, "type", "Notification"));
-  kjChildAdd(notification, kjString(kjP, "subscriptionId", itemP->subId));
-  kjChildAdd(notification, kjString(kjP, "notifiedAt", isoTimeBuf));
+  corTreeChildAdd(notification, corTreeString(allocP, "id", notifId));
+  corTreeChildAdd(notification, corTreeString(allocP, "type", "Notification"));
+  corTreeChildAdd(notification, corTreeString(allocP, "subscriptionId", itemP->subId));
+  corTreeChildAdd(notification, corTreeString(allocP, "notifiedAt", isoTimeBuf));
 
   // Convert entities from storage to API format
-  KjNode* dataArray = kjArray(kjP, "data");
-  for (KjNode* entityP = entityArray->value.firstChildP; entityP != NULL; entityP = entityP->next)
+  CorNode* dataArray = corTreeArray(allocP, "data");
+  for (CorNode* entityP = entityArray->value.firstChildP; entityP != NULL; entityP = entityP->next)
   {
-    KjNode* entityClone = kjClone(kjP, entityP);
+    CorNode* entityClone = corTreeClone(allocP, entityP);
     ldEntityToApi(entityClone, kaP);
     ldStripSysAttrs(entityClone);
-    kjChildAdd(dataArray, entityClone);
+    corTreeChildAdd(dataArray, entityClone);
   }
-  kjChildAdd(notification, dataArray);
+  corTreeChildAdd(notification, dataArray);
 
   // § 5.2.14 notification.join — linked-entity retrieval (§ 4.5.23)
   if (itemP->notifJoin != NULL && strcmp(itemP->notifJoin, "@none") != 0)
@@ -140,9 +138,9 @@ static bool pernotSendNotification(LdPernotItem* itemP, KjNode* entityArray, KAl
   }
 
   // Render to JSON
-  int bodySize = kjFastRenderSize(notification);
+  int bodySize = corJsonFastRenderSize(notification);
   char* body = (char*) kaAlloc(kaP, bodySize);
-  kjFastRender(notification, body);
+  corJsonFastRender(notification, body);
 
   // Send via HTTP
   CorRestClientRequest  req;
@@ -165,14 +163,14 @@ static bool pernotSendNotification(LdPernotItem* itemP, KjNode* entityArray, KAl
   // § 5.2.15 endpoint.receiverInfo — emit each {key,value} as a request header.
   // Periodic notifications run on a background thread with no triggering
   // request, so any "urn:ngsi-ld:request" placeholder is silently dropped.
-  if (itemP->receiverInfo != NULL && itemP->receiverInfo->type == KjArray)
+  if (itemP->receiverInfo != NULL && itemP->receiverInfo->type == CorArray)
   {
-    for (KjNode* kvP = itemP->receiverInfo->value.firstChildP; kvP != NULL; kvP = kvP->next)
+    for (CorNode* kvP = itemP->receiverInfo->value.firstChildP; kvP != NULL; kvP = kvP->next)
     {
-      if (kvP->type != KjObject) continue;
-      KjNode* kP = kjLookup(kvP, "key");
-      KjNode* vP = kjLookup(kvP, "value");
-      if (kP == NULL || kP->type != KjString || vP == NULL || vP->type != KjString) continue;
+      if (kvP->type != CorObject) continue;
+      CorNode* kP = corTreeLookup(kvP, "key");
+      CorNode* vP = corTreeLookup(kvP, "value");
+      if (kP == NULL || kP->type != CorString || vP == NULL || vP->type != CorString) continue;
       if (strcmp(vP->value.s, "urn:ngsi-ld:request") == 0) continue;
       corRestClientRequestHeader(&req, kP->value.s, vP->value.s);
     }
@@ -231,7 +229,7 @@ static void pernotTick(void* ctx, uint64_t now, KAlloc* kaP)
     if (itemP->lastNotification + intervalNs > now)
       continue;
 
-    KjNode* entityArray = loopQueryFn(itemP->tenantP, itemP, kaP);
+    CorNode* entityArray = loopQueryFn(itemP->tenantP, itemP, kaP);
 
     itemP->lastNotification = now;
     itemP->timesSent++;

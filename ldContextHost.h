@@ -9,7 +9,7 @@
 #ifndef LD_CONTEXT_HOST_H
 #define LD_CONTEXT_HOST_H
 
-#include "kjson/KjNode.h"                              // KjNode
+#include "corTree/CorNode.h"                           // CorNode
 #include "corJsonld/CorLdContext.h"                      // CorLdContext
 
 
@@ -42,7 +42,7 @@
 // corNgsild.userContextBody. Returns NULL on failure (caller falls back to
 // the core context).
 //
-extern CorLdContext* ldContextHostVolatile(KjNode* ctxBody);
+extern CorLdContext* ldContextHostVolatile(CorNode* ctxBody);
 
 
 
