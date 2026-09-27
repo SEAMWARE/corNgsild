@@ -10,7 +10,7 @@
 #include <stdbool.h>                                     // bool
 #include <string.h>                                      // strcmp, strstr, strlen, strrchr
 
-#include "kbase/kLibLog.h"                             // KLOG_T
+#include "corBase/corLibLog.h"                         // COR_LIB_*
 #include "corTree/CorNode.h"                           // CorNode
 #include "corJsonld/corLdExpand.h"                       // corLdSetVocabExpandCheck, corLdSetValueCheck, corLdSetKeywordCheck, corLdSetVocabValueSuffix
 
@@ -334,7 +334,7 @@ int ldInit(void)
   if (ldInitialized == true)
     return 0;
 
-  KLOG_T(LdTInit, "Initializing corNgsild library");
+  COR_LIB_T(LdTInit, "Initializing corNgsild library");
 
   if (ldParamsInit() == false)
     return -1;

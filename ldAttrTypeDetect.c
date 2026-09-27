@@ -9,7 +9,7 @@
 //
 #include <string.h>                                      // strcmp
 
-#include "kbase/kLibLog.h"                             // KLOG_T
+#include "corBase/corLibLog.h"                         // COR_LIB_*
 #include "corTree/CorNode.h"                            // CorNode
 
 #include "corNgsild/LdVocab.h"                            // LD_VOCAB_*
@@ -59,7 +59,7 @@ LdAttrType ldAttrTypeDetect(CorNode* attrP)
         LdAttrType fromType = ldAttrTypeFromString(childP->value.s);
         if (fromType != LdAttrNone)
         {
-          KLOG_T(LdTDetect, "Detected type '%s' from explicit type field", childP->value.s);
+          COR_LIB_T(LdTDetect, "Detected type '%s' from explicit type field", childP->value.s);
           return fromType;
         }
       }
@@ -79,7 +79,7 @@ LdAttrType ldAttrTypeDetect(CorNode* attrP)
 
     if (detected != LdAttrNone)
     {
-      KLOG_T(LdTDetect, "Detected type '%s' from value key '%s'",
+      COR_LIB_T(LdTDetect, "Detected type '%s' from value key '%s'",
            ldAttrTypeToString(detected), childP->name);
       return detected;
     }

@@ -182,7 +182,7 @@ LIB_DEPS      = $(addprefix $(OBJDIR)/,$(LIB_SOURCES:.c=.d))
 #
 FLAGSTAMP    := $(OBJDIR)/.flags
 
-LIBS          = ../corRest/libcorRest.a ../corJsonld/libcorJsonld.a ../corAlloc/libcorAlloc.a ../corJson/libcorJson.a ../corTree/libcorTree.a ../kbase/libkbase.a ../corLog/libcorLog.a ../corHash/libcorHash.a -lpthread
+LIBS          = ../corRest/libcorRest.a ../corJsonld/libcorJsonld.a ../corAlloc/libcorAlloc.a ../corJson/libcorJson.a ../corTree/libcorTree.a ../corBase/libcorBase.a ../corLog/libcorLog.a ../corHash/libcorHash.a -lpthread
 
 .PHONY: all clean test install i di ci
 
@@ -257,9 +257,9 @@ $(OBJDIR)/$(LIB):	$(LIB_OBJS)
 
 $(OBJDIR)/$(LIB_SO):	$(LIB_OBJS)
 					$(CC) -shared $(LIB_OBJS) -o $@ \
-						-L../corRest -L../corJsonld -L../corAlloc -L../corJson -L../corTree -L../kbase -L../corLog -L../corHash \
-						-lcorRest -lcorJsonld -lcorAlloc -lcorJson -lcorTree -lkbase -lcorLog -lcorHash -lmicrohttpd -lssl -lcrypto -lpthread -lmosquitto $(ICU_LIBS) \
-						-Wl,-rpath,'$$ORIGIN/../corRest:$$ORIGIN/../corJsonld:$$ORIGIN/../corAlloc:$$ORIGIN/../corJson:$$ORIGIN/../corTree:$$ORIGIN/../kbase:$$ORIGIN/../corLog:$$ORIGIN/../corHash'
+						-L../corRest -L../corJsonld -L../corAlloc -L../corJson -L../corTree -L../corBase -L../corLog -L../corHash \
+						-lcorRest -lcorJsonld -lcorAlloc -lcorJson -lcorTree -lcorBase -lcorLog -lcorHash -lmicrohttpd -lssl -lcrypto -lpthread -lmosquitto $(ICU_LIBS) \
+						-Wl,-rpath,'$$ORIGIN/../corRest:$$ORIGIN/../corJsonld:$$ORIGIN/../corAlloc:$$ORIGIN/../corJson:$$ORIGIN/../corTree:$$ORIGIN/../corBase:$$ORIGIN/../corLog:$$ORIGIN/../corHash'
 
 $(OBJDIR)/%.o: %.c $(FLAGSTAMP)
 					@mkdir -p $(OBJDIR)

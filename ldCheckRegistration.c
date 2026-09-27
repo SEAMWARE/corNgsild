@@ -18,7 +18,7 @@
 #include <string.h>                                      // strcmp
 #include <regex.h>                                       // regcomp, regfree
 
-#include "kbase/kLibLog.h"                             // KLOG_T
+#include "corBase/corLibLog.h"                         // COR_LIB_*
 #include "corAlloc/CorAlloc.h"                         // CorAlloc
 #include "corTree/CorNode.h"                            // CorNode
 #include "corTree/corTreeLookup.h"                      // corTreeLookup
@@ -781,7 +781,7 @@ bool ldCheckRegistration(CorNode* regP, LdOp op, bool merged, CorAlloc* faP)
 
   OBJECT_CHECK(regP, "Invalid Registration", "Registration payload must be a JSON object");
 
-  KLOG_T(LdTCheckReg, "Checking registration payload for op %s", ldOpToString(op));
+  COR_LIB_T(LdTCheckReg, "Checking registration payload for op %s", ldOpToString(op));
 
   // § 5.2.6.5.3 — status, lastFailure, lastSuccess, timesFailed and timesSent are
   // server-owned read-only members; a create "shall ignore" them. Strip them on
@@ -1019,6 +1019,6 @@ bool ldCheckRegistration(CorNode* regP, LdOp op, bool merged, CorAlloc* faP)
   if (observationSpaceP != NULL && ldCheckGeo(observationSpaceP) == false)  return false;
   if (operationSpaceP   != NULL && ldCheckGeo(operationSpaceP)   == false)  return false;
 
-  KLOG_T(LdTCheckReg, "Registration payload valid");
+  COR_LIB_T(LdTCheckReg, "Registration payload valid");
   return true;
 }

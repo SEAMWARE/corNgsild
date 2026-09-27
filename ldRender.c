@@ -10,7 +10,7 @@
 #include <stdbool.h>                                     // bool
 #include <string.h>                                      // strcmp
 
-#include "kbase/kLibLog.h"                             // KLOG_T
+#include "corBase/corLibLog.h"                         // COR_LIB_*
 #include "corAlloc/CorAlloc.h"                         // CorAlloc
 #include "corTree/CorNode.h"                             // CorNode
 #include "corTree/corTreeBuilder.h"                      // corTreeChildAdd, corTreeChildRemove, corTreeObject
@@ -189,7 +189,7 @@ bool ldToConcise(CorNode* entityP, CorAlloc* faP)
       attrToConcise(childP);
   }
 
-  KLOG_T(LdTRender, "Entity converted to concise format");
+  COR_LIB_T(LdTRender, "Entity converted to concise format");
   return true;
 }
 
@@ -363,6 +363,6 @@ bool ldToSimplified(CorNode* entityP, CorAlloc* faP)
     childP = nextP;
   }
 
-  KLOG_T(LdTRender, "Entity converted to simplified format");
+  COR_LIB_T(LdTRender, "Entity converted to simplified format");
   return true;
 }

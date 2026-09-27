@@ -11,7 +11,7 @@
 #include <string.h>                                      // strcmp
 #include <ctype.h>                                       // isalpha, isalnum
 
-#include "kbase/kLibLog.h"                             // KLOG_T
+#include "corBase/corLibLog.h"                         // COR_LIB_*
 #include "corAlloc/CorAlloc.h"                         // CorAlloc
 #include "corTree/CorNode.h"                            // CorNode
 #include "corTree/corTreeLookup.h"                      // corTreeLookup
@@ -425,7 +425,7 @@ bool ldCheckAttribute(CorNode* attrP, LdOp op, LdAttrType attrTypeFromDb, CorAll
   // Step 1: Detect attribute type
   LdAttrType attrType = ldAttrTypeDetect(attrP);
 
-  KLOG_T(LdTCheckAttr, "Checking attribute '%s', detected type: %s", attrP->name, ldAttrTypeToString(attrType));
+  COR_LIB_T(LdTCheckAttr, "Checking attribute '%s', detected type: %s", attrP->name, ldAttrTypeToString(attrType));
 
   // § 4.7 — `location`, `observationSpace`, `operationSpace` are well-known
   // GeoProperty names; an attribute carrying one of these names cannot be
@@ -758,6 +758,6 @@ bool ldCheckAttribute(CorNode* attrP, LdOp op, LdAttrType attrTypeFromDb, CorAll
     }
   }
 
-  KLOG_T(LdTCheckAttr, "Attribute '%s' valid (type: %s)", attrP->name, ldAttrTypeToString(attrType));
+  COR_LIB_T(LdTCheckAttr, "Attribute '%s' valid (type: %s)", attrP->name, ldAttrTypeToString(attrType));
   return true;
 }

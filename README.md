@@ -105,12 +105,12 @@ Sibling Cor-Lib repos:
 - [`corRest`](https://github.com/SEAMWARE/corRest) — REST server + HTTP client (transport)
 - [`corJsonld`](https://github.com/SEAMWARE/corJsonld) — JSON-LD context expansion / compaction
 
-Sibling k-lib repos:
+Sibling repos:
 
 - [`corAlloc`](https://github.com/SEAMWARE/corAlloc) — arena allocator (`CorAlloc`)
 - [`corTree`](https://github.com/SEAMWARE/corTree) — the tree (`CorNode`)
 - [`corJson`](https://github.com/SEAMWARE/corJson) — JSON parsing and rendering
-- [`kbase`](https://gitlab.com/kzangeli/kbase) — core utilities
+- [`corBase`](https://github.com/SEAMWARE/corBase) — core utilities and the library log (`COR_LIB_*`)
 - [`corLog`](https://github.com/SEAMWARE/corLog) — logging and trace levels
 - [`corHash`](https://github.com/SEAMWARE/corHash) — hash tables (cache indexes)
 
