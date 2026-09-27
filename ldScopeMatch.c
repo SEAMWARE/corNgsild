@@ -190,7 +190,7 @@ static void objectCanonicalize(CorNode* objectP, KAlloc* kaP)
 
   if (scopeP->type == CorArray)
   {
-    for (CorNode* valueP = scopeP->value.firstChildP; valueP != NULL; valueP = valueP->next)
+    for (CorNode* valueP = scopeP->value.head; valueP != NULL; valueP = valueP->next)
       scopeValueCanonicalize(valueP, kaP);
   }
   else
@@ -214,7 +214,7 @@ void ldScopeCanonicalize(CorNode* treeP, KAlloc* kaP)
   }
   else if (treeP->type == CorArray)
   {
-    for (CorNode* itemP = treeP->value.firstChildP; itemP != NULL; itemP = itemP->next)
+    for (CorNode* itemP = treeP->value.head; itemP != NULL; itemP = itemP->next)
       objectCanonicalize(itemP, kaP);
   }
 }

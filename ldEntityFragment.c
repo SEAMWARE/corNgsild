@@ -71,7 +71,7 @@ CorNode* ldEntityFragmentForInfo(CorNode*   entityP,
   // First pass — count claimed attrs. Avoid building an empty fragment.
   //
   int matched = 0;
-  for (CorNode* curP = entityP->value.firstChildP; curP != NULL; curP = curP->next)
+  for (CorNode* curP = entityP->value.head; curP != NULL; curP = curP->next)
   {
     if (isKeywordAttr(curP->name))
       continue;
@@ -101,7 +101,7 @@ CorNode* ldEntityFragmentForInfo(CorNode*   entityP,
   //
   // Second pass — move or link the claimed attrs.
   //
-  CorNode* curP = entityP->value.firstChildP;
+  CorNode* curP = entityP->value.head;
   while (curP != NULL)
   {
     CorNode* nextP = curP->next;

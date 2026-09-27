@@ -180,7 +180,7 @@ static LdRegEntityInfo* entityInfoExtract(CorNode* entP)
   LdRegEntityInfo* tail = NULL;
 
   // Walk type values (one for CorString, N for CorArray of strings)
-  CorNode* tValP = (typeP->type == CorArray) ? typeP->value.firstChildP : typeP;
+  CorNode* tValP = (typeP->type == CorArray) ? typeP->value.head : typeP;
 
   for (; tValP != NULL; tValP = (typeP->type == CorArray) ? tValP->next : NULL)
   {
@@ -221,7 +221,7 @@ static char** stringArrayExtract(CorNode* arrP)
     return NULL;
 
   int count = 0;
-  for (CorNode* sP = arrP->value.firstChildP; sP != NULL; sP = sP->next)
+  for (CorNode* sP = arrP->value.head; sP != NULL; sP = sP->next)
     if (sP->type == CorString)
       count++;
 
@@ -231,7 +231,7 @@ static char** stringArrayExtract(CorNode* arrP)
   char** v = (char**) malloc((count + 1) * sizeof(char*));
   int    ix = 0;
 
-  for (CorNode* sP = arrP->value.firstChildP; sP != NULL; sP = sP->next)
+  for (CorNode* sP = arrP->value.head; sP != NULL; sP = sP->next)
   {
     if (sP->type == CorString)
       v[ix++] = sP->value.s;
@@ -287,7 +287,7 @@ static LdRegInfo* infoListExtract(CorNode* infoArrayP, KAlloc* allocP)
   LdRegInfo* head = NULL;
   LdRegInfo* tail = NULL;
 
-  for (CorNode* infoP = infoArrayP->value.firstChildP; infoP != NULL; infoP = infoP->next)
+  for (CorNode* infoP = infoArrayP->value.head; infoP != NULL; infoP = infoP->next)
   {
     if (infoP->type != CorObject)
       continue;
@@ -302,7 +302,7 @@ static LdRegInfo* infoListExtract(CorNode* infoArrayP, KAlloc* allocP)
       LdRegEntityInfo* eHead = NULL;
       LdRegEntityInfo* eTail = NULL;
 
-      for (CorNode* entP = entitiesP->value.firstChildP; entP != NULL; entP = entP->next)
+      for (CorNode* entP = entitiesP->value.head; entP != NULL; entP = entP->next)
       {
         LdRegEntityInfo* sub = entityInfoExtract(entP);
         if (sub == NULL)
@@ -543,10 +543,10 @@ LdRegCacheItem* ldRegCacheItemAdd(LdRegCache* cacheP, CorNode* regTree, KAlloc* 
   // the default group "federationOps" applies. Resolve that once here
   // so the match path is a single AND with no default fallback logic.
   CorNode* opsP = corTreeLookup(itemP->regTree, "operations");
-  if (opsP != NULL && opsP->type == CorArray && opsP->value.firstChildP != NULL)
+  if (opsP != NULL && opsP->type == CorArray && opsP->value.head != NULL)
   {
     itemP->operationsMask = 0;
-    for (CorNode* e = opsP->value.firstChildP; e != NULL; e = e->next)
+    for (CorNode* e = opsP->value.head; e != NULL; e = e->next)
     {
       if (e->type != CorString)
         continue;
@@ -632,13 +632,13 @@ LdRegCacheItem* ldRegCacheItemAdd(LdRegCache* cacheP, CorNode* regTree, KAlloc* 
     else if (scopeP->type == CorArray)
     {
       int n = 0;
-      for (CorNode* sP = scopeP->value.firstChildP; sP != NULL; sP = sP->next)
+      for (CorNode* sP = scopeP->value.head; sP != NULL; sP = sP->next)
         if (sP->type == CorString) n++;
       if (n > 0)
       {
         itemP->scopeV = (char**) malloc((n + 1) * sizeof(char*));
         int ix = 0;
-        for (CorNode* sP = scopeP->value.firstChildP; sP != NULL; sP = sP->next)
+        for (CorNode* sP = scopeP->value.head; sP != NULL; sP = sP->next)
           if (sP->type == CorString)
             itemP->scopeV[ix++] = sP->value.s;
         itemP->scopeV[ix] = NULL;
@@ -652,7 +652,7 @@ LdRegCacheItem* ldRegCacheItemAdd(LdRegCache* cacheP, CorNode* regTree, KAlloc* 
   if (csiP != NULL && csiP->type == CorArray)
   {
     int n = 0;
-    for (CorNode* kvP = csiP->value.firstChildP; kvP != NULL; kvP = kvP->next)
+    for (CorNode* kvP = csiP->value.head; kvP != NULL; kvP = kvP->next)
       if (kvP->type == CorObject)
         n++;
 
@@ -660,7 +660,7 @@ LdRegCacheItem* ldRegCacheItemAdd(LdRegCache* cacheP, CorNode* regTree, KAlloc* 
     {
       itemP->contextSourceInfoKV = (char**) malloc((n * 2 + 1) * sizeof(char*));
       int ix = 0;
-      for (CorNode* kvP = csiP->value.firstChildP; kvP != NULL; kvP = kvP->next)
+      for (CorNode* kvP = csiP->value.head; kvP != NULL; kvP = kvP->next)
       {
         if (kvP->type != CorObject) continue;
         CorNode* keyP = corTreeLookup(kvP, "key");
@@ -1366,13 +1366,13 @@ const char* ldRegCacheLocalWriteConflictTree(LdRegCache* cacheP,
   else if (typeP != NULL && typeP->type == CorArray)
   {
     int n = 0;
-    for (CorNode* tP = typeP->value.firstChildP; tP != NULL; tP = tP->next)
+    for (CorNode* tP = typeP->value.head; tP != NULL; tP = tP->next)
       if (tP->type == CorString) n++;
     if (n > 0)
     {
       typeV = (char**) kaAlloc(kaP, (n + 1) * sizeof(char*));
       int ix = 0;
-      for (CorNode* tP = typeP->value.firstChildP; tP != NULL; tP = tP->next)
+      for (CorNode* tP = typeP->value.head; tP != NULL; tP = tP->next)
         if (tP->type == CorString) typeV[ix++] = tP->value.s;
       typeV[ix] = NULL;
     }
@@ -1390,13 +1390,13 @@ const char* ldRegCacheLocalWriteConflictTree(LdRegCache* cacheP,
   else if (scopeP != NULL && scopeP->type == CorArray)
   {
     int n = 0;
-    for (CorNode* sP = scopeP->value.firstChildP; sP != NULL; sP = sP->next)
+    for (CorNode* sP = scopeP->value.head; sP != NULL; sP = sP->next)
       if (sP->type == CorString) n++;
     if (n > 0)
     {
       scopeV = (char**) kaAlloc(kaP, (n + 1) * sizeof(char*));
       int ix = 0;
-      for (CorNode* sP = scopeP->value.firstChildP; sP != NULL; sP = sP->next)
+      for (CorNode* sP = scopeP->value.head; sP != NULL; sP = sP->next)
         if (sP->type == CorString) scopeV[ix++] = sP->value.s;
       scopeV[ix] = NULL;
     }
@@ -1404,7 +1404,7 @@ const char* ldRegCacheLocalWriteConflictTree(LdRegCache* cacheP,
 
   // attribute IRIs — every non-keyword member
   int attrN = 0;
-  for (CorNode* aP = fragP->value.firstChildP; aP != NULL; aP = aP->next)
+  for (CorNode* aP = fragP->value.head; aP != NULL; aP = aP->next)
   {
     if (aP->name == NULL || aP->name[0] == '@')   continue;
     if (strcmp(aP->name, "id")    == 0)           continue;
@@ -1415,7 +1415,7 @@ const char* ldRegCacheLocalWriteConflictTree(LdRegCache* cacheP,
 
   char** attrIriV = (char**) kaAlloc(kaP, (attrN + 1) * sizeof(char*));
   int    aIx      = 0;
-  for (CorNode* aP = fragP->value.firstChildP; aP != NULL; aP = aP->next)
+  for (CorNode* aP = fragP->value.head; aP != NULL; aP = aP->next)
   {
     if (aP->name == NULL || aP->name[0] == '@')   continue;
     if (strcmp(aP->name, "id")    == 0)           continue;

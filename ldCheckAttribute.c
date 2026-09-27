@@ -312,7 +312,7 @@ static bool checkLanguageMap(CorNode* lmP)
     return false;
   }
 
-  for (CorNode* childP = lmP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = lmP->value.head; childP != NULL; childP = childP->next)
   {
     // § 5.2.6.4.6 — a languageMap key shall be an RFC 5646 language tag, or @none
     // (the JSON-LD default when no more specific language matches; it is also what
@@ -346,12 +346,12 @@ static bool checkLanguageMap(CorNode* lmP)
     // An array value must be non-empty and hold only non-empty strings.
     if (childP->type == CorArray)
     {
-      if (childP->value.firstChildP == NULL)
+      if (childP->value.head == NULL)
       {
         ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid LanguageProperty", "languageMap value for '%s' is an empty array", childP->name);
         return false;
       }
-      for (CorNode* elemP = childP->value.firstChildP; elemP != NULL; elemP = elemP->next)
+      for (CorNode* elemP = childP->value.head; elemP != NULL; elemP = elemP->next)
       {
         if (elemP->type != CorString || elemP->value.s[0] == 0)
         {
@@ -364,11 +364,11 @@ static bool checkLanguageMap(CorNode* lmP)
     // § 5.2.6.4.6 — an array of ONE string collapses to a scalar on storage,
     // so it round-trips as a String in every format and under lang reduction.
     if ((childP->type == CorArray) &&
-        (childP->value.firstChildP != NULL) &&
-        (childP->value.firstChildP->next == NULL) &&
-        (childP->value.firstChildP->type == CorString))
+        (childP->value.head != NULL) &&
+        (childP->value.head->next == NULL) &&
+        (childP->value.head->type == CorString))
     {
-      CorNode* onlyP = childP->value.firstChildP;
+      CorNode* onlyP = childP->value.head;
       childP->type    = CorString;
       childP->value.s = onlyP->value.s;
     }
@@ -391,7 +391,7 @@ static bool checkObjectList(CorNode* listP)
     return false;
   }
 
-  for (CorNode* itemP = listP->value.firstChildP; itemP != NULL; itemP = itemP->next)
+  for (CorNode* itemP = listP->value.head; itemP != NULL; itemP = itemP->next)
   {
     if (itemP->type != CorString)
     {
@@ -476,7 +476,7 @@ bool ldCheckAttribute(CorNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc
   CorNode*     wrongValueKeyP = NULL;
   int          valueKeyCount  = 0;
 
-  for (CorNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = attrP->value.head; childP != NULL; childP = childP->next)
   {
     // JSON null not allowed inside attributes (except JsonProperty's "json" value is opaque)
     if (childP->type == CorNull && attrType != LdAttrJsonProperty)
@@ -571,7 +571,7 @@ bool ldCheckAttribute(CorNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc
   // anywhere it has no delete meaning is BadRequestData.
   else if ((attrType == LdAttrListProperty || attrType == LdAttrListRelationship) && valueNodeP->type == CorArray)
   {
-    for (CorNode* elemP = valueNodeP->value.firstChildP; elemP != NULL; elemP = elemP->next)
+    for (CorNode* elemP = valueNodeP->value.head; elemP != NULL; elemP = elemP->next)
     {
       if (elemP->type == CorString && strcmp(elemP->value.s, "urn:ngsi-ld:null") == 0)
       {
@@ -590,7 +590,7 @@ bool ldCheckAttribute(CorNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc
       URI_CHECK(valueNodeP->value.s);
     else if (valueNodeP->type == CorArray)
     {
-      for (CorNode* itemP = valueNodeP->value.firstChildP; itemP != NULL; itemP = itemP->next)
+      for (CorNode* itemP = valueNodeP->value.head; itemP != NULL; itemP = itemP->next)
       {
         if (itemP->type != CorString)
         {
@@ -626,11 +626,11 @@ bool ldCheckAttribute(CorNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc
 
     // Array of one - collapse to scalar so it round-trips as a String.
     if ((valueNodeP->type == CorArray) &&
-        (valueNodeP->value.firstChildP != NULL) &&
-        (valueNodeP->value.firstChildP->next == NULL) &&
-        (valueNodeP->value.firstChildP->type == CorString))
+        (valueNodeP->value.head != NULL) &&
+        (valueNodeP->value.head->next == NULL) &&
+        (valueNodeP->value.head->type == CorString))
     {
-      CorNode* onlyP      = valueNodeP->value.firstChildP;
+      CorNode* onlyP      = valueNodeP->value.head;
       valueNodeP->type    = CorString;
       valueNodeP->value.s = onlyP->value.s;
     }
@@ -685,7 +685,7 @@ bool ldCheckAttribute(CorNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc
   }
 
   // Step 5: Check sub-fields (optional fields + forbidden core terms + sub-attributes)
-  for (CorNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = attrP->value.head; childP != NULL; childP = childP->next)
   {
     // Core context term -- must be in the allowlist for this attribute type
     if (ldIsCoreAttrTerm(childP->name))

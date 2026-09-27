@@ -116,7 +116,7 @@ static void timestampsToIsoStrings(CorNode* objP, KAlloc* allocP)
   if (objP == NULL || objP->type != CorObject)
     return;
 
-  for (CorNode* childP = objP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = objP->value.head; childP != NULL; childP = childP->next)
   {
     if (childP->type == CorInt &&
         (strcmp(childP->name, LD_VOCAB_CREATED_AT)  == 0 ||
@@ -143,7 +143,7 @@ static void timestampsToIsoStrings(CorNode* objP, KAlloc* allocP)
   // attribute type — and never the value node, whose contents are the user's
   // (see isValueKey). Without that second half an integer the user happened to
   // call "observedAt" inside a value came back as an ISO string.
-  for (CorNode* childP = objP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = objP->value.head; childP != NULL; childP = childP->next)
   {
     if (childP->type != CorObject)
       continue;
@@ -151,7 +151,7 @@ static void timestampsToIsoStrings(CorNode* objP, KAlloc* allocP)
     if (isValueKey(childP->name))
       continue;
 
-    for (CorNode* gcP = childP->value.firstChildP; gcP != NULL; gcP = gcP->next)
+    for (CorNode* gcP = childP->value.head; gcP != NULL; gcP = gcP->next)
     {
       if (gcP->name != NULL && strcmp(gcP->name, "type") == 0 && gcP->type == CorString &&
           ldAttrTypeFromString(gcP->value.s) != LdAttrNone)
@@ -182,7 +182,7 @@ static void restoreValueKey(CorNode* instP, bool collapseSingletonArrays)
   CorNode* typeP = NULL;
   CorNode* valueP = NULL;
 
-  for (CorNode* childP = instP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = instP->value.head; childP != NULL; childP = childP->next)
   {
     if (strcmp(childP->name, "type") == 0 && childP->type == CorString) typeP  = childP;
     if (strcmp(childP->name, "value") == 0)                             valueP = childP;
@@ -211,13 +211,13 @@ static void restoreValueKey(CorNode* instP, bool collapseSingletonArrays)
     if (collapseSingletonArrays &&
         (aType == LdAttrProperty || aType == LdAttrRelationship) &&
         valueP->type == CorArray &&
-        valueP->value.firstChildP != NULL &&
-        valueP->value.firstChildP->next == NULL)
+        valueP->value.head != NULL &&
+        valueP->value.head->next == NULL)
     {
-      CorNode* onlyP    = valueP->value.firstChildP;
+      CorNode* onlyP    = valueP->value.head;
       valueP->type      = onlyP->type;
       valueP->value     = onlyP->value;
-      valueP->lastChild = onlyP->lastChild;
+      valueP->value.tail = onlyP->value.tail;
     }
   }
 
@@ -231,7 +231,7 @@ static void restoreValueKey(CorNode* instP, bool collapseSingletonArrays)
   // which compact straight back to "value" / "object", so only the types whose
   // value key is spelled differently ever showed it.
   //
-  for (CorNode* childP = instP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = instP->value.head; childP != NULL; childP = childP->next)
   {
     if (childP->type != CorObject)
       continue;
@@ -240,7 +240,7 @@ static void restoreValueKey(CorNode* instP, bool collapseSingletonArrays)
       continue;
 
     // Check if this child is a sub-attribute by looking for a "type" field with a known attr type
-    for (CorNode* gcP = childP->value.firstChildP; gcP != NULL; gcP = gcP->next)
+    for (CorNode* gcP = childP->value.head; gcP != NULL; gcP = gcP->next)
     {
       if (strcmp(gcP->name, "type") == 0 && gcP->type == CorString && ldAttrTypeFromString(gcP->value.s) != LdAttrNone)
       {
@@ -264,7 +264,7 @@ static int childCount(CorNode* containerP)
 
   int count = 0;
 
-  for (CorNode* p = containerP->value.firstChildP; p != NULL; p = p->next)
+  for (CorNode* p = containerP->value.head; p != NULL; p = p->next)
     ++count;
 
   return count;
@@ -287,7 +287,7 @@ void ldEntityToApi(CorNode* entityP, KAlloc* faP)
   if (entityP == NULL || entityP->type != CorObject)
     return;
 
-  CorNode* childP = entityP->value.firstChildP;
+  CorNode* childP = entityP->value.head;
 
   while (childP != NULL)
   {
@@ -307,7 +307,7 @@ void ldEntityToApi(CorNode* entityP, KAlloc* faP)
     // `value` but the API names it `json`).
     if (childP->type == CorArray)
     {
-      for (CorNode* instP = childP->value.firstChildP; instP != NULL; instP = instP->next)
+      for (CorNode* instP = childP->value.head; instP != NULL; instP = instP->next)
         restoreValueKey(instP, false);  // temporal: keep raw array values for aggregation
       childP = nextP;
       continue;
@@ -325,7 +325,7 @@ void ldEntityToApi(CorNode* entityP, KAlloc* faP)
     if (nInstances == 1)
     {
       // Single instance — unwrap to plain object
-      CorNode* instP = childP->value.firstChildP;
+      CorNode* instP = childP->value.head;
 
       if (instP == NULL || instP->type != CorObject)
       {
@@ -348,15 +348,15 @@ void ldEntityToApi(CorNode* entityP, KAlloc* faP)
       instP->next = nextP;
       corTreeChildReplace(entityP, childP, instP);
 
-      if (entityP->lastChild == childP)
-        entityP->lastChild = instP;
+      if (entityP->value.tail == childP)
+        entityP->value.tail = instP;
     }
     else if (nInstances > 1)
     {
       // Multiple instances — build array
       CorNode* arrayP = corTreeArray(corRest.kallocP, childP->name);
 
-      CorNode* instP = childP->value.firstChildP;
+      CorNode* instP = childP->value.head;
       while (instP != NULL)
       {
         CorNode* instNextP = instP->next;
@@ -381,8 +381,8 @@ void ldEntityToApi(CorNode* entityP, KAlloc* faP)
       arrayP->next = nextP;
       corTreeChildReplace(entityP, childP, arrayP);
 
-      if (entityP->lastChild == childP)
-        entityP->lastChild = arrayP;
+      if (entityP->value.tail == childP)
+        entityP->value.tail = arrayP;
     }
 
     childP = nextP;
@@ -391,13 +391,13 @@ void ldEntityToApi(CorNode* entityP, KAlloc* faP)
   // Convert integer timestamps to ISO 8601 strings (entity-level + inside each attribute)
   timestampsToIsoStrings(entityP, faP);
 
-  for (CorNode* attrP = entityP->value.firstChildP; attrP != NULL; attrP = attrP->next)
+  for (CorNode* attrP = entityP->value.head; attrP != NULL; attrP = attrP->next)
   {
     if (attrP->type == CorObject)
       timestampsToIsoStrings(attrP, faP);
     else if (attrP->type == CorArray)
     {
-      for (CorNode* instP = attrP->value.firstChildP; instP != NULL; instP = instP->next)
+      for (CorNode* instP = attrP->value.head; instP != NULL; instP = instP->next)
       {
         if (instP->type == CorObject)
           timestampsToIsoStrings(instP, faP);

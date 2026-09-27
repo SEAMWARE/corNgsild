@@ -113,7 +113,7 @@ void ldSnapshotNotify(LdSnapshotCacheItem* itemP, bool deleted)
   CorNode* riP = corTreeLookup(itemP->tree, "receiverInfo");
   if (riP != NULL && riP->type == CorArray)
   {
-    for (CorNode* kvP = riP->value.firstChildP; kvP != NULL; kvP = kvP->next)
+    for (CorNode* kvP = riP->value.head; kvP != NULL; kvP = kvP->next)
     {
       if (kvP->type != CorObject) continue;
       CorNode* kP = corTreeLookup(kvP, "key");

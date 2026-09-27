@@ -56,7 +56,7 @@ static bool checkNotifierInfo(CorNode* niP)
 {
   ARRAY_CHECK(niP, "Invalid Subscription", "'notification.endpoint.notifierInfo' must be an array");
 
-  for (CorNode* kvP = niP->value.firstChildP; kvP != NULL; kvP = kvP->next)
+  for (CorNode* kvP = niP->value.head; kvP != NULL; kvP = kvP->next)
   {
     if (kvP->type != CorObject)
     {
@@ -137,7 +137,7 @@ static bool checkReceiverInfo(CorNode* riP, CorNode* acceptP)
   CorMimeType effectiveType = acceptType;
   if (!acceptPresent)
   {
-    for (CorNode* kvP = riP->value.firstChildP; kvP != NULL; kvP = kvP->next)
+    for (CorNode* kvP = riP->value.head; kvP != NULL; kvP = kvP->next)
     {
       if (kvP->type != CorObject) continue;
       CorNode* kP = corTreeLookup(kvP, "key");
@@ -153,7 +153,7 @@ static bool checkReceiverInfo(CorNode* riP, CorNode* acceptP)
     }
   }
 
-  for (CorNode* kvP = riP->value.firstChildP; kvP != NULL; kvP = kvP->next)
+  for (CorNode* kvP = riP->value.head; kvP != NULL; kvP = kvP->next)
   {
     if (kvP->type != CorObject)
     {
@@ -256,7 +256,7 @@ static bool checkEndpoint(CorNode* endpointP, bool complete)
   CorNode* acceptP      = NULL;
   CorNode* receiverInfoP = NULL;
 
-  for (CorNode* childP = endpointP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = endpointP->value.head; childP != NULL; childP = childP->next)
   {
     if (strcmp(childP->name, LD_VOCAB_URI) == 0)
     {
@@ -327,7 +327,7 @@ static bool checkNotification(CorNode* notifP, bool complete, bool merged, LdFor
   CorNode* omitP       = NULL;
   CorNode* showChangesP = NULL;
 
-  for (CorNode* childP = notifP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = notifP->value.head; childP != NULL; childP = childP->next)
   {
     if (strcmp(childP->name, LD_VOCAB_ENDPOINT) == 0)
     {
@@ -367,7 +367,7 @@ static bool checkNotification(CorNode* notifP, bool complete, bool merged, LdFor
 
       // Each item must be a string. Per § 5.2.12 Table 5.2.12-1, the
       // attributes alias for pick disallows "id", "type", "scope".
-      for (CorNode* attrP = childP->value.firstChildP; attrP != NULL; attrP = attrP->next)
+      for (CorNode* attrP = childP->value.head; attrP != NULL; attrP = attrP->next)
       {
         if (attrP->type != CorString)
         {
@@ -396,7 +396,7 @@ static bool checkNotification(CorNode* notifP, bool complete, bool merged, LdFor
       DUPLICATE_CHECK(pickP, "notification.pick", childP);
       ARRAY_CHECK(childP, "Invalid Subscription", "'notification.pick' must be an array");
       EMPTY_ARRAY_CHECK(childP, "'notification.pick' must not be empty");
-      for (CorNode* itemP = childP->value.firstChildP; itemP != NULL; itemP = itemP->next)
+      for (CorNode* itemP = childP->value.head; itemP != NULL; itemP = itemP->next)
       {
         if (itemP->type != CorString)
         {
@@ -411,7 +411,7 @@ static bool checkNotification(CorNode* notifP, bool complete, bool merged, LdFor
       DUPLICATE_CHECK(omitP, "notification.omit", childP);
       ARRAY_CHECK(childP, "Invalid Subscription", "'notification.omit' must be an array");
       EMPTY_ARRAY_CHECK(childP, "'notification.omit' must not be empty");
-      for (CorNode* itemP = childP->value.firstChildP; itemP != NULL; itemP = itemP->next)
+      for (CorNode* itemP = childP->value.head; itemP != NULL; itemP = itemP->next)
       {
         if (itemP->type != CorString)
         {
@@ -469,9 +469,9 @@ static bool checkNotification(CorNode* notifP, bool complete, bool merged, LdFor
   // pick + omit may co-occur, but no member may appear in both.
   if (pickP != NULL && omitP != NULL)
   {
-    for (CorNode* pP = pickP->value.firstChildP; pP != NULL; pP = pP->next)
+    for (CorNode* pP = pickP->value.head; pP != NULL; pP = pP->next)
     {
-      for (CorNode* oP = omitP->value.firstChildP; oP != NULL; oP = oP->next)
+      for (CorNode* oP = omitP->value.head; oP != NULL; oP = oP->next)
       {
         if (strcmp(pP->value.s, oP->value.s) == 0)
         {
@@ -554,7 +554,7 @@ static bool checkEntitiesArray(CorNode* entitiesP)
   // over from a previous request on the same thread) are released
   // here.
   int entCount = 0;
-  for (CorNode* p = entitiesP->value.firstChildP; p != NULL; p = p->next)
+  for (CorNode* p = entitiesP->value.head; p != NULL; p = p->next)
     entCount++;
 
   ldSubEntityTypeExprsRelease();   // drop any leftover from a prior request on this thread
@@ -565,13 +565,13 @@ static bool checkEntitiesArray(CorNode* entitiesP)
   }
 
   int entIx = 0;
-  for (CorNode* entP = entitiesP->value.firstChildP; entP != NULL; entP = entP->next, entIx++)
+  for (CorNode* entP = entitiesP->value.head; entP != NULL; entP = entP->next, entIx++)
   {
     OBJECT_CHECK(entP, "Invalid Subscription", "'entities' items must be JSON objects");
 
     bool  hasType      = false;
 
-    for (CorNode* fieldP = entP->value.firstChildP; fieldP != NULL; fieldP = fieldP->next)
+    for (CorNode* fieldP = entP->value.head; fieldP != NULL; fieldP = fieldP->next)
     {
       if (strcmp(fieldP->name, "type") == 0)
       {
@@ -663,7 +663,7 @@ static bool checkGeoQ(CorNode* geoQP, bool complete, KAlloc* kaP)
   CorNode* georelP     = NULL;
   CorNode* geopropertyP = NULL;
 
-  for (CorNode* childP = geoQP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = geoQP->value.head; childP != NULL; childP = childP->next)
   {
     const char* name = childP->name;
 
@@ -787,8 +787,8 @@ static bool checkGeoQ(CorNode* geoQP, bool complete, KAlloc* kaP)
       if (arrP != NULL && arrP->type == CorArray)
       {
         coordinatesP->type              = CorArray;
-        coordinatesP->value.firstChildP = arrP->value.firstChildP;
-        coordinatesP->lastChild         = arrP->lastChild;
+        coordinatesP->value.head = arrP->value.head;
+        coordinatesP->value.tail        = arrP->value.tail;
       }
     }
   }
@@ -850,7 +850,7 @@ bool ldCheckSubscription(CorNode* subP, LdOp op, bool merged, LdFormat* notifFor
   CorNode* nameP          = NULL;
   CorNode* descriptionP   = NULL;
 
-  for (CorNode* childP = subP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = subP->value.head; childP != NULL; childP = childP->next)
   {
     const char* name = childP->name;
 
@@ -918,7 +918,7 @@ bool ldCheckSubscription(CorNode* subP, LdOp op, bool merged, LdFormat* notifFor
         ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription", "'notificationTrigger' must be a JSON array");
         return false;
       }
-      for (CorNode* trigP = childP->value.firstChildP; trigP != NULL; trigP = trigP->next)
+      for (CorNode* trigP = childP->value.head; trigP != NULL; trigP = trigP->next)
       {
         if (trigP->type != CorString)
         {
@@ -973,7 +973,7 @@ bool ldCheckSubscription(CorNode* subP, LdOp op, bool merged, LdFormat* notifFor
         ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription", "'datasetId' must be a JSON array");
         return false;
       }
-      for (CorNode* dsP = childP->value.firstChildP; dsP != NULL; dsP = dsP->next)
+      for (CorNode* dsP = childP->value.head; dsP != NULL; dsP = dsP->next)
       {
         if (dsP->type != CorString)
         {
@@ -1079,7 +1079,7 @@ bool ldCheckSubscription(CorNode* subP, LdOp op, bool merged, LdFormat* notifFor
     ARRAY_CHECK(watchedAttrsP, "Invalid Subscription", "'watchedAttributes' must be an array");
     EMPTY_ARRAY_CHECK(watchedAttrsP, "'watchedAttributes' must not be empty");
 
-    for (CorNode* wP = watchedAttrsP->value.firstChildP; wP != NULL; wP = wP->next)
+    for (CorNode* wP = watchedAttrsP->value.head; wP != NULL; wP = wP->next)
     {
       if (wP->type != CorString)
       {

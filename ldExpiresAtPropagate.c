@@ -123,14 +123,14 @@ void ldExpiresAtPropagate(CorNode* entityP, KAlloc* allocP)
   if (entityNs == 0)
     return;
 
-  for (CorNode* attrP = entityP->value.firstChildP; attrP != NULL; attrP = attrP->next)
+  for (CorNode* attrP = entityP->value.head; attrP != NULL; attrP = attrP->next)
   {
     if (!isAttributeContainer(attrP))
       continue;
 
     // Storage shape: attrP is an object whose children are instance objects
     // keyed by datasetId (or "@none" for the default).
-    for (CorNode* instP = attrP->value.firstChildP; instP != NULL; instP = instP->next)
+    for (CorNode* instP = attrP->value.head; instP != NULL; instP = instP->next)
     {
       if (instP->type != CorObject)
         continue;

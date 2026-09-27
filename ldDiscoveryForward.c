@@ -94,7 +94,7 @@ bool ldDiscoveryShouldForward(void)
 //
 static void stringArrayAddUnique(CorNode* arr, const char* s)
 {
-  for (CorNode* p = arr->value.firstChildP; p != NULL; p = p->next)
+  for (CorNode* p = arr->value.head; p != NULL; p = p->next)
     if (p->type == CorString && strcmp(p->value.s, s) == 0)
       return;
   corTreeChildAdd(arr, corTreeString(corRest.kallocP, NULL, s));
@@ -104,7 +104,7 @@ static void stringArrayAddUnique(CorNode* arr, const char* s)
 
 static CorNode* typeEntryEnsure(CorNode* agg, const char* typeIri, bool details)
 {
-  for (CorNode* e = agg->value.firstChildP; e != NULL; e = e->next)
+  for (CorNode* e = agg->value.head; e != NULL; e = e->next)
   {
     CorNode* iriP = corTreeLookup(e, "typeIri");
     if (iriP != NULL && iriP->type == CorString && strcmp(iriP->value.s, typeIri) == 0)
@@ -127,7 +127,7 @@ static CorNode* typeEntryEnsure(CorNode* agg, const char* typeIri, bool details)
 
 static CorNode* attrEntryEnsure(CorNode* agg, const char* attrIri, bool details)
 {
-  for (CorNode* e = agg->value.firstChildP; e != NULL; e = e->next)
+  for (CorNode* e = agg->value.head; e != NULL; e = e->next)
   {
     CorNode* iriP = corTreeLookup(e, "attrIri");
     if (iriP != NULL && iriP->type == CorString && strcmp(iriP->value.s, attrIri) == 0)
@@ -229,7 +229,7 @@ static void mergeEntityTypeArray(CorNode* agg, CorNode* respP, bool details)
 {
   if (respP == NULL || respP->type != CorArray) return;
 
-  for (CorNode* et = respP->value.firstChildP; et != NULL; et = et->next)
+  for (CorNode* et = respP->value.head; et != NULL; et = et->next)
   {
     CorNode* idP = corTreeLookup(et, "id");
     if (idP == NULL || idP->type != CorString) continue;
@@ -240,7 +240,7 @@ static void mergeEntityTypeArray(CorNode* agg, CorNode* respP, bool details)
     CorNode* anArr = corTreeLookup(et, "attributeNames");
     if (anArr != NULL && anArr->type == CorArray)
     {
-      for (CorNode* an = anArr->value.firstChildP; an != NULL; an = an->next)
+      for (CorNode* an = anArr->value.head; an != NULL; an = an->next)
       {
         if (an->type != CorString) continue;
         const char* iri = expandShort(an->value.s);
@@ -277,7 +277,7 @@ static void mergeEntityTypeInfo(CorNode* agg, CorNode* respP)
   CorNode* adArr = corTreeLookup(respP, "attributeDetails");
   if (adArr != NULL && adArr->type == CorArray)
   {
-    for (CorNode* ad = adArr->value.firstChildP; ad != NULL; ad = ad->next)
+    for (CorNode* ad = adArr->value.head; ad != NULL; ad = ad->next)
     {
       if (ad->type != CorObject) continue;
       CorNode* adIdP = corTreeLookup(ad, "id");
@@ -288,7 +288,7 @@ static void mergeEntityTypeInfo(CorNode* agg, CorNode* respP)
       CorNode* atArr = corTreeLookup(ad, "attributeTypes");
       if (atArr != NULL && atArr->type == CorArray)
       {
-        for (CorNode* at = atArr->value.firstChildP; at != NULL; at = at->next)
+        for (CorNode* at = atArr->value.head; at != NULL; at = at->next)
           if (at->type == CorString)
             addAttrType(te, adIdP->value.s, at->value.s);
       }
@@ -306,7 +306,7 @@ static void mergeAttributeArray(CorNode* agg, CorNode* respP, bool details)
 {
   if (respP == NULL || respP->type != CorArray) return;
 
-  for (CorNode* at = respP->value.firstChildP; at != NULL; at = at->next)
+  for (CorNode* at = respP->value.head; at != NULL; at = at->next)
   {
     CorNode* idP = corTreeLookup(at, "id");
     if (idP == NULL || idP->type != CorString) continue;
@@ -318,7 +318,7 @@ static void mergeAttributeArray(CorNode* agg, CorNode* respP, bool details)
     CorNode* typeNamesAgg = corTreeLookup(ae, "typeNames");
     if (tnArr != NULL && tnArr->type == CorArray && typeNamesAgg != NULL)
     {
-      for (CorNode* tn = tnArr->value.firstChildP; tn != NULL; tn = tn->next)
+      for (CorNode* tn = tnArr->value.head; tn != NULL; tn = tn->next)
         if (tn->type == CorString)
           stringArrayAddUnique(typeNamesAgg, expandShort(tn->value.s));
     }
@@ -351,7 +351,7 @@ static void mergeAttributeInfo(CorNode* agg, CorNode* respP)
   CorNode* attrTypesAgg = corTreeLookup(ae, "attrTypes");
   if (atArr != NULL && atArr->type == CorArray && attrTypesAgg != NULL)
   {
-    for (CorNode* at = atArr->value.firstChildP; at != NULL; at = at->next)
+    for (CorNode* at = atArr->value.head; at != NULL; at = at->next)
       if (at->type == CorString)
         stringArrayAddUnique(attrTypesAgg, at->value.s);
   }
@@ -360,7 +360,7 @@ static void mergeAttributeInfo(CorNode* agg, CorNode* respP)
   CorNode* typeNamesAgg = corTreeLookup(ae, "typeNames");
   if (tnArr != NULL && tnArr->type == CorArray && typeNamesAgg != NULL)
   {
-    for (CorNode* tn = tnArr->value.firstChildP; tn != NULL; tn = tn->next)
+    for (CorNode* tn = tnArr->value.head; tn != NULL; tn = tn->next)
       if (tn->type == CorString)
         stringArrayAddUnique(typeNamesAgg, expandShort(tn->value.s));
   }

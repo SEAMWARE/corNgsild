@@ -71,7 +71,7 @@ static LdAttrType findAttrTypeInDb(CorNode* dbEntityP, const char* attrName)
   if (dbEntityP == NULL)
     return LdAttrNone;
 
-  for (CorNode* attrP = dbEntityP->value.firstChildP; attrP != NULL; attrP = attrP->next)
+  for (CorNode* attrP = dbEntityP->value.head; attrP != NULL; attrP = attrP->next)
   {
     if (strcmp(attrP->name, attrName) == 0)
       return ldAttrTypeDetect(attrP);
@@ -106,7 +106,7 @@ bool ldCheckEntity(CorNode* entityP, LdOp op, CorNode* dbEntityP, KAlloc* faP)
   bool     hasAtType  = false;
 
   // First pass: find id and type, check for duplicates, null values, and attribute names
-  for (CorNode* childP = entityP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = entityP->value.head; childP != NULL; childP = childP->next)
   {
     // JSON null is not allowed in NGSI-LD (JSON-LD drops null values)
     if (childP->type == CorNull)
@@ -218,13 +218,13 @@ bool ldCheckEntity(CorNode* entityP, LdOp op, CorNode* dbEntityP, KAlloc* faP)
     }
     else if (typeNodeP->type == CorArray)
     {
-      if (typeNodeP->value.firstChildP == NULL)
+      if (typeNodeP->value.head == NULL)
       {
         ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Entity Type", "Entity 'type' array must not be empty");
         return false;
       }
 
-      for (CorNode* elemP = typeNodeP->value.firstChildP; elemP != NULL; elemP = elemP->next)
+      for (CorNode* elemP = typeNodeP->value.head; elemP != NULL; elemP = elemP->next)
       {
         if (elemP->type != CorString)
         {
@@ -261,7 +261,7 @@ bool ldCheckEntity(CorNode* entityP, LdOp op, CorNode* dbEntityP, KAlloc* faP)
   }
 
   // Validate scope if present
-  for (CorNode* childP = entityP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = entityP->value.head; childP != NULL; childP = childP->next)
   {
     if (strcmp(childP->name, LD_VOCAB_SCOPE) == 0)
     {
@@ -275,13 +275,13 @@ bool ldCheckEntity(CorNode* entityP, LdOp op, CorNode* dbEntityP, KAlloc* faP)
       }
       else if (childP->type == CorArray)
       {
-        if (childP->value.firstChildP == NULL)
+        if (childP->value.head == NULL)
         {
           ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Scope", "Entity 'scope' array must not be empty");
           return false;
         }
 
-        for (CorNode* elemP = childP->value.firstChildP; elemP != NULL; elemP = elemP->next)
+        for (CorNode* elemP = childP->value.head; elemP != NULL; elemP = elemP->next)
         {
           if (elemP->type != CorString)
           {
@@ -325,7 +325,7 @@ bool ldCheckEntity(CorNode* entityP, LdOp op, CorNode* dbEntityP, KAlloc* faP)
   // The NGSI-LD Null is the one non-DateTime value allowed, and only on the operations that can
   // delete a member (§ 5.4.1); on create the first-level check above has already refused it.
   //
-  for (CorNode* childP = entityP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = entityP->value.head; childP != NULL; childP = childP->next)
   {
     if (strcmp(childP->name, LD_VOCAB_EXPIRES_AT) != 0)
       continue;
@@ -348,7 +348,7 @@ bool ldCheckEntity(CorNode* entityP, LdOp op, CorNode* dbEntityP, KAlloc* faP)
   }
 
   // Second pass: validate each attribute
-  for (CorNode* childP = entityP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = entityP->value.head; childP != NULL; childP = childP->next)
   {
     if (ldIsEntityKeyword(childP->name) == true)
       continue;
@@ -361,7 +361,7 @@ bool ldCheckEntity(CorNode* entityP, LdOp op, CorNode* dbEntityP, KAlloc* faP)
     if (childP->type == CorArray)
     {
       // Multi-attribute: each element must be a valid attribute instance
-      if (childP->value.firstChildP == NULL)
+      if (childP->value.head == NULL)
       {
         ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Multi-Attribute", "Multi-attribute '%s' must not be an empty array", childP->name);
         return false;
@@ -379,11 +379,11 @@ bool ldCheckEntity(CorNode* entityP, LdOp op, CorNode* dbEntityP, KAlloc* faP)
       // an array raw when the request declared ?format=simplified. Undeclared, it
       // has already been wrapped as a Property and cannot arrive as a bare array.
       //
-      if (op == LdOpMergeEntity && childP->value.firstChildP->type != CorObject)
+      if (op == LdOpMergeEntity && childP->value.head->type != CorObject)
         continue;
 
       // Each element must be an object (shape check before dedup).
-      for (CorNode* instP = childP->value.firstChildP; instP != NULL; instP = instP->next)
+      for (CorNode* instP = childP->value.head; instP != NULL; instP = instP->next)
       {
         if (instP->type != CorObject)
         {
@@ -398,7 +398,7 @@ bool ldCheckEntity(CorNode* entityP, LdOp op, CorNode* dbEntityP, KAlloc* faP)
       // multiple Context Sources, not a single local write — so a conflicting
       // single payload is rejected, not resolved.)
       bool defaultFound = false;
-      for (CorNode* instP = childP->value.firstChildP; instP != NULL; instP = instP->next)
+      for (CorNode* instP = childP->value.head; instP != NULL; instP = instP->next)
       {
         CorNode* dsP = corTreeLookup(instP, "datasetId");
 
@@ -415,7 +415,7 @@ bool ldCheckEntity(CorNode* entityP, LdOp op, CorNode* dbEntityP, KAlloc* faP)
         {
           // Duplicate datasetId among earlier instances of the same attribute?
           // (full datasetId URI validation is done by ldCheckAttribute below)
-          for (CorNode* otherP = childP->value.firstChildP; otherP != instP; otherP = otherP->next)
+          for (CorNode* otherP = childP->value.head; otherP != instP; otherP = otherP->next)
           {
             CorNode* otherDsP = corTreeLookup(otherP, "datasetId");
             if ((otherDsP != NULL) && (otherDsP->type == CorString) && (strcmp(otherDsP->value.s, dsP->value.s) == 0))
@@ -428,7 +428,7 @@ bool ldCheckEntity(CorNode* entityP, LdOp op, CorNode* dbEntityP, KAlloc* faP)
       }
 
       // Validate each instance.
-      for (CorNode* instP = childP->value.firstChildP; instP != NULL; instP = instP->next)
+      for (CorNode* instP = childP->value.head; instP != NULL; instP = instP->next)
       {
         instP->name = childP->name;
         if (ldCheckAttribute(instP, op, dbAttrType, faP) == false)

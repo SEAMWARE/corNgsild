@@ -64,7 +64,7 @@ static bool isAttrKeyword(const CorNode* nodeP)
 //
 static bool hasValueKey(CorNode* objP)
 {
-  for (CorNode* childP = objP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = objP->value.head; childP != NULL; childP = childP->next)
   {
     if (strcmp(childP->name, LD_VOCAB_HAS_VALUE)        == 0)  return true;
     if (strcmp(childP->name, LD_VOCAB_HAS_OBJECT)       == 0)  return true;
@@ -117,7 +117,7 @@ static bool isGeoJsonObject(CorNode* objP)
   bool        hasGeoType   = false;
   bool        hasCoords    = false;
 
-  for (CorNode* childP = objP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = objP->value.head; childP != NULL; childP = childP->next)
   {
     if (strcmp(childP->name, "type") == 0 && childP->type == CorString && isGeoJsonTypeName(childP->value.s))
       hasGeoType = true;
@@ -152,7 +152,7 @@ static bool isSimplifiedGeoProperty(CorNode* objP)
   CorNode* coordsP = NULL;
   int      count   = 0;
 
-  for (CorNode* childP = objP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = objP->value.head; childP != NULL; childP = childP->next)
   {
     ++count;
     if      (strcmp(childP->name, "type")              == 0)  typeP   = childP;
@@ -179,7 +179,7 @@ static bool isSimplifiedGeoProperty(CorNode* objP)
 //
 static bool isJsonLiteral(CorNode* objP)
 {
-  for (CorNode* childP = objP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = objP->value.head; childP != NULL; childP = childP->next)
   {
     if ((strcmp(childP->name, "@type") == 0) && (childP->type == CorString) && (strcmp(childP->value.s, "@json") == 0))
       return true;
@@ -223,7 +223,7 @@ static bool isGeoJsonValue(CorNode* valueP)
 //
 static bool hasExplicitAttrType(CorNode* objP)
 {
-  for (CorNode* childP = objP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = objP->value.head; childP != NULL; childP = childP->next)
   {
     if (strcmp(childP->name, "type") == 0 && childP->type == CorString)
     {
@@ -288,8 +288,8 @@ static void addTypeField(CorNode* attrP, const char* typeName, KAlloc* kaP)
     // Structural member created here (after expansion) — stamp it so the
     // sub-attribute checks (KJF_ATTR_TERM) don't mistake it for a sub-attr.
     typeNodeP->flags |= KJF_CORE_TERM | KJF_ATTR_TERM;
-    typeNodeP->next = attrP->value.firstChildP;
-    attrP->value.firstChildP = typeNodeP;
+    typeNodeP->next = attrP->value.head;
+    attrP->value.head = typeNodeP;
   }
 }
 
@@ -402,7 +402,7 @@ static bool normalizeAttr(CorNode* containerP, CorNode* attrP, KAlloc* kaP, bool
   // ---  Array children  ---
   if (attrP->type == CorArray)
   {
-    CorNode* firstP = attrP->value.firstChildP;
+    CorNode* firstP = attrP->value.head;
 
     if (firstP == NULL)
       return true;  // empty array — leave for ldCheckEntity to reject
@@ -470,7 +470,7 @@ static bool normalizeAttr(CorNode* containerP, CorNode* attrP, KAlloc* kaP, bool
   if (hasExplicitAttrType(attrP))
   {
     // Recurse into sub-attributes
-    CorNode* subP = attrP->value.firstChildP;
+    CorNode* subP = attrP->value.head;
     while (subP != NULL)
     {
       CorNode* subNextP = subP->next;
@@ -537,7 +537,7 @@ static bool normalizeAttr(CorNode* containerP, CorNode* attrP, KAlloc* kaP, bool
     // Need to detect type and add it
     // Special case: hasValue with GeoJSON value → GeoProperty
     CorNode* hasValueP = NULL;
-    for (CorNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
+    for (CorNode* childP = attrP->value.head; childP != NULL; childP = childP->next)
     {
       if (strcmp(childP->name, LD_VOCAB_HAS_VALUE) == 0)
       {
@@ -558,7 +558,7 @@ static bool normalizeAttr(CorNode* containerP, CorNode* attrP, KAlloc* kaP, bool
     }
 
     // Recurse into sub-attributes
-    CorNode* subP = attrP->value.firstChildP;
+    CorNode* subP = attrP->value.head;
     while (subP != NULL)
     {
       CorNode* subNextP = subP->next;
@@ -599,7 +599,7 @@ static bool normalizeAttr(CorNode* containerP, CorNode* attrP, KAlloc* kaP, bool
   //
   if (mergeMode)
   {
-    CorNode* subP = attrP->value.firstChildP;
+    CorNode* subP = attrP->value.head;
     while (subP != NULL)
     {
       CorNode* subNextP = subP->next;
@@ -635,7 +635,7 @@ bool ldNormalizeInput(CorNode* entityP, KAlloc* kaP, bool mergeMode, bool simpli
   if (entityP == NULL || entityP->type != CorObject)
     return true;
 
-  CorNode* childP = entityP->value.firstChildP;
+  CorNode* childP = entityP->value.head;
 
   while (childP != NULL)
   {

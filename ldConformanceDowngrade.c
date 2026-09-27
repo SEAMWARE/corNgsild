@@ -178,13 +178,13 @@ static void downgradeAttr(CorNode* entityP, CorNode* attrP, short tMajor, short 
   if (attrP->type == CorArray)
   {
     // Per-instance downgrade first
-    for (CorNode* instP = attrP->value.firstChildP; instP != NULL; instP = instP->next)
+    for (CorNode* instP = attrP->value.head; instP != NULL; instP = instP->next)
       downgradeAttrInstance(instP, tMajor, tMinor);
 
     // < 1.3: lift first instance object in place of the array.
     if (olderThan(tMajor, tMinor, 1, 3))
     {
-      CorNode* firstP = attrP->value.firstChildP;
+      CorNode* firstP = attrP->value.head;
       if (firstP != NULL && firstP->type == CorObject && entityP != NULL)
       {
         firstP->name = attrP->name;
@@ -219,9 +219,9 @@ static void downgradeEntity(CorNode* entityP, short tMajor, short tMinor)
   if (olderThan(tMajor, tMinor, 1, 3))
   {
     CorNode* typeP = corTreeLookup(entityP, "type");
-    if (typeP != NULL && typeP->type == CorArray && typeP->value.firstChildP != NULL)
+    if (typeP != NULL && typeP->type == CorArray && typeP->value.head != NULL)
     {
-      CorNode* firstP = typeP->value.firstChildP;
+      CorNode* firstP = typeP->value.head;
       if (firstP->type == CorString)
       {
         // Replace the array node with a string node holding firstP's value
@@ -234,7 +234,7 @@ static void downgradeEntity(CorNode* entityP, short tMajor, short tMinor)
   // Recurse into attrs. downgradeAttr may replace a child (multi-instance
   // → single object collapse on < 1.3); capture next pointer up front so
   // iteration is safe across replacement.
-  CorNode* attrP = entityP->value.firstChildP;
+  CorNode* attrP = entityP->value.head;
   while (attrP != NULL)
   {
     CorNode* nextP = attrP->next;
@@ -266,7 +266,7 @@ void ldConformanceDowngrade(CorNode* treeP, short targetMajor, short targetMinor
 
   if (treeP->type == CorArray)
   {
-    for (CorNode* entP = treeP->value.firstChildP; entP != NULL; entP = entP->next)
+    for (CorNode* entP = treeP->value.head; entP != NULL; entP = entP->next)
       downgradeEntity(entP, targetMajor, targetMinor);
   }
   else if (treeP->type == CorObject)

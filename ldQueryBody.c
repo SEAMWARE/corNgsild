@@ -46,7 +46,7 @@ static const char* arrayJoin(CorNode* arrP)
 
   int total = 0;
   int n     = 0;
-  for (CorNode* c = arrP->value.firstChildP; c != NULL; c = c->next)
+  for (CorNode* c = arrP->value.head; c != NULL; c = c->next)
   {
     if (c->type != CorString) continue;
     total += strlen(c->value.s) + 1;
@@ -57,7 +57,7 @@ static const char* arrayJoin(CorNode* arrP)
 
   char* buf = (char*) kaAlloc(&corRest.kalloc, total + 1);
   int pos = 0;
-  for (CorNode* c = arrP->value.firstChildP; c != NULL; c = c->next)
+  for (CorNode* c = arrP->value.head; c != NULL; c = c->next)
   {
     if (c->type != CorString) continue;
     if (pos > 0) buf[pos++] = ',';
@@ -86,7 +86,7 @@ static void collectFromEntities(CorNode* entsArr)
   int idLen = 0, typeLen = 0, idCount = 0, typeCount = 0;
   const char* firstIdPattern = NULL;
 
-  for (CorNode* selP = entsArr->value.firstChildP; selP != NULL; selP = selP->next)
+  for (CorNode* selP = entsArr->value.head; selP != NULL; selP = selP->next)
   {
     if (selP->type != CorObject) continue;
 
@@ -112,7 +112,7 @@ static void collectFromEntities(CorNode* entsArr)
   {
     char* buf = (char*) kaAlloc(&corRest.kalloc, idLen + 1);
     int pos = 0;
-    for (CorNode* selP = entsArr->value.firstChildP; selP != NULL; selP = selP->next)
+    for (CorNode* selP = entsArr->value.head; selP != NULL; selP = selP->next)
     {
       if (selP->type != CorObject) continue;
       CorNode* idP = corTreeLookup(selP, "id");
@@ -130,7 +130,7 @@ static void collectFromEntities(CorNode* entsArr)
   {
     char* buf = (char*) kaAlloc(&corRest.kalloc, typeLen + 1);
     int pos = 0;
-    for (CorNode* selP = entsArr->value.firstChildP; selP != NULL; selP = selP->next)
+    for (CorNode* selP = entsArr->value.head; selP != NULL; selP = selP->next)
     {
       if (selP->type != CorObject) continue;
       CorNode* typeP = corTreeLookup(selP, "type");
@@ -215,7 +215,7 @@ bool ldQueryBodyToParams(CorNode* bodyP)
     return false;
   }
 
-  for (CorNode* fP = bodyP->value.firstChildP; fP != NULL; fP = fP->next)
+  for (CorNode* fP = bodyP->value.head; fP != NULL; fP = fP->next)
   {
     if (fP->name == NULL)                       continue;
     if (fP->name[0] == '@')                     continue;
@@ -239,7 +239,7 @@ bool ldQueryBodyToParams(CorNode* bodyP)
     // (§ 5.7.4 / § 6.24.3.1).
     if (strcmp(fP->name, "temporalQ") == 0 && fP->type == CorObject)
     {
-      for (CorNode* tP = fP->value.firstChildP; tP != NULL; tP = tP->next)
+      for (CorNode* tP = fP->value.head; tP != NULL; tP = tP->next)
       {
         if (tP->name == NULL || tP->name[0] == '@') continue;
 

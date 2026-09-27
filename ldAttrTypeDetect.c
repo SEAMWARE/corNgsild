@@ -50,7 +50,7 @@ LdAttrType ldAttrTypeDetect(CorNode* attrP)
   // Walk the children looking for "type" or value keys
   LdAttrType detected = LdAttrNone;
 
-  for (CorNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = attrP->value.head; childP != NULL; childP = childP->next)
   {
     if (strcmp(childP->name, "type") == 0)
     {
@@ -67,7 +67,7 @@ LdAttrType ldAttrTypeDetect(CorNode* attrP)
   }
 
   // No explicit type - infer from value key (expanded IRIs)
-  for (CorNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = attrP->value.head; childP != NULL; childP = childP->next)
   {
     if      (strcmp(childP->name, LD_VOCAB_HAS_VALUE)        == 0)  detected = LdAttrProperty;
     else if (strcmp(childP->name, LD_VOCAB_HAS_OBJECT)       == 0)  detected = LdAttrRelationship;

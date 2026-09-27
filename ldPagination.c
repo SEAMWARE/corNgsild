@@ -37,7 +37,7 @@ bool ldPaginationTrim(CorNode* arrayP, int limit)
   // Count children and find the node before the last one
   int      count = 0;
   CorNode* prevP = NULL;
-  CorNode* nodeP = arrayP->value.firstChildP;
+  CorNode* nodeP = arrayP->value.head;
 
   while (nodeP != NULL)
   {
@@ -47,7 +47,7 @@ bool ldPaginationTrim(CorNode* arrayP, int limit)
       // Unlink this node (it's the limit+1'th)
       if (prevP != NULL)
         prevP->next = NULL;
-      arrayP->lastChild = prevP;
+      arrayP->value.tail = prevP;
       return true;
     }
     prevP = nodeP;

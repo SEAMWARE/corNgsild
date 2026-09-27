@@ -111,7 +111,7 @@ do                                                                              
 #define EMPTY_ARRAY_CHECK(nodeP, detail)                                                                           \
 do                                                                                                                 \
 {                                                                                                                  \
-  if ((nodeP)->value.firstChildP == NULL)                                                                            \
+  if ((nodeP)->value.head == NULL)                                                                                   \
   {                                                                                                                \
     ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Empty Array", "%s", detail);                                          \
     return false;                                                                                                  \
@@ -127,7 +127,7 @@ do                                                                              
 #define EMPTY_OBJECT_CHECK(nodeP, detail)                                                                          \
 do                                                                                                                 \
 {                                                                                                                  \
-  if ((nodeP)->value.firstChildP == NULL)                                                                            \
+  if ((nodeP)->value.head == NULL)                                                                                   \
   {                                                                                                                \
     ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Empty Object", "%s", detail);                                         \
     return false;                                                                                                  \
