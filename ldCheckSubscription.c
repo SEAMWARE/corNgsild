@@ -14,9 +14,9 @@
 #include <regex.h>                                       // regcomp, regfree, REG_EXTENDED
 
 #include "kbase/kLibLog.h"                             // KLOG_T
-#include "kalloc/KAlloc.h"                             // KAlloc
-#include "kalloc/kaAlloc.h"                            // kaAlloc
-#include "kalloc/kaStrdup.h"                           // kaStrdup
+#include "corAlloc/CorAlloc.h"                         // CorAlloc
+#include "corAlloc/corAlloc.h"                         // corAlloc
+#include "corAlloc/corAllocStrdup.h"                   // corAllocStrdup
 #include "corTree/CorNode.h"                            // CorNode
 #include "corTree/corTreeLookup.h"                     // corTreeLookup
 #include "corTree/corTreeBuilder.h"                    // corTreeChildRemove
@@ -654,7 +654,7 @@ static bool checkEntitiesArray(CorNode* entitiesP)
 //
 // checkGeoQ - validate the "geoQ" object
 //
-static bool checkGeoQ(CorNode* geoQP, bool complete, KAlloc* kaP)
+static bool checkGeoQ(CorNode* geoQP, bool complete, CorAlloc* kaP)
 {
   OBJECT_CHECK(geoQP, "Invalid Subscription", "'geoQ' must be a JSON object");
 
@@ -753,7 +753,7 @@ static bool checkGeoQ(CorNode* geoQP, bool complete, KAlloc* kaP)
     // corJsonFastRender omits the top-level node's name, so this emits the bare array
     // (not "coordinates":[...]) — a top-level JSON array corJsonParse can re-parse.
     int   len = corJsonFastRenderSize(coordinatesP) + 1;
-    char* buf = (char*) kaAlloc(kaP, len);
+    char* buf = (char*) corAlloc(kaP, len);
     if (buf != NULL)
     {
       corJsonFastRender(coordinatesP, buf);
@@ -777,7 +777,7 @@ static bool checkGeoQ(CorNode* geoQP, bool complete, KAlloc* kaP)
   //
   if (coordinatesP->type == CorString)
   {
-    char* dup = kaStrdup(kaP, coordsStr);  // corJsonParse mutates its input
+    char* dup = corAllocStrdup(kaP, coordsStr);  // corJsonParse mutates its input
     if (dup != NULL)
     {
       CorJson corJson;
@@ -802,7 +802,7 @@ static bool checkGeoQ(CorNode* geoQP, bool complete, KAlloc* kaP)
 //
 // ldCheckSubscription -
 //
-bool ldCheckSubscription(CorNode* subP, LdOp op, bool merged, LdFormat* notifFormatP, KAlloc* kaP)
+bool ldCheckSubscription(CorNode* subP, LdOp op, bool merged, LdFormat* notifFormatP, CorAlloc* kaP)
 {
   OBJECT_CHECK(subP, "Invalid Subscription", "Subscription payload must be a JSON object");
 

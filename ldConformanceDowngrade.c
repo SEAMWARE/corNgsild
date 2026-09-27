@@ -12,7 +12,7 @@
 #include <stdio.h>                                       // sscanf
 #include <string.h>                                      // strcmp, strchr
 
-#include "kalloc/KAlloc.h"                               // KAlloc
+#include "corAlloc/CorAlloc.h"                           // CorAlloc
 #include "corTree/CorNode.h"                             // CorNode, CorValueType
 #include "corTree/corTreeBuilder.h"                      // corTreeString, corTreeChildAdd, corTreeChildRemove
 #include "corTree/corTreeLookup.h"                       // corTreeLookup
@@ -257,7 +257,7 @@ static void downgradeEntity(CorNode* entityP, short tMajor, short tMinor)
 
 // ldConformanceDowngrade -
 //
-void ldConformanceDowngrade(CorNode* treeP, short targetMajor, short targetMinor, KAlloc* allocP)
+void ldConformanceDowngrade(CorNode* treeP, short targetMajor, short targetMinor, CorAlloc* allocP)
 {
   (void) allocP;  // reserved for future replacement allocations
 

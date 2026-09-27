@@ -9,9 +9,9 @@
 //
 #include <string.h>                                      // strlen, strchr
 
-#include "kalloc/KAlloc.h"                             // kaAlloc
-#include "kalloc/kaAlloc.h"                            // kaAlloc
-#include "kalloc/kaStrdup.h"                            // kaStrdup
+#include "corAlloc/CorAlloc.h"                         // corAlloc
+#include "corAlloc/corAlloc.h"                         // corAlloc
+#include "corAlloc/corAllocStrdup.h"                    // corAllocStrdup
 
 #include "corNgsild/LdProblem.h"                          // LD_ERROR_BAD_REQUEST_DATA
 #include "corNgsild/ldError.h"                            // ldError
@@ -26,7 +26,7 @@
 // Input: a faP-strdup'd string like "/Madrid/+;/CompanyA" or "/Madrid/#" (parens already stripped).
 // Splits on ';', fills group->scopeV and group->count.
 //
-static bool parseGroup(char* str, LdScopeGroup* group, KAlloc* faP)
+static bool parseGroup(char* str, LdScopeGroup* group, CorAlloc* faP)
 {
   // Count semicolons to determine array size
   int count = 1;
@@ -37,7 +37,7 @@ static bool parseGroup(char* str, LdScopeGroup* group, KAlloc* faP)
       count++;
   }
 
-  group->scopeV = (char**) kaAlloc(faP, (count + 1) * sizeof(char*));
+  group->scopeV = (char**) corAlloc(faP, (count + 1) * sizeof(char*));
   group->count  = count;
 
   // Split on ';'
@@ -67,7 +67,7 @@ static bool parseGroup(char* str, LdScopeGroup* group, KAlloc* faP)
       if (start[0] != '/')
       {
         int   len     = strlen(start);
-        char* slashed = (char*) kaAlloc(faP, len + 2);
+        char* slashed = (char*) corAlloc(faP, len + 2);
 
         slashed[0] = '/';
         memcpy(&slashed[1], start, len + 1);
@@ -75,7 +75,7 @@ static bool parseGroup(char* str, LdScopeGroup* group, KAlloc* faP)
         group->scopeV[ix++] = slashed;
       }
       else
-        group->scopeV[ix++] = kaStrdup(faP, start);
+        group->scopeV[ix++] = corAllocStrdup(faP, start);
 
       if (end)
         break;
@@ -100,7 +100,7 @@ static bool parseGroup(char* str, LdScopeGroup* group, KAlloc* faP)
 //   orOp       = '|' / ','
 //   ScopeQ     = scope-path with optional '+' (single-level wildcard) and '/#' (multi-level wildcard)
 //
-LdScopeExpr* ldScopeExprParse(const char* value, KAlloc* faP)
+LdScopeExpr* ldScopeExprParse(const char* value, CorAlloc* faP)
 {
   if (value == NULL || value[0] == 0)
     return NULL;
@@ -131,7 +131,7 @@ LdScopeExpr* ldScopeExprParse(const char* value, KAlloc* faP)
   }
 
   // Work on a copy
-  char* buf = kaStrdup(faP, value);
+  char* buf = corAllocStrdup(faP, value);
 
   //
   // First pass: count OR groups by scanning for '|' and ',' outside parens
@@ -151,9 +151,9 @@ LdScopeExpr* ldScopeExprParse(const char* value, KAlloc* faP)
   //
   // Allocate result
   //
-  LdScopeExpr* expr = (LdScopeExpr*) kaAlloc(faP, sizeof(LdScopeExpr));
+  LdScopeExpr* expr = (LdScopeExpr*) corAlloc(faP, sizeof(LdScopeExpr));
 
-  expr->groupV     = (LdScopeGroup*) kaAlloc(faP, groupCount * sizeof(LdScopeGroup));
+  expr->groupV     = (LdScopeGroup*) corAlloc(faP, groupCount * sizeof(LdScopeGroup));
   expr->groupCount = groupCount;
   expr->isSimple   = true;
 

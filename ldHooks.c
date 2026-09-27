@@ -11,8 +11,8 @@
 #include <stdlib.h>                                      // malloc, free
 #include <string.h>                                      // strcmp, strncasecmp, memset
 
-#include "kalloc/kaAlloc.h"                             // kaAlloc
-#include "kalloc/KAlloc.h"                              // KAlloc
+#include "corAlloc/corAlloc.h"                          // corAlloc
+#include "corAlloc/CorAlloc.h"                          // CorAlloc
 #include "corTree/CorNode.h"                             // CorNode
 #include "corTree/corTreeLookup.h"                       // corTreeLookup
 #include "corTree/corTreeBuilder.h"                      // corTreeChildRemove, corTreeChildAdd
@@ -602,7 +602,7 @@ static void ldParseHook(void)
           if (end != NULL)
           {
             int   len = end - (v + 1);
-            char* url = kaAlloc(&corRest.kalloc, len + 1);
+            char* url = corAlloc(&corRest.kalloc, len + 1);
 
             memcpy(url, v + 1, len);
             url[len] = '\0';
@@ -1373,7 +1373,7 @@ static void ldRenderHook(void)
     // Apply representation format (simplified/concise/normalized)
     if (corNgsild.format == LdFormatSimplified || corNgsild.format == LdFormatConcise)
     {
-      void (*formatFn)(CorNode*, KAlloc*) = (corNgsild.format == LdFormatSimplified) ? (void(*)(CorNode*, KAlloc*)) ldToSimplified : (void(*)(CorNode*, KAlloc*)) ldToConcise;
+      void (*formatFn)(CorNode*, CorAlloc*) = (corNgsild.format == LdFormatSimplified) ? (void(*)(CorNode*, CorAlloc*)) ldToSimplified : (void(*)(CorNode*, CorAlloc*)) ldToConcise;
 
       if (treeP != NULL && treeP->type == CorArray)
       {
@@ -1462,7 +1462,7 @@ static void ldRenderHook(void)
             if (end != NULL)
             {
               int   len = end - (v + 1);
-              char* url = kaAlloc(&corRest.kalloc, len + 1);
+              char* url = corAlloc(&corRest.kalloc, len + 1);
               memcpy(url, v + 1, len);
               url[len] = '\0';
               linkUrl = url;
@@ -1575,7 +1575,7 @@ static void ldRenderHook(void)
     // pagination relations (031_02_*, 041_03_*, 046_14_01).
     static const char suffix[] = ">; rel=\"http://www.w3.org/ns/json-ld#context\"; type=\"application/ld+json\"";
     int               linkLen  = 1 + strlen(ctxUrl) + (sizeof(suffix) - 1) + 1;
-    char*             linkBuf  = kaAlloc(&corRest.kalloc, linkLen);
+    char*             linkBuf  = corAlloc(&corRest.kalloc, linkLen);
 
     strcpy(linkBuf, "<");
     strcat(linkBuf, ctxUrl);

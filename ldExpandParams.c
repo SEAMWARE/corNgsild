@@ -10,8 +10,8 @@
 #include <stddef.h>                                    // NULL
 #include <string.h>                                    // strcmp
 
-#include "kalloc/KAlloc.h"                             // KAlloc, kaAlloc
-#include "kalloc/kaStrdup.h"                           // kaStrdup
+#include "corAlloc/CorAlloc.h"                         // CorAlloc, corAlloc
+#include "corAlloc/corAllocStrdup.h"                   // corAllocStrdup
 #include "corRest/CorRestState.h"                        // corRest
 #include "corJsonld/corLdExpand.h"                       // corLdExpand
 #include "corNgsild/CorNgsild.h"                         // corNgsild
@@ -47,7 +47,7 @@ static bool isReservedMember(const char* s)
           strcmp(s, "@context") == 0);
 }
 
-static char* expandString(char* s, KAlloc* kaP)
+static char* expandString(char* s, CorAlloc* kaP)
 {
   if (s == NULL)
     return NULL;
@@ -65,7 +65,7 @@ static char* expandString(char* s, KAlloc* kaP)
 //
 // expandArray - expand each entry in a NULL-terminated string array in-place
 //
-static void expandArray(char** v, KAlloc* kaP)
+static void expandArray(char** v, CorAlloc* kaP)
 {
   if (v == NULL)
     return;
@@ -84,7 +84,7 @@ static void expandArray(char** v, KAlloc* kaP)
 // (param order is not guaranteed). Once expandValuesV is finalized, walk the
 // tree and expand string RHS values for matching attributes.
 //
-static void qExpandValuesWalk(LdQNode* nodeP, char** evV, KAlloc* kaP)
+static void qExpandValuesWalk(LdQNode* nodeP, char** evV, CorAlloc* kaP)
 {
   if (nodeP == NULL || evV == NULL)
     return;
@@ -163,7 +163,7 @@ static void qExpandValuesWalk(LdQNode* nodeP, char** evV, KAlloc* kaP)
 //          geoproperty, geometryProperty.
 // Does NOT expand: scopeQ, q, datasetId, lang, coordinates.
 //
-void ldExpandParams(KAlloc* kaP)
+void ldExpandParams(CorAlloc* kaP)
 {
   if (corRest.out.problemType != NULL)
     return;
@@ -235,8 +235,8 @@ void ldExpandParams(KAlloc* kaP)
       for (char* p = in; *p != 0; p++)
         if (*p == '.') segCount++;
 
-      char** segV = (char**) kaAlloc(kaP, (segCount + 1) * sizeof(char*));
-      char*  tmp  = kaStrdup(kaP, in);    // strtok_r mutates
+      char** segV = (char**) corAlloc(kaP, (segCount + 1) * sizeof(char*));
+      char*  tmp  = corAllocStrdup(kaP, in);    // strtok_r mutates
       char*  save;
       int    ix   = 0;
       for (char* tok = strtok_r(tmp, ".", &save); tok != NULL; tok = strtok_r(NULL, ".", &save))
@@ -251,7 +251,7 @@ void ldExpandParams(KAlloc* kaP)
       // Keep attrName as the joined-expanded form for logging; sort uses pathSegV.
       // Recompute joined form for backward compat.
       size_t bound = 16384;
-      char*  out   = (char*) kaAlloc(kaP, bound);
+      char*  out   = (char*) corAlloc(kaP, bound);
       out[0] = 0;
       size_t outLen = 0;
       for (int s = 0; s < ix; s++)

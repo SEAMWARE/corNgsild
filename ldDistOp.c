@@ -20,7 +20,7 @@
 #include "corTree/corTreeClone.h"                      // corTreeClone
 #include "corJson/corJsonParse.h"                      // corJsonParse
 
-#include "kalloc/kaAlloc.h"                            // kaAlloc
+#include "corAlloc/corAlloc.h"                         // corAlloc
 #include "corLog/corLog.h"                             // COR_T, COR_W
 #include "corRest/CorRestState.h"                        // corRest
 #include "corRest/CorRestKeyValue.h"                     // CorRestKeyValue
@@ -97,7 +97,7 @@ static const char* ldCsrAliasForForward(LdRegCacheItem* csr)
 
   int   aliasLen  = strlen(csr->csourceAlias);
   int   tenantLen = strlen(tenant);
-  char* scopedP   = (char*) kaAlloc(&corRest.kalloc, aliasLen + 1 + tenantLen + 1);
+  char* scopedP   = (char*) corAlloc(&corRest.kalloc, aliasLen + 1 + tenantLen + 1);
 
   strcpy(scopedP, csr->csourceAlias);
   scopedP[aliasLen] = ':';
@@ -218,7 +218,7 @@ static CorRestKeyValue* buildHeaders(CorRestVerb     verb,
     for (int i = 0; csrInfoKV[i] != NULL; i += 2) csiCount++;
 
   int cap = viaIn + 6 + csiCount;   // Content-Type + Accept + Link + NGSILD-Volatile-Context + own Via + NGSILD-Tenant + info[]
-  CorRestKeyValue* hv = (CorRestKeyValue*) kaAlloc(&corRest.kalloc, cap * sizeof(CorRestKeyValue));
+  CorRestKeyValue* hv = (CorRestKeyValue*) corAlloc(&corRest.kalloc, cap * sizeof(CorRestKeyValue));
   int hc = 0;
 
   const char* csiContentType   = NULL;
@@ -271,7 +271,7 @@ static CorRestKeyValue* buildHeaders(CorRestVerb     verb,
     const char* suffix  = ">; rel=\"http://www.w3.org/ns/json-ld#context\"; type=\"application/ld+json\"";
     int   urlLen = strlen(url);
     int   sufLen = strlen(suffix);
-    char* linkVal = (char*) kaAlloc(&corRest.kalloc, 1 + urlLen + sufLen + 1);
+    char* linkVal = (char*) corAlloc(&corRest.kalloc, 1 + urlLen + sufLen + 1);
     linkVal[0] = '<';
     strcpy(linkVal + 1, url);
     strcpy(linkVal + 1 + urlLen, suffix);
@@ -314,7 +314,7 @@ static CorRestKeyValue* buildHeaders(CorRestVerb     verb,
   if (ownAlias != NULL)
   {
     int   aliasLen = strlen(ownAlias);
-    char* viaVal   = (char*) kaAlloc(&corRest.kalloc, 4 + aliasLen + 1);
+    char* viaVal   = (char*) corAlloc(&corRest.kalloc, 4 + aliasLen + 1);
     strcpy(viaVal, "1.1 ");
     strcpy(viaVal + 4, ownAlias);
     hv[hc].key   = (char*) "Via";
@@ -655,7 +655,7 @@ int ldDistOpSendReceiveEx(LdRegCacheItem*  csr,
   // Append optional extra headers (e.g. NGSILD-EntityMap for entity-map distops)
   if (extraHeaderV != NULL && extraHeaderCount > 0)
   {
-    CorRestKeyValue* merged = (CorRestKeyValue*) kaAlloc(&corRest.kalloc, (hc + extraHeaderCount) * sizeof(CorRestKeyValue));
+    CorRestKeyValue* merged = (CorRestKeyValue*) corAlloc(&corRest.kalloc, (hc + extraHeaderCount) * sizeof(CorRestKeyValue));
     for (int i = 0; i < hc; i++) merged[i] = hv[i];
     for (int i = 0; i < extraHeaderCount; i++) merged[hc + i] = extraHeaderV[i];
     hv = merged;
@@ -730,7 +730,7 @@ int ldDistOpSendReceiveEx(LdRegCacheItem*  csr,
 
     if (errorDetailPP != NULL && resp.errorDetail[0] != 0)
     {
-      char* d = (char*) kaAlloc(&corRest.kalloc, strlen(resp.errorDetail) + 1);
+      char* d = (char*) corAlloc(&corRest.kalloc, strlen(resp.errorDetail) + 1);
       strcpy(d, resp.errorDetail);
       *errorDetailPP = d;
     }
@@ -791,7 +791,7 @@ static const char* responseContextLink(CorRestKeyValue* headerV, int headerCount
     if (end == NULL)                                                     continue;
 
     int   len = (int) (end - (v + 1));
-    char* url = (char*) kaAlloc(&corRest.kalloc, len + 1);
+    char* url = (char*) corAlloc(&corRest.kalloc, len + 1);
     if (url == NULL)                                                     return NULL;
     memcpy(url, v + 1, len);
     url[len] = 0;
@@ -916,7 +916,7 @@ char* ldDistOpWarnings(LdDistOpBatchItem* itemV, LdDistOpBatchResult* resultV, i
     int  wvLen  = snprintf(wv, sizeof(wv), "%d %s \"%s\"", code, authority, warnText);
     int  sepLen = (acc != NULL) ? 2 : 0;                       // ", " between warn-values
 
-    char* nacc = (char*) kaAlloc(&corRest.kalloc, accLen + sepLen + wvLen + 1);
+    char* nacc = (char*) corAlloc(&corRest.kalloc, accLen + sepLen + wvLen + 1);
     if (nacc == NULL)
       return acc;
 
@@ -984,11 +984,11 @@ int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
   // the in-process call, because running it now would reset corNgsild mid-loop
   // and corrupt buildHeaders for the remaining socket items.
   int addedCount = 0;
-  int* addIndex = (int*) kaAlloc(&corRest.kalloc, itemCount * sizeof(int));
+  int* addIndex = (int*) corAlloc(&corRest.kalloc, itemCount * sizeof(int));
   for (int i = 0; i < itemCount; i++) addIndex[i] = -1;
   memset(resultV, 0, itemCount * sizeof(LdDistOpBatchResult));
-  CorRestKeyValue** selfHv = (CorRestKeyValue**) kaAlloc(&corRest.kalloc, itemCount * sizeof(CorRestKeyValue*));
-  int*             selfHc = (int*) kaAlloc(&corRest.kalloc, itemCount * sizeof(int));
+  CorRestKeyValue** selfHv = (CorRestKeyValue**) corAlloc(&corRest.kalloc, itemCount * sizeof(CorRestKeyValue*));
+  int*             selfHc = (int*) corAlloc(&corRest.kalloc, itemCount * sizeof(int));
 
   for (int i = 0; i < itemCount; i++)
   {
@@ -1107,7 +1107,7 @@ int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
       resultV[i].timedOut   = (resp != NULL) && (resp->error == CORR_ERR_TIMEOUT);
       if (resp != NULL && resp->errorDetail[0] != 0)
       {
-        char* d = (char*) kaAlloc(&corRest.kalloc, strlen(resp->errorDetail) + 1);
+        char* d = (char*) corAlloc(&corRest.kalloc, strlen(resp->errorDetail) + 1);
         strcpy(d, resp->errorDetail);
         resultV[i].errorDetail = d;
       }
@@ -1130,7 +1130,7 @@ int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
     resultV[i].responseBodyLen = resp->bodyLen;
     if (resp->body != NULL && resp->bodyLen > 0)
     {
-      char* bodyCopy = (char*) kaAlloc(&corRest.kalloc, resp->bodyLen + 1);
+      char* bodyCopy = (char*) corAlloc(&corRest.kalloc, resp->bodyLen + 1);
       memcpy(bodyCopy, resp->body, resp->bodyLen);
       bodyCopy[resp->bodyLen] = 0;
       resultV[i].responseBody = bodyCopy;
@@ -1404,7 +1404,7 @@ int ldDistOpEntriesBuild(const LdDistOpGroup  groupV[],
   LdDistOpEntry* entries = NULL;
   if (capacity > 0)
   {
-    entries = (LdDistOpEntry*) kaAlloc(&corRest.kalloc, capacity * sizeof(LdDistOpEntry));
+    entries = (LdDistOpEntry*) corAlloc(&corRest.kalloc, capacity * sizeof(LdDistOpEntry));
     memset(entries, 0, capacity * sizeof(LdDistOpEntry));
   }
   int count = 0;
@@ -1518,8 +1518,8 @@ void ldDistOpEntriesPerform(LdDistOpEntry* entries,
 {
   if (count <= 0) return;
 
-  LdDistOpBatchItem*   items   = (LdDistOpBatchItem*)   kaAlloc(&corRest.kalloc, count * sizeof(LdDistOpBatchItem));
-  LdDistOpBatchResult* results = (LdDistOpBatchResult*) kaAlloc(&corRest.kalloc, count * sizeof(LdDistOpBatchResult));
+  LdDistOpBatchItem*   items   = (LdDistOpBatchItem*)   corAlloc(&corRest.kalloc, count * sizeof(LdDistOpBatchItem));
+  LdDistOpBatchResult* results = (LdDistOpBatchResult*) corAlloc(&corRest.kalloc, count * sizeof(LdDistOpBatchResult));
   memset(results, 0, count * sizeof(LdDistOpBatchResult));
 
   for (int i = 0; i < count; i++)

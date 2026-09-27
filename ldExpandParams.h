@@ -16,11 +16,11 @@
 //
 // Called once per request from the preServiceHook, before the service routine.
 //
-#include "kalloc/KAlloc.h"                           // KAlloc
+#include "corAlloc/CorAlloc.h"                       // CorAlloc
 
 
 
 // ldExpandParams - expand vocab-bearing URL params in corNgsild
-extern void ldExpandParams(KAlloc* kaP);
+extern void ldExpandParams(CorAlloc* kaP);
 
 #endif  // CORNGSILD_LDEXPANDPARAMS_H_

@@ -12,7 +12,7 @@
 //
 #include <stdbool.h>                                   // bool
 
-#include "kalloc/KAlloc.h"                             // KAlloc
+#include "corAlloc/CorAlloc.h"                         // CorAlloc
 #include "corTree/CorNode.h"                            // CorNode
 
 
@@ -40,7 +40,7 @@
 // against the target. Undeclared, the body is normalized or concise, where
 // § 5.3.2.3 admits no such target-dependence: a JSON primitive is a Property.
 //
-extern bool ldNormalizeInput(CorNode* entityP, KAlloc* kaP, bool mergeMode, bool simplified);
+extern bool ldNormalizeInput(CorNode* entityP, CorAlloc* kaP, bool mergeMode, bool simplified);
 
 
 
@@ -55,6 +55,6 @@ extern bool ldNormalizeInput(CorNode* entityP, KAlloc* kaP, bool mergeMode, bool
 // arrive as bare GeoJSON Geometry on the wire (§ 5.2.9) but live as
 // normalized GeoProperty wrappers in storage and on output.
 //
-extern void ldWrapAsGeoProperty(CorNode* entityP, CorNode* childP, KAlloc* kaP);
+extern void ldWrapAsGeoProperty(CorNode* entityP, CorNode* childP, CorAlloc* kaP);
 
 #endif  // CORNGSILD_LDNORMALIZEINPUT_H_

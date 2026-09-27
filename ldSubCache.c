@@ -13,9 +13,9 @@
 #include <string.h>                                    // strcmp, strdup
 
 #include "corLog/corLog.h"                             // COR_RE
-#include "kalloc/kaBufferInit.h"                       // kaBufferInit
-#include "kalloc/kaAlloc.h"                            // kaAlloc
-#include "kalloc/KAlloc.h"                             // KAlloc
+#include "corAlloc/corAllocBufferInit.h"               // corAllocBufferInit
+#include "corAlloc/corAlloc.h"                         // corAlloc
+#include "corAlloc/CorAlloc.h"                         // CorAlloc
 #include "corTree/CorNode.h"                           // CorNode
 #include "corTree/corTreeClone.h"                      // corTreeClone
 #include "corTree/corTreeFree.h"                       // corTreeFree
@@ -127,7 +127,7 @@ static LdSubEntitySelector* entitySelectorsExtract(CorNode* entitiesP)
 // and the datasetId goes to the returned array, at the same index. Returns NULL
 // when no entry names an instance, which is every standard subscription.
 //
-static char** watchedDatasetSplit(char** watchedV, KAlloc* kaP)
+static char** watchedDatasetSplit(char** watchedV, CorAlloc* kaP)
 {
   if (watchedV == NULL)
     return NULL;
@@ -149,7 +149,7 @@ static char** watchedDatasetSplit(char** watchedV, KAlloc* kaP)
       dsV = (char**) calloc(n + 1, sizeof(char*));
 
     int   nameLen = atP - watchedV[i];
-    char* nameP   = (char*) kaAlloc(kaP, nameLen + 1);
+    char* nameP   = (char*) corAlloc(kaP, nameLen + 1);
 
     memcpy(nameP, watchedV[i], nameLen);
     nameP[nameLen] = 0;
@@ -260,7 +260,7 @@ LdSubCache* ldSubCacheCreate(void)
 
   // Initialize persistent allocator for parsed q/scope trees.
   // Initial buffer is inline (1024 bytes); overflow allocates via calloc (4096 chunks).
-  kaBufferInit(&cacheP->alloc, cacheP->allocBuf, sizeof(cacheP->allocBuf), 4096, NULL, "subCache");
+  corAllocBufferInit(&cacheP->alloc, cacheP->allocBuf, sizeof(cacheP->allocBuf), 4096, NULL, "subCache");
   pthread_rwlock_init(&cacheP->lock, NULL);
 
   return cacheP;
@@ -475,7 +475,7 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, CorNode* subTree, LdQNode*
       // [[[lon,lat],...]]) — render it to the JSON-array string that
       // geoMatchFunc/geojsonToGeos expects. Stored in the cache alloc.
       int   len = corJsonFastRenderSize(coordsP) + 1;
-      char* buf = (char*) kaAlloc(&cacheP->alloc, len);
+      char* buf = (char*) corAlloc(&cacheP->alloc, len);
       if (buf != NULL)
       {
         corJsonFastRender(coordsP, buf);
@@ -695,7 +695,7 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, CorNode* subTree, LdQNode*
       if (lt != NULL && gt != NULL && gt > lt + 1)
       {
         int   len = (int) (gt - (lt + 1));
-        char* url = (char*) kaAlloc(&cacheP->alloc, len + 1);
+        char* url = (char*) corAlloc(&cacheP->alloc, len + 1);
         if (url != NULL)
         {
           memcpy(url, lt + 1, len);

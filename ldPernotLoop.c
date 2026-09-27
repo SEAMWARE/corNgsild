@@ -13,7 +13,7 @@
 #include <time.h>                                      // clock_gettime
 #include <stdlib.h>                                    // malloc, free
 
-#include "kalloc/KAlloc.h"                             // KAlloc, kaAlloc
+#include "corAlloc/CorAlloc.h"                         // CorAlloc, corAlloc
 #include "corTree/CorNode.h"                           // CorNode
 #include "corTree/corTreeBuilder.h"                    // corTreeObject, corTreeString, corTreeArray, corTreeChildAdd
 #include "corJson/corJsonRenderSize.h"                 // corJsonFastRenderSize
@@ -80,7 +80,7 @@ static void isoFromNanos(uint64_t ns, char* buf, int bufLen)
 //
 // pernotSendNotification - build + send a periodic notification for one sub
 //
-static bool pernotSendNotification(LdPernotItem* itemP, CorNode* entityArray, KAlloc* kaP)
+static bool pernotSendNotification(LdPernotItem* itemP, CorNode* entityArray, CorAlloc* kaP)
 {
   if (itemP->endpointUri == NULL)
     return false;
@@ -88,7 +88,7 @@ static bool pernotSendNotification(LdPernotItem* itemP, CorNode* entityArray, KA
   // Build the notification tree in the per-tick engine arena (kaP) — this runs
   // on the periodic-dispatch thread where corRest.allocP is not our arena. kaP is
   // reset by the engine after the tick, freeing the whole tree.
-  KAlloc*  allocP = kaP;
+  CorAlloc*  allocP = kaP;
 
   // Build notification tree
   CorNode* notification = corTreeObject(allocP, NULL);
@@ -139,7 +139,7 @@ static bool pernotSendNotification(LdPernotItem* itemP, CorNode* entityArray, KA
 
   // Render to JSON
   int bodySize = corJsonFastRenderSize(notification);
-  char* body = (char*) kaAlloc(kaP, bodySize);
+  char* body = (char*) corAlloc(kaP, bodySize);
   corJsonFastRender(notification, body);
 
   // Send via HTTP
@@ -199,7 +199,7 @@ static bool pernotSendNotification(LdPernotItem* itemP, CorNode* entityArray, KA
 // `ctx` is the LdPernotCache* passed at registration time. `kaP` is
 // scratch from the engine; reset before every consumer's tick call.
 //
-static void pernotTick(void* ctx, uint64_t now, KAlloc* kaP)
+static void pernotTick(void* ctx, uint64_t now, CorAlloc* kaP)
 {
   LdPernotCache* cacheP = (LdPernotCache*) ctx;
   if (cacheP == NULL || loopQueryFn == NULL) return;

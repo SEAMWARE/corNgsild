@@ -12,7 +12,7 @@
 #include <stdbool.h>                                    // bool
 #include <stdint.h>                                     // uint32_t, uint64_t
 
-#include "kalloc/KAlloc.h"                              // KAlloc
+#include "corAlloc/CorAlloc.h"                          // CorAlloc
 #include "corTree/CorNode.h"                            // CorNode
 
 
@@ -50,8 +50,8 @@ extern void ldToAggregatedValues(CorNode*      treeP,
                                  uint64_t      startNs,
                                  uint64_t      endNs,
                                  const char*   timeProp,
-                                 KAlloc*       allocP,
-                                 KAlloc*       faP);
+                                 CorAlloc*     allocP,
+                                 CorAlloc*     faP);
 
 
 

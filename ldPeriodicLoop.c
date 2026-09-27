@@ -13,9 +13,9 @@
 #include <string.h>                                    // memset
 #include <time.h>                                      // clock_gettime, nanosleep
 
-#include "kalloc/KAlloc.h"                             // KAlloc
-#include "kalloc/kaBufferInit.h"                       // kaBufferInit
-#include "kalloc/kaBufferReset.h"                      // kaBufferReset
+#include "corAlloc/CorAlloc.h"                         // CorAlloc
+#include "corAlloc/corAllocBufferInit.h"               // corAllocBufferInit
+#include "corAlloc/corAllocBufferReset.h"              // corAllocBufferReset
 #include "corJson/corJsonCreate.h"                     // corJsonCreate
 
 #include "corRest/CorRestState.h"                        // corRest (__thread)
@@ -64,20 +64,20 @@ static void* dispatchThread(void* unused)
   (void) unused;
 
   char            allocBuffer[8192];
-  KAlloc          ka;
+  CorAlloc        ka;
   struct timespec sleepTime = { 1, 0 };  // 1 second
 
   // Per-tick scratch allocator — reset before each callback so each
   // consumer starts clean.
-  kaBufferInit(&ka, allocBuffer, sizeof(allocBuffer), 16384, NULL, "periodic");
+  corAllocBufferInit(&ka, allocBuffer, sizeof(allocBuffer), 16384, NULL, "periodic");
 
   // Per-thread corRest init — many ngsild notification helpers
   // (ldCsrSubNotify, ldSubscriptionNotify) reach into corRest.kalloc /
   // corRest.kallocP for builders. Init once; refresh requestStartTime per
   // tick. Reset corRest.kalloc per tick so it doesn't accumulate.
   memset(&corRest, 0, sizeof(corRest));
-  kaBufferInit(&corRest.kalloc, corRest.kallocBuffer, sizeof(corRest.kallocBuffer),
-               256 * 1024, NULL, "periodic-rest");
+  corAllocBufferInit(&corRest.kalloc, corRest.kallocBuffer, sizeof(corRest.kallocBuffer),
+                     256 * 1024, NULL, "periodic-rest");
   corRest.corJsonP = corJsonCreate(&corRest.corJson, &corRest.kalloc);
   corRest.kallocP  = &corRest.kalloc;
 
@@ -88,16 +88,16 @@ static void* dispatchThread(void* unused)
 
     for (int i = 0; i < sourceCount; i++)
     {
-      kaBufferReset(&ka, true);
-      kaBufferReset(&corRest.kalloc, true);
+      corAllocBufferReset(&ka, true);
+      corAllocBufferReset(&corRest.kalloc, true);
       sources[i].fn(sources[i].ctx, now, &ka);
     }
 
     nanosleep(&sleepTime, NULL);
   }
 
-  kaBufferReset(&ka, true);
-  kaBufferReset(&corRest.kalloc, true);
+  corAllocBufferReset(&ka, true);
+  corAllocBufferReset(&corRest.kalloc, true);
   return NULL;
 }
 

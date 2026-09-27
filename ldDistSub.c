@@ -13,8 +13,8 @@
 #include <string.h>                                    // strlen, strcmp, strdup, memcpy
 
 #include "corLog/corLog.h"                             // COR_W
-#include "kalloc/kaAlloc.h"                            // kaAlloc
-#include "kalloc/KAlloc.h"                             // KAlloc
+#include "corAlloc/corAlloc.h"                         // corAlloc
+#include "corAlloc/CorAlloc.h"                         // CorAlloc
 #include "corTree/CorNode.h"                           // CorNode
 #include "corJson/CorJson.h"                           // CorJson
 #include "corTree/corTreeLookup.h"                     // corTreeLookup
@@ -45,7 +45,7 @@
 //
 // ldDistSubSubordinatesFragment - build {_subordinates, _subordinateRunNo}
 //
-CorNode* ldDistSubSubordinatesFragment(LdSubCacheItem* itemP, KAlloc* allocP)
+CorNode* ldDistSubSubordinatesFragment(LdSubCacheItem* itemP, CorAlloc* allocP)
 {
   if (itemP == NULL)
     return NULL;
@@ -128,7 +128,7 @@ static bool regHasMatchingType(LdSubCacheItem* itemP, LdRegCacheItem* regP)
 //                                more strictly on its side)
 //   * neither id nor idPat     → emit type only
 //
-static CorNode* narrowEntities(LdSubCacheItem* itemP, LdRegCacheItem* regP, KAlloc* allocP)
+static CorNode* narrowEntities(LdSubCacheItem* itemP, LdRegCacheItem* regP, CorAlloc* allocP)
 {
   CorNode* arr = corTreeArray(allocP, "entities");
 
@@ -265,7 +265,7 @@ static char* derivedSubBody(LdSubCacheItem* itemP,
     corTreeChildRemove(clone, atCtxP);
 
   int   sz  = corJsonFastRenderSize(clone) + 1;
-  char* buf = (char*) kaAlloc(&corRest.kalloc, sz);
+  char* buf = (char*) corAlloc(&corRest.kalloc, sz);
   corJsonFastRender(clone, buf);
 
   if (bodyLenP != NULL)
@@ -331,13 +331,13 @@ static bool fanoutToReg(LdSubCacheItem* itemP, LdRegCacheItem* regP, const char*
   int runNo = ++itemP->subordinateRunNo;
 
   // Derived sub id: "<parent>:<runNo>"
-  char* derivedId = (char*) kaAlloc(&corRest.kalloc, parentLen + 16);
+  char* derivedId = (char*) corAlloc(&corRest.kalloc, parentLen + 16);
   snprintf(derivedId, parentLen + 16, "%s:%d", itemP->subId, runNo);
 
   // Callback URI: "<our-endpoint>/ngsi-ld/ex/v1/notifications/<parent-sub-id>"
   static const char* notifPath = "/ngsi-ld/ex/v1/notifications/";
   int notifPathLen = (int) strlen(notifPath);
-  char* callback = (char*) kaAlloc(&corRest.kalloc, epLen + notifPathLen + parentLen + 1);
+  char* callback = (char*) corAlloc(&corRest.kalloc, epLen + notifPathLen + parentLen + 1);
   char* cp = callback;
   memcpy(cp, ldBrokerHttpEndpoint, epLen); cp += epLen;
   memcpy(cp, notifPath, notifPathLen);     cp += notifPathLen;
@@ -352,7 +352,7 @@ static bool fanoutToReg(LdSubCacheItem* itemP, LdRegCacheItem* regP, const char*
   static const char* subPath = "/ngsi-ld/v1/subscriptions";
   int subPathLen = (int) strlen(subPath);
   int regEpLen   = (int) strlen(regP->endpoint);
-  char* url = (char*) kaAlloc(&corRest.kalloc, regEpLen + subPathLen + 1);
+  char* url = (char*) corAlloc(&corRest.kalloc, regEpLen + subPathLen + 1);
   memcpy(url, regP->endpoint, regEpLen);
   memcpy(url + regEpLen, subPath, subPathLen + 1);
 
@@ -460,7 +460,7 @@ int ldDistSubCascadeDelete(LdSubCacheItem* itemP, LdRegCache* regCacheP, const c
 
     int   regEpLen = (int) strlen(regP->endpoint);
     int   idLen    = (int) strlen(sub->remoteSubId);
-    char* url      = (char*) kaAlloc(&corRest.kalloc, regEpLen + subPathLen + idLen + 1);
+    char* url      = (char*) corAlloc(&corRest.kalloc, regEpLen + subPathLen + idLen + 1);
     char* cp       = url;
     memcpy(cp, regP->endpoint, regEpLen); cp += regEpLen;
     memcpy(cp, subPath,        subPathLen); cp += subPathLen;
@@ -515,7 +515,7 @@ static char* patchBody(LdSubCacheItem* itemP, CorNode* fragmentP, int* bodyLenP)
     corTreeChildRemove(clone, atCtxP2);
 
   int   sz  = corJsonFastRenderSize(clone) + 1;
-  char* buf = (char*) kaAlloc(&corRest.kalloc, sz);
+  char* buf = (char*) corAlloc(&corRest.kalloc, sz);
   corJsonFastRender(clone, buf);
 
   if (bodyLenP != NULL)
@@ -541,7 +541,7 @@ static char* buildSubUrl(LdRegCacheItem* regP, const char* remoteSubId)
   int   subPathLen = (int) strlen(subPath);
   int   regEpLen   = (int) strlen(regP->endpoint);
   int   idLen      = (int) strlen(remoteSubId);
-  char* url        = (char*) kaAlloc(&corRest.kalloc, regEpLen + subPathLen + idLen + 1);
+  char* url        = (char*) corAlloc(&corRest.kalloc, regEpLen + subPathLen + idLen + 1);
   char* cp         = url;
   memcpy(cp, regP->endpoint, regEpLen); cp += regEpLen;
   memcpy(cp, subPath,        subPathLen); cp += subPathLen;
@@ -786,7 +786,7 @@ int ldDistSubOnRegDelete(LdSubCache*          subCacheP,
       {
         int   regEpLen = (int) strlen(regItemP->endpoint);
         int   idLen    = (int) strlen(sub->remoteSubId);
-        char* url      = (char*) kaAlloc(&corRest.kalloc, regEpLen + subPathLen + idLen + 1);
+        char* url      = (char*) corAlloc(&corRest.kalloc, regEpLen + subPathLen + idLen + 1);
         char* cp       = url;
         memcpy(cp, regItemP->endpoint, regEpLen); cp += regEpLen;
         memcpy(cp, subPath,            subPathLen); cp += subPathLen;

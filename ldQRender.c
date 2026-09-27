@@ -12,8 +12,8 @@
 #include <string.h>                                    // strlen, strcpy, strcat, strcmp
 #include <stdlib.h>                                    // malloc
 
-#include "kalloc/KAlloc.h"                             // KAlloc
-#include "kalloc/kaAlloc.h"                            // kaAlloc
+#include "corAlloc/CorAlloc.h"                         // CorAlloc
+#include "corAlloc/corAlloc.h"                         // corAlloc
 #include "corJsonld/CorLdContext.h"                      // CorLdContext
 #include "corJsonld/corLdCompact.h"                      // corLdCompact
 #include "corJsonld/corLdExpand.h"                       // corLdAlreadyExpanded
@@ -44,7 +44,7 @@ static bool isQGrammarChar(unsigned char c)
 
 // -----------------------------------------------------------------------------
 //
-// urlEncode - percent-encode a string (allocates via kaAlloc)
+// urlEncode - percent-encode a string (allocates via corAlloc)
 //
 // qGrammarOnly = false: full encoding — everything except the RFC 3986 unreserved
 //   set (A-Z a-z 0-9 - _ ~). Used when the q is rendered into a URL (forwarding).
@@ -53,12 +53,12 @@ static bool isQGrammarChar(unsigned char c)
 //   response BODY, where there is no URL-transport reason to encode but the
 //   q-grammar ambiguity (a dot meaning sub-attribute path) still must be removed.
 //
-static char* urlEncode(const char* s, KAlloc* allocP, bool qGrammarOnly)
+static char* urlEncode(const char* s, CorAlloc* allocP, bool qGrammarOnly)
 {
   // Worst case: every char becomes %XX (3x expansion)
   int   len    = strlen(s);
   int   outLen = len * 3 + 1;
-  char* out    = (char*) kaAlloc(allocP, outLen);
+  char* out    = (char*) corAlloc(allocP, outLen);
   char* p      = out;
 
   for (int i = 0; i < len; i++)
@@ -88,7 +88,7 @@ static char* urlEncode(const char* s, KAlloc* allocP, bool qGrammarOnly)
 //
 // ldCompactOrEncode - compact an IRI against the @context, URL-encode if uncompactable
 //
-const char* ldCompactOrEncode(const char* iri, CorLdContext* contextP, KAlloc* allocP, bool qGrammarOnly)
+const char* ldCompactOrEncode(const char* iri, CorLdContext* contextP, CorAlloc* allocP, bool qGrammarOnly)
 {
   // No context — internal storage mode: return the raw IRI unchanged.
   // URL-encoding is only needed for API responses where the consumer
@@ -137,7 +137,7 @@ static const char* opToString(LdQOperator op)
 
 
 // Forward declaration
-static int renderNode(LdQNode* nodeP, CorLdContext* contextP, KAlloc* allocP, char* buf, int bufSize, bool qGrammarOnly);
+static int renderNode(LdQNode* nodeP, CorLdContext* contextP, CorAlloc* allocP, char* buf, int bufSize, bool qGrammarOnly);
 
 
 
@@ -145,7 +145,7 @@ static int renderNode(LdQNode* nodeP, CorLdContext* contextP, KAlloc* allocP, ch
 //
 // renderTerm - render a single term
 //
-static int renderTerm(LdQTerm* term, CorLdContext* contextP, KAlloc* allocP, char* buf, int bufSize, bool qGrammarOnly)
+static int renderTerm(LdQTerm* term, CorLdContext* contextP, CorAlloc* allocP, char* buf, int bufSize, bool qGrammarOnly)
 {
   const char* attr = ldCompactOrEncode(term->attr, contextP, allocP, qGrammarOnly);
   const char* op   = opToString(term->op);
@@ -159,14 +159,14 @@ static int renderTerm(LdQTerm* term, CorLdContext* contextP, KAlloc* allocP, cha
   if (term->subPathN > 0)
   {
     int total = strlen(attr) + 1;
-    const char** segV = (const char**) kaAlloc(allocP, term->subPathN * sizeof(char*));
+    const char** segV = (const char**) corAlloc(allocP, term->subPathN * sizeof(char*));
     for (int i = 0; i < term->subPathN; i++)
     {
       segV[i] = ldCompactOrEncode(term->subPathV[i], contextP, allocP, qGrammarOnly);
       total  += strlen(segV[i]) + 1;
     }
 
-    char* joined = (char*) kaAlloc(allocP, total);
+    char* joined = (char*) corAlloc(allocP, total);
     strcpy(joined, attr);
     for (int i = 0; i < term->subPathN; i++)
     {
@@ -184,14 +184,14 @@ static int renderTerm(LdQTerm* term, CorLdContext* contextP, KAlloc* allocP, cha
   if (term->valuePathN > 0)
   {
     int total = strlen(attr) + 3;
-    const char** vsegV = (const char**) kaAlloc(allocP, term->valuePathN * sizeof(char*));
+    const char** vsegV = (const char**) corAlloc(allocP, term->valuePathN * sizeof(char*));
     for (int i = 0; i < term->valuePathN; i++)
     {
       vsegV[i] = urlEncode(term->valuePathV[i], allocP, qGrammarOnly);
       total   += strlen(vsegV[i]) + 1;
     }
 
-    char* joined = (char*) kaAlloc(allocP, total);
+    char* joined = (char*) corAlloc(allocP, total);
     strcpy(joined, attr);
     strcat(joined, "[");
     for (int i = 0; i < term->valuePathN; i++)
@@ -271,7 +271,7 @@ static int renderTerm(LdQTerm* term, CorLdContext* contextP, KAlloc* allocP, cha
 //
 // renderNode - recursively render a node
 //
-static int renderNode(LdQNode* nodeP, CorLdContext* contextP, KAlloc* allocP, char* buf, int bufSize, bool qGrammarOnly)
+static int renderNode(LdQNode* nodeP, CorLdContext* contextP, CorAlloc* allocP, char* buf, int bufSize, bool qGrammarOnly)
 {
   if (nodeP == NULL)
     return 0;
@@ -335,14 +335,14 @@ static int renderNode(LdQNode* nodeP, CorLdContext* contextP, KAlloc* allocP, ch
 //
 // ldQRender -
 //
-char* ldQRender(LdQNode* nodeP, CorLdContext* contextP, KAlloc* allocP, bool qGrammarOnly)
+char* ldQRender(LdQNode* nodeP, CorLdContext* contextP, CorAlloc* allocP, bool qGrammarOnly)
 {
   if (nodeP == NULL)
     return NULL;
 
   // Allocate a generous buffer
   int   bufSize = 4096;
-  char* buf     = (char*) kaAlloc(allocP, bufSize);
+  char* buf     = (char*) corAlloc(allocP, bufSize);
 
   int n = renderNode(nodeP, contextP, allocP, buf, bufSize, qGrammarOnly);
   buf[n] = 0;

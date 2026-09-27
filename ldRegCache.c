@@ -13,13 +13,13 @@
 #include <string.h>                                    // strcmp
 #include <time.h>                                      // clock_gettime
 
-#include "kalloc/kaBufferInit.h"                       // kaBufferInit
+#include "corAlloc/corAllocBufferInit.h"               // corAllocBufferInit
 #include "corTree/CorNode.h"                           // CorNode
 #include "corTree/corTreeClone.h"                      // corTreeClone
 #include "corTree/corTreeFree.h"                       // corTreeFree
 #include "corTree/corTreeLookup.h"                     // corTreeLookup
 
-#include "kalloc/KAlloc.h"                              // KAlloc
+#include "corAlloc/CorAlloc.h"                          // CorAlloc
 #include "corJsonld/corLdExpand.h"                       // corLdExpand, corLdAlreadyExpanded
 #include "corJsonld/corLdDownload.h"                     // corLdContextFromUrl
 #include "corJsonld/corLdInit.h"                         // corLdCoreContext
@@ -255,7 +255,7 @@ static char** stringArrayExtract(CorNode* arrP)
 // ARE stored fully-expanded) needs the IRI form, so we expand here at
 // cache-ingest time, once. Mirrors ldSubCache.c's notifAttrsV expansion.
 //
-static char** attrIRIArrayExtract(CorNode* arrP, KAlloc* allocP)
+static char** attrIRIArrayExtract(CorNode* arrP, CorAlloc* allocP)
 {
   char** v = stringArrayExtract(arrP);
   if (v == NULL)
@@ -279,7 +279,7 @@ static char** attrIRIArrayExtract(CorNode* arrP, KAlloc* allocP)
 //
 // infoListExtract - parse the information[] array into a linked list
 //
-static LdRegInfo* infoListExtract(CorNode* infoArrayP, KAlloc* allocP)
+static LdRegInfo* infoListExtract(CorNode* infoArrayP, CorAlloc* allocP)
 {
   if (infoArrayP == NULL || infoArrayP->type != CorArray)
     return NULL;
@@ -403,7 +403,7 @@ LdRegCache* ldRegCacheCreate(void)
 {
   LdRegCache* cacheP = (LdRegCache*) calloc(1, sizeof(LdRegCache));
 
-  kaBufferInit(&cacheP->alloc, cacheP->allocBuf, sizeof(cacheP->allocBuf), 4096, NULL, "regCache");
+  corAllocBufferInit(&cacheP->alloc, cacheP->allocBuf, sizeof(cacheP->allocBuf), 4096, NULL, "regCache");
   pthread_rwlock_init(&cacheP->lock, NULL);
 
   return cacheP;
@@ -515,7 +515,7 @@ static void cacheItemRetireOrFree(LdRegCache* cacheP, LdRegCacheItem* itemP)
 //
 // ldRegCacheItemAdd -
 //
-LdRegCacheItem* ldRegCacheItemAdd(LdRegCache* cacheP, CorNode* regTree, KAlloc* kaP)
+LdRegCacheItem* ldRegCacheItemAdd(LdRegCache* cacheP, CorNode* regTree, CorAlloc* kaP)
 {
   if (cacheP == NULL || regTree == NULL)
     return NULL;
@@ -1349,7 +1349,7 @@ bool ldRegCacheAttrExclusivelyClaimed(LdRegCache* cacheP,
 const char* ldRegCacheLocalWriteConflictTree(LdRegCache* cacheP,
                                              const char* entityId,
                                              CorNode*    fragP,
-                                             KAlloc*     kaP)
+                                             CorAlloc*   kaP)
 {
   if (cacheP == NULL || entityId == NULL || fragP == NULL || fragP->type != CorObject)
     return NULL;
@@ -1370,7 +1370,7 @@ const char* ldRegCacheLocalWriteConflictTree(LdRegCache* cacheP,
       if (tP->type == CorString) n++;
     if (n > 0)
     {
-      typeV = (char**) kaAlloc(kaP, (n + 1) * sizeof(char*));
+      typeV = (char**) corAlloc(kaP, (n + 1) * sizeof(char*));
       int ix = 0;
       for (CorNode* tP = typeP->value.head; tP != NULL; tP = tP->next)
         if (tP->type == CorString) typeV[ix++] = tP->value.s;
@@ -1394,7 +1394,7 @@ const char* ldRegCacheLocalWriteConflictTree(LdRegCache* cacheP,
       if (sP->type == CorString) n++;
     if (n > 0)
     {
-      scopeV = (char**) kaAlloc(kaP, (n + 1) * sizeof(char*));
+      scopeV = (char**) corAlloc(kaP, (n + 1) * sizeof(char*));
       int ix = 0;
       for (CorNode* sP = scopeP->value.head; sP != NULL; sP = sP->next)
         if (sP->type == CorString) scopeV[ix++] = sP->value.s;
@@ -1413,7 +1413,7 @@ const char* ldRegCacheLocalWriteConflictTree(LdRegCache* cacheP,
     attrN++;
   }
 
-  char** attrIriV = (char**) kaAlloc(kaP, (attrN + 1) * sizeof(char*));
+  char** attrIriV = (char**) corAlloc(kaP, (attrN + 1) * sizeof(char*));
   int    aIx      = 0;
   for (CorNode* aP = fragP->value.head; aP != NULL; aP = aP->next)
   {

@@ -14,7 +14,7 @@
 // with attribute names compacted against the response @context.
 //
 #include <stdbool.h>                                   // bool
-#include "kalloc/KAlloc.h"                             // KAlloc
+#include "corAlloc/CorAlloc.h"                         // CorAlloc
 #include "corTree/CorNode.h"                           // CorNode (unused but conventional)
 #include "corJsonld/CorLdContext.h"                      // CorLdContext
 
@@ -32,7 +32,7 @@
 //                q-grammar-significant chars of an uncompactable IRI, leaving
 //                URL-reserved chars raw. false for a forward URL (full encoding).
 //
-extern char* ldQRender(LdQNode* nodeP, CorLdContext* contextP, KAlloc* allocP, bool qGrammarOnly);
+extern char* ldQRender(LdQNode* nodeP, CorLdContext* contextP, CorAlloc* allocP, bool qGrammarOnly);
 
 
 
@@ -47,6 +47,6 @@ extern char* ldQRender(LdQNode* nodeP, CorLdContext* contextP, KAlloc* allocP, b
 // q-grammar chars (response body); false encodes everything but RFC 3986
 // unreserved (forward URL). NULL contextP returns the IRI untouched (storage).
 //
-extern const char* ldCompactOrEncode(const char* iri, CorLdContext* contextP, KAlloc* allocP, bool qGrammarOnly);
+extern const char* ldCompactOrEncode(const char* iri, CorLdContext* contextP, CorAlloc* allocP, bool qGrammarOnly);
 
 #endif  // CORNGSILD_LDQRENDER_H_

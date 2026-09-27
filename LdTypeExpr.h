@@ -12,7 +12,7 @@
 //
 #include <stdbool.h>                                     // bool
 
-#include "kalloc/KAlloc.h"                             // KAlloc
+#include "corAlloc/CorAlloc.h"                         // CorAlloc
 
 
 
@@ -57,7 +57,7 @@ typedef struct LdTypeExpr
 // from the cache. Used by the sub-cache to keep a parsed tree past the
 // request that created it.
 //
-extern LdTypeExpr* ldTypeExprParse(const char* value, KAlloc* kaP);
+extern LdTypeExpr* ldTypeExprParse(const char* value, CorAlloc* kaP);
 
 
 

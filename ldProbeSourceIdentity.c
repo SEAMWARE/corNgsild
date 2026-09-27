@@ -11,9 +11,9 @@
 #include <stdio.h>                                      // snprintf
 #include <string.h>                                     // strlen, strcpy
 
-#include "kalloc/KAlloc.h"                              // KAlloc
-#include "kalloc/kaBufferInit.h"                        // kaBufferInit
-#include "kalloc/kaBufferReset.h"                       // kaBufferReset
+#include "corAlloc/CorAlloc.h"                          // CorAlloc
+#include "corAlloc/corAllocBufferInit.h"                // corAllocBufferInit
+#include "corAlloc/corAllocBufferReset.h"               // corAllocBufferReset
 #include "corJson/CorJson.h"                            // CorJson
 #include "corJson/corJsonCreate.h"                      // corJsonCreate
 #include "corTree/CorNode.h"                            // CorNode
@@ -79,9 +79,9 @@ char* ldProbeSourceIdentity(const char* endpoint, const char* tenant, int timeou
   // Scratch kalloc for the forwarding-plugin response body. Stack-
   // allocated buffer keeps the probe cheap and avoids malloc churn.
   //
-  char    allocBuffer[4096];
-  KAlloc  scratchKa;
-  kaBufferInit(&scratchKa, allocBuffer, sizeof(allocBuffer), 16384, NULL, "probe-sourceIdentity");
+  char      allocBuffer[4096];
+  CorAlloc  scratchKa;
+  corAllocBufferInit(&scratchKa, allocBuffer, sizeof(allocBuffer), 16384, NULL, "probe-sourceIdentity");
 
   LdForwardRequest  req;
   LdForwardResponse resp;
@@ -111,13 +111,13 @@ char* ldProbeSourceIdentity(const char* endpoint, const char* tenant, int timeou
   int rc = plugin->send(&req, &resp);
   if (rc != 0)
   {
-    kaBufferReset(&scratchKa, 0);
+    corAllocBufferReset(&scratchKa, 0);
     return NULL;
   }
 
   if (resp.statusCode < 200 || resp.statusCode >= 300 || resp.body == NULL || resp.bodyLen == 0)
   {
-    kaBufferReset(&scratchKa, 0);
+    corAllocBufferReset(&scratchKa, 0);
     return NULL;
   }
 
@@ -129,7 +129,7 @@ char* ldProbeSourceIdentity(const char* endpoint, const char* tenant, int timeou
   CorNode* treeP = corJsonParse(corJsonP, resp.body);
   if (treeP == NULL)
   {
-    kaBufferReset(&scratchKa, 0);
+    corAllocBufferReset(&scratchKa, 0);
     return NULL;
   }
 
@@ -138,7 +138,7 @@ char* ldProbeSourceIdentity(const char* endpoint, const char* tenant, int timeou
   CorNode* aliasP = corTreeLookup(treeP, "contextSourceAlias");
   if (aliasP == NULL || aliasP->type != CorString || aliasP->value.s == NULL)
   {
-    kaBufferReset(&scratchKa, 0);
+    corAllocBufferReset(&scratchKa, 0);
     return NULL;
   }
 
@@ -147,6 +147,6 @@ char* ldProbeSourceIdentity(const char* endpoint, const char* tenant, int timeou
   // scratch arena — the caller owns the string.
   //
   char* result = strdup(aliasP->value.s);
-  kaBufferReset(&scratchKa, 0);
+  corAllocBufferReset(&scratchKa, 0);
   return result;
 }

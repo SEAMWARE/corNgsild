@@ -10,7 +10,7 @@
 //
 #include <string.h>                                    // strcmp
 
-#include "kalloc/kaAlloc.h"                            // kaAlloc
+#include "corAlloc/corAlloc.h"                         // corAlloc
 
 #include "corNgsild/LdQ.h"                              // LdQNode, LdQTerm
 #include "corNgsild/ldQAttrs.h"                         // Own interface
@@ -100,7 +100,7 @@ static void walk(LdQNode* nodeP, const char** outV, int* outNP, int cap)
 //
 // ldQAttrs -
 //
-char** ldQAttrs(LdQNode* nodeP, KAlloc* kaP)
+char** ldQAttrs(LdQNode* nodeP, CorAlloc* kaP)
 {
   if (nodeP == NULL)
     return NULL;
@@ -110,7 +110,7 @@ char** ldQAttrs(LdQNode* nodeP, KAlloc* kaP)
     return NULL;
 
   // +1 for the NULL terminator
-  const char** outV = (const char**) kaAlloc(kaP, (cap + 1) * sizeof(char*));
+  const char** outV = (const char**) corAlloc(kaP, (cap + 1) * sizeof(char*));
   int          outN = 0;
 
   walk(nodeP, outV, &outN, cap);

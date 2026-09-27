@@ -12,7 +12,7 @@
 #include <ctype.h>                                       // isalpha, isalnum
 
 #include "kbase/kLibLog.h"                             // KLOG_T
-#include "kalloc/KAlloc.h"                             // KAlloc
+#include "corAlloc/CorAlloc.h"                         // CorAlloc
 #include "corTree/CorNode.h"                            // CorNode
 #include "corTree/corTreeLookup.h"                      // corTreeLookup
 #include "corJsonld/corLdExpand.h"                        // corLdValueObjectIs, corLdValueObjectCheck
@@ -410,7 +410,7 @@ static bool checkObjectList(CorNode* listP)
 //
 // ldCheckAttribute -
 //
-bool ldCheckAttribute(CorNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc* faP)
+bool ldCheckAttribute(CorNode* attrP, LdOp op, LdAttrType attrTypeFromDb, CorAlloc* faP)
 {
   if (attrP == NULL)
   {

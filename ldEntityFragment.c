@@ -9,7 +9,7 @@
 
 #include <string.h>                                    // strcmp
 
-#include "kalloc/KAlloc.h"                             // KAlloc
+#include "corAlloc/CorAlloc.h"                         // CorAlloc
 #include "corTree/CorNode.h"                           // CorNode, CorJson
 #include "corTree/corTreeBuilder.h"                    // corTreeObject, corTreeChildAdd, corTreeChildRemove
 #include "corTree/corTreeClone.h"                      // corTreeClone
@@ -59,7 +59,7 @@ static bool isKeywordAttr(const char* name)
 //
 CorNode* ldEntityFragmentForInfo(CorNode*   entityP,
                                 LdRegInfo*  riP,
-                                KAlloc*     allocP,
+                                CorAlloc*   allocP,
                                 bool        detach)
 {
   if (entityP == NULL || riP == NULL || allocP == NULL)

@@ -32,7 +32,7 @@
 #include <stdbool.h>                                  // bool
 #include <stdint.h>                                   // uint64_t
 
-#include "kalloc/KAlloc.h"                            // KAlloc
+#include "corAlloc/CorAlloc.h"                        // CorAlloc
 #include "corTree/CorNode.h"                          // CorNode
 
 #include "corNgsild/ldEntityMerge.h"                   // LdMergeReport
@@ -57,6 +57,6 @@ extern void ldEntityAttrsSet(CorNode*        target,
                              bool            overwriteScope,
                              uint64_t        ts,
                              LdMergeReport*  reportP,
-                             KAlloc*         targetAllocP);
+                             CorAlloc*       targetAllocP);
 
 #endif  // CORNGSILD_LDENTITYATTRSSET_H_

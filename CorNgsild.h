@@ -13,7 +13,7 @@
 #include <stdbool.h>                                     // bool
 #include <stdint.h>                                      // uint64_t
 
-#include "kalloc/KAlloc.h"                               // KAlloc
+#include "corAlloc/CorAlloc.h"                           // CorAlloc
 #include "corTree/CorNode.h"                             // CorNode
 
 #include "corRest/CorRestState.h"                        // corRest (per-conn userData binding)
@@ -227,7 +227,7 @@ typedef struct CorNgsild
   // entry, indexed left-to-right; NULL slots mean "no type field" or
   // "plain literal — no expression to keep"). Drained by
   // ldSubCacheItemAdd which transfers ownership to the cache. Trees
-  // are malloc-allocated (KAlloc would die with the request);
+  // are malloc-allocated (CorAlloc would die with the request);
   // entitySelectorsFree calls ldTypeExprFree when not consumed.
   LdTypeExpr** subEntityTypeExprsV;
   int          subEntityTypeExprsN;
@@ -342,7 +342,7 @@ extern char* ldDefaultContextUrl;
 // to core, because a broker that will not start is worse than one that says
 // loudly what it is doing.
 //
-extern CorLdContext* ldDefaultContext(KAlloc* kaP);
+extern CorLdContext* ldDefaultContext(CorAlloc* kaP);
 extern uint64_t ldDefaultCooldownNs;   // --cooldownMillis: default endpoint cooldown after a delivery failure (0 = only when the subscription specifies one)
 
 

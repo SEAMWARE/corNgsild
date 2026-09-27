@@ -12,7 +12,7 @@
 //
 #include <stdbool.h>                                     // bool
 
-#include "kalloc/KAlloc.h"                             // KAlloc
+#include "corAlloc/CorAlloc.h"                         // CorAlloc
 #include "corTree/CorNode.h"                            // CorNode
 
 
@@ -21,7 +21,7 @@
 //
 // ldToConcise -
 //
-extern bool ldToConcise(CorNode* entityP, KAlloc* faP);
+extern bool ldToConcise(CorNode* entityP, CorAlloc* faP);
 
 
 
@@ -29,7 +29,7 @@ extern bool ldToConcise(CorNode* entityP, KAlloc* faP);
 //
 // ldToSimplified -
 //
-extern bool ldToSimplified(CorNode* entityP, KAlloc* faP);
+extern bool ldToSimplified(CorNode* entityP, CorAlloc* faP);
 
 
 

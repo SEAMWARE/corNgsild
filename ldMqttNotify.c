@@ -17,7 +17,7 @@
 #include <mosquitto.h>                                   // mosquitto_*
 
 #include "kbase/kLibLog.h"                               // kLogFunction
-#include "kalloc/kaAlloc.h"                              // kaAlloc
+#include "corAlloc/corAlloc.h"                           // corAlloc
 #include "corTree/CorNode.h"                             // CorNode
 #include "corTree/corTreeBuilder.h"                      // corTreeObject, corTreeArray, corTreeString, corTreeChildAdd
 #include "corTree/corTreeLookup.h"                       // corTreeLookup
@@ -143,7 +143,7 @@ static bool parseMqttUri(const char* uri, MqttUri* out)
 
   // Working copy — we'll NUL-terminate components in place.
   int   len  = strlen(schemeEnd);
-  char* buf  = (char*) kaAlloc(&corRest.kalloc, len + 1);
+  char* buf  = (char*) corAlloc(&corRest.kalloc, len + 1);
   memcpy(buf, schemeEnd, len + 1);
 
   // Split on the first '/' to separate authority from path/topic.
@@ -254,7 +254,7 @@ static char* buildMqttMessage(const char* notifBodyJson,
   corTreeChildAdd(root, bodyTree);
 
   int    sz  = corJsonFastRenderSize(root) + 1;
-  char*  buf = (char*) kaAlloc(&corRest.kalloc, sz);
+  char*  buf = (char*) corAlloc(&corRest.kalloc, sz);
   corJsonFastRender(root, buf);
   return buf;
 }

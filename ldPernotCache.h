@@ -10,7 +10,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 #include "corTree/CorNode.h"                           // CorNode
-#include "kalloc/KAlloc.h"                             // KAlloc
+#include "corAlloc/CorAlloc.h"                         // CorAlloc
 
 #include "corNgsild/LdPernotCache.h"                    // LdPernotCache, LdPernotItem
 #include "corNgsild/LdQ.h"                              // LdQNode

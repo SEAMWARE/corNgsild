@@ -10,7 +10,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // 
 //
-#include "kalloc/KAlloc.h"                             // KAlloc
+#include "corAlloc/CorAlloc.h"                         // CorAlloc
 #include "corTree/CorNode.h"                            // CorNode
 
 
@@ -23,6 +23,6 @@
 //   single @none key  -> plain object (no datasetId)
 //   multiple keys     -> array with datasetId fields restored
 //
-extern void ldEntityToApi(CorNode* entityP, KAlloc* faP);
+extern void ldEntityToApi(CorNode* entityP, CorAlloc* faP);
 
 #endif  // CORNGSILD_LDENTITYTOAPI_H_

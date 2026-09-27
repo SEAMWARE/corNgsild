@@ -8,7 +8,7 @@
 //
 #include <string.h>                                    // strcmp
 
-#include "kalloc/KAlloc.h"                             // KAlloc
+#include "corAlloc/CorAlloc.h"                         // CorAlloc
 #include "corTree/CorNode.h"                           // CorNode
 #include "corTree/corTreeLookup.h"                     // corTreeLookup
 
@@ -22,7 +22,7 @@
 //
 // ldSubscriptionCompactQ -
 //
-void ldSubscriptionCompactQ(CorNode* subP, LdQNode* qExpr, CorLdContext* contextP, KAlloc* allocP)
+void ldSubscriptionCompactQ(CorNode* subP, LdQNode* qExpr, CorLdContext* contextP, CorAlloc* allocP)
 {
   if (qExpr == NULL)
     return;

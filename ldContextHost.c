@@ -12,8 +12,8 @@
 #include <stdio.h>                                     // snprintf
 #include <time.h>                                      // time
 
-#include "kalloc/KAlloc.h"                             // KAlloc, kaAlloc
-#include "kalloc/kaStrdup.h"                           // kaStrdup
+#include "corAlloc/CorAlloc.h"                         // CorAlloc, corAlloc
+#include "corAlloc/corAllocStrdup.h"                   // corAllocStrdup
 #include "corTree/CorNode.h"                           // CorNode
 #include "corJson/corJsonRenderSize.h"                 // corJsonFastRenderSize
 #include "corJson/corJsonRender.h"                     // corJsonFastRender
@@ -72,7 +72,7 @@ CorLdContext* ldContextHostVolatile(CorNode* ctxBody)
     return NULL;
 
   CorLdContextCache* cacheP = corLdCacheGet();
-  KAlloc*           storeP = (cacheP != NULL) ? cacheP->kaP : NULL;
+  CorAlloc*         storeP = (cacheP != NULL) ? cacheP->kaP : NULL;
   if (storeP == NULL)
     return NULL;
 
@@ -81,7 +81,7 @@ CorLdContext* ldContextHostVolatile(CorNode* ctxBody)
   // request and never touch the arena — so repeated identical contexts under
   // load don't grow the cache allocator at all.
   int   bodyLen = corJsonFastRenderSize(ctxBody) + 32;
-  char* scratch = (char*) kaAlloc(&corRest.kalloc, bodyLen);
+  char* scratch = (char*) corAlloc(&corRest.kalloc, bodyLen);
   if (scratch == NULL)
     return NULL;
 
@@ -119,8 +119,8 @@ CorLdContext* ldContextHostVolatile(CorNode* ctxBody)
   if (ctxP == NULL)
     return NULL;
 
-  char* idBuf  = kaStrdup(storeP, id);
-  char* bodyP  = kaStrdup(storeP, scratch);
+  char* idBuf  = corAllocStrdup(storeP, id);
+  char* bodyP  = corAllocStrdup(storeP, scratch);
   if (idBuf == NULL || bodyP == NULL)
     return NULL;
 
@@ -132,7 +132,7 @@ CorLdContext* ldContextHostVolatile(CorNode* ctxBody)
   int         baseLen = strlen(base);
   int         prefLen = strlen(prefix);
   int         idLen   = strlen(idBuf);
-  char*       urlBuf  = (char*) kaAlloc(storeP, baseLen + prefLen + idLen + 1);
+  char*       urlBuf  = (char*) corAlloc(storeP, baseLen + prefLen + idLen + 1);
   if (urlBuf == NULL)
     return NULL;
   memcpy(urlBuf, base, baseLen);
@@ -159,7 +159,7 @@ CorLdContext* ldContextHostVolatile(CorNode* ctxBody)
 // volatileReapTick - periodic backstop: drop volatile contexts TTL seconds
 // after their last use.
 //
-static void volatileReapTick(void* ctx, uint64_t nowNs, KAlloc* kaP)
+static void volatileReapTick(void* ctx, uint64_t nowNs, CorAlloc* kaP)
 {
   (void) ctx;
   (void) nowNs;

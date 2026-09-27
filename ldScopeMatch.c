@@ -11,8 +11,8 @@
 #include <stdio.h>                                      // snprintf
 #include <string.h>                                     // strcmp, strlen, memcpy
 
-#include "kalloc/kaAlloc.h"                             // kaAlloc
-#include "kalloc/KAlloc.h"                              // KAlloc
+#include "corAlloc/corAlloc.h"                          // corAlloc
+#include "corAlloc/CorAlloc.h"                          // CorAlloc
 #include "corTree/CorNode.h"                            // CorNode
 #include "corTree/corTreeLookup.h"                      // corTreeLookup
 
@@ -156,7 +156,7 @@ int ldScopeToRegex(const char* pattern, char* buf, int bufSize)
 //
 // scopeValueCanonicalize - give one Scope its implicit leading '/'
 //
-static void scopeValueCanonicalize(CorNode* valueP, KAlloc* kaP)
+static void scopeValueCanonicalize(CorNode* valueP, CorAlloc* kaP)
 {
   if ((valueP->type != CorString) || (valueP->value.s == NULL) || (valueP->value.s[0] == '/'))
     return;
@@ -165,7 +165,7 @@ static void scopeValueCanonicalize(CorNode* valueP, KAlloc* kaP)
     return;
 
   int   len     = strlen(valueP->value.s);
-  char* slashed = kaAlloc(kaP, len + 2);
+  char* slashed = corAlloc(kaP, len + 2);
 
   slashed[0] = '/';
   memcpy(&slashed[1], valueP->value.s, len + 1);
@@ -179,7 +179,7 @@ static void scopeValueCanonicalize(CorNode* valueP, KAlloc* kaP)
 //
 // objectCanonicalize - canonicalize the "scope" member of one Entity/Registration
 //
-static void objectCanonicalize(CorNode* objectP, KAlloc* kaP)
+static void objectCanonicalize(CorNode* objectP, CorAlloc* kaP)
 {
   if (objectP == NULL || objectP->type != CorObject)
     return;
@@ -203,7 +203,7 @@ static void objectCanonicalize(CorNode* objectP, KAlloc* kaP)
 //
 // ldScopeCanonicalize -
 //
-void ldScopeCanonicalize(CorNode* treeP, KAlloc* kaP)
+void ldScopeCanonicalize(CorNode* treeP, CorAlloc* kaP)
 {
   if (treeP == NULL)
     return;

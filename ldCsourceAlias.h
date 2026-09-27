@@ -17,7 +17,7 @@
 //
 #include <stdbool.h>                                 // bool
 
-#include "kalloc/KAlloc.h"                           // KAlloc
+#include "corAlloc/CorAlloc.h"                       // CorAlloc
 #include "corRest/CorRestKeyValue.h"                   // CorRestKeyValue
 
 
@@ -30,7 +30,7 @@
 // "<base>:<tenant>" for a named tenant. Allocates inside kaP for the
 // concatenated form. Returns NULL if ldCsourceAliasBase is unset.
 //
-extern const char* ldCsourceAliasForTenant(const char* tenant, KAlloc* kaP);
+extern const char* ldCsourceAliasForTenant(const char* tenant, CorAlloc* kaP);
 
 
 

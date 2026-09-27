@@ -30,8 +30,8 @@
 #include <string.h>                                    // strcmp, strlen
 #include <time.h>                                      // clock_gettime
 
-#include "kalloc/kaAlloc.h"                            // kaAlloc
-#include "kalloc/KAlloc.h"                             // KAlloc
+#include "corAlloc/corAlloc.h"                         // corAlloc
+#include "corAlloc/CorAlloc.h"                         // CorAlloc
 #include "corLog/corLog.h"                             // COR_T, COR_W, COR_RVE
 #include "corTree/CorNode.h"                           // CorNode
 #include "corTree/corTreeBuilder.h"                    // corTreeObject, corTreeString, corTreeArray, corTreeChildAdd
@@ -367,7 +367,7 @@ static void csourceNotificationPost(LdSubCacheItem* subItemP, CorNode* notificat
   }
 
   int   bodySize = corJsonFastRenderSize(notification) + 1;
-  char* body     = (char*) kaAlloc(&corRest.kalloc, bodySize);
+  char* body     = (char*) corAlloc(&corRest.kalloc, bodySize);
   corJsonFastRender(notification, body);
 
   CorRestClientRequest  req;
@@ -591,7 +591,7 @@ void ldCsrSubInitialNotify(LdRegCache* regCacheP, LdSubCacheItem* subItemP)
   // only needed for the duration of this call.
   //
   int cap = 16;
-  LdRegCacheItem** matchV = (LdRegCacheItem**) kaAlloc(&corRest.kalloc, cap * sizeof(LdRegCacheItem*));
+  LdRegCacheItem** matchV = (LdRegCacheItem**) corAlloc(&corRest.kalloc, cap * sizeof(LdRegCacheItem*));
   int n = 0;
 
   // Walk the reg cache under its rdlock — the sub-side caller has already
@@ -605,7 +605,7 @@ void ldCsrSubInitialNotify(LdRegCache* regCacheP, LdSubCacheItem* subItemP)
     if (n == cap)
     {
       int newCap = cap * 2;
-      LdRegCacheItem** nv = (LdRegCacheItem**) kaAlloc(&corRest.kalloc, newCap * sizeof(LdRegCacheItem*));
+      LdRegCacheItem** nv = (LdRegCacheItem**) corAlloc(&corRest.kalloc, newCap * sizeof(LdRegCacheItem*));
       for (int i = 0; i < n; i++) nv[i] = matchV[i];
       matchV = nv;
       cap    = newCap;
@@ -699,7 +699,7 @@ static bool subEligibleForNotify(LdSubCacheItem* subItemP)
 //
 // ldCsrSubMatchingSubIds -
 //
-char** ldCsrSubMatchingSubIds(LdSubCache* regSubCacheP, LdRegCacheItem* regItemP, KAlloc* allocP)
+char** ldCsrSubMatchingSubIds(LdSubCache* regSubCacheP, LdRegCacheItem* regItemP, CorAlloc* allocP)
 {
   if (regSubCacheP == NULL || regItemP == NULL)
     return NULL;
@@ -724,13 +724,13 @@ char** ldCsrSubMatchingSubIds(LdSubCache* regSubCacheP, LdRegCacheItem* regItemP
     return NULL;
   }
 
-  char** v = (char**) kaAlloc(allocP, (count + 1) * sizeof(char*));
+  char** v = (char**) corAlloc(allocP, (count + 1) * sizeof(char*));
   int ix = 0;
   for (LdSubCacheItem* s = regSubCacheP->itemList; s != NULL && ix < count; s = s->next)
   {
     if (!subEligibleForNotify(s))        continue;
     if (!subMatchesReg(s, regItemP))     continue;
-    char* c = (char*) kaAlloc(allocP, strlen(s->subId) + 1);
+    char* c = (char*) corAlloc(allocP, strlen(s->subId) + 1);
     strcpy(c, s->subId);
     v[ix++] = c;
   }
@@ -820,7 +820,7 @@ typedef struct
 static CsrSubTickCtx tickCtxStorage;
 
 
-static void csrSubPeriodicTick(void* ctx, uint64_t now, KAlloc* kaP)
+static void csrSubPeriodicTick(void* ctx, uint64_t now, CorAlloc* kaP)
 {
   (void) kaP;  // sendCsourceNotification reaches into corRest.kalloc directly
 
@@ -858,7 +858,7 @@ static void csrSubPeriodicTick(void* ctx, uint64_t now, KAlloc* kaP)
 
     // Collect currently-matching CSRs.
     int cap = 16;
-    LdRegCacheItem** matchV = (LdRegCacheItem**) kaAlloc(&corRest.kalloc, cap * sizeof(LdRegCacheItem*));
+    LdRegCacheItem** matchV = (LdRegCacheItem**) corAlloc(&corRest.kalloc, cap * sizeof(LdRegCacheItem*));
     int n = 0;
     for (LdRegCacheItem* regItemP = tcP->regCache->itemList; regItemP != NULL; regItemP = regItemP->next)
     {
@@ -866,7 +866,7 @@ static void csrSubPeriodicTick(void* ctx, uint64_t now, KAlloc* kaP)
       if (n == cap)
       {
         int newCap = cap * 2;
-        LdRegCacheItem** nv = (LdRegCacheItem**) kaAlloc(&corRest.kalloc, newCap * sizeof(LdRegCacheItem*));
+        LdRegCacheItem** nv = (LdRegCacheItem**) corAlloc(&corRest.kalloc, newCap * sizeof(LdRegCacheItem*));
         for (int i = 0; i < n; i++) nv[i] = matchV[i];
         matchV = nv;
         cap    = newCap;

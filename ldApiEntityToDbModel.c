@@ -11,7 +11,7 @@
 #include <stdbool.h>                                     // bool
 #include <string.h>                                      // strcmp, memset
 
-#include "kalloc/KAlloc.h"                             // KAlloc
+#include "corAlloc/CorAlloc.h"                         // CorAlloc
 #include "corTree/CorNode.h"                            // CorNode
 #include "corTree/corTreeBuilder.h"                      // corTreeObject
 #include "corTree/corTreeChildReplace.h"                // corTreeChildReplace
@@ -161,7 +161,7 @@ static void normalizeValueKey(CorNode* attrP)
 //
 // timestampSet - add createdAt/modifiedAt to an CorObject node
 //
-static void timestampSet(CorNode* objP, uint64_t createdAt, uint64_t modifiedAt, KAlloc* faP)
+static void timestampSet(CorNode* objP, uint64_t createdAt, uint64_t modifiedAt, CorAlloc* faP)
 {
   corTreeChildAdd(objP, corTreeInteger(corRest.kallocP, LD_VOCAB_CREATED_AT, (long long) createdAt));
   corTreeChildAdd(objP, corTreeInteger(corRest.kallocP, LD_VOCAB_MODIFIED_AT, (long long) modifiedAt));
@@ -212,7 +212,7 @@ static bool isCoreAttrTerm(const CorNode* nodeP)
 // Adds timestamps and recurses into sub-attributes.
 // Sub-attributes are children that are CorObject and NOT core context terms.
 //
-static void attrToDbModel(CorNode* attrP, uint64_t ts, KAlloc* faP)
+static void attrToDbModel(CorNode* attrP, uint64_t ts, CorAlloc* faP)
 {
   if (attrP->type != CorObject)
     return;
@@ -251,7 +251,7 @@ static void attrToDbModel(CorNode* attrP, uint64_t ts, KAlloc* faP)
 // Before: "attrName": { "type": "Property", "value": 100, "datasetId": "urn:x" }
 // After:  "attrName": { "urn:x": { "type": "Property", "value": 100 } }
 //
-static CorNode* wrapSingleAttr(CorNode* attrP, uint64_t ts, KAlloc* faP)
+static CorNode* wrapSingleAttr(CorNode* attrP, uint64_t ts, CorAlloc* faP)
 {
   const char* dsKey = extractDatasetId(attrP);
 
@@ -280,7 +280,7 @@ static CorNode* wrapSingleAttr(CorNode* attrP, uint64_t ts, KAlloc* faP)
 // After:  "attrName": { "@none": { "type": "Property", "value": 100 },
 //                        "urn:x": { "type": "Property", "value": 98 } }
 //
-static CorNode* wrapMultiAttr(CorNode* arrayP, uint64_t ts, KAlloc* faP)
+static CorNode* wrapMultiAttr(CorNode* arrayP, uint64_t ts, CorAlloc* faP)
 {
   //
   // An array of non-objects is not a multi-attribute: it is the simplified value
@@ -328,7 +328,7 @@ static CorNode* wrapMultiAttr(CorNode* arrayP, uint64_t ts, KAlloc* faP)
 //
 // ldApiEntityToDbModel - transform API-format entity tree to DB storage format
 //
-void ldApiEntityToDbModel(CorNode* entityP, KAlloc* faP, int64_t createdAt)
+void ldApiEntityToDbModel(CorNode* entityP, CorAlloc* faP, int64_t createdAt)
 {
   if (entityP == NULL || entityP->type != CorObject)
     return;

@@ -9,7 +9,7 @@
 #include <stddef.h>                                      // NULL
 #include <string.h>                                      // strcmp
 
-#include "kalloc/KAlloc.h"                               // KAlloc
+#include "corAlloc/CorAlloc.h"                           // CorAlloc
 #include "corTree/CorNode.h"                             // CorNode
 #include "corTree/corTreeBuilder.h"                      // corTreeObject, corTreeString, corTreeArray, corTreeChildAdd, corTreeNull
 #include "corTree/corTreeLookup.h"                       // corTreeLookup
@@ -33,7 +33,7 @@
 // if absent and the attr itself has GeoJSON shape (`type` is one of the
 // geometry types + `coordinates`), use the attr directly.
 //
-static CorNode* extractGeometry(CorNode* entityP, const char* geoPropName, KAlloc* allocP)
+static CorNode* extractGeometry(CorNode* entityP, const char* geoPropName, CorAlloc* allocP)
 {
   CorNode* attrP = corTreeLookup(entityP, geoPropName);
 
@@ -97,7 +97,7 @@ static CorNode* extractGeometry(CorNode* entityP, const char* geoPropName, KAllo
 //
 // entityToFeature - wrap a single entity as a GeoJSON Feature
 //
-static CorNode* entityToFeature(CorNode* entityP, const char* geoPropName, KAlloc* allocP)
+static CorNode* entityToFeature(CorNode* entityP, const char* geoPropName, CorAlloc* allocP)
 {
   CorNode* feature = corTreeObject(allocP, NULL);
 
@@ -151,7 +151,7 @@ static CorNode* entityToFeature(CorNode* entityP, const char* geoPropName, KAllo
 //
 // ldToGeoJson - transform response tree to GeoJSON
 //
-void ldToGeoJson(CorNode** treePP, const char* geometryProperty, KAlloc* allocP)
+void ldToGeoJson(CorNode** treePP, const char* geometryProperty, CorAlloc* allocP)
 {
   CorNode* treeP = *treePP;
   if (treeP == NULL)

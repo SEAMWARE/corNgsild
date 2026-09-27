@@ -22,8 +22,8 @@
 #include <string.h>                                      // strcmp, strcpy, strchr, memset
 #include <time.h>                                        // strptime, timegm, gmtime_r
 
-#include "kalloc/KAlloc.h"                              // KAlloc
-#include "kalloc/kaAlloc.h"                             // kaAlloc
+#include "corAlloc/CorAlloc.h"                          // CorAlloc
+#include "corAlloc/corAlloc.h"                          // corAlloc
 #include "corJson/CorJson.h"                            // CorJson
 #include "corTree/CorNode.h"                            // CorNode
 #include "corTree/corTreeBuilder.h"                     // corTreeObject, corTreeArray, corTreeString, corTreeFloat, corTreeChildAdd
@@ -200,10 +200,10 @@ static uint64_t periodAdvance(uint64_t ns, uint32_t months, uint64_t fixedNs)
 // so a clean second renders as `2020-08-01T12:03:00Z` (matching the
 // canonical fixtures used by ETSI's aggregated-representation tests).
 //
-static char* nsToIso(uint64_t ns, KAlloc* faP)
+static char* nsToIso(uint64_t ns, CorAlloc* faP)
 {
   const int sz = 64;
-  char* buf = (char*) kaAlloc(faP, sz);
+  char* buf = (char*) corAlloc(faP, sz);
   time_t t  = (time_t) (ns / 1000000000ULL);
   long   ms = (long) ((ns % 1000000000ULL) / 1000000);
   struct tm tmv;
@@ -337,7 +337,7 @@ static void bucketTrackDistinct(Bucket* b, const char* s)
 
 
 
-static void bucketAddNumber(Bucket* b, double v, KAlloc* faP)
+static void bucketAddNumber(Bucket* b, double v, CorAlloc* faP)
 {
   if (b->numericCount == 0)
   {
@@ -353,7 +353,7 @@ static void bucketAddNumber(Bucket* b, double v, KAlloc* faP)
   b->sumsq += v * v;
   b->numericCount++;
 
-  char* buf = (char*) kaAlloc(faP, 32);
+  char* buf = (char*) corAlloc(faP, 32);
   snprintf(buf, 32, "%.17g", v);
   bucketTrackDistinct(b, buf);
 }
@@ -361,7 +361,7 @@ static void bucketAddNumber(Bucket* b, double v, KAlloc* faP)
 
 
 // Per § 4.5.19.1 note: "true is considered as a value of 1, false as 0".
-static void bucketAddBool(Bucket* b, bool v, KAlloc* faP)
+static void bucketAddBool(Bucket* b, bool v, CorAlloc* faP)
 {
   bucketAddNumber(b, v ? 1.0 : 0.0, faP);
 }
@@ -382,12 +382,12 @@ static void bucketAddString(Bucket* b, const char* s)
 
 // Render a JSON node (compact) into a fresh kalloc buffer. Used for arrays
 // and objects to feed distinctCount.
-static const char* renderNodeJson(CorNode* nP, KAlloc* faP)
+static const char* renderNodeJson(CorNode* nP, CorAlloc* faP)
 {
   // corJsonFastRender's contract for CorArray/CorObject is "open with [ or {, walk
   // children, close" — the parent name is NOT emitted, exactly what we want.
   int   sz  = corJsonFastRenderSize(nP) + 1;
-  char* buf = (char*) kaAlloc(faP, sz);
+  char* buf = (char*) corAlloc(faP, sz);
   corJsonFastRender(nP, buf);
   return buf;
 }
@@ -397,7 +397,7 @@ static const char* renderNodeJson(CorNode* nP, KAlloc* faP)
 // Array: feed the size into the numeric sub-accumulator (per table 1's
 // JSON-Array column: avg/sum/min/max are all "of the sizes"); feed the
 // canonical JSON into distinctCount.
-static void bucketAddArray(Bucket* b, CorNode* arrayP, KAlloc* faP)
+static void bucketAddArray(Bucket* b, CorNode* arrayP, CorAlloc* faP)
 {
   int sz = 0;
   for (CorNode* p = arrayP->value.head; p != NULL; p = p->next)
@@ -418,7 +418,7 @@ static void bucketAddArray(Bucket* b, CorNode* arrayP, KAlloc* faP)
 
 
 // Object: only totalCount and distinctCount per table 1.
-static void bucketAddObject(Bucket* b, CorNode* objP, KAlloc* faP)
+static void bucketAddObject(Bucket* b, CorNode* objP, CorAlloc* faP)
 {
   b->objectCount++;
   bucketTrackDistinct(b, renderNodeJson(objP, faP));
@@ -444,8 +444,8 @@ static CorNode* emitValueArray(const char*  method,
                               Bucket*       buckets,
                               int           bucketCount,
                               const char*   attrType,
-                              KAlloc*       allocP,
-                              KAlloc*       faP)
+                              CorAlloc*     allocP,
+                              CorAlloc*     faP)
 {
   CorNode* arr = corTreeArray(allocP, method);
 
@@ -543,8 +543,8 @@ static void aggregateAttr(CorNode*     attrP,
                           uint64_t     startNs,
                           uint64_t     endNs,
                           const char*  timeProp,
-                          KAlloc*      allocP,
-                          KAlloc*      faP)
+                          CorAlloc*    allocP,
+                          CorAlloc*    faP)
 {
   if (attrP == NULL || attrP->type != CorArray)
     return;
@@ -627,7 +627,7 @@ static void aggregateAttr(CorNode*     attrP,
   }
   if (bucketCount <= 0) bucketCount = 1;
 
-  Bucket*  buckets = (Bucket*) kaAlloc(faP, sizeof(Bucket) * bucketCount);
+  Bucket*  buckets = (Bucket*) corAlloc(faP, sizeof(Bucket) * bucketCount);
   uint64_t boundary = winStart;
   for (int i = 0; i < bucketCount; i++)
   {
@@ -703,8 +703,8 @@ static void aggregateEntity(CorNode*      entityP,
                             uint64_t      startNs,
                             uint64_t      endNs,
                             const char*   timeProp,
-                            KAlloc*       allocP,
-                            KAlloc*       faP)
+                            CorAlloc*     allocP,
+                            CorAlloc*     faP)
 {
   if (entityP == NULL || entityP->type != CorObject)
     return;
@@ -732,8 +732,8 @@ void ldToAggregatedValues(CorNode*      treeP,
                           uint64_t      startNs,
                           uint64_t      endNs,
                           const char*   timeProp,
-                          KAlloc*       allocP,
-                          KAlloc*       faP)
+                          CorAlloc*     allocP,
+                          CorAlloc*     faP)
 {
   if (treeP == NULL || methodsV == NULL || methodsV[0] == NULL)
     return;

@@ -14,7 +14,7 @@
 #include <string.h>                                      // strcmp
 #include "corRest/corRest.h"                            // corRest
 
-#include "kalloc/KAlloc.h"                             // KAlloc
+#include "corAlloc/CorAlloc.h"                         // CorAlloc
 #include "corTree/CorNode.h"                            // CorNode
 #include "corTree/corTreeBuilder.h"                      // corTreeString
 #include "corTree/corTreeChildReplace.h"                // corTreeChildReplace
@@ -59,7 +59,7 @@ static bool isAttrKeyword(const char* name)
 // 5. Add a "lang" sub-property with the chosen language tag
 // 6. Recurse into sub-attributes
 //
-static void attrLangReduce(CorNode* attrP, const char* lang, KAlloc* faP)
+static void attrLangReduce(CorNode* attrP, const char* lang, CorAlloc* faP)
 {
   if (attrP->type != CorObject)
     return;
@@ -142,7 +142,7 @@ static void attrLangReduce(CorNode* attrP, const char* lang, KAlloc* faP)
 // instance objects rather than a single object. When the entity-level child
 // is an array, walk it and reduce each instance.
 //
-void ldLangReduce(CorNode* entityP, const char* lang, KAlloc* faP)
+void ldLangReduce(CorNode* entityP, const char* lang, CorAlloc* faP)
 {
   if (entityP == NULL || entityP->type != CorObject)
     return;

@@ -20,7 +20,7 @@
 //
 #include <stdbool.h>                                   // bool
 
-#include "kalloc/KAlloc.h"                             // KAlloc
+#include "corAlloc/CorAlloc.h"                         // CorAlloc
 #include "corTree/CorNode.h"                           // CorNode, CorJson
 #include "corNgsild/LdRegCache.h"                       // LdRegInfo
 
@@ -57,7 +57,7 @@
 //
 extern CorNode* ldEntityFragmentForInfo(CorNode*   entityP,
                                        LdRegInfo*  riP,
-                                       KAlloc*     allocP,
+                                       CorAlloc*   allocP,
                                        bool        detach);
 
 #endif  // CORNGSILD_LDENTITYFRAGMENT_H_

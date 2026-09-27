@@ -10,8 +10,8 @@
 #include <string.h>                                  // strlen, strcpy, strncmp
 #include <strings.h>                                 // strcasecmp
 
-#include "kalloc/KAlloc.h"                           // KAlloc
-#include "kalloc/kaAlloc.h"                          // kaAlloc
+#include "corAlloc/CorAlloc.h"                       // CorAlloc
+#include "corAlloc/corAlloc.h"                       // corAlloc
 #include "corRest/CorRestKeyValue.h"                   // CorRestKeyValue
 #include "corNgsild/CorNgsild.h"                       // ldCsourceAliasBase
 
@@ -23,7 +23,7 @@
 //
 // ldCsourceAliasForTenant -
 //
-const char* ldCsourceAliasForTenant(const char* tenant, KAlloc* kaP)
+const char* ldCsourceAliasForTenant(const char* tenant, CorAlloc* kaP)
 {
   if (ldCsourceAliasBase == NULL)
     return NULL;
@@ -33,7 +33,7 @@ const char* ldCsourceAliasForTenant(const char* tenant, KAlloc* kaP)
 
   int   baseLen   = strlen(ldCsourceAliasBase);
   int   tenantLen = strlen(tenant);
-  char* aliasP    = (char*) kaAlloc(kaP, baseLen + 1 + tenantLen + 1);
+  char* aliasP    = (char*) corAlloc(kaP, baseLen + 1 + tenantLen + 1);
 
   strcpy(aliasP, ldCsourceAliasBase);
   aliasP[baseLen] = ':';

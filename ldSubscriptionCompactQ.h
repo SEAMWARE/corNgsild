@@ -14,7 +14,7 @@
 // the response @context, URL-encodes uncompactable IRIs, and replaces
 // the q value in the subscription tree.
 //
-#include "kalloc/KAlloc.h"                             // KAlloc
+#include "corAlloc/CorAlloc.h"                         // CorAlloc
 #include "corTree/CorNode.h"                           // CorNode
 #include "corJsonld/CorLdContext.h"                      // CorLdContext
 #include "corNgsild/LdQ.h"                              // LdQNode
@@ -30,6 +30,6 @@
 // contextP:  @context to compact against (NULL = URL-encode all attr IRIs)
 // allocP:    allocator for the compacted string
 //
-extern void ldSubscriptionCompactQ(CorNode* subP, LdQNode* qExpr, CorLdContext* contextP, KAlloc* allocP);
+extern void ldSubscriptionCompactQ(CorNode* subP, LdQNode* qExpr, CorLdContext* contextP, CorAlloc* allocP);
 
 #endif  // CORNGSILD_LDSUBSCRIPTIONCOMPACTQ_H_

@@ -13,7 +13,7 @@
 #include <stdint.h>                                      // int64_t
 #include <string.h>                                      // strcmp
 
-#include "kalloc/KAlloc.h"                               // KAlloc
+#include "corAlloc/CorAlloc.h"                           // CorAlloc
 #include "corTree/CorNode.h"                             // CorNode
 #include "corTree/corTreeLookup.h"                       // corTreeLookup
 #include "corTree/corTreeBuilder.h"                      // corTreeChildRemove, corTreeArray, corTreeString, corTreeChildAdd
@@ -147,7 +147,7 @@ void ldDistExpiresAtReconcile(CorNode* destP, CorNode* srcP)
 //
 // scopeValuesInto - add the Scopes of a "scope" member (String or Array) to an array, without duplicates
 //
-static void scopeValuesInto(CorNode* arrayP, CorNode* scopeP, KAlloc* allocP)
+static void scopeValuesInto(CorNode* arrayP, CorNode* scopeP, CorAlloc* allocP)
 {
   bool    isArray = (scopeP->type == CorArray);
   CorNode* valueP = (isArray == true) ? scopeP->value.head : scopeP;
@@ -182,7 +182,7 @@ static void scopeValuesInto(CorNode* arrayP, CorNode* scopeP, KAlloc* allocP)
 //
 // ldDistScopeMerge -
 //
-void ldDistScopeMerge(CorNode* destP, CorNode* srcP, KAlloc* allocP)
+void ldDistScopeMerge(CorNode* destP, CorNode* srcP, CorAlloc* allocP)
 {
   if (destP == NULL || srcP == NULL)
     return;
@@ -228,7 +228,7 @@ void ldDistScopeMerge(CorNode* destP, CorNode* srcP, KAlloc* allocP)
 //
 // ldDistMergeSourceInto -
 //
-void ldDistMergeSourceInto(CorNode* destP, CorNode* srcP, int64_t nowNs, KAlloc* allocP, bool clone)
+void ldDistMergeSourceInto(CorNode* destP, CorNode* srcP, int64_t nowNs, CorAlloc* allocP, bool clone)
 {
   if ((destP == NULL) || (srcP == NULL) || (destP->type != CorObject) || (srcP->type != CorObject))
     return;

@@ -9,7 +9,7 @@
 // Copyright 2026 Seamware
 // SPDX-License-Identifier: Apache-2.0
 //
-#include "kalloc/KAlloc.h"                              // KAlloc
+#include "corAlloc/CorAlloc.h"                          // CorAlloc
 #include "corTree/CorNode.h"                            // CorNode
 
 
@@ -34,6 +34,6 @@
 // timeProp picks which timestamp goes into each [value, ts] pair:
 // "observedAt" (default) | "modifiedAt" | "createdAt".
 //
-extern void ldToTemporalValues(CorNode* treeP, const char* timeProp, KAlloc* allocP, KAlloc* faP);
+extern void ldToTemporalValues(CorNode* treeP, const char* timeProp, CorAlloc* allocP, CorAlloc* faP);
 
 #endif  // CORNGSILD_LDTOTEMPORALVALUES_H_

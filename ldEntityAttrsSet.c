@@ -9,7 +9,7 @@
 
 #include <string.h>                                   // strcmp
 
-#include "kalloc/KAlloc.h"                            // KAlloc
+#include "corAlloc/CorAlloc.h"                        // CorAlloc
 #include "corTree/CorNode.h"                          // CorNode
 #include "corTree/corTreeBuilder.h"                   // corTreeObject, corTreeString, corTreeInteger, corTreeChildAdd, corTreeChildRemove
 #include "corTree/corTreeLookup.h"                    // corTreeLookup
@@ -31,7 +31,7 @@
 // would be wrong. The node must not be referenced elsewhere — every call site
 // here replaces it wholesale (report entries hold separate clones).
 //
-static void removeChild(CorNode* container, CorNode* node, KAlloc* allocP)
+static void removeChild(CorNode* container, CorNode* node, CorAlloc* allocP)
 {
   corTreeChildRemove(container, node);
   if (allocP == NULL)
@@ -97,7 +97,7 @@ static bool instanceValueIsNull(CorNode* instP)
 //
 // bumpModifiedAt - set modifiedAt on an object (replace in-place or add)
 //
-static void bumpModifiedAt(CorNode* objP, uint64_t ts, KAlloc* allocP)
+static void bumpModifiedAt(CorNode* objP, uint64_t ts, CorAlloc* allocP)
 {
   if (objP == NULL || objP->type != CorObject)
     return;
@@ -118,7 +118,7 @@ static void bumpModifiedAt(CorNode* objP, uint64_t ts, KAlloc* allocP)
 //
 // stampCreatedAtIfMissing -
 //
-static void stampCreatedAtIfMissing(CorNode* objP, uint64_t ts, KAlloc* allocP)
+static void stampCreatedAtIfMissing(CorNode* objP, uint64_t ts, CorAlloc* allocP)
 {
   if (objP == NULL || objP->type != CorObject)
     return;
@@ -168,7 +168,7 @@ static void addReportEntry(LdMergeReport* reportP, const char* attrName,
 // Result is CorString if only one value, else a CorArray containing all
 // unique values.
 //
-static void applyType(CorNode* target, CorNode* fragType, KAlloc* allocP)
+static void applyType(CorNode* target, CorNode* fragType, CorAlloc* allocP)
 {
   if (fragType == NULL)
     return;
@@ -252,7 +252,7 @@ static void applyType(CorNode* target, CorNode* fragType, KAlloc* allocP)
 // DB model, or the NGSI-LD Null string it deliberately does not convert. Either way this is
 // an Entity member, not an Attribute - it never grows dataset-keyed instances.
 //
-static void applyExpiresAt(CorNode* target, CorNode* fragExpiresAt, KAlloc* allocP)
+static void applyExpiresAt(CorNode* target, CorNode* fragExpiresAt, CorAlloc* allocP)
 {
   if (fragExpiresAt == NULL)
     return;
@@ -283,7 +283,7 @@ static void applyExpiresAt(CorNode* target, CorNode* fragExpiresAt, KAlloc* allo
 //
 // applyScope - replace or union fragment's scope into target's scope
 //
-static void applyScope(CorNode* target, CorNode* fragScope, bool overwrite, KAlloc* allocP)
+static void applyScope(CorNode* target, CorNode* fragScope, bool overwrite, CorAlloc* allocP)
 {
   if (fragScope == NULL)
     return;
@@ -365,7 +365,7 @@ static void applyScope(CorNode* target, CorNode* fragScope, bool overwrite, KAll
 //
 void ldEntityAttrsSet(CorNode* target, CorNode* fragment,
                       bool overwriteScope, uint64_t ts,
-                      LdMergeReport* reportP, KAlloc* targetAllocP)
+                      LdMergeReport* reportP, CorAlloc* targetAllocP)
 {
   if (target == NULL || fragment == NULL || fragment->type != CorObject)
     return;

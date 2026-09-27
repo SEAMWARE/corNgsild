@@ -10,8 +10,8 @@
 #include <stdlib.h>                                      // strtod
 #include <string.h>                                      // strcmp, strncmp, strchr
 
-#include "kalloc/KAlloc.h"                             // kaAlloc
-#include "kalloc/kaAlloc.h"                            // kaAlloc
+#include "corAlloc/CorAlloc.h"                         // corAlloc
+#include "corAlloc/corAlloc.h"                         // corAlloc
 
 #include "corNgsild/LdProblem.h"                          // LD_ERROR_BAD_REQUEST_DATA
 #include "corNgsild/ldError.h"                            // ldError
@@ -27,7 +27,7 @@
 // Where <rel> is one of: near, within, contains, overlaps, intersects, equals, disjoint
 // And <modifier> is: maxDistance==<number> or minDistance==<number>
 //
-LdGeoRel* ldGeoRelParse(const char* georelStr, KAlloc* faP)
+LdGeoRel* ldGeoRelParse(const char* georelStr, CorAlloc* faP)
 {
   if (georelStr == NULL || georelStr[0] == 0)
   {
@@ -35,7 +35,7 @@ LdGeoRel* ldGeoRelParse(const char* georelStr, KAlloc* faP)
     return NULL;
   }
 
-  LdGeoRel* geoRelP = (LdGeoRel*) kaAlloc(faP, sizeof(LdGeoRel));
+  LdGeoRel* geoRelP = (LdGeoRel*) corAlloc(faP, sizeof(LdGeoRel));
 
   geoRelP->maxDistance = -1;
   geoRelP->minDistance = -1;

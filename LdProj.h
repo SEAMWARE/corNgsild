@@ -25,7 +25,7 @@
 //
 #include <stdbool.h>                      // bool
 
-#include "kalloc/kaAlloc.h"               // KAlloc
+#include "corAlloc/corAlloc.h"            // CorAlloc
 
 
 
@@ -58,7 +58,7 @@ typedef struct LdProjItem
 // in ldExpandParams). Returns NULL on syntax error (unbalanced braces / empty
 // name / etc.) and leaves `*errMsgP` pointing at a static description.
 //
-extern LdProjItem* ldProjectionParse(char* value, KAlloc* kaP, const char** errMsgP);
+extern LdProjItem* ldProjectionParse(char* value, CorAlloc* kaP, const char** errMsgP);
 
 
 
@@ -75,7 +75,7 @@ extern LdProjItem* ldProjectionParse(char* value, KAlloc* kaP, const char** errM
 //           the {x,y} clause says "navigate into locatedAt's linked entity
 //           and apply the omit there", so locatedAt itself stays).
 //
-extern char** ldProjectionTopLevelNames(LdProjItem* tree, KAlloc* kaP, bool includeNested);
+extern char** ldProjectionTopLevelNames(LdProjItem* tree, CorAlloc* kaP, bool includeNested);
 
 
 

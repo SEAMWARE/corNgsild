@@ -16,7 +16,7 @@
 #include <stddef.h>                                  // NULL
 #include <string.h>                                  // strcmp, memcpy
 
-#include "kalloc/kaAlloc.h"                          // kaAlloc, kaStrdup
+#include "corAlloc/corAlloc.h"                       // corAlloc, corAllocStrdup
 #include "corNgsild/LdProj.h"                         // Own interface
 
 
@@ -25,13 +25,13 @@
 //
 // itemNew - allocate a fresh LdProjItem
 //
-static LdProjItem* itemNew(KAlloc* kaP, const char* nameStart, int nameLen)
+static LdProjItem* itemNew(CorAlloc* kaP, const char* nameStart, int nameLen)
 {
-  LdProjItem* itemP = (LdProjItem*) kaAlloc(kaP, sizeof(LdProjItem));
+  LdProjItem* itemP = (LdProjItem*) corAlloc(kaP, sizeof(LdProjItem));
   if (itemP == NULL)
     return NULL;
 
-  char* name = (char*) kaAlloc(kaP, nameLen + 1);
+  char* name = (char*) corAlloc(kaP, nameLen + 1);
   if (name == NULL)
     return NULL;
   memcpy(name, nameStart, nameLen);
@@ -53,7 +53,7 @@ static LdProjItem* itemNew(KAlloc* kaP, const char* nameStart, int nameLen)
 // closing '}'. Returns the head of the list (NULL on syntax error, with
 // *errMsgP set).
 //
-static LdProjItem* parseList(char** pP, KAlloc* kaP, const char** errMsgP)
+static LdProjItem* parseList(char** pP, CorAlloc* kaP, const char** errMsgP)
 {
   LdProjItem* head = NULL;
   LdProjItem* tail = NULL;
@@ -130,7 +130,7 @@ static LdProjItem* parseList(char** pP, KAlloc* kaP, const char** errMsgP)
 //
 // ldProjectionParse -
 //
-LdProjItem* ldProjectionParse(char* value, KAlloc* kaP, const char** errMsgP)
+LdProjItem* ldProjectionParse(char* value, CorAlloc* kaP, const char** errMsgP)
 {
   static const char* noErr = NULL;
   if (errMsgP == NULL)
@@ -158,7 +158,7 @@ LdProjItem* ldProjectionParse(char* value, KAlloc* kaP, const char** errMsgP)
 //
 // ldProjectionTopLevelNames -
 //
-char** ldProjectionTopLevelNames(LdProjItem* tree, KAlloc* kaP, bool includeNested)
+char** ldProjectionTopLevelNames(LdProjItem* tree, CorAlloc* kaP, bool includeNested)
 {
   if (tree == NULL)
     return NULL;
@@ -171,7 +171,7 @@ char** ldProjectionTopLevelNames(LdProjItem* tree, KAlloc* kaP, bool includeNest
   if (count == 0)
     return NULL;
 
-  char** result = (char**) kaAlloc(kaP, (count + 1) * sizeof(char*));
+  char** result = (char**) corAlloc(kaP, (count + 1) * sizeof(char*));
   if (result == NULL)
     return NULL;
 

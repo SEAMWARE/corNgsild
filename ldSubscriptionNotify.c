@@ -22,8 +22,8 @@
 #include <string.h>                                    // strcmp, strlen, strcpy, strcat
 #include <time.h>                                      // time
 
-#include "kalloc/kaAlloc.h"                            // kaAlloc
-#include "kalloc/KAlloc.h"                             // KAlloc
+#include "corAlloc/corAlloc.h"                         // corAlloc
+#include "corAlloc/CorAlloc.h"                         // CorAlloc
 #include "corLog/corLog.h"                             // COR_T
 #include "corTree/CorNode.h"                           // CorNode
 #include "corTree/corTreeBuilder.h"                    // corTreeObject, corTreeString, corTreeArray, corTreeChildAdd
@@ -923,7 +923,7 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   // Render to JSON
   //
   int   bodySize = corJsonFastRenderSize(notification) + 1;
-  char* body     = (char*) kaAlloc(&corRest.kalloc, bodySize);
+  char* body     = (char*) corAlloc(&corRest.kalloc, bodySize);
 
   corJsonFastRender(notification, body);
 
@@ -1129,7 +1129,7 @@ void ldSubscriptionNotifyBatch(LdSubCache*           cacheP,
   int subCount = 0;
   for (LdSubCacheItem* c = cacheP->itemList; c != NULL; c = c->next)
     subCount++;
-  SendEntry* sendV = (subCount > 0) ? (SendEntry*) kaAlloc(&corRest.kalloc, subCount * sizeof(SendEntry)) : NULL;
+  SendEntry* sendV = (subCount > 0) ? (SendEntry*) corAlloc(&corRest.kalloc, subCount * sizeof(SendEntry)) : NULL;
   int        sendN = 0;
 
   for (LdSubCacheItem* itemP = cacheP->itemList; itemP != NULL; itemP = itemP->next)
@@ -1156,7 +1156,7 @@ void ldSubscriptionNotifyBatch(LdSubCache*           cacheP,
     //
     // Per-pending match pass
     //
-    LdNotifyPendingEntry** matched  = (LdNotifyPendingEntry**) kaAlloc(&corRest.kalloc, pendingN * sizeof(LdNotifyPendingEntry*));
+    LdNotifyPendingEntry** matched  = (LdNotifyPendingEntry**) corAlloc(&corRest.kalloc, pendingN * sizeof(LdNotifyPendingEntry*));
     int                    matchedN = 0;
 
     for (int i = 0; i < pendingN; i++)
@@ -1249,7 +1249,7 @@ static LdThrottleRetrieveFunc throttleRetrieveFn = NULL;
 //
 // throttleFlushTick - registered with the periodic-dispatch engine (1 Hz).
 //
-static void throttleFlushTick(void* ctx, uint64_t now, KAlloc* kaP)
+static void throttleFlushTick(void* ctx, uint64_t now, CorAlloc* kaP)
 {
   (void) kaP;
   LdSubCache* cacheP = (LdSubCache*) ctx;
@@ -1265,7 +1265,7 @@ static void throttleFlushTick(void* ctx, uint64_t now, KAlloc* kaP)
   for (LdSubCacheItem* c = cacheP->itemList; c != NULL; c = c->next)
     subCount++;
 
-  LdSubCacheItem** dueV = (subCount > 0) ? (LdSubCacheItem**) kaAlloc(&corRest.kalloc, subCount * sizeof(LdSubCacheItem*)) : NULL;
+  LdSubCacheItem** dueV = (subCount > 0) ? (LdSubCacheItem**) corAlloc(&corRest.kalloc, subCount * sizeof(LdSubCacheItem*)) : NULL;
   int              dueN = 0;
 
   for (LdSubCacheItem* itemP = cacheP->itemList; itemP != NULL && dueV != NULL; itemP = itemP->next)
@@ -1302,8 +1302,8 @@ static void throttleFlushTick(void* ctx, uint64_t now, KAlloc* kaP)
       continue;
     }
 
-    LdNotifyPendingEntry*  peArr  = (LdNotifyPendingEntry*)  kaAlloc(&corRest.kalloc, entriesN * sizeof(LdNotifyPendingEntry));
-    LdNotifyPendingEntry** pePtrs = (LdNotifyPendingEntry**) kaAlloc(&corRest.kalloc, entriesN * sizeof(LdNotifyPendingEntry*));
+    LdNotifyPendingEntry*  peArr  = (LdNotifyPendingEntry*)  corAlloc(&corRest.kalloc, entriesN * sizeof(LdNotifyPendingEntry));
+    LdNotifyPendingEntry** pePtrs = (LdNotifyPendingEntry**) corAlloc(&corRest.kalloc, entriesN * sizeof(LdNotifyPendingEntry*));
     int                    peN    = 0;
 
     for (int i = 0; i < entriesN; i++)

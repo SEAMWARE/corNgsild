@@ -19,7 +19,7 @@
 #include <regex.h>                                       // regcomp, regfree
 
 #include "kbase/kLibLog.h"                             // KLOG_T
-#include "kalloc/KAlloc.h"                             // KAlloc
+#include "corAlloc/CorAlloc.h"                         // CorAlloc
 #include "corTree/CorNode.h"                            // CorNode
 #include "corTree/corTreeLookup.h"                      // corTreeLookup
 #include "corTree/corTreeBuilder.h"                     // corTreeChildAdd, corTreeChildRemove
@@ -775,7 +775,7 @@ static bool checkOperations(CorNode* opsP, const char* modeStr)
 //
 // ldCheckRegistration -
 //
-bool ldCheckRegistration(CorNode* regP, LdOp op, bool merged, KAlloc* faP)
+bool ldCheckRegistration(CorNode* regP, LdOp op, bool merged, CorAlloc* faP)
 {
   (void) faP;  // reserved for future use (e.g. allocating expanded names)
 

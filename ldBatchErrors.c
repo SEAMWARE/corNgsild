@@ -9,9 +9,9 @@
 #include <stddef.h>                                    // NULL
 #include <string.h>                                    // strcmp
 
-#include "kalloc/kaAlloc.h"                            // kaAlloc
-#include "kalloc/kaStrdup.h"                           // kaStrdup
-#include "kalloc/KAlloc.h"                             // KAlloc
+#include "corAlloc/corAlloc.h"                         // corAlloc
+#include "corAlloc/corAllocStrdup.h"                   // corAllocStrdup
+#include "corAlloc/CorAlloc.h"                         // CorAlloc
 #include "corTree/CorNode.h"                           // CorNode
 #include "corTree/corTreeBuilder.h"                    // corTreeObject, corTreeArray, corTreeString, corTreeInteger, corTreeChildAdd
 
@@ -31,7 +31,7 @@
 //
 // ldBatchErrorListInit -
 //
-void ldBatchErrorListInit(LdBatchErrorList* listP, KAlloc* allocP)
+void ldBatchErrorListInit(LdBatchErrorList* listP, CorAlloc* allocP)
 {
   if (listP == NULL)
     return;
@@ -62,7 +62,7 @@ void ldBatchErrorListAdd(LdBatchErrorList* listP,
   if (listP->count == listP->cap)
   {
     int           newCap     = listP->cap + LD_BATCH_ERROR_CHUNK;
-    LdBatchError* newEntries = (LdBatchError*) kaAlloc(listP->allocP, newCap * sizeof(LdBatchError));
+    LdBatchError* newEntries = (LdBatchError*) corAlloc(listP->allocP, newCap * sizeof(LdBatchError));
     if (newEntries == NULL)
       return;
 
@@ -74,12 +74,12 @@ void ldBatchErrorListAdd(LdBatchErrorList* listP,
   }
 
   LdBatchError* e = &listP->entries[listP->count++];
-  e->entityId    = kaStrdup(listP->allocP, entityId);
+  e->entityId    = corAllocStrdup(listP->allocP, entityId);
   e->statusCode  = statusCode;
-  e->errorType   = kaStrdup(listP->allocP, errorType);
-  e->errorTitle  = kaStrdup(listP->allocP, errorTitle);
-  e->errorDetail = kaStrdup(listP->allocP, errorDetail);
-  e->regId       = kaStrdup(listP->allocP, regId);
+  e->errorType   = corAllocStrdup(listP->allocP, errorType);
+  e->errorTitle  = corAllocStrdup(listP->allocP, errorTitle);
+  e->errorDetail = corAllocStrdup(listP->allocP, errorDetail);
+  e->regId       = corAllocStrdup(listP->allocP, regId);
 }
 
 
@@ -88,7 +88,7 @@ void ldBatchErrorListAdd(LdBatchErrorList* listP,
 //
 // ldBatchErrorListToTree -
 //
-CorNode* ldBatchErrorListToTree(const LdBatchErrorList* listP, KAlloc* allocP)
+CorNode* ldBatchErrorListToTree(const LdBatchErrorList* listP, CorAlloc* allocP)
 {
   CorNode* arrayP = corTreeArray(allocP, "errors");
   if (listP == NULL)

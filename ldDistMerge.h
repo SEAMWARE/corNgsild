@@ -29,7 +29,7 @@
 #include <stdbool.h>                                     // bool
 #include <stdint.h>                                      // uint64_t
 
-#include "kalloc/KAlloc.h"                               // KAlloc
+#include "corAlloc/CorAlloc.h"                           // CorAlloc
 #include "corTree/CorNode.h"                             // CorNode
 
 
@@ -101,7 +101,7 @@ extern void ldDistExpiresAtReconcile(CorNode* destP, CorNode* srcP);
 // Called once per merged-in version with 'destP' the running assembly and 'srcP' the
 // further version. Auxiliary sources (§ 4.3.6.2) fill gaps only and stay out of it.
 //
-extern void ldDistScopeMerge(CorNode* destP, CorNode* srcP, KAlloc* allocP);
+extern void ldDistScopeMerge(CorNode* destP, CorNode* srcP, CorAlloc* allocP);
 
 
 
@@ -133,6 +133,6 @@ extern void ldDistScopeMerge(CorNode* destP, CorNode* srcP, KAlloc* allocP);
 //   true  - instances are CLONED into `allocP`. For a destP that outlives srcP,
 //           e.g. a snapshot frozen into the snap-tenant.
 //
-extern void ldDistMergeSourceInto(CorNode* destP, CorNode* srcP, int64_t nowNs, KAlloc* allocP, bool clone);
+extern void ldDistMergeSourceInto(CorNode* destP, CorNode* srcP, int64_t nowNs, CorAlloc* allocP, bool clone);
 
 #endif  // CORNGSILD_LDDISTMERGE_H_
