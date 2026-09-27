@@ -19,7 +19,7 @@
 #include "kalloc/kaStrdup.h"                           // kaStrdup
 #include "corNgsild/LdProj.h"                              // LdProjItem, ldProjectionParse, ldProjectionTopLevelNames
 #include "corRest/corRest.h"                             // corRest
-#include "ktrace/kTrace.h"                              // KT_W
+#include "corLog/corLog.h"                              // COR_W
 #include "corJsonld/corLdDownload.h"                         // corLdContextFromUrl
 #include "corJsonld/corLdExpand.h"                           // corLdExpand
 #include "corJsonld/corLdInit.h"                             // corLdCoreContext
@@ -88,7 +88,7 @@ CorLdContext* ldDefaultContext(KAlloc* kaP)
     // something different from what the deployment intended, and the symptom
     // is an attribute under an IRI nobody asked for rather than an error.
     //
-    KT_W("the default user @context '%s' could not be used - expanding with the core context alone", ldDefaultContextUrl);
+    COR_W("the default user @context '%s' could not be used - expanding with the core context alone", ldDefaultContextUrl);
     return corLdCoreContext();
   }
 

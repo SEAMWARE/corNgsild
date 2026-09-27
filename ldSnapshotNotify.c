@@ -14,7 +14,7 @@
 #include <string.h>                                      // strlen
 #include <time.h>                                        // gmtime_r
 
-#include "ktrace/kTrace.h"                               // KT_E
+#include "corLog/corLog.h"                               // COR_E
 #include "kalloc/kaAlloc.h"                              // kaAlloc
 #include "corTree/CorNode.h"                             // CorNode
 #include "corTree/corTreeBuilder.h"                      // corTreeObject, corTreeString, corTreeInteger, corTreeChildAdd
@@ -132,6 +132,6 @@ void ldSnapshotNotify(LdSnapshotCacheItem* itemP, bool deleted)
 
   int rc = corRestClientSend(&req, &resp);
   if (rc != 0 || resp.statusCode < 200 || resp.statusCode >= 300)
-    KT_E("snapshotNotify: POST %s failed (rc=%d, status=%d)",
-         endpointP->value.s, rc, resp.statusCode);
+    COR_E("snapshotNotify: POST %s failed (rc=%d, status=%d)",
+          endpointP->value.s, rc, resp.statusCode);
 }
