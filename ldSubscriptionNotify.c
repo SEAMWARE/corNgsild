@@ -24,7 +24,7 @@
 
 #include "kalloc/kaAlloc.h"                            // kaAlloc
 #include "kalloc/KAlloc.h"                             // KAlloc
-#include "ktrace/kTrace.h"                             // KT_T
+#include "corLog/corLog.h"                             // COR_T
 #include "corTree/CorNode.h"                           // CorNode
 #include "corTree/corTreeBuilder.h"                    // corTreeObject, corTreeString, corTreeArray, corTreeChildAdd
 #include "corTree/corTreeChildReplace.h"               // corTreeChildReplace
@@ -1062,23 +1062,23 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   {
     const char* nq       = (req.url != NULL) ? strchr(req.url, '?') : NULL;
     int         nPathLen  = (nq != NULL) ? (int)(nq - req.url) : (req.url ? (int) strlen(req.url) : 0);
-    KT_T(LdTNotifReq, "notification request: %s %.*s", corRestVerbToString(req.verb), nPathLen, req.url ? req.url : "");
+    COR_T(LdTNotifReq, "notification request: %s %.*s", corRestVerbToString(req.verb), nPathLen, req.url ? req.url : "");
     for (const char* p = (nq != NULL) ? nq + 1 : NULL; p != NULL && *p != 0; )
     {
       const char* amp = strchr(p, '&');
       int         len = (amp != NULL) ? (int)(amp - p) : (int) strlen(p);
-      KT_T(LdTNotifReqParam, "notification request param: %.*s", len, p);
+      COR_T(LdTNotifReqParam, "notification request param: %.*s", len, p);
       if (amp == NULL) break;
       p = amp + 1;
     }
     for (int h = 0; h < req.headerCount; h++)
-      KT_T(LdTNotifHeader, "notification request header: %s: %s", req.headerV[h].key, req.headerV[h].value ? req.headerV[h].value : "");
-    KT_T(LdTNotifBody, "notification request body (%zu bytes): %s", strlen(body), body);
+      COR_T(LdTNotifHeader, "notification request header: %s: %s", req.headerV[h].key, req.headerV[h].value ? req.headerV[h].value : "");
+    COR_T(LdTNotifBody, "notification request body (%zu bytes): %s", strlen(body), body);
   }
 
   corRestClientSend(&req, &resp);
 
-  KT_T(LdTNotifRes, "notification response: status %d", resp.statusCode);
+  COR_T(LdTNotifRes, "notification response: status %d", resp.statusCode);
 
   //
   // Update notification counters (use request timestamp, nanoseconds)

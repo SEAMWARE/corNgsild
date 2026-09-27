@@ -12,7 +12,7 @@
 #include <stdlib.h>                                    // malloc, calloc
 #include <string.h>                                    // strlen, strcmp, strdup, memcpy
 
-#include "ktrace/kTrace.h"                             // KT_W
+#include "corLog/corLog.h"                             // COR_W
 #include "kalloc/kaAlloc.h"                            // kaAlloc
 #include "kalloc/KAlloc.h"                             // KAlloc
 #include "corTree/CorNode.h"                           // CorNode
@@ -363,8 +363,8 @@ static bool fanoutToReg(LdSubCacheItem* itemP, LdRegCacheItem* regP, const char*
 
   if (status != 201)
   {
-    KT_W("dist-sub fanout: CSR %s rejected derived sub for parent %s (status %d)",
-         (regP->regId != NULL) ? regP->regId : "?", itemP->subId, status);
+    COR_W("dist-sub fanout: CSR %s rejected derived sub for parent %s (status %d)",
+          (regP->regId != NULL) ? regP->regId : "?", itemP->subId, status);
     return false;
   }
 
@@ -453,8 +453,8 @@ int ldDistSubCascadeDelete(LdSubCacheItem* itemP, LdRegCache* regCacheP, const c
     LdRegCacheItem* regP = ldRegCacheItemLookup(regCacheP, sub->regId);
     if (regP == NULL || regP->endpoint == NULL)
     {
-      KT_W("dist-sub cascade DELETE: CSR %s for parent %s no longer in cache — skip",
-           sub->regId, (itemP->subId != NULL) ? itemP->subId : "?");
+      COR_W("dist-sub cascade DELETE: CSR %s for parent %s no longer in cache — skip",
+            sub->regId, (itemP->subId != NULL) ? itemP->subId : "?");
       continue;
     }
 
@@ -473,10 +473,10 @@ int ldDistSubCascadeDelete(LdSubCacheItem* itemP, LdRegCache* regCacheP, const c
     if (status >= 200 && status < 300)
       deleted++;
     else
-      KT_W("dist-sub cascade DELETE: CSR %s remote sub %s for parent %s status=%d (%s)",
-           sub->regId, sub->remoteSubId,
-           (itemP->subId != NULL) ? itemP->subId : "?",
-           status, (errorDetail != NULL) ? errorDetail : "");
+      COR_W("dist-sub cascade DELETE: CSR %s remote sub %s for parent %s status=%d (%s)",
+            sub->regId, sub->remoteSubId,
+            (itemP->subId != NULL) ? itemP->subId : "?",
+            status, (errorDetail != NULL) ? errorDetail : "");
   }
   ldRegCacheUnlock(regCacheP);
 
@@ -610,10 +610,10 @@ int ldDistSubReconcile(LdSubCacheItem*      itemP,
       if (status >= 200 && status < 300)
         changes++;
       else
-        KT_W("dist-sub reconcile PATCH: CSR %s remote sub %s for parent %s status=%d (%s)",
-             sub->regId, sub->remoteSubId,
-             (itemP->subId != NULL) ? itemP->subId : "?",
-             status, (errorDetail != NULL) ? errorDetail : "");
+        COR_W("dist-sub reconcile PATCH: CSR %s remote sub %s for parent %s status=%d (%s)",
+              sub->regId, sub->remoteSubId,
+              (itemP->subId != NULL) ? itemP->subId : "?",
+              status, (errorDetail != NULL) ? errorDetail : "");
 
       prevP = &sub->next;
       sub   = sub->next;
@@ -628,10 +628,10 @@ int ldDistSubReconcile(LdSubCacheItem*      itemP,
       int status = ldDistOpSendReceive(regP, CorVerbDelete, url, NULL, 0, ownAlias,
                                        &errorDetail, NULL, NULL);
       if (status < 200 || status >= 300)
-        KT_W("dist-sub reconcile DELETE: CSR %s remote sub %s for parent %s status=%d (%s)",
-             sub->regId, sub->remoteSubId,
-             (itemP->subId != NULL) ? itemP->subId : "?",
-             status, (errorDetail != NULL) ? errorDetail : "");
+        COR_W("dist-sub reconcile DELETE: CSR %s remote sub %s for parent %s status=%d (%s)",
+              sub->regId, sub->remoteSubId,
+              (itemP->subId != NULL) ? itemP->subId : "?",
+              status, (errorDetail != NULL) ? errorDetail : "");
     }
 
     LdSubSubordinate* gone = sub;
@@ -796,10 +796,10 @@ int ldDistSubOnRegDelete(LdSubCache*          subCacheP,
         int status = ldDistOpSendReceive(regItemP, CorVerbDelete, url, NULL, 0, ownAlias,
                                          &errorDetail, NULL, NULL);
         if (status < 200 || status >= 300)
-          KT_W("dist-sub on-reg-delete: CSR %s remote sub %s for parent %s status=%d (%s)",
-               regId, sub->remoteSubId,
-               (itemP->subId != NULL) ? itemP->subId : "?",
-               status, (errorDetail != NULL) ? errorDetail : "");
+          COR_W("dist-sub on-reg-delete: CSR %s remote sub %s for parent %s status=%d (%s)",
+                regId, sub->remoteSubId,
+                (itemP->subId != NULL) ? itemP->subId : "?",
+                status, (errorDetail != NULL) ? errorDetail : "");
       }
 
       // Unlink + free

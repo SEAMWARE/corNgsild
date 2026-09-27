@@ -25,7 +25,7 @@
 #include "corJsonld/corLdInit.h"                         // corLdCoreContext
 #include "corNgsild/LdVocab.h"                          // LD_VOCAB_*
 #include "corNgsild/LdRegCache.h"                       // LdRegCache, LdRegCacheItem
-#include "ktrace/kTrace.h"                              // KT_T
+#include "corLog/corLog.h"                              // COR_T
 #include "corNgsild/ldTraceLevels.h"                     // LdTRegMatch
 #include "corNgsild/CorNgsild.h"                          // corNgsild (per-conn probePending cache)
 #include "corNgsild/ldCheckDateTime.h"                  // ldIsoToNanoseconds
@@ -849,8 +849,8 @@ static bool entityInfoMatches(LdRegEntityInfo* eiP, const char* entityId, char**
     }
     if (!typeMatch)
     {
-      KT_T(LdTRegMatch, "%s: no match due to entity type ('%s' in reg, '%s' asked for)",
-           regId, eiP->type, entityTypeV[0]);
+      COR_T(LdTRegMatch, "%s: no match due to entity type ('%s' in reg, '%s' asked for)",
+            regId, eiP->type, entityTypeV[0]);
       return false;
     }
   }
@@ -873,9 +873,9 @@ static bool entityInfoMatches(LdRegEntityInfo* eiP, const char* entityId, char**
   }
 
   if (eiP->id != NULL)
-    KT_T(LdTRegMatch, "%s: no match due to entity id ('%s' in reg, '%s' asked for)", regId, eiP->id, entityId);
+    COR_T(LdTRegMatch, "%s: no match due to entity id ('%s' in reg, '%s' asked for)", regId, eiP->id, entityId);
   else
-    KT_T(LdTRegMatch, "%s: no match due to entity idPattern ('%s' matched no pattern)", regId, entityId);
+    COR_T(LdTRegMatch, "%s: no match due to entity idPattern ('%s' matched no pattern)", regId, entityId);
 
   return false;
 }
@@ -896,7 +896,7 @@ static bool itemMatches(LdRegCacheItem* itemP, const char* entityId, char** enti
     {
       if (entityInfoMatches(eiP, entityId, entityTypeV, regId))
       {
-        KT_T(LdTRegMatch, "%s: MATCH", regId);
+        COR_T(LdTRegMatch, "%s: MATCH", regId);
         return true;
       }
     }
@@ -958,18 +958,18 @@ int ldRegCacheMatchForRetrieveScoped(LdRegCache*       cacheP,
     // very same filters and would print every line twice.
     if (itemP->mode != modeFilter)
     {
-      KT_T(LdTRegMatch, "%s: no match due to mode ('%s' in reg, '%s' wanted by this pass)",
-           regId, regModeName(itemP->mode), regModeName(modeFilter));
+      COR_T(LdTRegMatch, "%s: no match due to mode ('%s' in reg, '%s' wanted by this pass)",
+            regId, regModeName(itemP->mode), regModeName(modeFilter));
       continue;
     }
     if (itemP->expiresAt > 0 && itemP->expiresAt <= nowNs)
     {
-      KT_T(LdTRegMatch, "%s: no match due to expiresAt — the registration has expired", regId);
+      COR_T(LdTRegMatch, "%s: no match due to expiresAt — the registration has expired", regId);
       continue;
     }
     if (!csrScopeMatches(itemP->scopeV, entityScopeV))
     {
-      KT_T(LdTRegMatch, "%s: no match due to scope", regId);
+      COR_T(LdTRegMatch, "%s: no match due to scope", regId);
       continue;
     }
     if (itemMatches(itemP, entityId, entityTypeV))
@@ -1138,14 +1138,14 @@ int ldRegCacheMatchForQuery(LdRegCache*       cacheP,
       if (itemP->mode != modeFilter)
       {
         if (pass == 0)
-          KT_T(LdTRegMatch, "%s: no match due to mode ('%s' in reg, '%s' wanted by this pass)",
-               regId, regModeName(itemP->mode), regModeName(modeFilter));
+          COR_T(LdTRegMatch, "%s: no match due to mode ('%s' in reg, '%s' wanted by this pass)",
+                regId, regModeName(itemP->mode), regModeName(modeFilter));
         continue;
       }
       if (itemP->expiresAt > 0 && itemP->expiresAt <= nowNs)
       {
         if (pass == 0)
-          KT_T(LdTRegMatch, "%s: no match due to expiresAt — the registration has expired", regId);
+          COR_T(LdTRegMatch, "%s: no match due to expiresAt — the registration has expired", regId);
         continue;
       }
 
@@ -1164,11 +1164,11 @@ int ldRegCacheMatchForQuery(LdRegCache*       cacheP,
       if (!match)
       {
         if (pass == 0)
-          KT_T(LdTRegMatch, "%s: no match due to entity id/type — the query selects nothing this registration covers", regId);
+          COR_T(LdTRegMatch, "%s: no match due to entity id/type — the query selects nothing this registration covers", regId);
         continue;
       }
 
-      if (pass == 0) { count++; KT_T(LdTRegMatch, "%s: MATCH", regId); }
+      if (pass == 0) { count++; COR_T(LdTRegMatch, "%s: MATCH", regId); }
       else           { v[ix++] = itemP; ldRegCacheItemPin(itemP); }
     }
 

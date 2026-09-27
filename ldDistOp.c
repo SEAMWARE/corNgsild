@@ -21,7 +21,7 @@
 #include "corJson/corJsonParse.h"                      // corJsonParse
 
 #include "kalloc/kaAlloc.h"                            // kaAlloc
-#include "ktrace/kTrace.h"                             // KT_T, KT_W
+#include "corLog/corLog.h"                             // COR_T, COR_W
 #include "corRest/CorRestState.h"                        // corRest
 #include "corRest/CorRestKeyValue.h"                     // CorRestKeyValue
 #include "corRest/CorRestVerb.h"                         // CorVerbGet, CorVerbDelete
@@ -141,16 +141,16 @@ bool ldDistOpCsrWouldLoop(LdRegCacheItem* csr, const char* ownAlias)
   // to each other and neither will forward to the other.
   if (ownAlias != NULL && strcmp(alias, ownAlias) == 0)
   {
-    KT_T(LdTRegMatch, "%s: matched, but NOT forwarded to: loop — its alias '%s' is our own",
-         regId, alias);
+    COR_T(LdTRegMatch, "%s: matched, but NOT forwarded to: loop — its alias '%s' is our own",
+          regId, alias);
     return true;
   }
 
   // Pointing at a broker we've already transited
   if (ldViaHasAlias(corRest.in.httpHeaderV, corRest.in.httpHeaderCount, alias))
   {
-    KT_T(LdTRegMatch, "%s: matched, but NOT forwarded to: loop — '%s' is already in the inbound Via",
-         regId, alias);
+    COR_T(LdTRegMatch, "%s: matched, but NOT forwarded to: loop — '%s' is already in the inbound Via",
+          regId, alias);
     return true;
   }
 
@@ -565,9 +565,9 @@ bool ldDistOpCsrInCooldown(LdRegCacheItem* csr)
   if (nowNs >= endsNs)
     return false;
 
-  KT_T(LdTRegMatch, "%s: matched, but NOT forwarded to: in cooldown after a failure, %llu ms left of %d",
-       (csr->regId != NULL) ? csr->regId : "<no id>",
-       (unsigned long long) ((endsNs - nowNs) / 1000000ULL), csr->cooldownMs);
+  COR_T(LdTRegMatch, "%s: matched, but NOT forwarded to: in cooldown after a failure, %llu ms left of %d",
+        (csr->regId != NULL) ? csr->regId : "<no id>",
+        (unsigned long long) ((endsNs - nowNs) / 1000000ULL), csr->cooldownMs);
 
   return true;
 }
@@ -588,7 +588,7 @@ static void distOpTraceRequest(CorRestVerb verb, const char* url, CorRestKeyValu
 
   const char* q = strchr(url, '?');
   int         pathLen = (q != NULL) ? (int)(q - url) : (int) strlen(url);
-  KT_T(LdTFwdReq, "forward request: %s %.*s", corRestVerbToString(verb), pathLen, url);
+  COR_T(LdTFwdReq, "forward request: %s %.*s", corRestVerbToString(verb), pathLen, url);
 
   if (q != NULL)
   {
@@ -596,17 +596,17 @@ static void distOpTraceRequest(CorRestVerb verb, const char* url, CorRestKeyValu
     {
       const char* amp = strchr(p, '&');
       int         len = (amp != NULL) ? (int)(amp - p) : (int) strlen(p);
-      KT_T(LdTFwdReqParam, "forward request param: %.*s", len, p);
+      COR_T(LdTFwdReqParam, "forward request param: %.*s", len, p);
       if (amp == NULL) break;
       p = amp + 1;
     }
   }
 
   for (int i = 0; i < hc; i++)
-    KT_T(LdTFwdReqHeader, "forward request header: %s: %s", hv[i].key, hv[i].value ? hv[i].value : "");
+    COR_T(LdTFwdReqHeader, "forward request header: %s: %s", hv[i].key, hv[i].value ? hv[i].value : "");
 
   if (body != NULL && bodyLen > 0)
-    KT_T(LdTFwdReqBody, "forward request body (%d bytes): %.*s", bodyLen, bodyLen, body);
+    COR_T(LdTFwdReqBody, "forward request body (%d bytes): %.*s", bodyLen, bodyLen, body);
 }
 
 
@@ -618,9 +618,9 @@ static void distOpTraceRequest(CorRestVerb verb, const char* url, CorRestKeyValu
 //
 static void distOpTraceResponse(int statusCode, CorRestKeyValue* hv, int hc)
 {
-  KT_T(LdTFwdRes, "forward response: status %d", statusCode);
+  COR_T(LdTFwdRes, "forward response: status %d", statusCode);
   for (int i = 0; i < hc; i++)
-    KT_T(LdTFwdResHeader, "forward response header: %s: %s", hv[i].key, hv[i].value ? hv[i].value : "");
+    COR_T(LdTFwdResHeader, "forward response header: %s: %s", hv[i].key, hv[i].value ? hv[i].value : "");
 }
 
 
@@ -743,11 +743,11 @@ int ldDistOpSendReceiveEx(LdRegCacheItem*  csr,
     // Warn once per failed forward, with what it takes to tell a slow context
     // source from a broken one: which CSR, where, and why.
     //
-    KT_W("dist-op %s %s: CSR %s forward failed (%s)",
-         corRestVerbToString(verb),
-         url,
-         (csr->regId != NULL) ? csr->regId : "?",
-         (resp.errorDetail[0] != 0) ? resp.errorDetail : "transport failure");
+    COR_W("dist-op %s %s: CSR %s forward failed (%s)",
+          corRestVerbToString(verb),
+          url,
+          (csr->regId != NULL) ? csr->regId : "?",
+          (resp.errorDetail[0] != 0) ? resp.errorDetail : "transport failure");
 
     return 502;
   }
@@ -822,8 +822,8 @@ static void distOpBodyParse(LdDistOpBatchResult* rP)
 
   // Trace the RAW forwarded-response body before corJsonParse tokenizes it in place
   // (afterwards it is no longer printable as a string).
-  KT_T(LdTFwdResBody, "forward response body (status %d, %d bytes): %.*s",
-       rP->statusCode, rP->responseBodyLen, rP->responseBodyLen, rP->responseBody);
+  COR_T(LdTFwdResBody, "forward response body (status %d, %d bytes): %.*s",
+        rP->statusCode, rP->responseBodyLen, rP->responseBodyLen, rP->responseBody);
 
   rP->responseTree = corJsonParse(corRest.corJsonP, rP->responseBody);
 
@@ -1115,11 +1115,11 @@ int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
         resultV[i].errorDetail = "transport failure";
 
       // The same silence as the single-forward path, once per failed peer.
-      KT_W("dist-op %s %s: CSR %s forward failed (%s)",
-           corRestVerbToString(itemV[i].hasVerb ? itemV[i].verb : verb),
-           itemV[i].url,
-           (csr->regId != NULL) ? csr->regId : "?",
-           resultV[i].errorDetail);
+      COR_W("dist-op %s %s: CSR %s forward failed (%s)",
+            corRestVerbToString(itemV[i].hasVerb ? itemV[i].verb : verb),
+            itemV[i].url,
+            (csr->regId != NULL) ? csr->regId : "?",
+            resultV[i].errorDetail);
       continue;
     }
 
@@ -1420,8 +1420,8 @@ int ldDistOpEntriesBuild(const LdDistOpGroup  groupV[],
 
       if (!ldRegOpSupported(csr, op))
       {
-        KT_T(LdTRegMatch, "%s: matched, but NOT forwarded to: the registration's 'operations' does not cover %s",
-             (csr->regId != NULL) ? csr->regId : "<no id>", opName);
+        COR_T(LdTRegMatch, "%s: matched, but NOT forwarded to: the registration's 'operations' does not cover %s",
+              (csr->regId != NULL) ? csr->regId : "<no id>", opName);
 
         if (grp->opConflict && errorsArrayP != NULL)
         {

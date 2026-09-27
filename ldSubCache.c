@@ -12,7 +12,7 @@
 #include <stdlib.h>                                    // malloc, calloc, free
 #include <string.h>                                    // strcmp, strdup
 
-#include "ktrace/kTrace.h"                             // KT_RE
+#include "corLog/corLog.h"                             // COR_RE
 #include "kalloc/kaBufferInit.h"                       // kaBufferInit
 #include "kalloc/kaAlloc.h"                            // kaAlloc
 #include "kalloc/KAlloc.h"                             // KAlloc
@@ -524,8 +524,8 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, CorNode* subTree, LdQNode*
   // to cache it rather than silently fabricate defaults for the missing members.
   CorNode* notifP = corTreeLookup(itemP->subTree, LD_VOCAB_NOTIFICATION);
   if (notifP == NULL)
-    KT_RE(NULL, "Corrupted DB: subscription '%s' has no 'notification' (a mandatory member) — refusing to cache it",
-          itemP->subId ? itemP->subId : "?");
+    COR_RE(NULL, "Corrupted DB: subscription '%s' has no 'notification' (a mandatory member) — refusing to cache it",
+           itemP->subId ? itemP->subId : "?");
 
   CorNode* endpointP = corTreeLookup(notifP, LD_VOCAB_ENDPOINT);
   CorNode* uriP     = (endpointP != NULL) ? corTreeLookup(endpointP, LD_VOCAB_URI) : NULL;
@@ -657,8 +657,8 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, CorNode* subTree, LdQNode*
   {
     CorNode* formatP = corTreeLookup(notifP, LD_VOCAB_FORMAT);
     if (formatP != NULL && formatP->type != CorString)
-      KT_RE(NULL, "Corrupted DB: subscription '%s' has a non-string 'notification.format' — refusing to cache it",
-            itemP->subId ? itemP->subId : "?");
+      COR_RE(NULL, "Corrupted DB: subscription '%s' has a non-string 'notification.format' — refusing to cache it",
+             itemP->subId ? itemP->subId : "?");
     // A subscription notification format is always an entity representation,
     // never a temporal one — temporal=false.
     itemP->format = ldFormatFromString((formatP != NULL) ? formatP->value.s : NULL, /*temporal*/false);
