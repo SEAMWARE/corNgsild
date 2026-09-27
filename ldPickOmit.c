@@ -66,7 +66,7 @@ static void pickOmitImpl(CorNode* entityP, char** pickV, char** omitV)
   if (entityP == NULL)
     return;
 
-  CorNode* childP = entityP->value.firstChildP;
+  CorNode* childP = entityP->value.head;
 
   while (childP != NULL)
   {
@@ -116,7 +116,7 @@ void ldAttrsFilter(CorNode* entityP, char** attrsV)
   if (entityP == NULL || attrsV == NULL)
     return;
 
-  CorNode* childP = entityP->value.firstChildP;
+  CorNode* childP = entityP->value.head;
 
   while (childP != NULL)
   {

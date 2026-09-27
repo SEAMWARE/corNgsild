@@ -76,7 +76,7 @@ void ldSysTimestampsToIso(CorNode* treeP, KAlloc* allocP)
   if (treeP == NULL || treeP->type != CorObject)
     return;
 
-  for (CorNode* childP = treeP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = treeP->value.head; childP != NULL; childP = childP->next)
   {
     if (childP->type == CorInt &&
         (strcmp(childP->name, LD_VOCAB_CREATED_AT)  == 0 ||

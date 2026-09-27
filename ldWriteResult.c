@@ -37,7 +37,7 @@
 //
 void ldWriteResultUpdatedAdd(CorNode* updatedP, const char* attrName)
 {
-  for (CorNode* p = updatedP->value.firstChildP; p != NULL; p = p->next)
+  for (CorNode* p = updatedP->value.head; p != NULL; p = p->next)
     if ((p->type == CorString) && (strcmp(p->value.s, attrName) == 0))
       return;
 
@@ -89,7 +89,7 @@ void ldWriteResultFragUpdated(CorNode* updatedP, CorNode* fragP)
   if (fragP == NULL)
     return;
 
-  for (CorNode* c = fragP->value.firstChildP; c != NULL; c = c->next)
+  for (CorNode* c = fragP->value.head; c != NULL; c = c->next)
   {
     if (ldIsEntityKeyword(c->name))
       continue;
@@ -108,7 +108,7 @@ void ldWriteResultFragNotUpdated(CorNode* notUpdatedP, CorNode* fragP, const cha
   if (fragP == NULL)
     return;
 
-  for (CorNode* c = fragP->value.firstChildP; c != NULL; c = c->next)
+  for (CorNode* c = fragP->value.head; c != NULL; c = c->next)
   {
     if (ldIsEntityKeyword(c->name))
       continue;
@@ -124,7 +124,7 @@ void ldWriteResultFragNotUpdated(CorNode* notUpdatedP, CorNode* fragP, const cha
 //
 static bool updatedHas(CorNode* updatedP, const char* attrName)
 {
-  for (CorNode* p = updatedP->value.firstChildP; p != NULL; p = p->next)
+  for (CorNode* p = updatedP->value.head; p != NULL; p = p->next)
     if ((p->type == CorString) && (strcmp(p->value.s, attrName) == 0))
       return true;
   return false;
@@ -153,7 +153,7 @@ static bool mergeRemoteUpdateResult(LdWriteResult* wrP, const char* regId, CorNo
   CorNode* up = corTreeLookup(bodyP, "updated");
   if ((up != NULL) && (up->type == CorArray))
   {
-    CorNode* a = up->value.firstChildP;
+    CorNode* a = up->value.head;
     while (a != NULL)
     {
       CorNode* next = a->next;
@@ -169,7 +169,7 @@ static bool mergeRemoteUpdateResult(LdWriteResult* wrP, const char* regId, CorNo
   CorNode* nu = corTreeLookup(bodyP, "notUpdated");
   if ((nu != NULL) && (nu->type == CorArray))
   {
-    CorNode* e = nu->value.firstChildP;
+    CorNode* e = nu->value.head;
     while (e != NULL)
     {
       CorNode* next = e->next;

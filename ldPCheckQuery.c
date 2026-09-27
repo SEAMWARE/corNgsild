@@ -81,7 +81,7 @@ static const char* typeTitle(int typeMask)
 //
 static bool ldFieldsExtract(CorNode* objP, LdField* fieldV, int fields, bool errorOnUnknown)
 {
-  for (CorNode* nodeP = objP->value.firstChildP; nodeP != NULL; nodeP = nodeP->next)
+  for (CorNode* nodeP = objP->value.head; nodeP != NULL; nodeP = nodeP->next)
   {
     if (nodeP->name == NULL || nodeP->name[0] == '@')   // skip @context et al.
       continue;
@@ -113,7 +113,7 @@ static bool ldFieldsExtract(CorNode* objP, LdField* fieldV, int fields, bool err
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, typeTitle(fP->typeMask), "%s", nodeP->name);
       return false;
     }
-    if ((nodeP->type == CorArray || nodeP->type == CorObject) && nodeP->value.firstChildP == NULL)
+    if ((nodeP->type == CorArray || nodeP->type == CorObject) && nodeP->value.head == NULL)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, (nodeP->type == CorArray) ? "Empty Array" : "Empty Object", "%s", nodeP->name);
       return false;
@@ -161,7 +161,7 @@ static CorNode* findField(LdField* fieldV, int fields, const char* name)
 //
 static bool pCheckEntities(CorNode* entitiesP)
 {
-  for (CorNode* entityP = entitiesP->value.firstChildP; entityP != NULL; entityP = entityP->next)
+  for (CorNode* entityP = entitiesP->value.head; entityP != NULL; entityP = entityP->next)
   {
     if (entityP->type != CorObject)
     {
@@ -233,7 +233,7 @@ static bool pCheckGeoQ(CorNode* geoQP)
 //
 static bool pCheckUriArray(CorNode* arrayP, const char* what)
 {
-  for (CorNode* memberP = arrayP->value.firstChildP; memberP != NULL; memberP = memberP->next)
+  for (CorNode* memberP = arrayP->value.head; memberP != NULL; memberP = memberP->next)
   {
     if (memberP->type != CorString)
     {
@@ -257,7 +257,7 @@ static bool pCheckUriArray(CorNode* arrayP, const char* what)
 //
 static bool pCheckAttrs(CorNode* attrsP)
 {
-  for (CorNode* attrP = attrsP->value.firstChildP; attrP != NULL; attrP = attrP->next)
+  for (CorNode* attrP = attrsP->value.head; attrP != NULL; attrP = attrP->next)
   {
     if (attrP->type != CorString)
     {

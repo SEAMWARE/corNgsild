@@ -59,8 +59,8 @@ static bool nodeDeepEqual(CorNode* a, CorNode* b)
 
   case CorArray:
   {
-    CorNode* ca = a->value.firstChildP;
-    CorNode* cb = b->value.firstChildP;
+    CorNode* ca = a->value.head;
+    CorNode* cb = b->value.head;
     while (ca != NULL && cb != NULL)
     {
       if (!nodeDeepEqual(ca, cb)) return false;
@@ -73,10 +73,10 @@ static bool nodeDeepEqual(CorNode* a, CorNode* b)
   case CorObject:
   {
     int na = 0, nb = 0;
-    for (CorNode* c = a->value.firstChildP; c != NULL; c = c->next) na++;
-    for (CorNode* c = b->value.firstChildP; c != NULL; c = c->next) nb++;
+    for (CorNode* c = a->value.head; c != NULL; c = c->next) na++;
+    for (CorNode* c = b->value.head; c != NULL; c = c->next) nb++;
     if (na != nb)  return false;
-    for (CorNode* c = a->value.firstChildP; c != NULL; c = c->next)
+    for (CorNode* c = a->value.head; c != NULL; c = c->next)
     {
       CorNode* m = corTreeLookup(b, c->name);
       if (m == NULL || !nodeDeepEqual(c, m)) return false;
@@ -106,7 +106,7 @@ static bool attrValueChanged(CorNode* preWrapper, CorNode* curWrapper)
   if (preWrapper == NULL || curWrapper == NULL)
     return true;
 
-  for (CorNode* oldInst = preWrapper->value.firstChildP; oldInst != NULL; oldInst = oldInst->next)
+  for (CorNode* oldInst = preWrapper->value.head; oldInst != NULL; oldInst = oldInst->next)
   {
     CorNode* newInst = corTreeLookup(curWrapper, oldInst->name);
     if (newInst == NULL)
@@ -115,7 +115,7 @@ static bool attrValueChanged(CorNode* preWrapper, CorNode* curWrapper)
       return true;
   }
 
-  for (CorNode* newInst = curWrapper->value.firstChildP; newInst != NULL; newInst = newInst->next)
+  for (CorNode* newInst = curWrapper->value.head; newInst != NULL; newInst = newInst->next)
     if (corTreeLookup(preWrapper, newInst->name) == NULL)
       return true;  // dataset instance added
 
@@ -137,7 +137,7 @@ static bool reportHasValueChange(CorNode* entityP, LdMergeReport* reportP)
   if (reportP == NULL || reportP->changes == NULL)
     return true;  // no report ⇒ can't prove it's value-neutral ⇒ notify
 
-  for (CorNode* chP = reportP->changes->value.firstChildP; chP != NULL; chP = chP->next)
+  for (CorNode* chP = reportP->changes->value.head; chP != NULL; chP = chP->next)
   {
     CorNode*    reasonP = corTreeLookup(chP, "reason");
     const char* reason  = (reasonP != NULL && reasonP->type == CorString) ? reasonP->value.s : "";
@@ -194,7 +194,7 @@ void ldNotifyDefer(LdSubCache* cacheP, CorNode* entityP, LdNotifyOp op, LdMergeR
   corNgsild.pendingV[corNgsild.pendingN].reasonsMask = 0;
   if (reportP != NULL && reportP->changes != NULL)
   {
-    for (CorNode* chP = reportP->changes->value.firstChildP; chP != NULL; chP = chP->next)
+    for (CorNode* chP = reportP->changes->value.head; chP != NULL; chP = chP->next)
     {
       CorNode* reasonP = corTreeLookup(chP, "reason");
       if (reasonP != NULL && reasonP->type == CorString)

@@ -40,7 +40,7 @@ static bool entityHasType(CorNode* typeP, const char* uri)
 
   if (typeP->type == CorArray)
   {
-    for (CorNode* elemP = typeP->value.firstChildP; elemP != NULL; elemP = elemP->next)
+    for (CorNode* elemP = typeP->value.head; elemP != NULL; elemP = elemP->next)
     {
       if (elemP->type == CorString && strcmp(elemP->value.s, uri) == 0)
         return true;
@@ -95,7 +95,7 @@ static bool entityScopeMatchesPattern(CorNode* scopeP, const char* pattern)
 
   if (scopeP->type == CorArray)
   {
-    for (CorNode* elemP = scopeP->value.firstChildP; elemP != NULL; elemP = elemP->next)
+    for (CorNode* elemP = scopeP->value.head; elemP != NULL; elemP = elemP->next)
     {
       if (elemP->type == CorString && ldScopePatternMatch(pattern, elemP->value.s))
         return true;
@@ -166,7 +166,7 @@ static CorNode* getAttrValue(CorNode* entityP, const char* attrName)
     return flatValueP;
 
   // DB-model nested shape: wrapper.firstChild → instance object → "value"
-  CorNode* instP = wrapperP->value.firstChildP;
+  CorNode* instP = wrapperP->value.head;
   if (instP == NULL || instP->type != CorObject)
     return NULL;
 
@@ -193,7 +193,7 @@ static CorNode* attrInstanceOf(CorNode* containerP, const char* attrName)
   if (corTreeLookup(wrapperP, "value") != NULL || corTreeLookup(wrapperP, "object") != NULL)
     return wrapperP;   // flat API shape
 
-  CorNode* instP = wrapperP->value.firstChildP;  // DB-model: first instance
+  CorNode* instP = wrapperP->value.head;         // DB-model: first instance
   if (instP != NULL && instP->type == CorObject)
     return instP;
 
@@ -206,7 +206,7 @@ static CorNode* attrInstanceOf(CorNode* containerP, const char* attrName)
 //
 // Multi-attribute instances (§ 8.5) — clause 7 defines the q "target value" of a
 // Property with several instances, when no datasetId is addressed, as "any Value
-// of such instances". The matcher used to take wrapperP->value.firstChildP and
+// of such instances". The matcher used to take wrapperP->value.head and
 // compare that one, so only the FIRST instance was ever under test.
 //
 // These two resolve the instance list instead. Both non-multi shapes count as a
@@ -225,7 +225,7 @@ static int attrInstanceCountOf(CorNode* containerP, const char* attrName)
     return 1;                                                  // flat API shape
 
   int n = 0;
-  for (CorNode* instP = wrapperP->value.firstChildP; instP != NULL; instP = instP->next)
+  for (CorNode* instP = wrapperP->value.head; instP != NULL; instP = instP->next)
     n++;
 
   return (n > 0) ? n : 1;
@@ -243,7 +243,7 @@ static CorNode* attrInstanceAt(CorNode* containerP, const char* attrName, int ix
     return wrapperP;
 
   int i = 0;
-  for (CorNode* instP = wrapperP->value.firstChildP; instP != NULL; instP = instP->next, i++)
+  for (CorNode* instP = wrapperP->value.head; instP != NULL; instP = instP->next, i++)
   {
     if (i == ix)
       return (instP->type == CorObject) ? instP : wrapperP;
@@ -415,11 +415,11 @@ static bool matchTermOnInstance(CorNode* entityP, LdQTerm* term, int instIx)
     // "no element matches" semantics). A "*" segment is terminal.
     if (strcmp(term->valuePathV[i], "*") == 0)
     {
-      if (term->op == LdQExists)    return (valueP->value.firstChildP != NULL);
-      if (term->op == LdQNotExists) return (valueP->value.firstChildP == NULL);
+      if (term->op == LdQExists)    return (valueP->value.head != NULL);
+      if (term->op == LdQNotExists) return (valueP->value.head == NULL);
 
       bool negative = (term->op == LdQUnequal) || (term->op == LdQNotPattern);
-      for (CorNode* langP = valueP->value.firstChildP; langP != NULL; langP = langP->next)
+      for (CorNode* langP = valueP->value.head; langP != NULL; langP = langP->next)
       {
         bool m = qLeafCompare(term, langP);
         if (negative && !m) return false;   // ALL keys must satisfy != / notPattern
@@ -524,7 +524,7 @@ static bool qLeafCompare(LdQTerm* term, CorNode* valueP)
     if (valueP->type == CorArray)
     {
       bool hit = false;
-      for (CorNode* elemP = valueP->value.firstChildP; elemP != NULL; elemP = elemP->next)
+      for (CorNode* elemP = valueP->value.head; elemP != NULL; elemP = elemP->next)
       {
         double elemNum;
         if      (elemP->type == CorInt)  elemNum = (double) elemP->value.i;
@@ -576,7 +576,7 @@ static bool qLeafCompare(LdQTerm* term, CorNode* valueP)
 
       if (valueP->type == CorArray)
       {
-        for (CorNode* elemP = valueP->value.firstChildP; elemP != NULL; elemP = elemP->next)
+        for (CorNode* elemP = valueP->value.head; elemP != NULL; elemP = elemP->next)
         {
           if (elemP->type == CorString) { comparable = true; break; }
         }
@@ -595,7 +595,7 @@ static bool qLeafCompare(LdQTerm* term, CorNode* valueP)
         m = (regexec(&re, valueP->value.s, 0, NULL, 0) == 0);
       else
       {
-        for (CorNode* elemP = valueP->value.firstChildP; elemP != NULL; elemP = elemP->next)
+        for (CorNode* elemP = valueP->value.head; elemP != NULL; elemP = elemP->next)
         {
           if ((elemP->type == CorString) && (regexec(&re, elemP->value.s, 0, NULL, 0) == 0))
           { m = true; break; }
@@ -613,7 +613,7 @@ static bool qLeafCompare(LdQTerm* term, CorNode* valueP)
     if (valueP->type == CorArray)
     {
       bool hit = false;
-      for (CorNode* elemP = valueP->value.firstChildP; elemP != NULL; elemP = elemP->next)
+      for (CorNode* elemP = valueP->value.head; elemP != NULL; elemP = elemP->next)
       {
         if (elemP->type == CorString && strcmp(elemP->value.s, term->value.s) == 0)
         { hit = true; break; }
@@ -647,7 +647,7 @@ static bool qLeafCompare(LdQTerm* term, CorNode* valueP)
     if (valueP->type == CorArray)
     {
       bool hit = false;
-      for (CorNode* elemP = valueP->value.firstChildP; elemP != NULL; elemP = elemP->next)
+      for (CorNode* elemP = valueP->value.head; elemP != NULL; elemP = elemP->next)
       {
         if (elemP->type == CorBoolean && elemP->value.b == term->value.b) { hit = true; break; }
       }
@@ -721,7 +721,7 @@ static bool qLeafCompare(LdQTerm* term, CorNode* valueP)
     if (valueP->type == CorArray)
     {
       bool hit = false;
-      for (CorNode* elemP = valueP->value.firstChildP; elemP != NULL; elemP = elemP->next)
+      for (CorNode* elemP = valueP->value.head; elemP != NULL; elemP = elemP->next)
       {
         double elemNum;
         if      (elemP->type == CorInt)  elemNum = (double) elemP->value.i;
@@ -768,7 +768,7 @@ static bool qLeafCompare(LdQTerm* term, CorNode* valueP)
       {
         LdQValueType itemType = term->value.list.itemTypeV[i];
 
-        for (CorNode* elemP = valueP->value.firstChildP; elemP != NULL; elemP = elemP->next)
+        for (CorNode* elemP = valueP->value.head; elemP != NULL; elemP = elemP->next)
         {
           if ((itemType == LdQNumber) && ((elemP->type == CorInt) || (elemP->type == CorFloat)))
           {
@@ -840,14 +840,14 @@ static const char* findRelationshipTargetId(CorNode* entityP, const char* relNam
   if (entityP == NULL || relName == NULL || entityP->type != CorObject)
     return NULL;
 
-  for (CorNode* attrP = entityP->value.firstChildP; attrP != NULL; attrP = attrP->next)
+  for (CorNode* attrP = entityP->value.head; attrP != NULL; attrP = attrP->next)
   {
     if (attrP->name == NULL || attrP->type != CorObject)
       continue;
     if (strcmp(attrP->name, relName) != 0)
       continue;
 
-    for (CorNode* instP = attrP->value.firstChildP; instP != NULL; instP = instP->next)
+    for (CorNode* instP = attrP->value.head; instP != NULL; instP = instP->next)
     {
       if (instP->type != CorObject)
         continue;

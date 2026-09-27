@@ -35,14 +35,14 @@ static char** stringArrayExtract(CorNode* arrayP)
     return NULL;
 
   int count = 0;
-  for (CorNode* p = arrayP->value.firstChildP; p != NULL; p = p->next)
+  for (CorNode* p = arrayP->value.head; p != NULL; p = p->next)
     if (p->type == CorString) count++;
   if (count == 0)
     return NULL;
 
   char** v = (char**) malloc((count + 1) * sizeof(char*));
   int ix = 0;
-  for (CorNode* p = arrayP->value.firstChildP; p != NULL; p = p->next)
+  for (CorNode* p = arrayP->value.head; p != NULL; p = p->next)
     if (p->type == CorString)
       v[ix++] = p->value.s;
   v[ix] = NULL;
@@ -63,7 +63,7 @@ static LdSubEntitySelector* entitySelectorsExtractPernot(CorNode* entitiesP)
   LdSubEntitySelector* head = NULL;
   LdSubEntitySelector* tail = NULL;
 
-  for (CorNode* entP = entitiesP->value.firstChildP; entP != NULL; entP = entP->next)
+  for (CorNode* entP = entitiesP->value.head; entP != NULL; entP = entP->next)
   {
     if (entP->type != CorObject) continue;
 

@@ -55,7 +55,7 @@ static void vocabCompactInPlace(CorNode* valP)
   }
   else if (valP->type == CorArray)
   {
-    for (CorNode* itemP = valP->value.firstChildP; itemP != NULL; itemP = itemP->next)
+    for (CorNode* itemP = valP->value.head; itemP != NULL; itemP = itemP->next)
     {
       if (itemP->type != CorString)
         continue;
@@ -213,13 +213,13 @@ static void transformAttr(CorNode* attrP, const char* timeProp, KAlloc* allocP, 
     return;
 
   // Inspect the first instance to learn the attr type and key shape.
-  CorNode* firstP = attrP->value.firstChildP;
+  CorNode* firstP = attrP->value.head;
   if (firstP == NULL || firstP->type != CorObject)
   {
     // Empty or malformed — collapse to a minimal Property/values:[] object.
     attrP->type = CorObject;
-    attrP->value.firstChildP = NULL;
-    attrP->lastChild         = NULL;
+    attrP->value.head = NULL;
+    attrP->value.tail        = NULL;
     corTreeChildAdd(attrP, corTreeString(allocP, "type", "Property"));
     corTreeChildAdd(attrP, corTreeArray(allocP, "values"));
     return;
@@ -274,8 +274,8 @@ static void transformAttr(CorNode* attrP, const char* timeProp, KAlloc* allocP, 
     // single-bucket shape for consistency with the no-instances guard
     // above.
     attrP->type              = CorObject;
-    attrP->value.firstChildP = NULL;
-    attrP->lastChild         = NULL;
+    attrP->value.head = NULL;
+    attrP->value.tail        = NULL;
     corTreeChildAdd(attrP, corTreeString(allocP, "type", attrType));
     corTreeChildAdd(attrP, corTreeArray(allocP, valuesKey));
     return;
@@ -286,8 +286,8 @@ static void transformAttr(CorNode* attrP, const char* timeProp, KAlloc* allocP, 
   if (dsCount == 1)
   {
     attrP->type              = CorObject;
-    attrP->value.firstChildP = NULL;
-    attrP->lastChild         = NULL;
+    attrP->value.head = NULL;
+    attrP->value.tail        = NULL;
     corTreeChildAdd(attrP, corTreeString(allocP, "type", attrType));
     if (dsId[0] != NULL)
       corTreeChildAdd(attrP, corTreeString(allocP, "datasetId", (char*) dsId[0]));
@@ -296,8 +296,8 @@ static void transformAttr(CorNode* attrP, const char* timeProp, KAlloc* allocP, 
   }
 
   // Multi-datasetId: keep attrP as a CorArray, replace its children.
-  attrP->value.firstChildP = NULL;
-  attrP->lastChild         = NULL;
+  attrP->value.head = NULL;
+  attrP->value.tail        = NULL;
   for (int i = 0; i < dsCount; i++)
   {
     CorNode* obj = corTreeObject(allocP, NULL);
@@ -320,7 +320,7 @@ static void transformEntity(CorNode* entityP, const char* timeProp, KAlloc* allo
   if (entityP == NULL || entityP->type != CorObject)
     return;
 
-  for (CorNode* childP = entityP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = entityP->value.head; childP != NULL; childP = childP->next)
   {
     if (childP->name == NULL)
       continue;
@@ -352,7 +352,7 @@ void ldToTemporalValues(CorNode* treeP, const char* timeProp, KAlloc* allocP, KA
 
   if (treeP->type == CorArray)
   {
-    for (CorNode* itemP = treeP->value.firstChildP; itemP != NULL; itemP = itemP->next)
+    for (CorNode* itemP = treeP->value.head; itemP != NULL; itemP = itemP->next)
       transformEntity(itemP, timeProp, allocP, faP);
   }
   else

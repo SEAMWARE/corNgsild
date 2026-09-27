@@ -37,7 +37,7 @@
 //
 static void stringArrayAddUnique(CorNode* arr, const char* s)
 {
-  for (CorNode* p = arr->value.firstChildP; p != NULL; p = p->next)
+  for (CorNode* p = arr->value.head; p != NULL; p = p->next)
     if (p->type == CorString && strcmp(p->value.s, s) == 0)
       return;
   corTreeChildAdd(arr, corTreeString(corRest.kallocP, NULL, s));
@@ -51,7 +51,7 @@ static void stringArrayAddUnique(CorNode* arr, const char* s)
 //
 static CorNode* typeEntryEnsure(CorNode* agg, const char* typeIri, bool details)
 {
-  for (CorNode* e = agg->value.firstChildP; e != NULL; e = e->next)
+  for (CorNode* e = agg->value.head; e != NULL; e = e->next)
   {
     CorNode* iriP = corTreeLookup(e, "typeIri");
     if (iriP != NULL && iriP->type == CorString && strcmp(iriP->value.s, typeIri) == 0)
@@ -78,7 +78,7 @@ static CorNode* typeEntryEnsure(CorNode* agg, const char* typeIri, bool details)
 //
 static CorNode* attrEntryEnsure(CorNode* agg, const char* attrIri, bool details)
 {
-  for (CorNode* e = agg->value.firstChildP; e != NULL; e = e->next)
+  for (CorNode* e = agg->value.head; e != NULL; e = e->next)
   {
     CorNode* iriP = corTreeLookup(e, "attrIri");
     if (iriP != NULL && iriP->type == CorString && strcmp(iriP->value.s, attrIri) == 0)

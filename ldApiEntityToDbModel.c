@@ -47,7 +47,7 @@ static void ldGeoValueUnexpand(CorNode* geoValueP)
   if (geoValueP == NULL || geoValueP->type != CorObject)
     return;
 
-  for (CorNode* childP = geoValueP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = geoValueP->value.head; childP != NULL; childP = childP->next)
   {
     // Un-expand key names: "https://purl.org/geojson/vocab#coordinates" -> "coordinates"
     if (strncmp(childP->name, LD_VOCAB_GEOJSON_PREFIX, LD_VOCAB_GEOJSON_PREFIX_LEN) == 0)
@@ -67,7 +67,7 @@ static void ldGeoValueUnexpand(CorNode* geoValueP)
     // Recurse into arrays of objects (e.g. GeometryCollection "geometries" array)
     if (childP->type == CorArray)
     {
-      for (CorNode* elemP = childP->value.firstChildP; elemP != NULL; elemP = elemP->next)
+      for (CorNode* elemP = childP->value.head; elemP != NULL; elemP = elemP->next)
       {
         if (elemP->type == CorObject)
           ldGeoValueUnexpand(elemP);
@@ -105,7 +105,7 @@ static const char* expandedValueKeys[] =
 //
 static void temporalPropertiesToNanoseconds(CorNode* attrP)
 {
-  for (CorNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = attrP->value.head; childP != NULL; childP = childP->next)
   {
     bool isTemporal = (strcmp(childP->name, LD_VOCAB_OBSERVED_AT) == 0 ||
                        strcmp(childP->name, LD_VOCAB_EXPIRES_AT)  == 0);
@@ -126,7 +126,7 @@ static void temporalPropertiesToNanoseconds(CorNode* attrP)
     else if (childP->type == CorObject)
     {
       // JSON-LD expanded DateTime: {"@value": "2026-...", "@type": "DateTime"}
-      for (CorNode* m = childP->value.firstChildP; m != NULL; m = m->next)
+      for (CorNode* m = childP->value.head; m != NULL; m = m->next)
       {
         if (strcmp(m->name, "@value") == 0 && m->type == CorString)
         {
@@ -150,7 +150,7 @@ static void normalizeValueKey(CorNode* attrP)
   if (attrP->type != CorObject)
     return;
 
-  for (CorNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = attrP->value.head; childP != NULL; childP = childP->next)
     for (const char** vk = expandedValueKeys; *vk != NULL; vk++)
       if (strcmp(childP->name, *vk) == 0) { childP->name = "value"; return; }
 }
@@ -218,7 +218,7 @@ static void attrToDbModel(CorNode* attrP, uint64_t ts, KAlloc* faP)
     return;
 
   // Recurse into sub-attributes (non-core-context object children)
-  for (CorNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = attrP->value.head; childP != NULL; childP = childP->next)
   {
     if (childP->type == CorObject && !isCoreAttrTerm(childP))
       attrToDbModel(childP, ts, faP);
@@ -263,8 +263,8 @@ static CorNode* wrapSingleAttr(CorNode* attrP, uint64_t ts, KAlloc* faP)
   // Move attrP into the wrapper as a child keyed by datasetId
   // Keep attrP->next intact — corTreeChildReplace needs it to link wrapperP to the next sibling
   attrP->name = (char*) dsKey;
-  wrapperP->value.firstChildP = attrP;
-  wrapperP->lastChild         = attrP;
+  wrapperP->value.head = attrP;
+  wrapperP->value.tail        = attrP;
 
   return wrapperP;
 }
@@ -296,13 +296,13 @@ static CorNode* wrapMultiAttr(CorNode* arrayP, uint64_t ts, KAlloc* faP)
   // leads with an object, and one that turns non-object further along is still
   // rejected by ldCheckEntity.
   //
-  if (arrayP->value.firstChildP != NULL && arrayP->value.firstChildP->type != CorObject)
+  if (arrayP->value.head != NULL && arrayP->value.head->type != CorObject)
     return NULL;
 
   CorNode* wrapperP = corTreeObject(corRest.kallocP, arrayP->name);
 
   // Move each array element into the wrapper, keyed by its datasetId
-  CorNode* instP = arrayP->value.firstChildP;
+  CorNode* instP = arrayP->value.head;
 
   while (instP != NULL)
   {
@@ -335,7 +335,7 @@ void ldApiEntityToDbModel(CorNode* entityP, KAlloc* faP, int64_t createdAt)
 
   uint64_t ts = corRest.requestStartTime;
 
-  CorNode* childP = entityP->value.firstChildP;
+  CorNode* childP = entityP->value.head;
 
   while (childP != NULL)
   {
@@ -364,7 +364,7 @@ void ldApiEntityToDbModel(CorNode* entityP, KAlloc* faP, int64_t createdAt)
   // After JSON-LD expansion, DateTime-typed values may be:
   //   - CorString: bare string (no expansion of value)
   //   - CorObject: {"@value": "2026-...", "@type": "DateTime"} (expanded by JSON-LD)
-  for (CorNode* cP = entityP->value.firstChildP; cP != NULL; cP = cP->next)
+  for (CorNode* cP = entityP->value.head; cP != NULL; cP = cP->next)
   {
     if (strcmp(cP->name, LD_VOCAB_EXPIRES_AT) != 0)
       continue;
@@ -386,7 +386,7 @@ void ldApiEntityToDbModel(CorNode* entityP, KAlloc* faP, int64_t createdAt)
     {
       // Extract @value from the expanded DateTime object
       CorNode* atValueP = NULL;
-      for (CorNode* m = cP->value.firstChildP; m != NULL; m = m->next)
+      for (CorNode* m = cP->value.head; m != NULL; m = m->next)
       {
         if (strcmp(m->name, "@value") == 0 && m->type == CorString)
         {

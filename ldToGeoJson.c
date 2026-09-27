@@ -47,7 +47,7 @@ static CorNode* extractGeometry(CorNode* entityP, const char* geoPropName, KAllo
   if (attrP->type == CorArray)
   {
     CorNode* defaultInstanceP = NULL;
-    for (CorNode* instanceP = attrP->value.firstChildP; instanceP != NULL; instanceP = instanceP->next)
+    for (CorNode* instanceP = attrP->value.head; instanceP != NULL; instanceP = instanceP->next)
     {
       if (instanceP->type == CorObject && corTreeLookup(instanceP, "datasetId") == NULL)
       {
@@ -172,7 +172,7 @@ void ldToGeoJson(CorNode** treePP, const char* geometryProperty, KAlloc* allocP)
 
     CorNode* features = corTreeArray(allocP, "features");
 
-    for (CorNode* entityP = treeP->value.firstChildP; entityP != NULL; entityP = entityP->next)
+    for (CorNode* entityP = treeP->value.head; entityP != NULL; entityP = entityP->next)
     {
       CorNode* featureP = entityToFeature(entityP, geoPropName, allocP);
       corTreeChildAdd(features, featureP);

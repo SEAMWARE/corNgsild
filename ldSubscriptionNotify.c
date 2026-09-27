@@ -233,7 +233,7 @@ static bool watchedAttrsMatch(LdSubCacheItem* itemP, CorNode* entityP, LdNotifyO
 
   if (reportP != NULL && reportP->changes != NULL)
   {
-    for (CorNode* chP = reportP->changes->value.firstChildP; chP != NULL; chP = chP->next)
+    for (CorNode* chP = reportP->changes->value.head; chP != NULL; chP = chP->next)
     {
       CorNode* attrP = corTreeLookup(chP, "attr");
       if (attrP == NULL || attrP->type != CorString) continue;
@@ -358,7 +358,7 @@ static CorNode* buildNotifDataEntry(LdSubCacheItem*      itemP,
     // each attribute rendered with its previous value (ETSI 046_37..39).
     if (((triggerMask & LD_TRIGGER_ATTR_DELETED) != 0) || itemP->showChanges)
     {
-      for (CorNode* attrP = entityP->value.firstChildP; attrP != NULL; attrP = attrP->next)
+      for (CorNode* attrP = entityP->value.head; attrP != NULL; attrP = attrP->next)
       {
         if (attrP->name == NULL || attrP->type != CorObject) continue;
         if (ldIsEntityKeyword(attrP->name))                 continue;
@@ -376,7 +376,7 @@ static CorNode* buildNotifDataEntry(LdSubCacheItem*      itemP,
 
         // Pull the type from any instance (all share the same type).
         const char* typeStr = "Property";
-        CorNode* anyInstP = attrP->value.firstChildP;
+        CorNode* anyInstP = attrP->value.head;
         if (anyInstP != NULL && anyInstP->type == CorObject)
         {
           CorNode* tNodeP = corTreeLookup(anyInstP, "type");
@@ -507,7 +507,7 @@ static CorNode* buildNotifDataEntry(LdSubCacheItem*      itemP,
     CorNode*  modAtP    = corTreeLookup(entityClone, LD_VOCAB_MODIFIED_AT);
     long long deletedNs = (modAtP != NULL && modAtP->type == CorInt) ? modAtP->value.i : 0;
 
-    for (CorNode* chP = reportP->changes->value.firstChildP; chP != NULL; chP = chP->next)
+    for (CorNode* chP = reportP->changes->value.head; chP != NULL; chP = chP->next)
     {
       CorNode* reasonP = corTreeLookup(chP, "reason");
       CorNode* attrP  = corTreeLookup(chP, "attr");
@@ -517,7 +517,7 @@ static CorNode* buildNotifDataEntry(LdSubCacheItem*      itemP,
 
       // "datasetIds" lists the dsKey of every instance the change removed.
       CorNode* dsKeysP = corTreeLookup(chP, "datasetIds");
-      if ((dsKeysP != NULL) && ((dsKeysP->type != CorArray) || (dsKeysP->value.firstChildP == NULL)))
+      if ((dsKeysP != NULL) && ((dsKeysP->type != CorArray) || (dsKeysP->value.head == NULL)))
         dsKeysP = NULL;
 
       CorNode* existingAttr = corTreeLookup(entityClone, attrP->value.s);
@@ -526,16 +526,16 @@ static CorNode* buildNotifDataEntry(LdSubCacheItem*      itemP,
       // pre-merge wrapper; otherwise read from a surviving instance.
       const char* typeStr = "Property";
       CorNode*    preValP = corTreeLookup(chP, "preValue");
-      if (preValP != NULL && preValP->type == CorObject && preValP->value.firstChildP != NULL)
+      if (preValP != NULL && preValP->type == CorObject && preValP->value.head != NULL)
       {
-        CorNode* anyInstP = preValP->value.firstChildP;
+        CorNode* anyInstP = preValP->value.head;
         CorNode* tNodeP  = (anyInstP->type == CorObject) ? corTreeLookup(anyInstP, "type") : NULL;
         if (tNodeP != NULL && tNodeP->type == CorString)
           typeStr = tNodeP->value.s;
       }
-      else if (existingAttr != NULL && existingAttr->type == CorObject && existingAttr->value.firstChildP != NULL)
+      else if (existingAttr != NULL && existingAttr->type == CorObject && existingAttr->value.head != NULL)
       {
-        CorNode* anyInstP = existingAttr->value.firstChildP;
+        CorNode* anyInstP = existingAttr->value.head;
         CorNode* tNodeP  = (anyInstP->type == CorObject) ? corTreeLookup(anyInstP, "type") : NULL;
         if (tNodeP != NULL && tNodeP->type == CorString)
           typeStr = tNodeP->value.s;
@@ -566,7 +566,7 @@ static CorNode* buildNotifDataEntry(LdSubCacheItem*      itemP,
         // ("@none" for the default instance). Surviving instances, if any,
         // are already in the wrapper - the markers join them and the array
         // form rendered downstream carries a datasetId on each keyed entry.
-        for (CorNode* keyP = dsKeysP->value.firstChildP; keyP != NULL; keyP = keyP->next)
+        for (CorNode* keyP = dsKeysP->value.head; keyP != NULL; keyP = keyP->next)
         {
           if (keyP->type != CorString)
             continue;
@@ -603,7 +603,7 @@ static CorNode* buildNotifDataEntry(LdSubCacheItem*      itemP,
   //
   if (itemP->datasetIdV != NULL)
   {
-    CorNode* attrP = entityClone->value.firstChildP;
+    CorNode* attrP = entityClone->value.head;
     while (attrP != NULL)
     {
       CorNode* nextAttr = attrP->next;
@@ -615,7 +615,7 @@ static CorNode* buildNotifDataEntry(LdSubCacheItem*      itemP,
         continue;
       }
 
-      CorNode* instP = attrP->value.firstChildP;
+      CorNode* instP = attrP->value.head;
       while (instP != NULL)
       {
         CorNode* nextInst = instP->next;
@@ -636,7 +636,7 @@ static CorNode* buildNotifDataEntry(LdSubCacheItem*      itemP,
         instP = nextInst;
       }
 
-      if (attrP->value.firstChildP == NULL)
+      if (attrP->value.head == NULL)
         corTreeChildRemove(entityClone, attrP);
 
       attrP = nextAttr;
@@ -657,7 +657,7 @@ static CorNode* buildNotifDataEntry(LdSubCacheItem*      itemP,
   if (itemP->showChanges && reportP != NULL && reportP->changes != NULL &&
       (itemP->format != LdFormatSimplified))
   {
-    for (CorNode* chP = reportP->changes->value.firstChildP; chP != NULL; chP = chP->next)
+    for (CorNode* chP = reportP->changes->value.head; chP != NULL; chP = chP->next)
     {
       CorNode* attrNameP = corTreeLookup(chP, "attr");
       CorNode* preValueP = corTreeLookup(chP, "preValue");
@@ -670,7 +670,7 @@ static CorNode* buildNotifDataEntry(LdSubCacheItem*      itemP,
       // previousX key based on the per-instance "type".
       CorNode* preInst = corTreeLookup(preValueP, "@none");
       if (preInst == NULL && preValueP->type == CorObject)
-        preInst = preValueP->value.firstChildP;
+        preInst = preValueP->value.head;
       if (preInst == NULL || preInst->type != CorObject) continue;
 
       CorNode* preVal = corTreeLookup(preInst, "value");
@@ -713,7 +713,7 @@ static CorNode* buildNotifDataEntry(LdSubCacheItem*      itemP,
 
   if (itemP->notifAttrsV != NULL)
   {
-    CorNode* childP = entityClone->value.firstChildP;
+    CorNode* childP = entityClone->value.head;
     while (childP != NULL)
     {
       CorNode* nextP = childP->next;
@@ -817,7 +817,7 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   //
   if (itemP->format != LdFormatNone)
   {
-    for (CorNode* eP = dataArray->value.firstChildP; eP != NULL; eP = eP->next)
+    for (CorNode* eP = dataArray->value.head; eP != NULL; eP = eP->next)
     {
       if (itemP->format == LdFormatSimplified)
         ldToSimplified(eP, &corRest.kalloc);
@@ -864,7 +864,7 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   bool notifPreferBodyJson = false;
   if (acceptGeoJson && itemP->receiverInfo != NULL && itemP->receiverInfo->type == CorArray)
   {
-    for (CorNode* kvP = itemP->receiverInfo->value.firstChildP; kvP != NULL; kvP = kvP->next)
+    for (CorNode* kvP = itemP->receiverInfo->value.head; kvP != NULL; kvP = kvP->next)
     {
       if (kvP->type != CorObject) continue;
       CorNode* kP = corTreeLookup(kvP, "key");
@@ -890,7 +890,7 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
     CorNode* dataP = corTreeLookup(notification, "data");
     if (dataP != NULL && dataP->type == CorArray)
     {
-      for (CorNode* ep = dataP->value.firstChildP; ep != NULL; ep = ep->next)
+      for (CorNode* ep = dataP->value.head; ep != NULL; ep = ep->next)
       {
         if (ep->type == CorObject && corTreeLookup(ep, "@context") == NULL)
           corTreeChildAdd(ep, corTreeString(corRest.kallocP, "@context", itemP->contextUrl));
@@ -1024,7 +1024,7 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   // § 5.2.15 endpoint.receiverInfo — emit each {key,value} as a request header
   if (itemP->receiverInfo != NULL && itemP->receiverInfo->type == CorArray)
   {
-    for (CorNode* kvP = itemP->receiverInfo->value.firstChildP; kvP != NULL; kvP = kvP->next)
+    for (CorNode* kvP = itemP->receiverInfo->value.head; kvP != NULL; kvP = kvP->next)
     {
       if (kvP->type != CorObject) continue;
       CorNode* kP = corTreeLookup(kvP, "key");

@@ -299,7 +299,7 @@ static CorNode* csourceNotificationBuild(LdSubCacheItem* subItemP,
       CorNode* infoArrP = corTreeLookup(regClone, "information");
       if (infoArrP != NULL && infoArrP->type == CorArray)
       {
-        CorNode*   jsonInfo = infoArrP->value.firstChildP;
+        CorNode*   jsonInfo = infoArrP->value.head;
         LdRegInfo* regInfo  = matchV[i]->infoV;
         while (jsonInfo != NULL && regInfo != NULL)
         {
@@ -358,7 +358,7 @@ static void csourceNotificationPost(LdSubCacheItem* subItemP, CorNode* notificat
     CorNode* dataP = corTreeLookup(notification, "data");
     if (dataP != NULL && dataP->type == CorArray)
     {
-      for (CorNode* ep = dataP->value.firstChildP; ep != NULL; ep = ep->next)
+      for (CorNode* ep = dataP->value.head; ep != NULL; ep = ep->next)
       {
         if (ep->type == CorObject && corTreeLookup(ep, "@context") == NULL)
           corTreeChildAdd(ep, corTreeString(corRest.kallocP, "@context", subItemP->contextUrl));
@@ -397,7 +397,7 @@ static void csourceNotificationPost(LdSubCacheItem* subItemP, CorNode* notificat
   // § 5.2.15 endpoint.receiverInfo — emit each {key,value} as a request header
   if (subItemP->receiverInfo != NULL && subItemP->receiverInfo->type == CorArray)
   {
-    for (CorNode* kvP = subItemP->receiverInfo->value.firstChildP; kvP != NULL; kvP = kvP->next)
+    for (CorNode* kvP = subItemP->receiverInfo->value.head; kvP != NULL; kvP = kvP->next)
     {
       if (kvP->type != CorObject) continue;
       CorNode* kP = corTreeLookup(kvP, "key");

@@ -98,17 +98,17 @@ static void attrToConcise(CorNode* attrP)
   if (attrTypeCanBeInferred(attrType) == true)
   {
     CorNode* prevP = NULL;
-    for (CorNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
+    for (CorNode* childP = attrP->value.head; childP != NULL; childP = childP->next)
     {
       if (strcmp(childP->name, "type") == 0)
       {
         if (prevP == NULL)
-          attrP->value.firstChildP = childP->next;
+          attrP->value.head = childP->next;
         else
           prevP->next = childP->next;
 
-        if (attrP->lastChild == childP)
-          attrP->lastChild = prevP;
+        if (attrP->value.tail == childP)
+          attrP->value.tail = prevP;
 
         break;
       }
@@ -117,7 +117,7 @@ static void attrToConcise(CorNode* attrP)
   }
 
   // Recurse into sub-attributes
-  for (CorNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = attrP->value.head; childP != NULL; childP = childP->next)
   {
     if (isAttrKeyword(childP->name) == false)
       attrToConcise(childP);
@@ -136,7 +136,7 @@ static void attrToConcise(CorNode* attrP)
     CorNode* valueP    = NULL;
     bool     valueOnly = true;
 
-    for (CorNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
+    for (CorNode* childP = attrP->value.head; childP != NULL; childP = childP->next)
     {
       if (strcmp(childP->name, "type") == 0)
         continue;
@@ -165,7 +165,7 @@ bool ldToConcise(CorNode* entityP, KAlloc* faP)
   if (entityP == NULL || entityP->type != CorObject)
     return false;
 
-  for (CorNode* childP = entityP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = entityP->value.head; childP != NULL; childP = childP->next)
   {
     if (ldIsEntityKeyword(childP->name) == true)
       continue;
@@ -182,7 +182,7 @@ bool ldToConcise(CorNode* entityP, KAlloc* faP)
     //
     if (childP->type == CorArray)
     {
-      for (CorNode* instP = childP->value.firstChildP; instP != NULL; instP = instP->next)
+      for (CorNode* instP = childP->value.head; instP != NULL; instP = instP->next)
         attrToConcise(instP);
     }
     else
@@ -216,7 +216,7 @@ CorNode* ldAttrValueNode(CorNode* attrP)
   if (attrP->type != CorObject)
     return NULL;
 
-  for (CorNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = attrP->value.head; childP != NULL; childP = childP->next)
   {
     if (strcmp(childP->name, LD_VOCAB_HAS_VALUE)        == 0)  return childP;
     if (strcmp(childP->name, LD_VOCAB_HAS_OBJECT)       == 0)  return childP;
@@ -249,7 +249,7 @@ bool ldToSimplified(CorNode* entityP, KAlloc* faP)
   //
   KAlloc* allocP = faP;
 
-  CorNode* childP = entityP->value.firstChildP;
+  CorNode* childP = entityP->value.head;
 
   while (childP != NULL)
   {
@@ -269,7 +269,7 @@ bool ldToSimplified(CorNode* entityP, KAlloc* faP)
     {
       CorNode* datasetMap = corTreeObject(allocP, "dataset");
 
-      for (CorNode* instP = childP->value.firstChildP; instP != NULL; instP = instP->next)
+      for (CorNode* instP = childP->value.head; instP != NULL; instP = instP->next)
       {
         if (instP->type != CorObject)
           continue;
@@ -301,8 +301,8 @@ bool ldToSimplified(CorNode* entityP, KAlloc* faP)
       }
 
       childP->type              = CorObject;
-      childP->value.firstChildP = NULL;
-      childP->lastChild         = NULL;
+      childP->value.head = NULL;
+      childP->value.tail        = NULL;
       corTreeChildAdd(childP, datasetMap);
 
       childP = nextP;
@@ -328,7 +328,7 @@ bool ldToSimplified(CorNode* entityP, KAlloc* faP)
       {
         // Multivalued join (§ C.2.2.1.2): the Relationship's value becomes the
         // ARRAY of inlined Entities, each itself simplified — not the object URIs.
-        for (CorNode* linkedP = entityValP->value.firstChildP; linkedP != NULL; linkedP = linkedP->next)
+        for (CorNode* linkedP = entityValP->value.head; linkedP != NULL; linkedP = linkedP->next)
           ldToSimplified(linkedP, faP);
         childP->type  = entityValP->type;
         childP->value = entityValP->value;
@@ -348,8 +348,8 @@ bool ldToSimplified(CorNode* entityP, KAlloc* faP)
           // { languageMap | vocab | json : value } wrapper in simplified form.
           // Drop "type" and any sub-attrs, keeping just the value node.
           valueP->next              = NULL;
-          childP->value.firstChildP = valueP;
-          childP->lastChild         = valueP;
+          childP->value.head = valueP;
+          childP->value.tail        = valueP;
         }
         else
         {

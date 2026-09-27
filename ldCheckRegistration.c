@@ -54,7 +54,7 @@ static bool checkEntityInfo(CorNode* entP)
   CorNode* idP     = NULL;
   CorNode* idPatP  = NULL;
 
-  for (CorNode* fP = entP->value.firstChildP; fP != NULL; fP = fP->next)
+  for (CorNode* fP = entP->value.head; fP != NULL; fP = fP->next)
   {
     if      (strcmp(fP->name, "type") == 0)                    typeP  = fP;
     else if (strcmp(fP->name, "id") == 0)                      idP    = fP;
@@ -81,7 +81,7 @@ static bool checkEntityInfo(CorNode* entP)
   else if (typeP->type == CorArray)
   {
     EMPTY_ARRAY_CHECK(typeP, "'entities[].type' array must not be empty");
-    for (CorNode* tP = typeP->value.firstChildP; tP != NULL; tP = tP->next)
+    for (CorNode* tP = typeP->value.head; tP != NULL; tP = tP->next)
     {
       STRING_CHECK(tP, "Invalid Registration", "'entities[].type' array items must be strings");
     }
@@ -139,7 +139,7 @@ static bool checkStringArrayNonEmpty(CorNode* arrP, const char* fieldName)
 
   EMPTY_ARRAY_CHECK(arrP, "'information[].attributeNames' must not be empty");
 
-  for (CorNode* sP = arrP->value.firstChildP; sP != NULL; sP = sP->next)
+  for (CorNode* sP = arrP->value.head; sP != NULL; sP = sP->next)
   {
     if (sP->type != CorString || sP->value.s[0] == 0)
     {
@@ -171,7 +171,7 @@ static bool checkStringArrayNonEmpty(CorNode* arrP, const char* fieldName)
 //
 static bool checkExclusiveStructure(CorNode* infoArrayP)
 {
-  for (CorNode* infoP = infoArrayP->value.firstChildP; infoP != NULL; infoP = infoP->next)
+  for (CorNode* infoP = infoArrayP->value.head; infoP != NULL; infoP = infoP->next)
   {
     CorNode* entitiesP = corTreeLookup(infoP, LD_VOCAB_ENTITIES);
     CorNode* attrNamesP = corTreeLookup(infoP, "attributeNames");
@@ -184,7 +184,7 @@ static bool checkExclusiveStructure(CorNode* infoArrayP)
       return false;
     }
 
-    for (CorNode* entP = entitiesP->value.firstChildP; entP != NULL; entP = entP->next)
+    for (CorNode* entP = entitiesP->value.head; entP != NULL; entP = entP->next)
     {
       CorNode* idP   = corTreeLookup(entP, "id");
       CorNode* idPatP = corTreeLookup(entP, LD_VOCAB_ID_PATTERN);
@@ -227,7 +227,7 @@ static bool checkInformationArray(CorNode* infoArrayP)
   ARRAY_CHECK(infoArrayP, "Invalid Registration", "'information' must be a JSON array");
   EMPTY_ARRAY_CHECK(infoArrayP, "'information' must have at least one element");
 
-  for (CorNode* infoP = infoArrayP->value.firstChildP; infoP != NULL; infoP = infoP->next)
+  for (CorNode* infoP = infoArrayP->value.head; infoP != NULL; infoP = infoP->next)
   {
     OBJECT_CHECK(infoP, "Invalid Registration", "'information' items must be JSON objects");
 
@@ -236,7 +236,7 @@ static bool checkInformationArray(CorNode* infoArrayP)
     CorNode* propsP    = NULL;
     CorNode* relsP     = NULL;
 
-    for (CorNode* fP = infoP->value.firstChildP; fP != NULL; fP = fP->next)
+    for (CorNode* fP = infoP->value.head; fP != NULL; fP = fP->next)
     {
       if      (strcmp(fP->name, LD_VOCAB_ENTITIES)   == 0)  entitiesP  = fP;
       else if (strcmp(fP->name, "attributeNames")    == 0)  attrNamesP = fP;
@@ -272,7 +272,7 @@ static bool checkInformationArray(CorNode* infoArrayP)
       ARRAY_CHECK(entitiesP, "Invalid Registration", "'information[].entities' must be an array");
       EMPTY_ARRAY_CHECK(entitiesP, "'information[].entities' must not be empty");
 
-      for (CorNode* entP = entitiesP->value.firstChildP; entP != NULL; entP = entP->next)
+      for (CorNode* entP = entitiesP->value.head; entP != NULL; entP = entP->next)
       {
         if (checkEntityInfo(entP) == false)
           return false;
@@ -303,7 +303,7 @@ static bool checkInformationArray(CorNode* infoArrayP)
 //
 static void regInfoMergeAttributeNames(CorNode* infoArrayP)
 {
-  for (CorNode* infoP = infoArrayP->value.firstChildP; infoP != NULL; infoP = infoP->next)
+  for (CorNode* infoP = infoArrayP->value.head; infoP != NULL; infoP = infoP->next)
   {
     if (infoP->type != CorObject)
       continue;
@@ -320,7 +320,7 @@ static void regInfoMergeAttributeNames(CorNode* infoArrayP)
     // both forms present — append every relationshipNames item to attributeNames
     if (propsP != NULL && relsP != NULL)
     {
-      CorNode* itemP = relsP->value.firstChildP;
+      CorNode* itemP = relsP->value.head;
       while (itemP != NULL)
       {
         CorNode* nextP = itemP->next;
@@ -347,14 +347,14 @@ static bool checkContextSourceInfo(CorNode* arrP)
 {
   ARRAY_CHECK(arrP, "Invalid Registration", "'contextSourceInfo' must be an array");
 
-  for (CorNode* kvP = arrP->value.firstChildP; kvP != NULL; kvP = kvP->next)
+  for (CorNode* kvP = arrP->value.head; kvP != NULL; kvP = kvP->next)
   {
     OBJECT_CHECK(kvP, "Invalid Registration", "'contextSourceInfo' items must be {key,value} objects");
 
     CorNode* keyP  = NULL;
     CorNode* valueP = NULL;
 
-    for (CorNode* fP = kvP->value.firstChildP; fP != NULL; fP = fP->next)
+    for (CorNode* fP = kvP->value.head; fP != NULL; fP = fP->next)
     {
       if      (strcmp(fP->name, "key")   == 0)  keyP   = fP;
       else if (strcmp(fP->name, "value") == 0)  valueP = fP;
@@ -481,7 +481,7 @@ static bool checkTimeInterval(CorNode* tiP, const char* fieldName, bool complete
 
   CorNode* startP = NULL;
   CorNode* endP  = NULL;
-  for (CorNode* fP = tiP->value.firstChildP; fP != NULL; fP = fP->next)
+  for (CorNode* fP = tiP->value.head; fP != NULL; fP = fP->next)
   {
     if      (strcmp(fP->name, "startAt") == 0) startP = fP;
     else if (strcmp(fP->name, "endAt")   == 0) endP   = fP;
@@ -555,7 +555,7 @@ static bool checkScope(CorNode* scopeP)
   if (scopeP->type == CorArray)
   {
     EMPTY_ARRAY_CHECK(scopeP, "'scope' array must not be empty");
-    for (CorNode* sP = scopeP->value.firstChildP; sP != NULL; sP = sP->next)
+    for (CorNode* sP = scopeP->value.head; sP != NULL; sP = sP->next)
     {
       if (sP->type != CorString || sP->value.s[0] == 0)
       {
@@ -589,7 +589,7 @@ static bool checkManagement(CorNode* mgmtP)
     return false;
   }
 
-  for (CorNode* fP = mgmtP->value.firstChildP; fP != NULL; fP = fP->next)
+  for (CorNode* fP = mgmtP->value.head; fP != NULL; fP = fP->next)
   {
     if (strcmp(fP->name, "cacheDuration") == 0)
     {
@@ -654,7 +654,7 @@ static bool checkDatasetIdArray(CorNode* dsP)
   ARRAY_CHECK(dsP, "Invalid Registration", "'datasetId' must be a JSON array");
   EMPTY_ARRAY_CHECK(dsP, "'datasetId' array must not be empty");
 
-  for (CorNode* sP = dsP->value.firstChildP; sP != NULL; sP = sP->next)
+  for (CorNode* sP = dsP->value.head; sP != NULL; sP = sP->next)
   {
     STRING_CHECK(sP, "Invalid Registration", "'datasetId' items must be strings");
 
@@ -740,7 +740,7 @@ static bool checkOperations(CorNode* opsP, const char* modeStr)
 
   bool isAux = (strcmp(modeStr, "auxiliary") == 0);
 
-  for (CorNode* sP = opsP->value.firstChildP; sP != NULL; sP = sP->next)
+  for (CorNode* sP = opsP->value.head; sP != NULL; sP = sP->next)
   {
     STRING_CHECK(sP, "Invalid Registration", "'operations' items must be strings");
 
@@ -820,7 +820,7 @@ bool ldCheckRegistration(CorNode* regP, LdOp op, bool merged, KAlloc* faP)
   CorNode* observationSpaceP   = NULL;
   CorNode* operationSpaceP     = NULL;
 
-  for (CorNode* childP = regP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = regP->value.head; childP != NULL; childP = childP->next)
   {
     //
     // Delete-markers (TS 104-175 clause-8 / § 5.9.3). On the update path the

@@ -27,7 +27,7 @@ void ldStripAtContext(CorNode* treeP)
 
   if (treeP->type == CorObject)
   {
-    CorNode* childP = treeP->value.firstChildP;
+    CorNode* childP = treeP->value.head;
     while (childP != NULL)
     {
       CorNode* nextP = childP->next;
@@ -40,7 +40,7 @@ void ldStripAtContext(CorNode* treeP)
   }
   else if (treeP->type == CorArray)
   {
-    for (CorNode* childP = treeP->value.firstChildP; childP != NULL; childP = childP->next)
+    for (CorNode* childP = treeP->value.head; childP != NULL; childP = childP->next)
       ldStripAtContext(childP);
   }
 }

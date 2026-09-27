@@ -400,7 +400,7 @@ static const char* renderNodeJson(CorNode* nP, KAlloc* faP)
 static void bucketAddArray(Bucket* b, CorNode* arrayP, KAlloc* faP)
 {
   int sz = 0;
-  for (CorNode* p = arrayP->value.firstChildP; p != NULL; p = p->next)
+  for (CorNode* p = arrayP->value.head; p != NULL; p = p->next)
     sz++;
 
   // Replicate the numeric accumulator update without growing distinct
@@ -550,7 +550,7 @@ static void aggregateAttr(CorNode*     attrP,
     return;
 
   // First pass: figure out attr type + scan instances.
-  CorNode* firstP = attrP->value.firstChildP;
+  CorNode* firstP = attrP->value.head;
   if (firstP == NULL || firstP->type != CorObject)
     return;
 
@@ -677,8 +677,8 @@ static void aggregateAttr(CorNode*     attrP,
 
   // Replace the array contents with { type, "<method>": [...], ... }.
   attrP->type              = CorObject;
-  attrP->value.firstChildP = NULL;
-  attrP->lastChild         = NULL;
+  attrP->value.head = NULL;
+  attrP->value.tail        = NULL;
   corTreeChildAdd(attrP, corTreeString(allocP, "type", attrType));
 
   for (int m = 0; methodsV != NULL && methodsV[m] != NULL; m++)
@@ -709,7 +709,7 @@ static void aggregateEntity(CorNode*      entityP,
   if (entityP == NULL || entityP->type != CorObject)
     return;
 
-  for (CorNode* childP = entityP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = entityP->value.head; childP != NULL; childP = childP->next)
   {
     if (childP->name == NULL || ldIsEntityKeyword(childP->name))
       continue;
@@ -742,7 +742,7 @@ void ldToAggregatedValues(CorNode*      treeP,
 
   if (treeP->type == CorArray)
   {
-    for (CorNode* itemP = treeP->value.firstChildP; itemP != NULL; itemP = itemP->next)
+    for (CorNode* itemP = treeP->value.head; itemP != NULL; itemP = itemP->next)
       aggregateEntity(itemP, methodsV, periodMonths, periodNs, startNs, endNs, timeProp, allocP, faP);
   }
   else

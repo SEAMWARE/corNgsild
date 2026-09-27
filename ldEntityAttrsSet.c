@@ -196,7 +196,7 @@ static void applyType(CorNode* target, CorNode* fragType, KAlloc* allocP)
   }
   else if (tType->type == CorArray)
   {
-    for (CorNode* c = tType->value.firstChildP; c != NULL; c = c->next)
+    for (CorNode* c = tType->value.head; c != NULL; c = c->next)
       if (c->type == CorString)
         corTreeChildAdd(arrayP, corTreeString(allocP, NULL, c->value.s));
   }
@@ -210,7 +210,7 @@ static void applyType(CorNode* target, CorNode* fragType, KAlloc* allocP)
   }
   else if (fragType->type == CorArray)
   {
-    for (CorNode* c = fragType->value.firstChildP; c != NULL; c = c->next)
+    for (CorNode* c = fragType->value.head; c != NULL; c = c->next)
       if (c->type == CorString && toAddN < 32)
         toAdd[toAddN++] = c->value.s;
   }
@@ -218,7 +218,7 @@ static void applyType(CorNode* target, CorNode* fragType, KAlloc* allocP)
   for (int i = 0; i < toAddN; i++)
   {
     bool present = false;
-    for (CorNode* c = arrayP->value.firstChildP; c != NULL; c = c->next)
+    for (CorNode* c = arrayP->value.head; c != NULL; c = c->next)
       if (c->type == CorString && strcmp(c->value.s, toAdd[i]) == 0) { present = true; break; }
     if (!present)
       corTreeChildAdd(arrayP, corTreeString(allocP, NULL, toAdd[i]));
@@ -229,11 +229,11 @@ static void applyType(CorNode* target, CorNode* fragType, KAlloc* allocP)
 
   // Count elements in arrayP
   int n = 0;
-  for (CorNode* c = arrayP->value.firstChildP; c != NULL; c = c->next) n++;
+  for (CorNode* c = arrayP->value.head; c != NULL; c = c->next) n++;
 
   if (n == 1)
   {
-    CorNode* only = arrayP->value.firstChildP;
+    CorNode* only = arrayP->value.head;
     corTreeChildAdd(target, corTreeString(allocP, "type", only->value.s));
   }
   else
@@ -321,7 +321,7 @@ static void applyScope(CorNode* target, CorNode* fragScope, bool overwrite, KAll
   if (tScope->type == CorString)
     corTreeChildAdd(arrayP, corTreeString(allocP, NULL, tScope->value.s));
   else if (tScope->type == CorArray)
-    for (CorNode* c = tScope->value.firstChildP; c != NULL; c = c->next)
+    for (CorNode* c = tScope->value.head; c != NULL; c = c->next)
       if (c->type == CorString)
         corTreeChildAdd(arrayP, corTreeString(allocP, NULL, c->value.s));
 
@@ -330,14 +330,14 @@ static void applyScope(CorNode* target, CorNode* fragScope, bool overwrite, KAll
   if (fragScope->type == CorString)
     toAdd[toAddN++] = fragScope->value.s;
   else if (fragScope->type == CorArray)
-    for (CorNode* c = fragScope->value.firstChildP; c != NULL; c = c->next)
+    for (CorNode* c = fragScope->value.head; c != NULL; c = c->next)
       if (c->type == CorString && toAddN < 32)
         toAdd[toAddN++] = c->value.s;
 
   for (int i = 0; i < toAddN; i++)
   {
     bool present = false;
-    for (CorNode* c = arrayP->value.firstChildP; c != NULL; c = c->next)
+    for (CorNode* c = arrayP->value.head; c != NULL; c = c->next)
       if (c->type == CorString && strcmp(c->value.s, toAdd[i]) == 0) { present = true; break; }
     if (!present)
       corTreeChildAdd(arrayP, corTreeString(allocP, NULL, toAdd[i]));
@@ -350,7 +350,7 @@ static void applyScope(CorNode* target, CorNode* fragScope, bool overwrite, KAll
   // as a bare String, not a one-element Array. Collapse when the union left
   // exactly one value (e.g. target "/x" ∪ fragment "/x").
   //
-  CorNode* firstP = arrayP->value.firstChildP;
+  CorNode* firstP = arrayP->value.head;
   if ((firstP != NULL) && (firstP->next == NULL))
     corTreeChildAdd(target, corTreeString(allocP, LD_VOCAB_SCOPE, firstP->value.s));
   else
@@ -376,7 +376,7 @@ void ldEntityAttrsSet(CorNode* target, CorNode* fragment,
   // First pass: handle top-level keywords (type, scope). id is not
   // copied over — entity id is immutable on append.
   //
-  for (CorNode* fP = fragment->value.firstChildP; fP != NULL; fP = fP->next)
+  for (CorNode* fP = fragment->value.head; fP != NULL; fP = fP->next)
   {
     if (fP->name == NULL)
       continue;
@@ -414,7 +414,7 @@ void ldEntityAttrsSet(CorNode* target, CorNode* fragment,
   //
   // Second pass: top-level attributes (anything not a keyword).
   //
-  for (CorNode* fAttrP = fragment->value.firstChildP; fAttrP != NULL; fAttrP = fAttrP->next)
+  for (CorNode* fAttrP = fragment->value.head; fAttrP != NULL; fAttrP = fAttrP->next)
   {
     // type, scope and expiresAt were handled in the first pass - and are Entity members anyway
     if (ldIsNotAttributeName(fAttrP->name))
@@ -449,7 +449,7 @@ void ldEntityAttrsSet(CorNode* target, CorNode* fragment,
       // Stamp createdAt/modifiedAt on every instance.
       //
       CorNode* clone = corTreeClone(targetAllocP, fAttrP);
-      for (CorNode* instP = clone->value.firstChildP; instP != NULL; instP = instP->next)
+      for (CorNode* instP = clone->value.head; instP != NULL; instP = instP->next)
       {
         if (instP->type != CorObject)
           continue;
@@ -470,7 +470,7 @@ void ldEntityAttrsSet(CorNode* target, CorNode* fragment,
     if (reportP != NULL)
       preClone = corTreeClone(corRest.kallocP, tAttrP);
 
-    CorNode* fInstP = fAttrP->value.firstChildP;
+    CorNode* fInstP = fAttrP->value.head;
     while (fInstP != NULL)
     {
       CorNode* nextInst = fInstP->next;
@@ -545,7 +545,7 @@ void ldEntityAttrsSet(CorNode* target, CorNode* fragment,
     // individual instances do, which were stamped above. If every
     // instance was null'd away, the attribute itself is gone — drop
     // the empty wrapper from the target and report attributeDeleted.
-    if (tAttrP->value.firstChildP == NULL)
+    if (tAttrP->value.head == NULL)
     {
       removeChild(target, tAttrP, targetAllocP);
       addReportEntry(reportP, fAttrP->name, "attributeDeleted", preClone);

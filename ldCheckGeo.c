@@ -59,7 +59,7 @@ static bool nodeNumberValue(CorNode* nodeP, double* valueP)
 static int childCount(CorNode* containerP)
 {
   int count = 0;
-  for (CorNode* childP = containerP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = containerP->value.head; childP != NULL; childP = childP->next)
     ++count;
   return count;
 }
@@ -79,7 +79,7 @@ static bool checkPosition(CorNode* posP)
   if (count < 2 || count > 3)
     return geoError("GeoJSON position must have 2 or 3 elements (lon, lat[, alt])");
 
-  CorNode* lonP = posP->value.firstChildP;
+  CorNode* lonP = posP->value.head;
   CorNode* latP = lonP->next;
   double   lon, lat;
 
@@ -112,7 +112,7 @@ static bool checkLineString(CorNode* coordsP)
   if (childCount(coordsP) < 2)
     return geoError("GeoJSON LineString must have at least 2 positions");
 
-  for (CorNode* posP = coordsP->value.firstChildP; posP != NULL; posP = posP->next)
+  for (CorNode* posP = coordsP->value.head; posP != NULL; posP = posP->next)
   {
     if (checkPosition(posP) == false)
       return false;
@@ -129,8 +129,8 @@ static bool checkLineString(CorNode* coordsP)
 //
 static bool positionsEqual(CorNode* pos1P, CorNode* pos2P)
 {
-  CorNode* c1 = pos1P->value.firstChildP;
-  CorNode* c2 = pos2P->value.firstChildP;
+  CorNode* c1 = pos1P->value.head;
+  CorNode* c2 = pos2P->value.head;
 
   while (c1 != NULL && c2 != NULL)
   {
@@ -214,7 +214,7 @@ static bool posXY(CorNode* posP, double* lonP, double* latP)
 {
   if (posP == NULL || posP->type != CorArray)
     return false;
-  CorNode* a = posP->value.firstChildP;
+  CorNode* a = posP->value.head;
   if (a == NULL || a->next == NULL)
     return false;
   return nodeNumberValue(a, lonP) && nodeNumberValue(a->next, latP);
@@ -245,7 +245,7 @@ static bool ringSelfIntersects(CorNode* ringP)
   if (xs == NULL || ys == NULL) { free(xs); free(ys); return false; }
 
   int i = 0;
-  for (CorNode* posP = ringP->value.firstChildP; posP != NULL; posP = posP->next, i++)
+  for (CorNode* posP = ringP->value.head; posP != NULL; posP = posP->next, i++)
   {
     if (posXY(posP, &xs[i], &ys[i]) == false) { free(xs); free(ys); return false; }
   }
@@ -284,7 +284,7 @@ static bool checkLinearRing(CorNode* ringP)
   CorNode* firstP = NULL;
   CorNode* lastP  = NULL;
 
-  for (CorNode* posP = ringP->value.firstChildP; posP != NULL; posP = posP->next)
+  for (CorNode* posP = ringP->value.head; posP != NULL; posP = posP->next)
   {
     if (checkPosition(posP) == false)
       return false;
@@ -324,7 +324,7 @@ static bool checkPolygonCoords(CorNode* coordsP)
   if (childCount(coordsP) < 1)
     return geoError("GeoJSON Polygon must have at least one ring");
 
-  for (CorNode* ringP = coordsP->value.firstChildP; ringP != NULL; ringP = ringP->next)
+  for (CorNode* ringP = coordsP->value.head; ringP != NULL; ringP = ringP->next)
   {
     if (checkLinearRing(ringP) == false)
       return false;
@@ -353,7 +353,7 @@ bool ldCheckGeo(CorNode* geoValueP)
 
   // Duplicate keys inside the geometry object are rejected uniformly by the
   // duplicate-member check in ldParseHook, before this validation runs.
-  for (CorNode* childP = geoValueP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = geoValueP->value.head; childP != NULL; childP = childP->next)
   {
     if      (strcmp(childP->name, "type") == 0)               typeP   = childP;
     else if (strcmp(childP->name, LD_VOCAB_COORDINATES) == 0) coordsP = childP;
@@ -381,7 +381,7 @@ bool ldCheckGeo(CorNode* geoValueP)
 
   if (strcmp(geoType, "MultiPoint") == 0 || strcmp(geoType, LD_VOCAB_GEO_MULTI_POINT) == 0)
   {
-    for (CorNode* posP = coordsP->value.firstChildP; posP != NULL; posP = posP->next)
+    for (CorNode* posP = coordsP->value.head; posP != NULL; posP = posP->next)
     {
       if (checkPosition(posP) == false)
         return false;
@@ -391,7 +391,7 @@ bool ldCheckGeo(CorNode* geoValueP)
 
   if (strcmp(geoType, "MultiLineString") == 0 || strcmp(geoType, LD_VOCAB_GEO_MULTI_LINE) == 0)
   {
-    for (CorNode* lineP = coordsP->value.firstChildP; lineP != NULL; lineP = lineP->next)
+    for (CorNode* lineP = coordsP->value.head; lineP != NULL; lineP = lineP->next)
     {
       if (checkLineString(lineP) == false)
         return false;
@@ -401,7 +401,7 @@ bool ldCheckGeo(CorNode* geoValueP)
 
   if (strcmp(geoType, "MultiPolygon") == 0 || strcmp(geoType, LD_VOCAB_GEO_MULTI_POLYGON) == 0)
   {
-    for (CorNode* polyP = coordsP->value.firstChildP; polyP != NULL; polyP = polyP->next)
+    for (CorNode* polyP = coordsP->value.head; polyP != NULL; polyP = polyP->next)
     {
       if (checkPolygonCoords(polyP) == false)
         return false;

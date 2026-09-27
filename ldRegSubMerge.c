@@ -34,7 +34,7 @@ static bool isOpaqueValueObject(CorNode* nodeP)
   if (nodeP == NULL || nodeP->type != CorObject)
     return false;
 
-  for (CorNode* c = nodeP->value.firstChildP; c != NULL; c = c->next)
+  for (CorNode* c = nodeP->value.head; c != NULL; c = c->next)
   {
     if (c->name == NULL)
       continue;
@@ -82,7 +82,7 @@ void ldRegSubMerge(CorNode* target, CorNode* fragment, KAlloc* allocP)
   if (target == NULL || fragment == NULL)
     return;
 
-  for (CorNode* fP = fragment->value.firstChildP; fP != NULL; fP = fP->next)
+  for (CorNode* fP = fragment->value.head; fP != NULL; fP = fP->next)
   {
     if (fP->name == NULL)
       continue;

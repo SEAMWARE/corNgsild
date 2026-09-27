@@ -197,7 +197,7 @@ static bool parseMqttUri(const char* uri, MqttUri* out)
 static const char* notifierInfoLookup(CorNode* arr, const char* key)
 {
   if (arr == NULL || arr->type != CorArray) return NULL;
-  for (CorNode* kvP = arr->value.firstChildP; kvP != NULL; kvP = kvP->next)
+  for (CorNode* kvP = arr->value.head; kvP != NULL; kvP = kvP->next)
   {
     if (kvP->type != CorObject) continue;
     CorNode* kP = corTreeLookup(kvP, "key");
@@ -234,7 +234,7 @@ static char* buildMqttMessage(const char* notifBodyJson,
   // Copy receiverInfo entries into metadata as plain key/value strings.
   if (receiverInfo != NULL && receiverInfo->type == CorArray)
   {
-    for (CorNode* kvP = receiverInfo->value.firstChildP; kvP != NULL; kvP = kvP->next)
+    for (CorNode* kvP = receiverInfo->value.head; kvP != NULL; kvP = kvP->next)
     {
       if (kvP->type != CorObject) continue;
       CorNode* kP = corTreeLookup(kvP, "key");

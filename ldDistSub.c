@@ -183,7 +183,7 @@ static CorNode* narrowEntities(LdSubCacheItem* itemP, LdRegCacheItem* regP, KAll
     }
   }
 
-  return (arr->value.firstChildP != NULL) ? arr : NULL;
+  return (arr->value.head != NULL) ? arr : NULL;
 }
 
 

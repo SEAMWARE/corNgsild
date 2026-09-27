@@ -115,7 +115,7 @@ static CorNode* temporalLatestInstance(CorNode* arrayP)
   CorNode* bestP = NULL;
   const char* bestKey = NULL;
 
-  for (CorNode* instP = arrayP->value.firstChildP; instP != NULL; instP = instP->next)
+  for (CorNode* instP = arrayP->value.head; instP != NULL; instP = instP->next)
   {
     if (instP->type != CorObject)
       continue;
@@ -147,7 +147,7 @@ static CorNode* lookupSeg(CorNode* base, const char* seg)
 {
   if (base == NULL || base->type != CorObject || seg == NULL)
     return NULL;
-  for (CorNode* c = base->value.firstChildP; c != NULL; c = c->next)
+  for (CorNode* c = base->value.head; c != NULL; c = c->next)
     if (c->name != NULL && strcmp(c->name, seg) == 0)
       return c;
   return NULL;
@@ -383,7 +383,7 @@ void ldOrderSort(CorNode* arrayP, LdOrderTerm* terms, int termCount, const char*
 
   // Count entities
   int count = 0;
-  for (CorNode* p = arrayP->value.firstChildP; p != NULL; p = p->next)
+  for (CorNode* p = arrayP->value.head; p != NULL; p = p->next)
     count++;
 
   if (count < 2)
@@ -392,7 +392,7 @@ void ldOrderSort(CorNode* arrayP, LdOrderTerm* terms, int termCount, const char*
   // Build pointer array for qsort
   CorNode** ptrV = (CorNode**) malloc(count * sizeof(CorNode*));
   int ix = 0;
-  for (CorNode* p = arrayP->value.firstChildP; p != NULL; p = p->next)
+  for (CorNode* p = arrayP->value.head; p != NULL; p = p->next)
     ptrV[ix++] = p;
 
   // Set thread-local sort context
@@ -423,11 +423,11 @@ void ldOrderSort(CorNode* arrayP, LdOrderTerm* terms, int termCount, const char*
 #endif
 
   // Re-link the list in sorted order
-  arrayP->value.firstChildP = ptrV[0];
+  arrayP->value.head = ptrV[0];
   for (int i = 0; i < count - 1; i++)
     ptrV[i]->next = ptrV[i + 1];
   ptrV[count - 1]->next = NULL;
-  arrayP->lastChild = ptrV[count - 1];
+  arrayP->value.tail = ptrV[count - 1];
 
   free(ptrV);
 }

@@ -68,7 +68,7 @@ static void attrLangReduce(CorNode* attrP, const char* lang, KAlloc* faP)
   CorNode* langMapP = NULL;
   CorNode* typeP   = NULL;
 
-  for (CorNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = attrP->value.head; childP != NULL; childP = childP->next)
   {
     if (strcmp(childP->name, "languageMap") == 0)
       langMapP = childP;
@@ -85,9 +85,9 @@ static void attrLangReduce(CorNode* attrP, const char* lang, KAlloc* faP)
     CorNode* matchP = NULL;
     CorNode* noneP = NULL;
     CorNode* enP   = NULL;
-    CorNode* firstP = langMapP->value.firstChildP;
+    CorNode* firstP = langMapP->value.head;
 
-    for (CorNode* keyP = langMapP->value.firstChildP; keyP != NULL; keyP = keyP->next)
+    for (CorNode* keyP = langMapP->value.head; keyP != NULL; keyP = keyP->next)
     {
       if (strcmp(keyP->name, lang) == 0)
       {
@@ -125,7 +125,7 @@ static void attrLangReduce(CorNode* attrP, const char* lang, KAlloc* faP)
   }
 
   // Recurse into sub-attributes
-  for (CorNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = attrP->value.head; childP != NULL; childP = childP->next)
   {
     if (isAttrKeyword(childP->name) == false)
       attrLangReduce(childP, lang, faP);
@@ -147,14 +147,14 @@ void ldLangReduce(CorNode* entityP, const char* lang, KAlloc* faP)
   if (entityP == NULL || entityP->type != CorObject)
     return;
 
-  for (CorNode* childP = entityP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = entityP->value.head; childP != NULL; childP = childP->next)
   {
     if (childP->name == NULL || ldIsEntityKeyword(childP->name))
       continue;
 
     if (childP->type == CorArray)
     {
-      for (CorNode* instP = childP->value.firstChildP; instP != NULL; instP = instP->next)
+      for (CorNode* instP = childP->value.head; instP != NULL; instP = instP->next)
         attrLangReduce(instP, lang, faP);
     }
     else

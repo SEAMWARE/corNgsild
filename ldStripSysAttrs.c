@@ -58,7 +58,7 @@ static void stripObject(CorNode* objectP)
   if (objectP == NULL || objectP->type != CorObject)
     return;
 
-  CorNode* childP = objectP->value.firstChildP;
+  CorNode* childP = objectP->value.head;
 
   while (childP != NULL)
   {
@@ -70,7 +70,7 @@ static void stripObject(CorNode* objectP)
       stripObject(childP);
     else if (childP->type == CorArray)
     {
-      for (CorNode* itemP = childP->value.firstChildP; itemP != NULL; itemP = itemP->next)
+      for (CorNode* itemP = childP->value.head; itemP != NULL; itemP = itemP->next)
         stripObject(itemP);
     }
 
@@ -95,7 +95,7 @@ void ldStripSysAttrs(CorNode* treeP)
   }
   else if (treeP->type == CorArray)
   {
-    for (CorNode* itemP = treeP->value.firstChildP; itemP != NULL; itemP = itemP->next)
+    for (CorNode* itemP = treeP->value.head; itemP != NULL; itemP = itemP->next)
       stripObject(itemP);
   }
 }

@@ -65,7 +65,7 @@ static inline bool isNgsildNull(const CorNode* nodeP)
     return strcmp(nodeP->value.s, LD_VOCAB_NGSILD_NULL) == 0;
   if (nodeP->type == CorObject)
   {
-    CorNode* firstP = nodeP->value.firstChildP;
+    CorNode* firstP = nodeP->value.head;
     if (firstP == NULL || firstP->next != NULL) return false;   // exactly one child
     if (firstP->name == NULL || strcmp(firstP->name, "@none") != 0) return false;
     return firstP->type == CorString && strcmp(firstP->value.s, LD_VOCAB_NGSILD_NULL) == 0;
@@ -155,7 +155,7 @@ static bool validateNoTypeChange(const char* attrName, CorNode* tWrapper, CorNod
   if (tWrapper == NULL || fWrapper == NULL || fWrapper->type != CorObject)
     return true;
 
-  for (CorNode* fInst = fWrapper->value.firstChildP; fInst != NULL; fInst = fInst->next)
+  for (CorNode* fInst = fWrapper->value.head; fInst != NULL; fInst = fInst->next)
   {
     if (fInst->type != CorObject)
       continue;
@@ -298,7 +298,7 @@ static CorNode* buildInstanceFromScalar(const char* attrName,
 
     if (fragScalar->type == CorArray)
     {
-      for (CorNode* elemP = fragScalar->value.firstChildP; elemP != NULL; elemP = elemP->next)
+      for (CorNode* elemP = fragScalar->value.head; elemP != NULL; elemP = elemP->next)
       {
         if (elemP->type != CorString)
         {
@@ -320,7 +320,7 @@ static CorNode* buildInstanceFromScalar(const char* attrName,
       CorNode* targetValue = corTreeLookup(targetInstance, "value");
       if (targetValue != NULL && targetValue->type == CorObject)
       {
-        for (CorNode* langP = targetValue->value.firstChildP; langP != NULL; langP = langP->next)
+        for (CorNode* langP = targetValue->value.head; langP != NULL; langP = langP->next)
         {
           if (langP->name != NULL && strcmp(langP->name, corNgsild.lang) == 0)
             continue;  // skip — will be overwritten by the URL-param entry below
@@ -390,7 +390,7 @@ static CorNode* buildInstanceFromScalar(const char* attrName,
 
     if (targetType == LdAttrListRelationship)
     {
-      for (CorNode* elemP = fragScalar->value.firstChildP; elemP != NULL; elemP = elemP->next)
+      for (CorNode* elemP = fragScalar->value.head; elemP != NULL; elemP = elemP->next)
       {
         if (elemP->type != CorString)
         {
@@ -456,7 +456,7 @@ static void injectObservedAtIfNeeded(CorNode* wrapperTarget, CorNode* wrapperFra
   if (observedAtNs == 0 || wrapperTarget == NULL || wrapperFragment == NULL)
     return;
 
-  for (CorNode* fragInst = wrapperFragment->value.firstChildP; fragInst != NULL; fragInst = fragInst->next)
+  for (CorNode* fragInst = wrapperFragment->value.head; fragInst != NULL; fragInst = fragInst->next)
   {
     if (fragInst->type != CorObject)
       continue;
@@ -525,7 +525,7 @@ void ldEntityReplaceReport(CorNode* oldEntityP, CorNode* newEntityP, LdMergeRepo
     return;
 
   // new vs old → attributeCreated (new-only) / attributeModified (in both)
-  for (CorNode* nAttrP = newEntityP->value.firstChildP; nAttrP != NULL; nAttrP = nAttrP->next)
+  for (CorNode* nAttrP = newEntityP->value.head; nAttrP != NULL; nAttrP = nAttrP->next)
   {
     if ((nAttrP->name == NULL) || ldIsEntityKeyword(nAttrP->name) || (strcmp(nAttrP->name, "_id") == 0))
       continue;
@@ -538,7 +538,7 @@ void ldEntityReplaceReport(CorNode* oldEntityP, CorNode* newEntityP, LdMergeRepo
   }
 
   // old not in new → attributeDeleted
-  for (CorNode* oAttrP = oldEntityP->value.firstChildP; oAttrP != NULL; oAttrP = oAttrP->next)
+  for (CorNode* oAttrP = oldEntityP->value.head; oAttrP != NULL; oAttrP = oAttrP->next)
   {
     if ((oAttrP->name == NULL) || ldIsEntityKeyword(oAttrP->name) || (strcmp(oAttrP->name, "_id") == 0))
       continue;
@@ -566,7 +566,7 @@ static bool rfc7396Merge(CorNode* targetP, CorNode* patchP, uint64_t ts, KAlloc*
 {
   bool mutated = false;
 
-  CorNode* pChild = patchP->value.firstChildP;
+  CorNode* pChild = patchP->value.head;
   while (pChild != NULL)
   {
     CorNode* pNext = pChild->next;
@@ -661,7 +661,7 @@ static bool typeHasValue(CorNode* typeP, const char* s)
 
   if (typeP->type == CorArray)
   {
-    for (CorNode* e = typeP->value.firstChildP; e != NULL; e = e->next)
+    for (CorNode* e = typeP->value.head; e != NULL; e = e->next)
       if (e->type == CorString && strcmp(e->value.s, s) == 0)
         return true;
   }
@@ -700,7 +700,7 @@ static bool typeUnion(CorNode* target, CorNode* fragType, KAlloc* targetAllocP)
   }
   else if (fragType->type == CorArray)
   {
-    for (CorNode* e = fragType->value.firstChildP; e != NULL && fragCount < 64; e = e->next)
+    for (CorNode* e = fragType->value.head; e != NULL && fragCount < 64; e = e->next)
     {
       if (e->type == CorString)
         fragStrings[fragCount++] = e->value.s;
@@ -782,7 +782,7 @@ static bool mergeAttrWrapper(CorNode* target, CorNode* fragment, uint64_t ts, KA
 {
   bool mutated = false;
 
-  CorNode* pChild = fragment->value.firstChildP;
+  CorNode* pChild = fragment->value.head;
   while (pChild != NULL)
   {
     CorNode* pNext = pChild->next;
@@ -827,7 +827,7 @@ static bool mergeAttrWrapper(CorNode* target, CorNode* fragment, uint64_t ts, KA
   // Storage form keeps every typed primary key (object / languageMap /
   // vocab / json / valueList / objectList) under "value" — q can't filter
   // otherwise. So one lookup is enough.
-  CorNode* iChild = target->value.firstChildP;
+  CorNode* iChild = target->value.head;
   while (iChild != NULL)
   {
     CorNode* iNext = iChild->next;
@@ -866,7 +866,7 @@ static bool mergeApply(CorNode*       target,
 
   bool entityMutated = false;
 
-  CorNode* fChild = fragment->value.firstChildP;
+  CorNode* fChild = fragment->value.head;
   while (fChild != NULL)
   {
     CorNode*    fNext = fChild->next;
@@ -1056,7 +1056,7 @@ static bool mergeApply(CorNode*       target,
         // are gone, the attribute itself is gone — remove it from the target
         // and report this as "attributeDeleted" so subscriptions with
         // notificationTrigger=["attributeDeleted"] match (ETSI 046_22_*).
-        if (tAttr->value.firstChildP == NULL)
+        if (tAttr->value.head == NULL)
         {
           corTreeChildRemove(target, tAttr);
           reportAdd(reportP, name, "attributeDeleted", preClone);

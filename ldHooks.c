@@ -87,7 +87,7 @@ static bool preExpandCheckCsrEntityTypes(CorNode* bodyP)
   if (infoP == NULL || infoP->type != CorArray)
     return false;
 
-  for (CorNode* infoElP = infoP->value.firstChildP; infoElP != NULL; infoElP = infoElP->next)
+  for (CorNode* infoElP = infoP->value.head; infoElP != NULL; infoElP = infoElP->next)
   {
     if (infoElP->type != CorObject)
       continue;
@@ -96,7 +96,7 @@ static bool preExpandCheckCsrEntityTypes(CorNode* bodyP)
     if (entitiesP == NULL || entitiesP->type != CorArray)
       continue;
 
-    for (CorNode* entP = entitiesP->value.firstChildP; entP != NULL; entP = entP->next)
+    for (CorNode* entP = entitiesP->value.head; entP != NULL; entP = entP->next)
     {
       if (entP->type != CorObject)
         continue;
@@ -116,7 +116,7 @@ static bool preExpandCheckCsrEntityTypes(CorNode* bodyP)
       }
       else if (typeP->type == CorArray)
       {
-        for (CorNode* elemP = typeP->value.firstChildP; elemP != NULL; elemP = elemP->next)
+        for (CorNode* elemP = typeP->value.head; elemP != NULL; elemP = elemP->next)
         {
           if (elemP->type == CorString && elemP->value.s[0] == 0)
           {
@@ -167,7 +167,7 @@ static bool preExpandCheckEntityType(CorNode* entP)
   }
   else if (typeP->type == CorArray)
   {
-    for (CorNode* elemP = typeP->value.firstChildP; elemP != NULL; elemP = elemP->next)
+    for (CorNode* elemP = typeP->value.head; elemP != NULL; elemP = elemP->next)
     {
       if (elemP->type == CorString && elemP->value.s[0] == 0)
       {
@@ -200,7 +200,7 @@ static bool preExpandCheckEntityTypes(CorNode* bodyP)
 
   if (bodyP->type == CorArray)
   {
-    for (CorNode* entP = bodyP->value.firstChildP; entP != NULL; entP = entP->next)
+    for (CorNode* entP = bodyP->value.head; entP != NULL; entP = entP->next)
     {
       if (entP->type == CorObject && preExpandCheckEntityType(entP))
         return true;
@@ -230,7 +230,7 @@ static CorNode* ldFindEmbeddedAtContext(CorNode* nodeP)
 
   if (nodeP->type == CorObject)
   {
-    for (CorNode* c = nodeP->value.firstChildP; c != NULL; c = c->next)
+    for (CorNode* c = nodeP->value.head; c != NULL; c = c->next)
     {
       if (c->name != NULL && strcmp(c->name, "@context") == 0)
         return c;
@@ -241,7 +241,7 @@ static CorNode* ldFindEmbeddedAtContext(CorNode* nodeP)
   }
   else if (nodeP->type == CorArray)
   {
-    for (CorNode* c = nodeP->value.firstChildP; c != NULL; c = c->next)
+    for (CorNode* c = nodeP->value.head; c != NULL; c = c->next)
     {
       CorNode* inner = ldFindEmbeddedAtContext(c);
       if (inner != NULL)
@@ -288,7 +288,7 @@ static bool checkRawInputTree(CorNode* nodeP, bool checkEmpty)
   if (checkEmpty && (nodeP->type == CorObject || nodeP->type == CorArray))
   {
     bool empty = true;
-    for (CorNode* cP = nodeP->value.firstChildP; cP != NULL; cP = cP->next)
+    for (CorNode* cP = nodeP->value.head; cP != NULL; cP = cP->next)
     {
       if ((nodeP->type == CorObject) && (cP->name != NULL) &&
           ((strcmp(cP->name, "@context") == 0) || (strcmp(cP->name, "@graph") == 0)))
@@ -306,7 +306,7 @@ static bool checkRawInputTree(CorNode* nodeP, bool checkEmpty)
 
   if (nodeP->type == CorObject)
   {
-    for (CorNode* aP = nodeP->value.firstChildP; aP != NULL; aP = aP->next)
+    for (CorNode* aP = nodeP->value.head; aP != NULL; aP = aP->next)
     {
       for (CorNode* bP = aP->next; bP != NULL; bP = bP->next)
       {
@@ -319,7 +319,7 @@ static bool checkRawInputTree(CorNode* nodeP, bool checkEmpty)
       }
     }
 
-    for (CorNode* cP = nodeP->value.firstChildP; cP != NULL; cP = cP->next)
+    for (CorNode* cP = nodeP->value.head; cP != NULL; cP = cP->next)
     {
       if ((cP->name != NULL) && ((strcmp(cP->name, LD_VOCAB_HAS_JSON) == 0) || (strcmp(cP->name, "@context") == 0)))
         continue;  // opaque JSON literal / JSON-LD context — not NGSI-LD structure
@@ -330,7 +330,7 @@ static bool checkRawInputTree(CorNode* nodeP, bool checkEmpty)
   }
   else if (nodeP->type == CorArray)
   {
-    for (CorNode* cP = nodeP->value.firstChildP; cP != NULL; cP = cP->next)
+    for (CorNode* cP = nodeP->value.head; cP != NULL; cP = cP->next)
       if (checkRawInputTree(cP, checkEmpty) == false)
         return false;
   }
@@ -465,7 +465,7 @@ static void ldParseHook(void)
   }
   else if (isArrayBody)
   {
-    for (CorNode* elemP = corRest.in.requestTree->value.firstChildP; elemP != NULL; elemP = elemP->next)
+    for (CorNode* elemP = corRest.in.requestTree->value.head; elemP != NULL; elemP = elemP->next)
     {
       if (elemP->type != CorObject)
         continue;
@@ -527,7 +527,7 @@ static void ldParseHook(void)
 
     if (isArrayBody && isEntityArrayOp)
     {
-      for (CorNode* elemP = corRest.in.requestTree->value.firstChildP; elemP != NULL; elemP = elemP->next)
+      for (CorNode* elemP = corRest.in.requestTree->value.head; elemP != NULL; elemP = elemP->next)
       {
         if (elemP->type != CorObject)
           continue;
@@ -552,7 +552,7 @@ static void ldParseHook(void)
   {
     if (isArrayBody && isEntityArrayOp)
     {
-      for (CorNode* elemP = corRest.in.requestTree->value.firstChildP; elemP != NULL; elemP = elemP->next)
+      for (CorNode* elemP = corRest.in.requestTree->value.head; elemP != NULL; elemP = elemP->next)
       {
         if (elemP->type != CorObject)
           continue;
@@ -660,7 +660,7 @@ static void ldParseHook(void)
     if (recordTypeValue != NULL)
     {
       CorNode* prev = NULL;
-      for (CorNode* c = corRest.in.requestTree->value.firstChildP; c != NULL; c = c->next)
+      for (CorNode* c = corRest.in.requestTree->value.head; c != NULL; c = c->next)
       {
         if (c->name != NULL && strcmp(c->name, "type") == 0) { typeP = c; typePrevP = prev; break; }
         prev = c;
@@ -757,7 +757,7 @@ static void ldParseHook(void)
       }
       else if (node->type == CorArray)
       {
-        for (CorNode* c = node->value.firstChildP; c != NULL; c = c->next)
+        for (CorNode* c = node->value.head; c != NULL; c = c->next)
         {
           if (c->type == CorString && corLdContextFromUrl(c->value.s, &corRest.kalloc) == NULL)
           { offendingUrl = c->value.s; break; }
@@ -792,7 +792,7 @@ static void ldParseHook(void)
   if (isArrayBody && isBatchOp)
   {
     CorNode* prev = NULL;
-    CorNode* elemP = corRest.in.requestTree->value.firstChildP;
+    CorNode* elemP = corRest.in.requestTree->value.head;
     while (elemP != NULL)
     {
       CorNode* nextP = elemP->next;
@@ -807,7 +807,7 @@ static void ldParseHook(void)
         }
         else if (elemCtx != NULL && elemCtx->type == CorArray)
         {
-          for (CorNode* c = elemCtx->value.firstChildP; c != NULL; c = c->next)
+          for (CorNode* c = elemCtx->value.head; c != NULL; c = c->next)
           {
             if (c->type == CorString && corLdContextFromUrl(c->value.s, &corRest.kalloc) == NULL)
             { badUrl = c->value.s; break; }
@@ -877,14 +877,14 @@ static void ldParseHook(void)
     CorNode* entitiesP = corTreeLookup(corRest.in.requestTree, "entities");
     if (entitiesP != NULL && entitiesP->type == CorArray)
     {
-      for (CorNode* selP = entitiesP->value.firstChildP;
+      for (CorNode* selP = entitiesP->value.head;
            selP != NULL && typeExprNodeN < (int)(sizeof(typeExprNodesV)/sizeof(typeExprNodesV[0]));
            selP = selP->next)
       {
         if (selP->type != CorObject) continue;
         CorNode* prev = NULL;
         CorNode* tP  = NULL;
-        for (CorNode* c = selP->value.firstChildP; c != NULL; c = c->next)
+        for (CorNode* c = selP->value.head; c != NULL; c = c->next)
         {
           if (c->name != NULL && strcmp(c->name, "type") == 0) { tP = c; break; }
           prev = c;
@@ -922,15 +922,15 @@ static void ldParseHook(void)
     CorNode* tP     = typeExprNodesV[i].typeP;
     if (prevP == NULL)
     {
-      tP->next = parentP->value.firstChildP;
-      parentP->value.firstChildP = tP;
-      if (parentP->lastChild == NULL) parentP->lastChild = tP;
+      tP->next = parentP->value.head;
+      parentP->value.head = tP;
+      if (parentP->value.tail == NULL) parentP->value.tail = tP;
     }
     else
     {
       tP->next = prevP->next;
       prevP->next = tP;
-      if (prevP == parentP->lastChild) parentP->lastChild = tP;
+      if (prevP == parentP->value.tail) parentP->value.tail = tP;
     }
   }
 
@@ -944,15 +944,15 @@ static void ldParseHook(void)
   {
     if (typePrevP == NULL)
     {
-      typeP->next = corRest.in.requestTree->value.firstChildP;
-      corRest.in.requestTree->value.firstChildP = typeP;
-      if (corRest.in.requestTree->lastChild == NULL) corRest.in.requestTree->lastChild = typeP;
+      typeP->next = corRest.in.requestTree->value.head;
+      corRest.in.requestTree->value.head = typeP;
+      if (corRest.in.requestTree->value.tail == NULL) corRest.in.requestTree->value.tail = typeP;
     }
     else
     {
       typeP->next = typePrevP->next;
       typePrevP->next = typeP;
-      if (typePrevP == corRest.in.requestTree->lastChild) corRest.in.requestTree->lastChild = typeP;
+      if (typePrevP == corRest.in.requestTree->value.tail) corRest.in.requestTree->value.tail = typeP;
     }
   }
 
@@ -1110,7 +1110,7 @@ static void filterDatasetId(CorNode* entityP, char** datasetIdV)
   if (entityP == NULL || entityP->type != CorObject)
     return;
 
-  CorNode* childP = entityP->value.firstChildP;
+  CorNode* childP = entityP->value.head;
 
   while (childP != NULL)
   {
@@ -1130,7 +1130,7 @@ static void filterDatasetId(CorNode* entityP, char** datasetIdV)
     }
 
     // childP is a dataset-keyed attribute wrapper — filter its children
-    CorNode* instP = childP->value.firstChildP;
+    CorNode* instP = childP->value.head;
 
     while (instP != NULL)
     {
@@ -1153,7 +1153,7 @@ static void filterDatasetId(CorNode* entityP, char** datasetIdV)
     }
 
     // If no instances left, remove the attribute entirely
-    if (childP->value.firstChildP == NULL)
+    if (childP->value.head == NULL)
       corTreeChildRemove(entityP, childP);
 
     childP = nextP;
@@ -1227,14 +1227,14 @@ static void ldRenderHook(void)
     CorNode* successP = corTreeLookup(corRest.out.responseTree, "success");
     CorNode* errorsP = corTreeLookup(corRest.out.responseTree, "errors");
 
-    if ((successP != NULL) && (successP->type == CorArray) && (successP->value.firstChildP == NULL) &&
-        (errorsP  != NULL) && (errorsP->type  == CorArray) && (errorsP->value.firstChildP != NULL))
+    if ((successP != NULL) && (successP->type == CorArray) && (successP->value.head == NULL) &&
+        (errorsP  != NULL) && (errorsP->type  == CorArray) && (errorsP->value.head != NULL))
     {
       int  status  = -1;
       int  count   = 0;
       bool uniform = true;
 
-      for (CorNode* eP = errorsP->value.firstChildP; eP != NULL; eP = eP->next)
+      for (CorNode* eP = errorsP->value.head; eP != NULL; eP = eP->next)
       {
         CorNode* errObjP = corTreeLookup(eP, "error");
         CorNode* stP    = (errObjP != NULL) ? corTreeLookup(errObjP, "status") : NULL;
@@ -1253,7 +1253,7 @@ static void ldRenderHook(void)
       //
       if (uniform && (status > 0) && ((count == 1) || (status == 404)))
       {
-        CorNode* errObjP = corTreeLookup(errorsP->value.firstChildP, "error");
+        CorNode* errObjP = corTreeLookup(errorsP->value.head, "error");
         CorNode* typeP  = corTreeLookup(errObjP, "type");
         CorNode* titleP = corTreeLookup(errObjP, "title");
         CorNode* detailP = corTreeLookup(errObjP, "detail");
@@ -1322,7 +1322,7 @@ static void ldRenderHook(void)
     {
       if (treeP != NULL && treeP->type == CorArray)
       {
-        for (CorNode* itemP = treeP->value.firstChildP; itemP != NULL; itemP = itemP->next)
+        for (CorNode* itemP = treeP->value.head; itemP != NULL; itemP = itemP->next)
           filterDatasetId(itemP, corNgsild.datasetIdV);
       }
       else
@@ -1334,7 +1334,7 @@ static void ldRenderHook(void)
     // Convert storage format to API format
     if (treeP != NULL && treeP->type == CorArray)
     {
-      for (CorNode* itemP = treeP->value.firstChildP; itemP != NULL; itemP = itemP->next)
+      for (CorNode* itemP = treeP->value.head; itemP != NULL; itemP = itemP->next)
         ldEntityToApi(itemP, &corRest.kalloc);
     }
     else
@@ -1361,7 +1361,7 @@ static void ldRenderHook(void)
     {
       if (treeP != NULL && treeP->type == CorArray)
       {
-        for (CorNode* itemP = treeP->value.firstChildP; itemP != NULL; itemP = itemP->next)
+        for (CorNode* itemP = treeP->value.head; itemP != NULL; itemP = itemP->next)
           ldLangReduce(itemP, corNgsild.lang, &corRest.kalloc);
       }
       else
@@ -1377,7 +1377,7 @@ static void ldRenderHook(void)
 
       if (treeP != NULL && treeP->type == CorArray)
       {
-        for (CorNode* itemP = treeP->value.firstChildP; itemP != NULL; itemP = itemP->next)
+        for (CorNode* itemP = treeP->value.head; itemP != NULL; itemP = itemP->next)
           formatFn(itemP, &corRest.kalloc);
       }
       else
@@ -1545,7 +1545,7 @@ static void ldRenderHook(void)
   {
     if (treeP->type == CorArray)
     {
-      for (CorNode* itemP = treeP->value.firstChildP; itemP != NULL; itemP = itemP->next)
+      for (CorNode* itemP = treeP->value.head; itemP != NULL; itemP = itemP->next)
       {
         if (itemP->type == CorObject)
         {

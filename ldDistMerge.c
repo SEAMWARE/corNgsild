@@ -150,7 +150,7 @@ void ldDistExpiresAtReconcile(CorNode* destP, CorNode* srcP)
 static void scopeValuesInto(CorNode* arrayP, CorNode* scopeP, KAlloc* allocP)
 {
   bool    isArray = (scopeP->type == CorArray);
-  CorNode* valueP = (isArray == true) ? scopeP->value.firstChildP : scopeP;
+  CorNode* valueP = (isArray == true) ? scopeP->value.head : scopeP;
 
   while (valueP != NULL)
   {
@@ -158,7 +158,7 @@ static void scopeValuesInto(CorNode* arrayP, CorNode* scopeP, KAlloc* allocP)
     {
       bool present = false;
 
-      for (CorNode* haveP = arrayP->value.firstChildP; haveP != NULL; haveP = haveP->next)
+      for (CorNode* haveP = arrayP->value.head; haveP != NULL; haveP = haveP->next)
       {
         if (strcmp(haveP->value.s, valueP->value.s) == 0)
         {
@@ -213,7 +213,7 @@ void ldDistScopeMerge(CorNode* destP, CorNode* srcP, KAlloc* allocP)
   // § 5.2.7: the value of scope "is represented as a JSON array in case there is more than one
   // Scope" - so a union that came out as a single Scope goes back to a bare String.
   //
-  CorNode* onlyP = unionP->value.firstChildP;
+  CorNode* onlyP = unionP->value.head;
 
   if ((onlyP != NULL) && (onlyP->next == NULL))
     corTreeChildAdd(destP, corTreeString(allocP, LD_VOCAB_SCOPE, onlyP->value.s));
@@ -243,7 +243,7 @@ void ldDistMergeSourceInto(CorNode* destP, CorNode* srcP, int64_t nowNs, KAlloc*
   ldDistExpiresAtReconcile(destP, srcP);
   ldDistScopeMerge(destP, srcP, allocP);
 
-  CorNode* srcAttrP = srcP->value.firstChildP;
+  CorNode* srcAttrP = srcP->value.head;
 
   while (srcAttrP != NULL)
   {
@@ -273,7 +273,7 @@ void ldDistMergeSourceInto(CorNode* destP, CorNode* srcP, int64_t nowNs, KAlloc*
       corTreeChildAdd(destP, destAttrP);
     }
 
-    CorNode* srcInstP = srcAttrP->value.firstChildP;
+    CorNode* srcInstP = srcAttrP->value.head;
 
     while (srcInstP != NULL)
     {
@@ -327,7 +327,7 @@ void ldDistMergeSourceInto(CorNode* destP, CorNode* srcP, int64_t nowNs, KAlloc*
     // empty wrapper. Only a wrapper this call created can end up empty - a
     // pre-existing one still holds the dsKeys srcP never mentioned.
     //
-    if (fresh && (destAttrP->value.firstChildP == NULL))
+    if (fresh && (destAttrP->value.head == NULL))
       corTreeChildRemove(destP, destAttrP);
 
     srcAttrP = nextSrcAttr;

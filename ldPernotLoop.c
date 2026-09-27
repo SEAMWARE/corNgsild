@@ -107,7 +107,7 @@ static bool pernotSendNotification(LdPernotItem* itemP, CorNode* entityArray, KA
 
   // Convert entities from storage to API format
   CorNode* dataArray = corTreeArray(allocP, "data");
-  for (CorNode* entityP = entityArray->value.firstChildP; entityP != NULL; entityP = entityP->next)
+  for (CorNode* entityP = entityArray->value.head; entityP != NULL; entityP = entityP->next)
   {
     CorNode* entityClone = corTreeClone(allocP, entityP);
     ldEntityToApi(entityClone, kaP);
@@ -165,7 +165,7 @@ static bool pernotSendNotification(LdPernotItem* itemP, CorNode* entityArray, KA
   // request, so any "urn:ngsi-ld:request" placeholder is silently dropped.
   if (itemP->receiverInfo != NULL && itemP->receiverInfo->type == CorArray)
   {
-    for (CorNode* kvP = itemP->receiverInfo->value.firstChildP; kvP != NULL; kvP = kvP->next)
+    for (CorNode* kvP = itemP->receiverInfo->value.head; kvP != NULL; kvP = kvP->next)
     {
       if (kvP->type != CorObject) continue;
       CorNode* kP = corTreeLookup(kvP, "key");
@@ -234,7 +234,7 @@ static void pernotTick(void* ctx, uint64_t now, KAlloc* kaP)
     itemP->lastNotification = now;
     itemP->timesSent++;
 
-    if (entityArray == NULL || entityArray->value.firstChildP == NULL)
+    if (entityArray == NULL || entityArray->value.head == NULL)
     {
       itemP->noMatch++;
       continue;

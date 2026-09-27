@@ -58,7 +58,7 @@ static LdSubEntitySelector* entitySelectorsExtract(CorNode* entitiesP)
   // malloc-allocated LdTypeExpr and stashed it on corNgsild. Claim the
   // tree here (zero the slot so corNgsildReset doesn't free-double).
   int selIx = 0;
-  for (CorNode* selP = entitiesP->value.firstChildP; selP != NULL; selP = selP->next, selIx++)
+  for (CorNode* selP = entitiesP->value.head; selP != NULL; selP = selP->next, selIx++)
   {
     if (selP->type != CorObject)
       continue;
@@ -177,7 +177,7 @@ static char** watchedAttrsExtract(CorNode* watchedP)
 
   // Count elements
   int count = 0;
-  for (CorNode* wP = watchedP->value.firstChildP; wP != NULL; wP = wP->next)
+  for (CorNode* wP = watchedP->value.head; wP != NULL; wP = wP->next)
     if (wP->type == CorString)
       count++;
 
@@ -187,7 +187,7 @@ static char** watchedAttrsExtract(CorNode* watchedP)
   char** v = (char**) malloc((count + 1) * sizeof(char*));
   int ix = 0;
 
-  for (CorNode* wP = watchedP->value.firstChildP; wP != NULL; wP = wP->next)
+  for (CorNode* wP = watchedP->value.head; wP != NULL; wP = wP->next)
   {
     if (wP->type == CorString)
       v[ix++] = wP->value.s;  // borrowed pointer
@@ -353,7 +353,7 @@ static const char* riHeaderValue(CorNode* riP, const char* name)
   if (riP == NULL || riP->type != CorArray)
     return NULL;
 
-  for (CorNode* kvP = riP->value.firstChildP; kvP != NULL; kvP = kvP->next)
+  for (CorNode* kvP = riP->value.head; kvP != NULL; kvP = kvP->next)
   {
     if (kvP->type != CorObject) continue;
     CorNode* kP = corTreeLookup(kvP, "key");
@@ -505,7 +505,7 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, CorNode* subTree, LdQNode*
   if (triggerP != NULL && triggerP->type == CorArray)
   {
     itemP->triggerMask = 0;
-    for (CorNode* tP = triggerP->value.firstChildP; tP != NULL; tP = tP->next)
+    for (CorNode* tP = triggerP->value.head; tP != NULL; tP = tP->next)
     {
       if (tP->type == CorString)
         itemP->triggerMask |= ldTriggerFromString(tP->value.s);
@@ -774,7 +774,7 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, CorNode* subTree, LdQNode*
     if (subListP->type == CorArray)
     {
       LdSubSubordinate* tail = NULL;
-      for (CorNode* entryP = subListP->value.firstChildP; entryP != NULL; entryP = entryP->next)
+      for (CorNode* entryP = subListP->value.head; entryP != NULL; entryP = entryP->next)
       {
         if (entryP->type != CorObject) continue;
 

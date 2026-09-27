@@ -1215,7 +1215,7 @@ void ldDistOpBatchErrorAdd(CorNode*     errorsArrayP,
 //
 int ldBatchErrorsSingleStatus(CorNode* errorsArrayP)
 {
-  if (errorsArrayP == NULL || errorsArrayP->value.firstChildP == NULL)
+  if (errorsArrayP == NULL || errorsArrayP->value.head == NULL)
     return -1;
 
   static const struct { const char* type; int status; } collapsable[] = {
@@ -1228,7 +1228,7 @@ int ldBatchErrorsSingleStatus(CorNode* errorsArrayP)
   int         matchedStatus = -1;
   const char* matchedType   = NULL;
 
-  for (CorNode* entry = errorsArrayP->value.firstChildP; entry != NULL; entry = entry->next)
+  for (CorNode* entry = errorsArrayP->value.head; entry != NULL; entry = entry->next)
   {
     CorNode* errP = corTreeLookup(entry, "error");
     if (errP == NULL || errP->type != CorObject) return -1;
@@ -1278,10 +1278,10 @@ int ldBatchErrorsSingleStatus(CorNode* errorsArrayP)
 //
 CorNode* ldBatchErrorAsProblemDetails(CorNode* errorsArrayP)
 {
-  if (errorsArrayP == NULL || errorsArrayP->value.firstChildP == NULL)
+  if (errorsArrayP == NULL || errorsArrayP->value.head == NULL)
     return NULL;
 
-  CorNode* first = errorsArrayP->value.firstChildP;
+  CorNode* first = errorsArrayP->value.head;
   CorNode* errP = corTreeLookup(first, "error");
   if (errP == NULL || errP->type != CorObject)
     return NULL;
@@ -1298,7 +1298,7 @@ CorNode* ldBatchErrorAsProblemDetails(CorNode* errorsArrayP)
 
   // entityId(s) — extension field (anticipated ETSI ProblemDetails extension).
   int n = 0;
-  for (CorNode* e = errorsArrayP->value.firstChildP; e != NULL; e = e->next) n++;
+  for (CorNode* e = errorsArrayP->value.head; e != NULL; e = e->next) n++;
 
   if (n == 1)
   {
@@ -1309,7 +1309,7 @@ CorNode* ldBatchErrorAsProblemDetails(CorNode* errorsArrayP)
   else
   {
     CorNode* idsArr = corTreeArray(corRest.kallocP, "entityIds");
-    for (CorNode* e = errorsArrayP->value.firstChildP; e != NULL; e = e->next)
+    for (CorNode* e = errorsArrayP->value.head; e != NULL; e = e->next)
     {
       CorNode* idP = corTreeLookup(e, "entityId");
       if (idP != NULL && idP->type == CorString)
