@@ -10,7 +10,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // 
 //
-#include "kalloc/KAlloc.h"                             // KAlloc
+#include "corAlloc/CorAlloc.h"                         // CorAlloc
 #include "corTree/CorNode.h"                            // CorNode
 
 
@@ -19,6 +19,6 @@
 //
 // ldLangReduce - reduce LanguageProperty attributes to Property with matching language
 //
-extern void ldLangReduce(CorNode* entityP, const char* lang, KAlloc* faP);
+extern void ldLangReduce(CorNode* entityP, const char* lang, CorAlloc* faP);
 
 #endif  // CORNGSILD_LDLANGREDUCE_H_

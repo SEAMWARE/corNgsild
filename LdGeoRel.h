@@ -10,7 +10,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // 
 //
-#include "kalloc/KAlloc.h"                             // KAlloc
+#include "corAlloc/CorAlloc.h"                         // CorAlloc
 
 
 
@@ -49,6 +49,6 @@ typedef struct LdGeoRel
 //
 // ldGeoRelParse - parse a georel string like "near;maxDistance==1000"
 //
-extern LdGeoRel* ldGeoRelParse(const char* georelStr, KAlloc* faP);
+extern LdGeoRel* ldGeoRelParse(const char* georelStr, CorAlloc* faP);
 
 #endif  // CORNGSILD_LDGEOREL_H_

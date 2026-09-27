@@ -30,7 +30,7 @@
 #include <stdint.h>                                    // uint64_t
 #include <pthread.h>                                   // pthread_rwlock_t
 
-#include "kalloc/KAlloc.h"                             // KAlloc
+#include "corAlloc/CorAlloc.h"                         // CorAlloc
 #include "corTree/CorNode.h"                           // CorNode
 
 #include "corNgsild/LdOp.h"                             // LdOp
@@ -220,7 +220,7 @@ typedef struct LdRegCache
   LdRegCacheItem*        retiredList;        // unlinked-but-still-pinned items
                                              // awaiting reap (refCount → 0)
   LdCsrGeoMatchFunc      csrGeoMatchFunc;    // registered by broker; NULL = skip geo check
-  KAlloc                 alloc;              // persistent allocator for parsed shortcuts
+  CorAlloc               alloc;              // persistent allocator for parsed shortcuts
   char                   allocBuf[1024];     // initial allocation buffer
 
   // Concurrency: the cache is shared per-tenant and read by the (hot) match

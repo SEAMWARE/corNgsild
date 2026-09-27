@@ -9,9 +9,9 @@
 //
 #include <stddef.h>                                    // NULL
 
-#include "kalloc/KAlloc.h"                           // KAlloc
-#include "kalloc/kaAlloc.h"                            // kaAlloc
-#include "kalloc/kaStrdup.h"                           // kaStrdup
+#include "corAlloc/CorAlloc.h"                       // CorAlloc
+#include "corAlloc/corAlloc.h"                         // corAlloc
+#include "corAlloc/corAllocStrdup.h"                   // corAllocStrdup
 
 #include "corNgsild/ldQueryParams.h"                    // Own interface
 
@@ -27,12 +27,12 @@
 // list there was cut at its first comma - attrs=a,b went on as attrs=a, and a
 // distributed query asked the source for less than the client asked for.
 //
-char** ldParamSplit(char* csv, KAlloc* faP)
+char** ldParamSplit(char* csv, CorAlloc* faP)
 {
   if (csv == NULL || csv[0] == 0)
     return NULL;
 
-  csv = kaStrdup(faP, csv);
+  csv = corAllocStrdup(faP, csv);
 
   //
   // Count commas to determine array size
@@ -47,7 +47,7 @@ char** ldParamSplit(char* csv, KAlloc* faP)
   //
   // Allocate pointer array (count + 1 for NULL terminator)
   //
-  char** result = (char**) kaAlloc(faP, (count + 1) * sizeof(char*));
+  char** result = (char**) corAlloc(faP, (count + 1) * sizeof(char*));
 
   //
   // Split (the copy) in place

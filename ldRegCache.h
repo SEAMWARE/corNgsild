@@ -15,7 +15,7 @@
 #include <stdint.h>                                    // uint64_t
 #include <regex.h>                                     // regex_t
 
-#include "kalloc/KAlloc.h"                              // KAlloc
+#include "corAlloc/CorAlloc.h"                          // CorAlloc
 #include "corNgsild/LdOp.h"                             // LdOp
 #include "corNgsild/LdRegCache.h"                       // LdRegCache, LdRegCacheItem
 
@@ -80,7 +80,7 @@ extern void ldRegCacheItemUnpin(LdRegCacheItem* itemP);
 // May be NULL (no transient arena → the parse tree falls back to malloc and
 // leaks — every real caller passes &corRest.kalloc).
 //
-extern LdRegCacheItem* ldRegCacheItemAdd(LdRegCache* cacheP, CorNode* regTree, KAlloc* kaP);
+extern LdRegCacheItem* ldRegCacheItemAdd(LdRegCache* cacheP, CorNode* regTree, CorAlloc* kaP);
 
 
 
@@ -275,7 +275,7 @@ extern const char* ldRegCacheLocalWriteConflict(LdRegCache* cacheP,
 extern const char* ldRegCacheLocalWriteConflictTree(LdRegCache* cacheP,
                                                     const char* entityId,
                                                     CorNode*    fragP,
-                                                    KAlloc*     kaP);
+                                                    CorAlloc*   kaP);
 
 // Is 'attrIri' on entity (entityId, entityTypeV) claimed by an EXCLUSIVE
 // registration? Used by the multi-source read merge to discard a colliding

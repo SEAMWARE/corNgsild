@@ -12,7 +12,7 @@
 //
 #include <stdbool.h>                                     // bool
 
-#include "kalloc/KAlloc.h"                             // KAlloc
+#include "corAlloc/CorAlloc.h"                         // CorAlloc
 
 
 
@@ -53,6 +53,6 @@ typedef struct LdScopeExpr
 //
 // Returns a faP-allocated LdScopeExpr, or NULL on error (ldError(400) called).
 //
-extern LdScopeExpr* ldScopeExprParse(const char* value, KAlloc* faP);
+extern LdScopeExpr* ldScopeExprParse(const char* value, CorAlloc* faP);
 
 #endif  // CORNGSILD_LDSCOPEEXPR_H_

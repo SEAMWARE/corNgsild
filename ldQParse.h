@@ -10,7 +10,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // 
 //
-#include "kalloc/KAlloc.h"                             // KAlloc
+#include "corAlloc/CorAlloc.h"                         // CorAlloc
 #include "corNgsild/LdQ.h"                               // LdQNode
 
 
@@ -21,7 +21,7 @@
 //
 // Returns a kaP-allocated LdQNode tree, or NULL on parse error (ldError called).
 //
-extern LdQNode* ldQParse(const char* q, KAlloc* kaP);
+extern LdQNode* ldQParse(const char* q, CorAlloc* kaP);
 
 
 
@@ -34,6 +34,6 @@ extern LdQNode* ldQParse(const char* q, KAlloc* kaP);
 // candidate set and the broker's post-filter resolves the linked layers. NULL
 // means "no DB-evaluable constraint" (query without q). The input is not mutated.
 //
-extern LdQNode* ldQStripLinked(LdQNode* node, KAlloc* kaP);
+extern LdQNode* ldQStripLinked(LdQNode* node, CorAlloc* kaP);
 
 #endif  // CORNGSILD_LDQPARSE_H_

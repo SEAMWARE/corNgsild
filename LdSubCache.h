@@ -23,7 +23,7 @@
 #include <stdint.h>                                    // uint64_t
 #include <pthread.h>                                   // pthread_rwlock_t
 
-#include "kalloc/KAlloc.h"                             // KAlloc
+#include "corAlloc/CorAlloc.h"                         // CorAlloc
 #include "corTree/CorNode.h"                           // CorNode
 
 #include "corNgsild/LdFormat.h"                     // LdFormat
@@ -231,7 +231,7 @@ typedef struct LdSubCache
   LdSubCacheItem*     last;         // linked list tail (O(1) append)
   LdSubCacheItem*     retiredList;  // unlinked-but-still-pinned items awaiting reap
   LdGeoMatchFunc   geoMatchFunc; // registered by broker (NULL = skip geo check)
-  KAlloc              alloc;        // persistent allocator for parsed trees (q, scope, etc.)
+  CorAlloc            alloc;        // persistent allocator for parsed trees (q, scope, etc.)
   char                allocBuf[1024]; // initial allocation buffer
 
   // Concurrency (mirror of LdRegCache): writers (sub CRUD service routines) take

@@ -107,7 +107,7 @@ Sibling Cor-Lib repos:
 
 Sibling k-lib repos:
 
-- [`kalloc`](https://gitlab.com/kzangeli/kalloc) — arena allocator (`KAlloc`)
+- [`corAlloc`](https://github.com/SEAMWARE/corAlloc) — arena allocator (`CorAlloc`)
 - [`corTree`](https://github.com/SEAMWARE/corTree) — the tree (`CorNode`)
 - [`corJson`](https://github.com/SEAMWARE/corJson) — JSON parsing and rendering
 - [`kbase`](https://gitlab.com/kzangeli/kbase) — core utilities

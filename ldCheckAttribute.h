@@ -12,7 +12,7 @@
 //
 #include <stdbool.h>                                     // bool
 
-#include "kalloc/KAlloc.h"                             // KAlloc
+#include "corAlloc/CorAlloc.h"                         // CorAlloc
 #include "corTree/CorNode.h"                            // CorNode
 #include "corNgsild/LdAttrType.h"                         // LdAttrType
 #include "corNgsild/LdOp.h"                               // LdOp
@@ -25,6 +25,6 @@
 //
 extern bool ldCheckAttribute(CorNode* attrP, LdOp op,
                               LdAttrType attrTypeFromDb,
-                              KAlloc* faP);
+                              CorAlloc* faP);
 
 #endif  // CORNGSILD_LDCHECKATTRIBUTE_H_

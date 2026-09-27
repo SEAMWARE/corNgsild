@@ -11,7 +11,7 @@
 #include <string.h>                                      // strcmp
 
 #include "kbase/kLibLog.h"                             // KLOG_T
-#include "kalloc/KAlloc.h"                             // KAlloc
+#include "corAlloc/CorAlloc.h"                         // CorAlloc
 
 #include "corRest/corRest.h"                              // corRest
 #include "corTree/CorNode.h"                            // CorNode
@@ -87,7 +87,7 @@ static LdAttrType findAttrTypeInDb(CorNode* dbEntityP, const char* attrName)
 //
 // ldCheckEntity -
 //
-bool ldCheckEntity(CorNode* entityP, LdOp op, CorNode* dbEntityP, KAlloc* faP)
+bool ldCheckEntity(CorNode* entityP, LdOp op, CorNode* dbEntityP, CorAlloc* faP)
 {
   OBJECT_CHECK_IR(entityP, "Invalid Entity", "Entity payload must be a JSON object");
 

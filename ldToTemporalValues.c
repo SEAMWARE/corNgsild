@@ -11,7 +11,7 @@
 #include <stddef.h>                                      // NULL
 #include <string.h>                                      // strcmp
 
-#include "kalloc/KAlloc.h"                              // KAlloc
+#include "corAlloc/CorAlloc.h"                          // CorAlloc
 #include "corTree/CorNode.h"                             // CorNode
 #include "corTree/corTreeBuilder.h"                      // corTreeObject, corTreeArray, corTreeString
 #include "corTree/corTreeLookup.h"                       // corTreeLookup
@@ -153,7 +153,7 @@ static void addPair(CorNode*     valuesArray,
                     const char*  firstKey,
                     bool         wrapped,
                     const char*  timeProp,
-                    KAlloc*      allocP)
+                    CorAlloc*    allocP)
 {
   CorNode* valP = corTreeLookup(instP, firstKey);
   CorNode* tsP = corTreeLookup(instP, timeProp);
@@ -207,7 +207,7 @@ static void addPair(CorNode*     valuesArray,
 //                 multiple groups, the attr becomes an ARRAY of such
 //                 objects, each carrying its own "datasetId" member.
 //
-static void transformAttr(CorNode* attrP, const char* timeProp, KAlloc* allocP, KAlloc* faP)
+static void transformAttr(CorNode* attrP, const char* timeProp, CorAlloc* allocP, CorAlloc* faP)
 {
   if (attrP == NULL || attrP->type != CorArray)
     return;
@@ -315,7 +315,7 @@ static void transformAttr(CorNode* attrP, const char* timeProp, KAlloc* allocP, 
 //
 // transformEntity - apply transformAttr to every attribute child of one entity
 //
-static void transformEntity(CorNode* entityP, const char* timeProp, KAlloc* allocP, KAlloc* faP)
+static void transformEntity(CorNode* entityP, const char* timeProp, CorAlloc* allocP, CorAlloc* faP)
 {
   if (entityP == NULL || entityP->type != CorObject)
     return;
@@ -342,7 +342,7 @@ static void transformEntity(CorNode* entityP, const char* timeProp, KAlloc* allo
 //
 // ldToTemporalValues -
 //
-void ldToTemporalValues(CorNode* treeP, const char* timeProp, KAlloc* allocP, KAlloc* faP)
+void ldToTemporalValues(CorNode* treeP, const char* timeProp, CorAlloc* allocP, CorAlloc* faP)
 {
   if (treeP == NULL)
     return;

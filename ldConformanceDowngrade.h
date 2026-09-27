@@ -19,7 +19,7 @@
 //
 #include <stdbool.h>                                     // bool
 
-#include "kalloc/KAlloc.h"                               // KAlloc
+#include "corAlloc/CorAlloc.h"                           // CorAlloc
 #include "corTree/CorNode.h"                             // CorNode
 
 
@@ -52,7 +52,7 @@ extern bool ldConformanceParse(const char* str, short* majorOut, short* minorOut
 //
 // allocP is needed to allocate replacement nodes.
 //
-extern void ldConformanceDowngrade(CorNode* treeP, short targetMajor, short targetMinor, KAlloc* allocP);
+extern void ldConformanceDowngrade(CorNode* treeP, short targetMajor, short targetMinor, CorAlloc* allocP);
 
 
 

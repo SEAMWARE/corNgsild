@@ -18,7 +18,7 @@
 #include <stdint.h>                                    // uint64_t
 
 #include "corTree/CorNode.h"                           // CorNode
-#include "kalloc/KAlloc.h"                             // KAlloc
+#include "corAlloc/CorAlloc.h"                         // CorAlloc
 
 #include "corNgsild/LdQ.h"                              // LdQNode
 #include "corNgsild/LdScopeExpr.h"                      // LdScopeExpr
@@ -105,7 +105,7 @@ typedef struct LdPernotCache
 {
   LdPernotItem*  head;
   LdPernotItem*  tail;
-  KAlloc         alloc;
+  CorAlloc       alloc;
   char           allocBuf[1024];
 } LdPernotCache;
 

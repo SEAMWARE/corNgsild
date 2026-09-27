@@ -8,7 +8,7 @@
 //
 #include <string.h>                                   // strcmp
 
-#include "kalloc/KAlloc.h"                             // KAlloc
+#include "corAlloc/CorAlloc.h"                         // CorAlloc
 #include "corTree/CorNode.h"                           // CorNode
 #include "corTree/corTreeLookup.h"                     // corTreeLookup
 #include "corTree/corTreeBuilder.h"                    // corTreeChildAdd, corTreeChildRemove
@@ -77,7 +77,7 @@ static bool isDeleteMarker(CorNode* fP)
 // the merged result is still valid — e.g. a mandatory member was deleted — is
 // the caller's post-merge re-validation, not this mechanical merge.
 //
-void ldRegSubMerge(CorNode* target, CorNode* fragment, KAlloc* allocP)
+void ldRegSubMerge(CorNode* target, CorNode* fragment, CorAlloc* allocP)
 {
   if (target == NULL || fragment == NULL)
     return;

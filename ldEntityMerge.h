@@ -13,7 +13,7 @@
 #include <stdbool.h>                                  // bool
 #include <stdint.h>                                   // uint64_t
 
-#include "kalloc/KAlloc.h"                            // KAlloc
+#include "corAlloc/CorAlloc.h"                        // CorAlloc
 #include "corTree/CorNode.h"                          // CorNode
 
 
@@ -96,11 +96,11 @@ typedef struct LdMergeReport
 //   * Any object that gets mutated (attribute, sub-attribute, ..., entity)
 //     has its modifiedAt bumped to `ts`.
 //
-extern bool ldEntityMerge(CorNode*        target,
-                          CorNode*        fragment,
-                          LdMergeReport*  reportP,
-                          uint64_t        ts,
-                          struct KAlloc*  targetAllocP);
+extern bool ldEntityMerge(CorNode*          target,
+                          CorNode*          fragment,
+                          LdMergeReport*    reportP,
+                          uint64_t          ts,
+                          struct CorAlloc*  targetAllocP);
 
 
 
@@ -111,11 +111,11 @@ extern bool ldEntityMerge(CorNode*        target,
 // Attribute). Same plumbing as ldEntityMerge but the primary value is replaced
 // wholesale instead of being deep-merged. See ldEntityMerge.c.
 //
-extern bool ldEntityFragmentApply(CorNode*        target,
-                                  CorNode*        fragment,
-                                  LdMergeReport*  reportP,
-                                  uint64_t        ts,
-                                  struct KAlloc*  targetAllocP);
+extern bool ldEntityFragmentApply(CorNode*          target,
+                                  CorNode*          fragment,
+                                  LdMergeReport*    reportP,
+                                  uint64_t          ts,
+                                  struct CorAlloc*  targetAllocP);
 
 
 

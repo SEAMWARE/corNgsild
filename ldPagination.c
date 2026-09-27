@@ -10,8 +10,8 @@
 #include <stdio.h>                                       // snprintf
 #include <string.h>                                      // strcmp, strlen
 
-#include "kalloc/KAlloc.h"                             // kaAlloc
-#include "kalloc/kaAlloc.h"                            // kaAlloc
+#include "corAlloc/CorAlloc.h"                         // corAlloc
+#include "corAlloc/corAlloc.h"                         // corAlloc
 #include "corRest/corRest.h"                             // corRest
 #include "corNgsild/CorNgsild.h"                           // corNgsild
 #include "corNgsild/ldParams.h"                           // LD_PARAM_LIMIT, LD_PARAM_OFFSET
@@ -118,7 +118,7 @@ void ldPaginationLinkHeader(bool hasMore)
   // Build Link header value
   // Max: two link-values, each ~300 bytes => 1024 is plenty
   int  bufSize = 1024;
-  char* buf = (char*) kaAlloc(&corRest.kalloc, bufSize);
+  char* buf = (char*) corAlloc(&corRest.kalloc, bufSize);
   int  bLen = 0;
 
   const char* mediaType = ldPaginationMediaType();
@@ -215,7 +215,7 @@ void ldTemporalPaginationLinkHeader(bool hasMore, int pageLimit)
   const char* shallowRel = descending ? "intervalafter"  : "intervalbefore";
 
   int   bufSize = 1024 + 2 * (pLen + (int) strlen(corRest.in.urlPath));
-  char* buf     = (char*) kaAlloc(&corRest.kalloc, bufSize);
+  char* buf     = (char*) corAlloc(&corRest.kalloc, bufSize);
   int   bLen    = 0;
 
   // Shallower page (towards offsetN=0); absent on the first page.

@@ -21,7 +21,7 @@
 #include <stdio.h>                                     // snprintf
 
 #include "corRest/corRest.h"                            // corRest
-#include "kalloc/kaAlloc.h"                             // kaAlloc
+#include "corAlloc/corAlloc.h"                          // corAlloc
 
 #include "corTree/CorNode.h"                            // CorNode
 #include "corTree/corTreeLookup.h"                      // corTreeLookup
@@ -55,7 +55,7 @@ static const char* arrayJoin(CorNode* arrP)
   if (n == 0)
     return NULL;
 
-  char* buf = (char*) kaAlloc(&corRest.kalloc, total + 1);
+  char* buf = (char*) corAlloc(&corRest.kalloc, total + 1);
   int pos = 0;
   for (CorNode* c = arrP->value.head; c != NULL; c = c->next)
   {
@@ -110,7 +110,7 @@ static void collectFromEntities(CorNode* entsArr)
 
   if (idCount > 0)
   {
-    char* buf = (char*) kaAlloc(&corRest.kalloc, idLen + 1);
+    char* buf = (char*) corAlloc(&corRest.kalloc, idLen + 1);
     int pos = 0;
     for (CorNode* selP = entsArr->value.head; selP != NULL; selP = selP->next)
     {
@@ -128,7 +128,7 @@ static void collectFromEntities(CorNode* entsArr)
 
   if (typeCount > 0)
   {
-    char* buf = (char*) kaAlloc(&corRest.kalloc, typeLen + 1);
+    char* buf = (char*) corAlloc(&corRest.kalloc, typeLen + 1);
     int pos = 0;
     for (CorNode* selP = entsArr->value.head; selP != NULL; selP = selP->next)
     {
@@ -171,7 +171,7 @@ static void collectFromGeoQ(CorNode* geoQ)
   if (coords != NULL)
   {
     int   bufSize = corJsonFastRenderSize(coords) + 1;
-    char* buf     = (char*) kaAlloc(&corRest.kalloc, bufSize);
+    char* buf     = (char*) corAlloc(&corRest.kalloc, bufSize);
     corJsonFastRender(coords, buf);
     ldParamHook("coordinates", buf);
   }

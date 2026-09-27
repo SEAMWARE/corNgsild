@@ -11,7 +11,7 @@
 #include <string.h>                                      // strcmp
 
 #include "kbase/kLibLog.h"                             // KLOG_T
-#include "kalloc/KAlloc.h"                             // KAlloc
+#include "corAlloc/CorAlloc.h"                         // CorAlloc
 #include "corTree/CorNode.h"                             // CorNode
 #include "corTree/corTreeBuilder.h"                      // corTreeChildAdd, corTreeChildRemove, corTreeObject
 #include "corTree/corTreeLookup.h"                       // corTreeLookup
@@ -160,7 +160,7 @@ static void attrToConcise(CorNode* attrP)
 //
 // ldToConcise -
 //
-bool ldToConcise(CorNode* entityP, KAlloc* faP)
+bool ldToConcise(CorNode* entityP, CorAlloc* faP)
 {
   if (entityP == NULL || entityP->type != CorObject)
     return false;
@@ -236,7 +236,7 @@ CorNode* ldAttrValueNode(CorNode* attrP)
 //
 // ldToSimplified -
 //
-bool ldToSimplified(CorNode* entityP, KAlloc* faP)
+bool ldToSimplified(CorNode* entityP, CorAlloc* faP)
 {
   if (entityP == NULL || entityP->type != CorObject)
     return false;
@@ -247,7 +247,7 @@ bool ldToSimplified(CorNode* entityP, KAlloc* faP)
   // the builders fall back to malloc - so every simplified multi-attribute response
   // leaked its dataset wrapper for the life of the process.
   //
-  KAlloc* allocP = faP;
+  CorAlloc* allocP = faP;
 
   CorNode* childP = entityP->value.head;
 

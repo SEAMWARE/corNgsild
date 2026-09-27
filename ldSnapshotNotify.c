@@ -15,7 +15,7 @@
 #include <time.h>                                        // gmtime_r
 
 #include "corLog/corLog.h"                               // COR_E
-#include "kalloc/kaAlloc.h"                              // kaAlloc
+#include "corAlloc/corAlloc.h"                           // corAlloc
 #include "corTree/CorNode.h"                             // CorNode
 #include "corTree/corTreeBuilder.h"                      // corTreeObject, corTreeString, corTreeInteger, corTreeChildAdd
 #include "corTree/corTreeLookup.h"                       // corTreeLookup
@@ -41,7 +41,7 @@ static char* nsToIso(uint64_t ns)
   struct tm tm;
   gmtime_r(&s, &tm);
 
-  char* buf = (char*) kaAlloc(&corRest.kalloc, 48);
+  char* buf = (char*) corAlloc(&corRest.kalloc, 48);
   snprintf(buf, 48, "%04d-%02d-%02dT%02d:%02d:%02d.%03ldZ",
            tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
            tm.tm_hour, tm.tm_min, tm.tm_sec, ms);
@@ -56,7 +56,7 @@ static char* nsToIso(uint64_t ns)
 static char* generateNotificationId(void)
 {
   static int counter = 0;
-  char* buf = (char*) kaAlloc(&corRest.kalloc, 64);
+  char* buf = (char*) corAlloc(&corRest.kalloc, 64);
   snprintf(buf, 64, "urn:ngsi-ld:Notification:%lx:%04x",
            (long) (corRest.requestStartTime / 1000000000ULL), ++counter & 0xFFFF);
   return buf;
@@ -99,7 +99,7 @@ void ldSnapshotNotify(LdSnapshotCacheItem* itemP, bool deleted)
     corTreeChildAdd(notifP, corTreeClone(corRest.kallocP, detailsP));
 
   // Render to JSON.
-  char* body = (char*) kaAlloc(&corRest.kalloc, 8192);
+  char* body = (char*) corAlloc(&corRest.kalloc, 8192);
   corJsonFastRender(notifP, body);
 
   // POST.

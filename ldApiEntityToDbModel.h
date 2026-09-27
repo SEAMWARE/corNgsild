@@ -10,7 +10,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // 
 //
-#include "kalloc/KAlloc.h"                             // KAlloc
+#include "corAlloc/CorAlloc.h"                         // CorAlloc
 #include "corTree/CorNode.h"                            // CorNode
 
 
@@ -30,6 +30,6 @@
 // create (stamp 'now'); on a Replace pass the stored entity's createdAt so it
 // survives the write (§ 6.5.3.3). Attribute-instance createdAt is always 'now'.
 //
-extern void ldApiEntityToDbModel(CorNode* entityP, KAlloc* faP, int64_t createdAt);
+extern void ldApiEntityToDbModel(CorNode* entityP, CorAlloc* faP, int64_t createdAt);
 
 #endif  // CORNGSILD_LDAPIENTITYTODBMODEL_H_

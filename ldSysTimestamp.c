@@ -12,8 +12,8 @@
 #include <time.h>                                        // gmtime_r, strftime
 
 #include "corRest/corRest.h"                            // corRest
-#include "kalloc/KAlloc.h"                             // KAlloc
-#include "kalloc/kaAlloc.h"                            // kaAlloc
+#include "corAlloc/CorAlloc.h"                         // CorAlloc
+#include "corAlloc/corAlloc.h"                         // corAlloc
 #include "corTree/CorNode.h"                            // CorNode
 #include "corTree/corTreeBuilder.h"                       // corTreeInteger, corTreeChildAdd
 #include "corTree/corTreeLookup.h"                       // corTreeLookup
@@ -71,7 +71,7 @@ void ldSysTimestampToIso(long long nsec, char* buf, int bufSize)
 // top level (unlike entities, whose attributes each carry their own), so a
 // non-recursive pass is enough.
 //
-void ldSysTimestampsToIso(CorNode* treeP, KAlloc* allocP)
+void ldSysTimestampsToIso(CorNode* treeP, CorAlloc* allocP)
 {
   if (treeP == NULL || treeP->type != CorObject)
     return;
@@ -85,7 +85,7 @@ void ldSysTimestampsToIso(CorNode* treeP, KAlloc* allocP)
       char  isoBuf[32];
       ldSysTimestampToIso(childP->value.i, isoBuf, sizeof(isoBuf));
 
-      char* isoStr = (char*) kaAlloc(allocP, 32);
+      char* isoStr = (char*) corAlloc(allocP, 32);
       if (isoStr != NULL)
       {
         strcpy(isoStr, isoBuf);

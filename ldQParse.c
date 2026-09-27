@@ -23,9 +23,9 @@
 #include <stdlib.h>                                      // strtod
 #include <string.h>                                      // strlen, strncmp, strcmp, strchr, memcpy
 
-#include "kalloc/KAlloc.h"                             // kaAlloc
-#include "kalloc/kaAlloc.h"                            // kaAlloc
-#include "kalloc/kaStrdup.h"                            // kaStrdup
+#include "corAlloc/CorAlloc.h"                         // corAlloc
+#include "corAlloc/corAlloc.h"                         // corAlloc
+#include "corAlloc/corAllocStrdup.h"                    // corAllocStrdup
 #include "corJsonld/corLdExpand.h"                           // corLdExpand
 
 #include "corNgsild/LdProblem.h"                          // LD_ERROR_BAD_REQUEST_DATA
@@ -41,7 +41,7 @@
 //
 // Forward declarations
 //
-static LdQNode* parseOr(const char** pp, KAlloc* kaP);
+static LdQNode* parseOr(const char** pp, CorAlloc* kaP);
 
 
 
@@ -61,10 +61,10 @@ static void skipWs(const char** pp)
 //
 // expandAttr - expand an attribute name via the request's @context
 //
-static char* expandAttr(const char* name, int len, KAlloc* kaP)
+static char* expandAttr(const char* name, int len, CorAlloc* kaP)
 {
   // Make a NUL-terminated copy
-  char* buf = (char*) kaAlloc(kaP, len + 1);
+  char* buf = (char*) corAlloc(kaP, len + 1);
   if (buf == NULL)
     return NULL;
   memcpy(buf, name, len);
@@ -80,7 +80,7 @@ static char* expandAttr(const char* name, int len, KAlloc* kaP)
   // which lives in the request allocator.  The q-expr tree persists in the
   // subscription cache, so copy the result into kaP (the cache allocator).
   if (expanded != NULL && expanded != buf)
-    return kaStrdup(kaP, expanded);
+    return corAllocStrdup(kaP, expanded);
 
   return buf;
 }
@@ -95,9 +95,9 @@ static char* expandAttr(const char* name, int len, KAlloc* kaP)
 // separator), and round-tripped q strings carry fully %-encoded IRIs
 // (ldQRender's compactOrEncode) — decode AFTER splitting on raw dots.
 //
-static char* urlDecodeSegment(const char* s, int len, KAlloc* kaP)
+static char* urlDecodeSegment(const char* s, int len, CorAlloc* kaP)
 {
-  char* out = (char*) kaAlloc(kaP, len + 1);
+  char* out = (char*) corAlloc(kaP, len + 1);
   int   o   = 0;
 
   for (int i = 0; i < len; i++)
@@ -127,7 +127,7 @@ static char* urlDecodeSegment(const char* s, int len, KAlloc* kaP)
 // context aliases (sub-attribute names expand exactly like attribute
 // names do).
 //
-static void expandAttrPath(LdQTerm* termP, const char* start, int len, KAlloc* kaP)
+static void expandAttrPath(LdQTerm* termP, const char* start, int len, CorAlloc* kaP)
 {
   int segN = 1;
   for (int i = 0; i < len; i++)
@@ -136,7 +136,7 @@ static void expandAttrPath(LdQTerm* termP, const char* start, int len, KAlloc* k
   termP->subPathV = NULL;
   termP->subPathN = 0;
   if (segN > 1)
-    termP->subPathV = (char**) kaAlloc(kaP, (segN - 1) * sizeof(char*));
+    termP->subPathV = (char**) corAlloc(kaP, (segN - 1) * sizeof(char*));
 
   int segStart = 0;
   int segIx    = 0;
@@ -292,7 +292,7 @@ static int scanValueLen(const char* p)
 //
 // Items can be quoted strings, numbers, or booleans (all same type expected).
 //
-static bool parseValueList(const char* raw, int rawLen, LdQTerm* term, KAlloc* kaP)
+static bool parseValueList(const char* raw, int rawLen, LdQTerm* term, CorAlloc* kaP)
 {
   // Count commas to determine size
   int count = 1;
@@ -303,12 +303,12 @@ static bool parseValueList(const char* raw, int rawLen, LdQTerm* term, KAlloc* k
       count++;
   }
 
-  char** values  = (char**) kaAlloc(kaP, count * sizeof(char*));
+  char** values  = (char**) corAlloc(kaP, count * sizeof(char*));
   int    ix      = 0;
   const char* p  = raw;
   const char* end = raw + rawLen;
 
-  LdQValueType* itemTypeV = (LdQValueType*) kaAlloc(kaP, count * sizeof(LdQValueType));
+  LdQValueType* itemTypeV = (LdQValueType*) corAlloc(kaP, count * sizeof(LdQValueType));
 
   while (p < end && ix < count)
   {
@@ -356,7 +356,7 @@ static bool parseValueList(const char* raw, int rawLen, LdQTerm* term, KAlloc* k
       // matcher's strtod turned `[3` into 0 and `7]` into 7, and a list of
       // unquoted URIs compared as numbers and matched nothing at all.
       //
-      char* probe = (char*) kaAlloc(kaP, itemLen + 1);
+      char* probe = (char*) corAlloc(kaP, itemLen + 1);
       memcpy(probe, itemStart, itemLen);
       probe[itemLen] = 0;
 
@@ -371,7 +371,7 @@ static bool parseValueList(const char* raw, int rawLen, LdQTerm* term, KAlloc* k
       }
     }
 
-    char* item = (char*) kaAlloc(kaP, itemLen + 1);
+    char* item = (char*) corAlloc(kaP, itemLen + 1);
     memcpy(item, itemStart, itemLen);
     item[itemLen] = 0;
     values[ix++] = item;
@@ -395,16 +395,16 @@ static bool parseValueList(const char* raw, int rawLen, LdQTerm* term, KAlloc* k
 //
 // parseRange - parse a range value: lo..hi
 //
-static bool parseRange(const char* raw, int rawLen, const char* dotdot, LdQTerm* term, KAlloc* kaP)
+static bool parseRange(const char* raw, int rawLen, const char* dotdot, LdQTerm* term, CorAlloc* kaP)
 {
   int loLen = (int)(dotdot - raw);
   int hiLen = rawLen - loLen - 2;  // skip ".."
 
-  char* lo = (char*) kaAlloc(kaP, loLen + 1);
+  char* lo = (char*) corAlloc(kaP, loLen + 1);
   memcpy(lo, raw, loLen);
   lo[loLen] = 0;
 
-  char* hi = (char*) kaAlloc(kaP, hiLen + 1);
+  char* hi = (char*) corAlloc(kaP, hiLen + 1);
   memcpy(hi, dotdot + 2, hiLen);
   hi[hiLen] = 0;
 
@@ -458,7 +458,7 @@ static bool parseRange(const char* raw, int rawLen, const char* dotdot, LdQTerm*
 //
 // parseTerm - parse: attrName [operator value]
 //
-static LdQNode* parseTerm(const char** pp, KAlloc* kaP)
+static LdQNode* parseTerm(const char** pp, CorAlloc* kaP)
 {
   const char* p = *pp;
 
@@ -519,7 +519,7 @@ static LdQNode* parseTerm(const char** pp, KAlloc* kaP)
     }
     p++;  // consume '}'
 
-    LdQNode* linkedP        = (LdQNode*) kaAlloc(kaP, sizeof(LdQNode));
+    LdQNode* linkedP        = (LdQNode*) corAlloc(kaP, sizeof(LdQNode));
     linkedP->type           = LdQLinkedNode;
     linkedP->linked.relName = expandAttr(attrStart, attrLen, kaP);
     linkedP->linked.subQ    = subQ;
@@ -531,7 +531,7 @@ static LdQNode* parseTerm(const char** pp, KAlloc* kaP)
   //
   // Allocate the node
   //
-  LdQNode* nodeP = (LdQNode*) kaAlloc(kaP, sizeof(LdQNode));
+  LdQNode* nodeP = (LdQNode*) corAlloc(kaP, sizeof(LdQNode));
   nodeP->type = LdQTermNode;
   expandAttrPath(&nodeP->term, attrStart, attrLen, kaP);
 
@@ -559,7 +559,7 @@ static LdQNode* parseTerm(const char** pp, KAlloc* kaP)
     int segN = 1;
     for (int i = 0; i < vpLen; i++)
       if (vpStart[i] == '.') segN++;
-    nodeP->term.valuePathV = (char**) kaAlloc(kaP, segN * sizeof(char*));
+    nodeP->term.valuePathV = (char**) corAlloc(kaP, segN * sizeof(char*));
 
     int segStart = 0;
     for (int i = 0; i <= vpLen; i++)
@@ -665,7 +665,7 @@ static LdQNode* parseTerm(const char** pp, KAlloc* kaP)
     if (*p == '"')
       p++;
 
-    char* s = (char*) kaAlloc(kaP, sLen + 1);
+    char* s = (char*) corAlloc(kaP, sLen + 1);
     memcpy(s, sStart, sLen);
     s[sLen] = 0;
 
@@ -733,7 +733,7 @@ static LdQNode* parseTerm(const char** pp, KAlloc* kaP)
     int rLen = scanValueLen(p);
     p += rLen;
 
-    char* s = (char*) kaAlloc(kaP, rLen + 1);
+    char* s = (char*) corAlloc(kaP, rLen + 1);
     memcpy(s, rStart, rLen);
     s[rLen] = 0;
 
@@ -774,7 +774,7 @@ static LdQNode* parseTerm(const char** pp, KAlloc* kaP)
     }
     else if (looksLikeDateTime(vStart))
     {
-      char* s = (char*) kaAlloc(kaP, vLen + 1);
+      char* s = (char*) corAlloc(kaP, vLen + 1);
       memcpy(s, vStart, vLen);
       s[vLen] = 0;
 
@@ -790,7 +790,7 @@ static LdQNode* parseTerm(const char** pp, KAlloc* kaP)
       // admits those on its own (`CompEqualityValue` lists URI), so the
       // fallback was only ever covering tokens that are not Values at all.
       //
-      char* tok = (char*) kaAlloc(kaP, vLen + 1);
+      char* tok = (char*) corAlloc(kaP, vLen + 1);
       memcpy(tok, vStart, vLen);
       tok[vLen] = 0;
 
@@ -860,7 +860,7 @@ static LdQNode* parseTerm(const char** pp, KAlloc* kaP)
 //
 // parseAtom - parse: '(' expr ')' | term
 //
-static LdQNode* parseAtom(const char** pp, KAlloc* kaP)
+static LdQNode* parseAtom(const char** pp, CorAlloc* kaP)
 {
   skipWs(pp);
 
@@ -893,12 +893,12 @@ static LdQNode* parseAtom(const char** pp, KAlloc* kaP)
 //
 // groupAdd - add a child to an AND/OR group, growing the array if needed
 //
-static void groupAdd(LdQNode* groupP, LdQNode* childP, KAlloc* kaP)
+static void groupAdd(LdQNode* groupP, LdQNode* childP, CorAlloc* kaP)
 {
   if (groupP->group.count >= groupP->group.allocated)
   {
     int newAlloc = (groupP->group.allocated == 0) ? 4 : groupP->group.allocated * 2;
-    LdQNode** newV = (LdQNode**) kaAlloc(kaP, newAlloc * sizeof(LdQNode*));
+    LdQNode** newV = (LdQNode**) corAlloc(kaP, newAlloc * sizeof(LdQNode*));
 
     if (groupP->group.childV != NULL)
       memcpy(newV, groupP->group.childV, groupP->group.count * sizeof(LdQNode*));
@@ -916,7 +916,7 @@ static void groupAdd(LdQNode* groupP, LdQNode* childP, KAlloc* kaP)
 //
 // parseAnd - parse: atom *(';' atom)
 //
-static LdQNode* parseAnd(const char** pp, KAlloc* kaP)
+static LdQNode* parseAnd(const char** pp, CorAlloc* kaP)
 {
   LdQNode* left = parseAtom(pp, kaP);
 
@@ -929,7 +929,7 @@ static LdQNode* parseAnd(const char** pp, KAlloc* kaP)
     return left;  // single atom, no AND
 
   // Build AND group
-  LdQNode* andP = (LdQNode*) kaAlloc(kaP, sizeof(LdQNode));
+  LdQNode* andP = (LdQNode*) corAlloc(kaP, sizeof(LdQNode));
   andP->type              = LdQAndNode;
   andP->group.childV      = NULL;
   andP->group.count       = 0;
@@ -958,7 +958,7 @@ static LdQNode* parseAnd(const char** pp, KAlloc* kaP)
 //
 // parseOr - parse: andExpr *('|' andExpr)
 //
-static LdQNode* parseOr(const char** pp, KAlloc* kaP)
+static LdQNode* parseOr(const char** pp, CorAlloc* kaP)
 {
   LdQNode* left = parseAnd(pp, kaP);
 
@@ -971,7 +971,7 @@ static LdQNode* parseOr(const char** pp, KAlloc* kaP)
     return left;  // single andExpr, no OR
 
   // Build OR group
-  LdQNode* orP = (LdQNode*) kaAlloc(kaP, sizeof(LdQNode));
+  LdQNode* orP = (LdQNode*) corAlloc(kaP, sizeof(LdQNode));
   orP->type              = LdQOrNode;
   orP->group.childV      = NULL;
   orP->group.count       = 0;
@@ -1026,7 +1026,7 @@ static int linkedDepth(LdQNode* nodeP)
 
 // ldQParse - parse a ?q= expression into an expression tree
 //
-LdQNode* ldQParse(const char* q, KAlloc* kaP)
+LdQNode* ldQParse(const char* q, CorAlloc* kaP)
 {
   if (q == NULL || q[0] == 0)
     return NULL;
@@ -1078,7 +1078,7 @@ LdQNode* ldQParse(const char* q, KAlloc* kaP)
 // the full q (with the linked layers) stays in corNgsild.qExpr for the
 // post-filter.
 //
-LdQNode* ldQStripLinked(LdQNode* node, KAlloc* kaP)
+LdQNode* ldQStripLinked(LdQNode* node, CorAlloc* kaP)
 {
   if (node == NULL)
     return NULL;
@@ -1090,7 +1090,7 @@ LdQNode* ldQStripLinked(LdQNode* node, KAlloc* kaP)
     return NULL;
 
   // AND / OR group
-  LdQNode** keep = (LdQNode**) kaAlloc(kaP, node->group.count * sizeof(LdQNode*));
+  LdQNode** keep = (LdQNode**) corAlloc(kaP, node->group.count * sizeof(LdQNode*));
   int       n    = 0;
 
   for (int i = 0; i < node->group.count; i++)
@@ -1109,7 +1109,7 @@ LdQNode* ldQStripLinked(LdQNode* node, KAlloc* kaP)
   if (n == 1)
     return keep[0];
 
-  LdQNode* groupP = (LdQNode*) kaAlloc(kaP, sizeof(LdQNode));
+  LdQNode* groupP = (LdQNode*) corAlloc(kaP, sizeof(LdQNode));
   groupP->type             = node->type;
   groupP->group.childV     = keep;
   groupP->group.count      = n;

@@ -26,7 +26,7 @@
 // (consumers live for the broker's lifetime).
 //
 #include <stdint.h>                                    // uint64_t
-#include "kalloc/KAlloc.h"                             // KAlloc
+#include "corAlloc/CorAlloc.h"                         // CorAlloc
 
 
 // -----------------------------------------------------------------------------
@@ -38,7 +38,7 @@
 //   nowNs : monotonic clock_gettime(CLOCK_REALTIME) at the start of this tick
 //   kaP   : per-tick scratch allocator (reset before each callback)
 //
-typedef void (*LdPeriodicTickFn)(void* ctx, uint64_t nowNs, KAlloc* kaP);
+typedef void (*LdPeriodicTickFn)(void* ctx, uint64_t nowNs, CorAlloc* kaP);
 
 
 

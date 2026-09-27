@@ -24,7 +24,7 @@
 #include <stdbool.h>                                  // bool
 #include <string.h>                                   // strcmp
 
-#include "kalloc/KAlloc.h"                            // KAlloc
+#include "corAlloc/CorAlloc.h"                        // CorAlloc
 #include "corTree/CorNode.h"                          // CorNode
 #include "corTree/corTreeBuilder.h"                   // corTreeObject, corTreeArray, corTreeString, corTreeInteger, corTreeChildAdd, corTreeChildRemove
 #include "corTree/corTreeClone.h"                     // corTreeClone
@@ -86,7 +86,7 @@ static inline bool isNgsildNull(const CorNode* nodeP)
 // target allocator (so it lives alongside the object it is attached to).
 // createdAt is left alone.
 //
-static void bumpModifiedAt(CorNode* objP, uint64_t ts, KAlloc* targetAllocP)
+static void bumpModifiedAt(CorNode* objP, uint64_t ts, CorAlloc* targetAllocP)
 {
   if (objP == NULL || objP->type != CorObject)
     return;
@@ -235,7 +235,7 @@ static void typeChangeToProperty(const char* attrName, LdAttrType targetType)
 static CorNode* buildInstanceFromScalar(const char* attrName,
                                        CorNode*    targetInstance,
                                        CorNode*    fragScalar,
-                                       KAlloc*     targetAllocP)
+                                       CorAlloc*   targetAllocP)
 {
   LdAttrType targetType = (targetInstance != NULL)
                             ? ldAttrTypeDetect(targetInstance)
@@ -451,7 +451,7 @@ static CorNode* buildInstanceFromScalar(const char* attrName,
 // top-level attribute (e.g. {@none: {...}, "urn:ds:1": {...}}).
 //
 static void injectObservedAtIfNeeded(CorNode* wrapperTarget, CorNode* wrapperFragment,
-                                     uint64_t observedAtNs, KAlloc* targetAllocP)
+                                     uint64_t observedAtNs, CorAlloc* targetAllocP)
 {
   if (observedAtNs == 0 || wrapperTarget == NULL || wrapperFragment == NULL)
     return;
@@ -562,7 +562,7 @@ void ldEntityReplaceReport(CorNode* oldEntityP, CorNode* newEntityP, LdMergeRepo
 // patchP is not mutated; nodes that need to be inserted into targetP are
 // cloned with targetAllocP.
 //
-static bool rfc7396Merge(CorNode* targetP, CorNode* patchP, uint64_t ts, KAlloc* targetAllocP, bool deepValueMerge)
+static bool rfc7396Merge(CorNode* targetP, CorNode* patchP, uint64_t ts, CorAlloc* targetAllocP, bool deepValueMerge)
 {
   bool mutated = false;
 
@@ -681,7 +681,7 @@ static bool typeHasValue(CorNode* typeP, const char* s)
 //
 // Returns true if target was mutated.
 //
-static bool typeUnion(CorNode* target, CorNode* fragType, KAlloc* targetAllocP)
+static bool typeUnion(CorNode* target, CorNode* fragType, CorAlloc* targetAllocP)
 {
   CorNode* tType = corTreeLookup(target, "type");
 
@@ -741,7 +741,7 @@ static bool typeUnion(CorNode* target, CorNode* fragType, KAlloc* targetAllocP)
 // Per § 5.6.17.4 the surgical-merge PATCH replaces scope outright when present
 // in the fragment (no overwrite flag on the Merge Entity endpoint).
 //
-static bool scopeReplace(CorNode* target, CorNode* fragScope, KAlloc* targetAllocP)
+static bool scopeReplace(CorNode* target, CorNode* fragScope, CorAlloc* targetAllocP)
 {
   CorNode* tScope = corTreeLookup(target, LD_VOCAB_SCOPE);
 
@@ -778,7 +778,7 @@ static bool scopeReplace(CorNode* target, CorNode* fragScope, KAlloc* targetAllo
 //
 // Returns true if anything inside the wrapper was mutated.
 //
-static bool mergeAttrWrapper(CorNode* target, CorNode* fragment, uint64_t ts, KAlloc* targetAllocP, bool deepValueMerge)
+static bool mergeAttrWrapper(CorNode* target, CorNode* fragment, uint64_t ts, CorAlloc* targetAllocP, bool deepValueMerge)
 {
   bool mutated = false;
 
@@ -855,7 +855,7 @@ static bool mergeApply(CorNode*       target,
                        CorNode*       fragment,
                        LdMergeReport* reportP,
                        uint64_t       ts,
-                       KAlloc*        targetAllocP,
+                       CorAlloc*      targetAllocP,
                        bool           deepValueMerge)
 {
   if (target == NULL || target->type != CorObject || fragment == NULL || fragment->type != CorObject)
@@ -1089,7 +1089,7 @@ static bool mergeApply(CorNode*       target,
 // instance replaces the matching stored one (or is appended / null-deleted);
 // the primary value is replaced wholesale, never deep-merged.
 //
-bool ldEntityFragmentApply(CorNode* target, CorNode* fragment, LdMergeReport* reportP, uint64_t ts, KAlloc* targetAllocP)
+bool ldEntityFragmentApply(CorNode* target, CorNode* fragment, LdMergeReport* reportP, uint64_t ts, CorAlloc* targetAllocP)
 {
   return mergeApply(target, fragment, reportP, ts, targetAllocP, false);
 }
@@ -1103,7 +1103,7 @@ bool ldEntityFragmentApply(CorNode* target, CorNode* fragment, LdMergeReport* re
 // Surgically deep-merges object values (keeping unspecified siblings; null
 // deletes a member), per IETF RFC 7396 (JSON Merge Patch).
 //
-bool ldEntityMerge(CorNode* target, CorNode* fragment, LdMergeReport* reportP, uint64_t ts, KAlloc* targetAllocP)
+bool ldEntityMerge(CorNode* target, CorNode* fragment, LdMergeReport* reportP, uint64_t ts, CorAlloc* targetAllocP)
 {
   return mergeApply(target, fragment, reportP, ts, targetAllocP, true);
 }

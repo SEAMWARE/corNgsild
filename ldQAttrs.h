@@ -15,7 +15,7 @@
 // forwarder to compute the set of attrs that must be present on the
 // remote-returned slice so a local re-evaluation of q stays sound.
 //
-#include "kalloc/KAlloc.h"                             // KAlloc
+#include "corAlloc/CorAlloc.h"                         // CorAlloc
 
 #include "corNgsild/LdQ.h"                              // LdQNode
 
@@ -33,6 +33,6 @@
 // is empty / no terms.  Duplicates are dropped (the same attr referenced
 // multiple times appears once).
 //
-extern char** ldQAttrs(LdQNode* nodeP, KAlloc* kaP);
+extern char** ldQAttrs(LdQNode* nodeP, CorAlloc* kaP);
 
 #endif  // CORNGSILD_LDQATTRS_H_

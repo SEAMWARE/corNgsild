@@ -17,7 +17,7 @@
 // 8601 strings only when the client asks for system attributes.
 //
 #include "corTree/CorNode.h"                             // CorNode
-#include "kalloc/KAlloc.h"                               // KAlloc
+#include "corAlloc/CorAlloc.h"                           // CorAlloc
 
 
 
@@ -34,7 +34,7 @@ extern void ldSysTimestampToIso(long long nsec, char* buf, int bufSize);
 // ldSysTimestampsToIso - convert a tree's top-level createdAt/modifiedAt
 //                        integer members to ISO 8601 strings, in place
 //
-extern void ldSysTimestampsToIso(CorNode* treeP, KAlloc* allocP);
+extern void ldSysTimestampsToIso(CorNode* treeP, CorAlloc* allocP);
 
 
 

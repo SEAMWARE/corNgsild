@@ -14,9 +14,9 @@
 #include <errno.h>                                        // errno, ERANGE
 #include <limits.h>                                       // INT_MAX
 
-#include "kalloc/KAlloc.h"                             // kaAlloc
-#include "kalloc/kaAlloc.h"                            // kaAlloc
-#include "kalloc/kaStrdup.h"                           // kaStrdup
+#include "corAlloc/CorAlloc.h"                         // corAlloc
+#include "corAlloc/corAlloc.h"                         // corAlloc
+#include "corAlloc/corAllocStrdup.h"                   // corAllocStrdup
 #include "corNgsild/LdProj.h"                              // LdProjItem, ldProjectionParse, ldProjectionTopLevelNames
 #include "corRest/corRest.h"                             // corRest
 #include "corLog/corLog.h"                              // COR_W
@@ -74,7 +74,7 @@ char*       ldDefaultContextUrl  = NULL;
 // The download is cached by corLdContextFromUrl, so the repeat calls this gets
 // - once per arriving sample, on the transport threads - cost a hash lookup.
 //
-CorLdContext* ldDefaultContext(KAlloc* kaP)
+CorLdContext* ldDefaultContext(CorAlloc* kaP)
 {
   if (ldDefaultContextUrl == NULL)
     return corLdCoreContext();
@@ -145,7 +145,7 @@ bool ldContextResolve(void)
   if (corNgsild.contextP != NULL)
     return (corNgsild.contextUnavailableUrl == NULL);
 
-  KAlloc* faP          = &corRest.kalloc;
+  CorAlloc* faP        = &corRest.kalloc;
   char*   requestedUrl = NULL;
 
   for (int i = 0; i < corRest.in.httpHeaderCount; i++)
@@ -208,7 +208,7 @@ bool ldContextResolve(void)
       *end = 0;
       corNgsild.contextP = corLdContextFromUrl(start, faP);
       if (corNgsild.contextP == NULL)
-        requestedUrl = kaStrdup(faP, start);   // copy: *end is restored below
+        requestedUrl = corAllocStrdup(faP, start);   // copy: *end is restored below
       *end = '>';
 
       break;
@@ -315,7 +315,7 @@ static bool intParam(const char* name, const char* value, int* outP, int minVal)
 //
 void ldParamHook(const char* name, const char* value)
 {
-  KAlloc* faP = &corRest.kalloc;
+  CorAlloc* faP = &corRest.kalloc;
 
   //
   // Lazy context resolution
@@ -379,7 +379,7 @@ void ldParamHook(const char* name, const char* value)
     {
       int n = corNgsild.typeExpr->groupCount;
 
-      corNgsild.typeV = (char**) kaAlloc(faP, (n + 1) * sizeof(char*));
+      corNgsild.typeV = (char**) corAlloc(faP, (n + 1) * sizeof(char*));
 
       for (int ix = 0; ix < n; ix++)
         corNgsild.typeV[ix] = corNgsild.typeExpr->groupV[ix].typeV[0];
@@ -432,7 +432,7 @@ void ldParamHook(const char* name, const char* value)
     }
 
     int   len = 9 + strlen(value) + 1;   // "urn:goal:" + id + NUL
-    char* dsP = (char*) kaAlloc(faP, len);
+    char* dsP = (char*) corAlloc(faP, len);
 
     snprintf(dsP, len, "urn:goal:%s", value);
 
@@ -441,7 +441,7 @@ void ldParamHook(const char* name, const char* value)
 
     corNgsild.goal          = (char*) value;
     corNgsild.datasetId     = dsP;
-    corNgsild.datasetIdV    = (char**) kaAlloc(faP, 2 * sizeof(char*));
+    corNgsild.datasetIdV    = (char**) corAlloc(faP, 2 * sizeof(char*));
     corNgsild.datasetIdV[0] = dsP;
     corNgsild.datasetIdV[1] = NULL;
   }
@@ -452,7 +452,7 @@ void ldParamHook(const char* name, const char* value)
     // pickV[] is derived from the top level for back-compat with code
     // that still walks a flat array.
     const char* errMsg = NULL;
-    char*       valCopy = kaStrdup(faP, value);   // parser writes NULs in-place
+    char*       valCopy = corAllocStrdup(faP, value);   // parser writes NULs in-place
     corNgsild.pick     = (char*) value;
     corNgsild.pickTree = ldProjectionParse(valCopy, faP, &errMsg);
     if (errMsg != NULL)
@@ -473,7 +473,7 @@ void ldParamHook(const char* name, const char* value)
   else if (strcmp(name, "omit") == 0)
   {
     const char* errMsg = NULL;
-    char*       valCopy = kaStrdup(faP, value);
+    char*       valCopy = corAllocStrdup(faP, value);
     corNgsild.omit     = (char*) value;
     corNgsild.omitTree = ldProjectionParse(valCopy, faP, &errMsg);
     if (errMsg != NULL)
@@ -694,7 +694,7 @@ void ldParamHook(const char* name, const char* value)
     // Deprecated comma-separated param.  Wrap with commas for safe substring matching:
     //   "keyValues,sysAttrs" => ",keyValues,sysAttrs,"
     int   len    = strlen(value);
-    char* wrapped = (char*) kaAlloc(faP, len + 3);  // ',' + value + ',' + '\0'
+    char* wrapped = (char*) corAlloc(faP, len + 3); // ',' + value + ',' + '\0'
 
     wrapped[0] = ',';
     memcpy(wrapped + 1, value, len);
@@ -910,10 +910,10 @@ void ldParamHook(const char* name, const char* value)
     for (const char* p = value; *p; p++)
       if (*p == ',') count++;
 
-    LdOrderTerm* terms = (LdOrderTerm*) kaAlloc(faP, (count + 1) * sizeof(LdOrderTerm));
+    LdOrderTerm* terms = (LdOrderTerm*) corAlloc(faP, (count + 1) * sizeof(LdOrderTerm));
     int ix = 0;
 
-    char* copy = (char*) kaAlloc(faP, strlen(value) + 1);
+    char* copy = (char*) corAlloc(faP, strlen(value) + 1);
     strcpy(copy, value);
 
     char* saveptr = NULL;
@@ -960,7 +960,7 @@ void ldParamHook(const char* name, const char* value)
         int members = 1;
         for (char* p = inner; *p != 0; p++)
           if (*p == '.') members++;
-        valuePathV = (char**) kaAlloc(faP, (members + 1) * sizeof(char*));
+        valuePathV = (char**) corAlloc(faP, (members + 1) * sizeof(char*));
         char* vsave = NULL;
         for (char* m = strtok_r(inner, ".", &vsave); m != NULL; m = strtok_r(NULL, ".", &vsave))
           valuePathV[valuePathN++] = m;

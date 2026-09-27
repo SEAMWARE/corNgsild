@@ -8,7 +8,7 @@
 // Copyright 2026 Seamware
 // SPDX-License-Identifier: Apache-2.0
 //
-#include "kalloc/KAlloc.h"                            // KAlloc
+#include "corAlloc/CorAlloc.h"                        // CorAlloc
 #include "corTree/CorNode.h"                           // CorNode
 
 
@@ -28,6 +28,6 @@
 // The merge is done broker-side so the DB plugins only ever STORE a complete
 // document — the NGSI-LD merge/delete semantics live here, not in each plugin.
 //
-extern void ldRegSubMerge(CorNode* target, CorNode* fragment, KAlloc* allocP);
+extern void ldRegSubMerge(CorNode* target, CorNode* fragment, CorAlloc* allocP);
 
 #endif  // COR_NGSILD_LD_REG_SUB_MERGE_H

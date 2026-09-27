@@ -23,7 +23,7 @@
 //
 #include <stdbool.h>                                   // bool
 
-#include "kalloc/KAlloc.h"                             // KAlloc
+#include "corAlloc/CorAlloc.h"                         // CorAlloc
 #include "corRest/CorRestVerb.h"                         // CorRestVerb
 #include "corRest/CorRestKeyValue.h"                     // CorRestKeyValue
 
@@ -62,7 +62,7 @@ typedef struct LdForwardResponse
   int              headerCount;
   char*            body;              // borrowed into allocP
   int              bodyLen;
-  KAlloc*          allocP;            // arena that headers + body live in
+  CorAlloc*        allocP;            // arena that headers + body live in
   int              error;             // 0 = transport ok (statusCode is meaningful); nonzero = transport-level failure
   char             errorDetail[256];  // human-readable transport error
 } LdForwardResponse;

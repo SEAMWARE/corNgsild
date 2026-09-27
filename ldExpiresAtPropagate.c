@@ -11,7 +11,7 @@
 #include <stdint.h>                                      // int64_t
 #include <string.h>                                      // strcmp
 
-#include "kalloc/KAlloc.h"                               // KAlloc
+#include "corAlloc/CorAlloc.h"                           // CorAlloc
 #include "corTree/CorNode.h"                             // CorNode
 #include "corTree/corTreeLookup.h"                       // corTreeLookup
 #include "corTree/corTreeBuilder.h"                      // corTreeString, corTreeInteger, corTreeChildAdd
@@ -57,7 +57,7 @@ static bool isAttributeContainer(CorNode* nodeP)
 // capture path). An instance inherits the shape of the value it copies, and an
 // instance that already has one keeps its own shape.
 //
-static void applyToInstance(CorNode* instP, CorNode* entityExpP, int64_t entityNs, KAlloc* allocP)
+static void applyToInstance(CorNode* instP, CorNode* entityExpP, int64_t entityNs, CorAlloc* allocP)
 {
   CorNode* attrExpP = corTreeLookup(instP, LD_VOCAB_EXPIRES_AT);
 
@@ -107,7 +107,7 @@ static void applyToInstance(CorNode* instP, CorNode* entityExpP, int64_t entityN
 //
 // ldExpiresAtPropagate -
 //
-void ldExpiresAtPropagate(CorNode* entityP, KAlloc* allocP)
+void ldExpiresAtPropagate(CorNode* entityP, CorAlloc* allocP)
 {
   if (entityP == NULL || entityP->type != CorObject)
     return;

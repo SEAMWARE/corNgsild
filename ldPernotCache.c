@@ -10,8 +10,8 @@
 #include <stdlib.h>                                    // calloc, malloc, free
 #include <string.h>                                    // strcmp, strdup
 
-#include "kalloc/KAlloc.h"                             // KAlloc, kaAlloc
-#include "kalloc/kaBufferInit.h"                       // kaBufferInit
+#include "corAlloc/CorAlloc.h"                         // CorAlloc, corAlloc
+#include "corAlloc/corAllocBufferInit.h"               // corAllocBufferInit
 #include "corTree/CorNode.h"                           // CorNode
 #include "corTree/corTreeLookup.h"                     // corTreeLookup
 #include "corTree/corTreeClone.h"                      // corTreeClone
@@ -120,7 +120,7 @@ static void entitySelectorsFree(LdSubEntitySelector* head)
 LdPernotCache* ldPernotCacheCreate(void)
 {
   LdPernotCache* cacheP = (LdPernotCache*) calloc(1, sizeof(LdPernotCache));
-  kaBufferInit(&cacheP->alloc, cacheP->allocBuf, sizeof(cacheP->allocBuf), 4096, NULL, "pernot-cache");
+  corAllocBufferInit(&cacheP->alloc, cacheP->allocBuf, sizeof(cacheP->allocBuf), 4096, NULL, "pernot-cache");
   return cacheP;
 }
 

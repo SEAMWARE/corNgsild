@@ -10,9 +10,9 @@
 #include <stdlib.h>                                      // malloc, free, calloc
 #include <string.h>                                      // strlen, strchr, strdup
 
-#include "kalloc/KAlloc.h"                             // kaAlloc
-#include "kalloc/kaAlloc.h"                            // kaAlloc
-#include "kalloc/kaStrdup.h"                            // kaStrdup
+#include "corAlloc/CorAlloc.h"                         // corAlloc
+#include "corAlloc/corAlloc.h"                         // corAlloc
+#include "corAlloc/corAllocStrdup.h"                    // corAllocStrdup
 #include "corJsonld/corLdExpand.h"                           // corLdExpand
 
 #include "corNgsild/LdProblem.h"                          // LD_ERROR_BAD_REQUEST_DATA
@@ -27,20 +27,20 @@
 // memAlloc / memStrdup - allocator shims
 //
 // The parser is called from two contexts:
-//   - request-scoped (URL params, validators) → KAlloc arena, freed
+//   - request-scoped (URL params, validators) → CorAlloc arena, freed
 //     automatically at end of request
 //   - sub-cache build (parsed tree must outlive any request and any
-//     KAlloc arena) → caller passes NULL and the parser uses malloc;
+//     CorAlloc arena) → caller passes NULL and the parser uses malloc;
 //     ldTypeExprFree releases the tree later.
 //
-static void* memAlloc(KAlloc* kaP, unsigned long long size)
+static void* memAlloc(CorAlloc* kaP, unsigned long long size)
 {
-  return (kaP != NULL) ? kaAlloc(kaP, size) : calloc(1, (size_t) size);
+  return (kaP != NULL) ? corAlloc(kaP, size) : calloc(1, (size_t) size);
 }
 
-static char* memStrdup(KAlloc* kaP, const char* s)
+static char* memStrdup(CorAlloc* kaP, const char* s)
 {
-  return (kaP != NULL) ? kaStrdup(kaP, s) : strdup(s);
+  return (kaP != NULL) ? corAllocStrdup(kaP, s) : strdup(s);
 }
 
 
@@ -49,7 +49,7 @@ static char* memStrdup(KAlloc* kaP, const char* s)
 //
 // expandType - expand a single type name via the request's @context
 //
-static char* expandType(const char* name, KAlloc* kaP)
+static char* expandType(const char* name, CorAlloc* kaP)
 {
   char* expanded = corLdExpand(corNgsild.contextP, name, kaP, NULL, NULL);
 
@@ -73,7 +73,7 @@ static char* expandType(const char* name, KAlloc* kaP)
 // Input: a kaP-strdup'd string like "Home;Vehicle" or "Building" (parens already stripped).
 // Splits on ';', expands each type, fills group->typeV and group->count.
 //
-static bool parseGroup(char* str, LdTypeGroup* group, KAlloc* kaP)
+static bool parseGroup(char* str, LdTypeGroup* group, CorAlloc* kaP)
 {
   // Count semicolons to determine array size
   int count = 1;
@@ -129,7 +129,7 @@ static bool parseGroup(char* str, LdTypeGroup* group, KAlloc* kaP)
 //   OrEntityType = '(' EntityType *(';' EntityType) ')' | EntityType
 //   orOp         = '|' / ','
 //
-LdTypeExpr* ldTypeExprParse(const char* value, KAlloc* kaP)
+LdTypeExpr* ldTypeExprParse(const char* value, CorAlloc* kaP)
 {
   if (value == NULL || value[0] == 0)
     return NULL;
@@ -244,7 +244,7 @@ LdTypeExpr* ldTypeExprParse(const char* value, KAlloc* kaP)
 //
 // ldTypeExprFree - release a malloc-mode parsed tree
 //
-// Only call on trees parsed with kaP == NULL. KAlloc-allocated trees
+// Only call on trees parsed with kaP == NULL. CorAlloc-allocated trees
 // are freed automatically when the arena is reset; calling this on
 // one would double-free.
 //

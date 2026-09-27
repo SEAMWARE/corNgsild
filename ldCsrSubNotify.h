@@ -19,7 +19,7 @@
 //
 #include <stdbool.h>                                    // bool
 
-#include "kalloc/KAlloc.h"                              // KAlloc
+#include "corAlloc/CorAlloc.h"                          // CorAlloc
 #include "corTree/CorNode.h"                            // CorNode
 
 #include "corNgsild/LdSubCache.h"                        // LdSubCacheItem
@@ -104,7 +104,7 @@ extern void ldCsrSubOnRegDelete(LdSubCache* regSubCacheP, LdRegCacheItem* regIte
 // Used to capture the "was matching" set before a CSR update so that
 // ldCsrSubOnRegUpdate can emit the right triggerReason per sub.
 //
-extern char** ldCsrSubMatchingSubIds(LdSubCache* regSubCacheP, LdRegCacheItem* regItemP, KAlloc* allocP);
+extern char** ldCsrSubMatchingSubIds(LdSubCache* regSubCacheP, LdRegCacheItem* regItemP, CorAlloc* allocP);
 
 
 

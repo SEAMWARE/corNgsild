@@ -21,7 +21,7 @@
 // path pays zero JSON-tree allocation cost.
 //
 
-#include "kalloc/KAlloc.h"                             // KAlloc
+#include "corAlloc/CorAlloc.h"                         // CorAlloc
 #include "corTree/CorNode.h"                           // CorNode
 
 
@@ -40,7 +40,7 @@ typedef struct LdBatchError
 
 typedef struct LdBatchErrorList
 {
-  KAlloc*       allocP;       // arena for entry copies and the eventual tree
+  CorAlloc*     allocP;       // arena for entry copies and the eventual tree
   int           count;
   int           cap;
   LdBatchError* entries;
@@ -52,7 +52,7 @@ typedef struct LdBatchErrorList
 //
 // ldBatchErrorListInit - zero-state initialiser. No allocations.
 //
-extern void ldBatchErrorListInit(LdBatchErrorList* listP, KAlloc* allocP);
+extern void ldBatchErrorListInit(LdBatchErrorList* listP, CorAlloc* allocP);
 
 
 
@@ -92,7 +92,7 @@ static inline int ldBatchErrorListCount(const LdBatchErrorList* listP)
 // `status` and `detail` per § 5.2.17.
 //
 extern CorNode* ldBatchErrorListToTree(const LdBatchErrorList* listP,
-                                      KAlloc*                 allocP);
+                                      CorAlloc*               allocP);
 
 
 

@@ -18,8 +18,8 @@
 #include "corRest/corRest.h"                            // corRest
 #include <string.h>                                      // strcmp
 
-#include "kalloc/KAlloc.h"                             // KAlloc
-#include "kalloc/kaAlloc.h"                            // kaAlloc
+#include "corAlloc/CorAlloc.h"                         // CorAlloc
+#include "corAlloc/corAlloc.h"                         // corAlloc
 #include "corTree/CorNode.h"                            // CorNode
 #include "corTree/corTreeBuilder.h"                      // corTreeObject
 #include "corTree/corTreeChildReplace.h"                // corTreeChildReplace
@@ -280,7 +280,7 @@ static bool hasExplicitAttrType(CorNode* objP)
 //
 // addTypeField - prepend a "type" string field to an attribute object
 //
-static void addTypeField(CorNode* attrP, const char* typeName, KAlloc* kaP)
+static void addTypeField(CorNode* attrP, const char* typeName, CorAlloc* kaP)
 {
   CorNode* typeNodeP = corTreeString(corRest.kallocP, "type", typeName);
   if (typeNodeP != NULL)
@@ -302,14 +302,14 @@ static void addTypeField(CorNode* attrP, const char* typeName, KAlloc* kaP)
 // Input:   entityP has child  "attrName": <value>
 // Output:  entityP has child  "attrName": { "type": "Property", LD_VOCAB_HAS_VALUE: <value> }
 //
-static void wrapAsProperty(CorNode* entityP, CorNode* childP, KAlloc* kaP)
+static void wrapAsProperty(CorNode* entityP, CorNode* childP, CorAlloc* kaP)
 {
   CorNode* wrapperP = corTreeObject(corRest.kallocP, childP->name);
   if (wrapperP == NULL)
     return;
 
   // Create a value node that copies the original's type+value
-  CorNode* valueNodeP = (CorNode*) kaAlloc(kaP, sizeof(CorNode));
+  CorNode* valueNodeP = (CorNode*) corAlloc(kaP, sizeof(CorNode));
   if (valueNodeP == NULL)
     return;
 
@@ -337,14 +337,14 @@ static void wrapAsProperty(CorNode* entityP, CorNode* childP, KAlloc* kaP)
 // bare GeoJSON on the wire per § 5.2.9, but stored and rendered as the
 // normalized GeoProperty wrapper).
 //
-void ldWrapAsGeoProperty(CorNode* entityP, CorNode* childP, KAlloc* kaP)
+void ldWrapAsGeoProperty(CorNode* entityP, CorNode* childP, CorAlloc* kaP)
 {
   CorNode* wrapperP = corTreeObject(corRest.kallocP, childP->name);
   if (wrapperP == NULL)
     return;
 
   // Create hasValue node pointing to the GeoJSON object's children
-  CorNode* valueNodeP = (CorNode*) kaAlloc(kaP, sizeof(CorNode));
+  CorNode* valueNodeP = (CorNode*) corAlloc(kaP, sizeof(CorNode));
   if (valueNodeP == NULL)
     return;
 
@@ -363,7 +363,7 @@ void ldWrapAsGeoProperty(CorNode* entityP, CorNode* childP, KAlloc* kaP)
 
 
 
-static bool normalizeAttr(CorNode* containerP, CorNode* attrP, KAlloc* kaP, bool mergeMode, bool simplified);
+static bool normalizeAttr(CorNode* containerP, CorNode* attrP, CorAlloc* kaP, bool mergeMode, bool simplified);
 
 
 
@@ -374,7 +374,7 @@ static bool normalizeAttr(CorNode* containerP, CorNode* attrP, KAlloc* kaP, bool
 // containerP: the parent node (entity or attribute object) — needed for corTreeChildReplace
 // attrP:      the attribute node to normalize
 //
-static bool normalizeAttr(CorNode* containerP, CorNode* attrP, KAlloc* kaP, bool mergeMode, bool simplified)
+static bool normalizeAttr(CorNode* containerP, CorNode* attrP, CorAlloc* kaP, bool mergeMode, bool simplified)
 {
   // ---  Scalar children → simplified Property  ---
   if (attrP->type == CorInt || attrP->type == CorFloat || attrP->type == CorString || attrP->type == CorBoolean || attrP->type == CorNull)
@@ -630,7 +630,7 @@ static bool normalizeAttr(CorNode* containerP, CorNode* attrP, KAlloc* kaP, bool
 //
 // ldNormalizeInput -
 //
-bool ldNormalizeInput(CorNode* entityP, KAlloc* kaP, bool mergeMode, bool simplified)
+bool ldNormalizeInput(CorNode* entityP, CorAlloc* kaP, bool mergeMode, bool simplified)
 {
   if (entityP == NULL || entityP->type != CorObject)
     return true;

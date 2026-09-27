@@ -10,7 +10,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // 
 //
-#include "kalloc/KAlloc.h"                         // KAlloc
+#include "corAlloc/CorAlloc.h"                     // CorAlloc
 
 
 
@@ -21,7 +21,7 @@
 // Returns a faP-allocated array of pointers into the original (modified) string.
 // The input string is modified in place: commas are replaced with '\0'.
 //
-extern char** ldParamSplit(char* csv, KAlloc* faP);
+extern char** ldParamSplit(char* csv, CorAlloc* faP);
 
 
 

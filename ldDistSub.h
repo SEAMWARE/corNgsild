@@ -21,7 +21,7 @@
 // derived sub goes out with our own alias appended, so a remote that has
 // us in its own reg-cache won't forward back to us.
 //
-#include "kalloc/KAlloc.h"                              // KAlloc
+#include "corAlloc/CorAlloc.h"                          // CorAlloc
 #include "corTree/CorNode.h"                            // CorNode
 #include "corNgsild/LdSubCache.h"                       // LdSubCache, LdSubCacheItem
 #include "corNgsild/LdRegCache.h"                       // LdRegCache
@@ -52,7 +52,7 @@ typedef void (*LdDistSubPersistFunc)(LdSubCacheItem* itemP, void* userData);
 // hand-off to the persist callback.
 //
 struct CorJson;
-extern CorNode* ldDistSubSubordinatesFragment(LdSubCacheItem* itemP, struct KAlloc* allocP);
+extern CorNode* ldDistSubSubordinatesFragment(LdSubCacheItem* itemP, struct CorAlloc* allocP);
 
 
 

@@ -13,8 +13,8 @@
 #include <time.h>                                        // gmtime_r, strftime
 #include "corRest/corRest.h"                            // corRest
 
-#include "kalloc/KAlloc.h"                             // KAlloc
-#include "kalloc/kaAlloc.h"                            // kaAlloc
+#include "corAlloc/CorAlloc.h"                         // CorAlloc
+#include "corAlloc/corAlloc.h"                         // corAlloc
 #include "corTree/CorNode.h"                            // CorNode
 #include "corTree/corTreeBuilder.h"                       // corTreeArray
 #include "corTree/corTreeChildReplace.h"                // corTreeChildReplace
@@ -111,7 +111,7 @@ static bool isValueKey(const char* name)
 // Walks the children of an object, finds createdAt/modifiedAt integer nodes,
 // and converts them in-place to string nodes.
 //
-static void timestampsToIsoStrings(CorNode* objP, KAlloc* allocP)
+static void timestampsToIsoStrings(CorNode* objP, CorAlloc* allocP)
 {
   if (objP == NULL || objP->type != CorObject)
     return;
@@ -128,7 +128,7 @@ static void timestampsToIsoStrings(CorNode* objP, KAlloc* allocP)
       char  isoBuf[32];
       timestampToIso(childP->value.i, isoBuf, sizeof(isoBuf));
 
-      char* isoStr = (char*) kaAlloc(allocP, 32);
+      char* isoStr = (char*) corAlloc(allocP, 32);
       if (isoStr != NULL)
       {
         strcpy(isoStr, isoBuf);
@@ -282,7 +282,7 @@ static int childCount(CorNode* containerP)
 //   - Single named key    -> plain attribute object with datasetId field
 //   - Multiple keys       -> array of attribute objects with datasetId fields
 //
-void ldEntityToApi(CorNode* entityP, KAlloc* faP)
+void ldEntityToApi(CorNode* entityP, CorAlloc* faP)
 {
   if (entityP == NULL || entityP->type != CorObject)
     return;
