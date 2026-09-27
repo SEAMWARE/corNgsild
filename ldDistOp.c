@@ -14,11 +14,11 @@
 #include <time.h>                                      // clock_gettime
 #include <regex.h>                                     // regexec
 
-#include "kjson/KjNode.h"                              // KjNode
-#include "kjson/kjBuilder.h"                           // kjObject, kjString, kjChildAdd
-#include "kjson/kjLookup.h"                            // kjLookup
-#include "kjson/kjClone.h"                             // kjClone
-#include "kjson/kjParse.h"                             // kjParse
+#include "corTree/CorNode.h"                           // CorNode
+#include "corTree/corTreeBuilder.h"                    // corTreeObject, corTreeString, corTreeChildAdd
+#include "corTree/corTreeLookup.h"                     // corTreeLookup
+#include "corTree/corTreeClone.h"                      // corTreeClone
+#include "corJson/corJsonParse.h"                      // corJsonParse
 
 #include "kalloc/kaAlloc.h"                            // kaAlloc
 #include "ktrace/kTrace.h"                             // KT_T, KT_W
@@ -807,7 +807,7 @@ static const char* responseContextLink(CorRestKeyValue* headerV, int headerCount
 //
 // distOpBodyParse - parse a forwarded response body once, at reception
 //
-// The parsed tree is cached on the result so no consumer re-parses it (kjParse
+// The parsed tree is cached on the result so no consumer re-parses it (corJsonParse
 // tokenizes the buffer in place — a second parse would hit a mutated buffer).
 // A 2xx response whose non-empty body will not parse is an unusable upstream
 // reply: downgrade the leg to 502 Bad Gateway with a diagnostic, so every
@@ -820,12 +820,12 @@ static void distOpBodyParse(LdDistOpBatchResult* rP)
   if ((rP->responseBody == NULL) || (rP->responseBodyLen == 0))
     return;
 
-  // Trace the RAW forwarded-response body before kjParse tokenizes it in place
+  // Trace the RAW forwarded-response body before corJsonParse tokenizes it in place
   // (afterwards it is no longer printable as a string).
   KT_T(LdTFwdResBody, "forward response body (status %d, %d bytes): %.*s",
        rP->statusCode, rP->responseBodyLen, rP->responseBodyLen, rP->responseBody);
 
-  rP->responseTree = kjParse(corRest.kjsonP, rP->responseBody);
+  rP->responseTree = corJsonParse(corRest.corJsonP, rP->responseBody);
 
   if ((rP->responseTree == NULL) && (rP->statusCode >= 200) && (rP->statusCode < 300))
   {
@@ -1164,7 +1164,7 @@ int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
 //
 // ldDistOpBatchErrorAdd -
 //
-void ldDistOpBatchErrorAdd(KjNode*      errorsArrayP,
+void ldDistOpBatchErrorAdd(CorNode*     errorsArrayP,
                            const char*  entityId,
                            int          statusCode,
                            const char*  errorType,
@@ -1175,20 +1175,20 @@ void ldDistOpBatchErrorAdd(KjNode*      errorsArrayP,
   if (errorsArrayP == NULL)
     return;
 
-  KjNode* entry = kjObject(corRest.kjsonP, NULL);
-  kjChildAdd(entry, kjString(corRest.kjsonP, "entityId", entityId));
+  CorNode* entry = corTreeObject(corRest.kallocP, NULL);
+  corTreeChildAdd(entry, corTreeString(corRest.kallocP, "entityId", entityId));
 
-  KjNode* pd = kjObject(corRest.kjsonP, "error");
-  kjChildAdd(pd, kjString (corRest.kjsonP, "type",   errorType));
-  kjChildAdd(pd, kjString (corRest.kjsonP, "title",  errorTitle));
-  kjChildAdd(pd, kjInteger(corRest.kjsonP, "status", statusCode));
-  kjChildAdd(pd, kjString (corRest.kjsonP, "detail", errorDetail));
-  kjChildAdd(entry, pd);
+  CorNode* pd = corTreeObject(corRest.kallocP, "error");
+  corTreeChildAdd(pd, corTreeString (corRest.kallocP, "type", errorType));
+  corTreeChildAdd(pd, corTreeString (corRest.kallocP, "title", errorTitle));
+  corTreeChildAdd(pd, corTreeInteger(corRest.kallocP, "status", statusCode));
+  corTreeChildAdd(pd, corTreeString (corRest.kallocP, "detail", errorDetail));
+  corTreeChildAdd(entry, pd);
 
   if (regId != NULL)
-    kjChildAdd(entry, kjString(corRest.kjsonP, "registrationId", regId));
+    corTreeChildAdd(entry, corTreeString(corRest.kallocP, "registrationId", regId));
 
-  kjChildAdd(errorsArrayP, entry);
+  corTreeChildAdd(errorsArrayP, entry);
 }
 
 
@@ -1213,7 +1213,7 @@ void ldDistOpBatchErrorAdd(KjNode*      errorsArrayP,
 // Other uniform-error cases (all-400, all-422, …) still produce 207 —
 // they tend to carry per-entity detail worth surfacing.
 //
-int ldBatchErrorsSingleStatus(KjNode* errorsArrayP)
+int ldBatchErrorsSingleStatus(CorNode* errorsArrayP)
 {
   if (errorsArrayP == NULL || errorsArrayP->value.firstChildP == NULL)
     return -1;
@@ -1228,13 +1228,13 @@ int ldBatchErrorsSingleStatus(KjNode* errorsArrayP)
   int         matchedStatus = -1;
   const char* matchedType   = NULL;
 
-  for (KjNode* entry = errorsArrayP->value.firstChildP; entry != NULL; entry = entry->next)
+  for (CorNode* entry = errorsArrayP->value.firstChildP; entry != NULL; entry = entry->next)
   {
-    KjNode* errP = kjLookup(entry, "error");
-    if (errP == NULL || errP->type != KjObject) return -1;
+    CorNode* errP = corTreeLookup(entry, "error");
+    if (errP == NULL || errP->type != CorObject) return -1;
 
-    KjNode* tP = kjLookup(errP, "type");
-    if (tP == NULL || tP->type != KjString) return -1;
+    CorNode* tP = corTreeLookup(errP, "type");
+    if (tP == NULL || tP->type != CorString) return -1;
 
     if (matchedType == NULL)
     {
@@ -1276,46 +1276,46 @@ int ldBatchErrorsSingleStatus(KjNode* errorsArrayP)
 // `entityIds` (array) if more — so the client knows WHICH entity(ies)
 // caused the failure without parsing the multi-status envelope.
 //
-KjNode* ldBatchErrorAsProblemDetails(KjNode* errorsArrayP)
+CorNode* ldBatchErrorAsProblemDetails(CorNode* errorsArrayP)
 {
   if (errorsArrayP == NULL || errorsArrayP->value.firstChildP == NULL)
     return NULL;
 
-  KjNode* first = errorsArrayP->value.firstChildP;
-  KjNode* errP  = kjLookup(first, "error");
-  if (errP == NULL || errP->type != KjObject)
+  CorNode* first = errorsArrayP->value.firstChildP;
+  CorNode* errP = corTreeLookup(first, "error");
+  if (errP == NULL || errP->type != CorObject)
     return NULL;
 
-  KjNode* pd = kjObject(corRest.kjsonP, NULL);
+  CorNode* pd = corTreeObject(corRest.kallocP, NULL);
 
   // type / title — clone from the first error so the body looks like a
   // standalone ProblemDetails. Drop "detail" (the per-entity detail strings
   // become noise once we collapse — title alone is clear).
-  KjNode* typeP  = kjLookup(errP, "type");
-  KjNode* titleP = kjLookup(errP, "title");
-  if (typeP  != NULL) kjChildAdd(pd, kjClone(corRest.kjsonP, typeP));
-  if (titleP != NULL) kjChildAdd(pd, kjClone(corRest.kjsonP, titleP));
+  CorNode* typeP = corTreeLookup(errP, "type");
+  CorNode* titleP = corTreeLookup(errP, "title");
+  if (typeP  != NULL) corTreeChildAdd(pd, corTreeClone(corRest.kallocP, typeP));
+  if (titleP != NULL) corTreeChildAdd(pd, corTreeClone(corRest.kallocP, titleP));
 
   // entityId(s) — extension field (anticipated ETSI ProblemDetails extension).
   int n = 0;
-  for (KjNode* e = errorsArrayP->value.firstChildP; e != NULL; e = e->next) n++;
+  for (CorNode* e = errorsArrayP->value.firstChildP; e != NULL; e = e->next) n++;
 
   if (n == 1)
   {
-    KjNode* idP = kjLookup(first, "entityId");
-    if (idP != NULL && idP->type == KjString)
-      kjChildAdd(pd, kjString(corRest.kjsonP, "entityId", idP->value.s));
+    CorNode* idP = corTreeLookup(first, "entityId");
+    if (idP != NULL && idP->type == CorString)
+      corTreeChildAdd(pd, corTreeString(corRest.kallocP, "entityId", idP->value.s));
   }
   else
   {
-    KjNode* idsArr = kjArray(corRest.kjsonP, "entityIds");
-    for (KjNode* e = errorsArrayP->value.firstChildP; e != NULL; e = e->next)
+    CorNode* idsArr = corTreeArray(corRest.kallocP, "entityIds");
+    for (CorNode* e = errorsArrayP->value.firstChildP; e != NULL; e = e->next)
     {
-      KjNode* idP = kjLookup(e, "entityId");
-      if (idP != NULL && idP->type == KjString)
-        kjChildAdd(idsArr, kjString(corRest.kjsonP, NULL, idP->value.s));
+      CorNode* idP = corTreeLookup(e, "entityId");
+      if (idP != NULL && idP->type == CorString)
+        corTreeChildAdd(idsArr, corTreeString(corRest.kallocP, NULL, idP->value.s));
     }
-    kjChildAdd(pd, idsArr);
+    corTreeChildAdd(pd, idsArr);
   }
 
   return pd;
@@ -1384,7 +1384,7 @@ int ldDistOpEntriesBuild(const LdDistOpGroup  groupV[],
                          bool                 perRi,
                          const char*          riEntityIdCheck,
                          const char*          riAttrIriCheck,
-                         KjNode*              errorsArrayP,
+                         CorNode*             errorsArrayP,
                          LdDistOpEntry**      entriesPP)
 {
   // Upper-bound capacity: sum over all groups of matchN, times max riP count

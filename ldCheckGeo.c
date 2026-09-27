@@ -12,10 +12,10 @@
 #include <string.h>                                      // strcmp
 
 #include "kbase/kLibLog.h"                             // KLOG_T
-#include "kjson/KjNode.h"                               // KjNode
-#include "kjson/kjBufferCreate.h"                       // kjBufferCreate
-#include "kjson/kjParse.h"                              // kjParse
-#include "kjson/kjBuilder.h"                            // kjObject, kjString, kjChildAdd
+#include "corTree/CorNode.h"                            // CorNode
+#include "corJson/corJsonCreate.h"                      // corJsonCreate
+#include "corJson/corJsonParse.h"                       // corJsonParse
+#include "corTree/corTreeBuilder.h"                     // corTreeObject, corTreeString, corTreeChildAdd
 
 #include "corRest/CorRestState.h"                         // corRest
 
@@ -41,12 +41,12 @@ static bool geoError(const char* detail)
 
 // -----------------------------------------------------------------------------
 //
-// nodeNumberValue - extract numeric value from a KjNode (int or float)
+// nodeNumberValue - extract numeric value from a CorNode (int or float)
 //
-static bool nodeNumberValue(KjNode* nodeP, double* valueP)
+static bool nodeNumberValue(CorNode* nodeP, double* valueP)
 {
-  if (nodeP->type == KjFloat)  { *valueP = nodeP->value.f;           return true; }
-  if (nodeP->type == KjInt)    { *valueP = (double) nodeP->value.i;  return true; }
+  if (nodeP->type == CorFloat) { *valueP = nodeP->value.f;           return true; }
+  if (nodeP->type == CorInt)   { *valueP = (double) nodeP->value.i;  return true; }
   return false;
 }
 
@@ -56,10 +56,10 @@ static bool nodeNumberValue(KjNode* nodeP, double* valueP)
 //
 // childCount - count children of a container node
 //
-static int childCount(KjNode* containerP)
+static int childCount(CorNode* containerP)
 {
   int count = 0;
-  for (KjNode* childP = containerP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = containerP->value.firstChildP; childP != NULL; childP = childP->next)
     ++count;
   return count;
 }
@@ -70,17 +70,17 @@ static int childCount(KjNode* containerP)
 //
 // checkPosition - validate a single position [lon, lat] or [lon, lat, alt]
 //
-static bool checkPosition(KjNode* posP)
+static bool checkPosition(CorNode* posP)
 {
-  if (posP == NULL || posP->type != KjArray)
+  if (posP == NULL || posP->type != CorArray)
     return geoError("GeoJSON position must be an array");
 
   int count = childCount(posP);
   if (count < 2 || count > 3)
     return geoError("GeoJSON position must have 2 or 3 elements (lon, lat[, alt])");
 
-  KjNode*  lonP = posP->value.firstChildP;
-  KjNode*  latP = lonP->next;
+  CorNode* lonP = posP->value.firstChildP;
+  CorNode* latP = lonP->next;
   double   lon, lat;
 
   if (nodeNumberValue(lonP, &lon) == false)  return geoError("GeoJSON longitude must be a number");
@@ -104,15 +104,15 @@ static bool checkPosition(KjNode* posP)
 //
 // checkLineString - validate an array of positions (at least 2)
 //
-static bool checkLineString(KjNode* coordsP)
+static bool checkLineString(CorNode* coordsP)
 {
-  if (coordsP == NULL || coordsP->type != KjArray)
+  if (coordsP == NULL || coordsP->type != CorArray)
     return geoError("GeoJSON LineString coordinates must be an array");
 
   if (childCount(coordsP) < 2)
     return geoError("GeoJSON LineString must have at least 2 positions");
 
-  for (KjNode* posP = coordsP->value.firstChildP; posP != NULL; posP = posP->next)
+  for (CorNode* posP = coordsP->value.firstChildP; posP != NULL; posP = posP->next)
   {
     if (checkPosition(posP) == false)
       return false;
@@ -127,10 +127,10 @@ static bool checkLineString(KjNode* coordsP)
 //
 // positionsEqual - check if two position arrays have the same coordinates
 //
-static bool positionsEqual(KjNode* pos1P, KjNode* pos2P)
+static bool positionsEqual(CorNode* pos1P, CorNode* pos2P)
 {
-  KjNode*  c1 = pos1P->value.firstChildP;
-  KjNode*  c2 = pos2P->value.firstChildP;
+  CorNode* c1 = pos1P->value.firstChildP;
+  CorNode* c2 = pos2P->value.firstChildP;
 
   while (c1 != NULL && c2 != NULL)
   {
@@ -208,13 +208,13 @@ static bool segmentsIntersect(double ax, double ay, double bx, double by,
 
 // -----------------------------------------------------------------------------
 //
-// posXY - extract (lon, lat) from a position KjNode
+// posXY - extract (lon, lat) from a position CorNode
 //
-static bool posXY(KjNode* posP, double* lonP, double* latP)
+static bool posXY(CorNode* posP, double* lonP, double* latP)
 {
-  if (posP == NULL || posP->type != KjArray)
+  if (posP == NULL || posP->type != CorArray)
     return false;
-  KjNode* a = posP->value.firstChildP;
+  CorNode* a = posP->value.firstChildP;
   if (a == NULL || a->next == NULL)
     return false;
   return nodeNumberValue(a, lonP) && nodeNumberValue(a->next, latP);
@@ -235,7 +235,7 @@ static bool posXY(KjNode* posP, double* lonP, double* latP)
 // front catches the common test-fixture errors and keeps us out of the
 // DB error path.
 //
-static bool ringSelfIntersects(KjNode* ringP)
+static bool ringSelfIntersects(CorNode* ringP)
 {
   int n = childCount(ringP);
   if (n < 4)  return false;
@@ -245,7 +245,7 @@ static bool ringSelfIntersects(KjNode* ringP)
   if (xs == NULL || ys == NULL) { free(xs); free(ys); return false; }
 
   int i = 0;
-  for (KjNode* posP = ringP->value.firstChildP; posP != NULL; posP = posP->next, i++)
+  for (CorNode* posP = ringP->value.firstChildP; posP != NULL; posP = posP->next, i++)
   {
     if (posXY(posP, &xs[i], &ys[i]) == false) { free(xs); free(ys); return false; }
   }
@@ -273,18 +273,18 @@ static bool ringSelfIntersects(KjNode* ringP)
 }
 
 
-static bool checkLinearRing(KjNode* ringP)
+static bool checkLinearRing(CorNode* ringP)
 {
-  if (ringP == NULL || ringP->type != KjArray)
+  if (ringP == NULL || ringP->type != CorArray)
     return geoError("GeoJSON polygon ring must be an array");
 
   if (childCount(ringP) < 4)
     return geoError("GeoJSON polygon ring must have at least 4 positions");
 
-  KjNode*  firstP = NULL;
-  KjNode*  lastP  = NULL;
+  CorNode* firstP = NULL;
+  CorNode* lastP  = NULL;
 
-  for (KjNode* posP = ringP->value.firstChildP; posP != NULL; posP = posP->next)
+  for (CorNode* posP = ringP->value.firstChildP; posP != NULL; posP = posP->next)
   {
     if (checkPosition(posP) == false)
       return false;
@@ -316,15 +316,15 @@ static bool checkLinearRing(KjNode* ringP)
 //
 // checkPolygonCoords - validate polygon coordinates (array of linear rings)
 //
-static bool checkPolygonCoords(KjNode* coordsP)
+static bool checkPolygonCoords(CorNode* coordsP)
 {
-  if (coordsP == NULL || coordsP->type != KjArray)
+  if (coordsP == NULL || coordsP->type != CorArray)
     return geoError("GeoJSON Polygon coordinates must be an array");
 
   if (childCount(coordsP) < 1)
     return geoError("GeoJSON Polygon must have at least one ring");
 
-  for (KjNode* ringP = coordsP->value.firstChildP; ringP != NULL; ringP = ringP->next)
+  for (CorNode* ringP = coordsP->value.firstChildP; ringP != NULL; ringP = ringP->next)
   {
     if (checkLinearRing(ringP) == false)
       return false;
@@ -343,26 +343,26 @@ static bool checkPolygonCoords(KjNode* coordsP)
 // After JSON-LD expansion, "type" stays as "type" (expands to @type, skipped)
 // and "coordinates" becomes "https://purl.org/geojson/vocab#coordinates".
 //
-bool ldCheckGeo(KjNode* geoValueP)
+bool ldCheckGeo(CorNode* geoValueP)
 {
-  if (geoValueP == NULL || geoValueP->type != KjObject)
+  if (geoValueP == NULL || geoValueP->type != CorObject)
     return geoError("GeoJSON value must be an object");
 
-  KjNode*  typeP       = NULL;
-  KjNode*  coordsP     = NULL;
+  CorNode* typeP       = NULL;
+  CorNode* coordsP     = NULL;
 
   // Duplicate keys inside the geometry object are rejected uniformly by the
   // duplicate-member check in ldParseHook, before this validation runs.
-  for (KjNode* childP = geoValueP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = geoValueP->value.firstChildP; childP != NULL; childP = childP->next)
   {
     if      (strcmp(childP->name, "type") == 0)               typeP   = childP;
     else if (strcmp(childP->name, LD_VOCAB_COORDINATES) == 0) coordsP = childP;
   }
 
-  if (typeP == NULL || typeP->type != KjString)
+  if (typeP == NULL || typeP->type != CorString)
     return geoError("GeoJSON must have a 'type' string field");
 
-  if (coordsP == NULL || coordsP->type != KjArray)
+  if (coordsP == NULL || coordsP->type != CorArray)
     return geoError("GeoJSON must have a 'coordinates' array field");
 
   const char* geoType = typeP->value.s;
@@ -381,7 +381,7 @@ bool ldCheckGeo(KjNode* geoValueP)
 
   if (strcmp(geoType, "MultiPoint") == 0 || strcmp(geoType, LD_VOCAB_GEO_MULTI_POINT) == 0)
   {
-    for (KjNode* posP = coordsP->value.firstChildP; posP != NULL; posP = posP->next)
+    for (CorNode* posP = coordsP->value.firstChildP; posP != NULL; posP = posP->next)
     {
       if (checkPosition(posP) == false)
         return false;
@@ -391,7 +391,7 @@ bool ldCheckGeo(KjNode* geoValueP)
 
   if (strcmp(geoType, "MultiLineString") == 0 || strcmp(geoType, LD_VOCAB_GEO_MULTI_LINE) == 0)
   {
-    for (KjNode* lineP = coordsP->value.firstChildP; lineP != NULL; lineP = lineP->next)
+    for (CorNode* lineP = coordsP->value.firstChildP; lineP != NULL; lineP = lineP->next)
     {
       if (checkLineString(lineP) == false)
         return false;
@@ -401,7 +401,7 @@ bool ldCheckGeo(KjNode* geoValueP)
 
   if (strcmp(geoType, "MultiPolygon") == 0 || strcmp(geoType, LD_VOCAB_GEO_MULTI_POLYGON) == 0)
   {
-    for (KjNode* polyP = coordsP->value.firstChildP; polyP != NULL; polyP = polyP->next)
+    for (CorNode* polyP = coordsP->value.firstChildP; polyP != NULL; polyP = polyP->next)
     {
       if (checkPolygonCoords(polyP) == false)
         return false;
@@ -434,7 +434,7 @@ bool ldCheckGeoQuery(const char* geometry, const char* coordinates)
   if (geometry == NULL || coordinates == NULL)
     return true;  // nothing to check; caller's earlier validation handles missing pair
 
-  // kjParse mutates its input — work on a heap copy.
+  // corJsonParse mutates its input — work on a heap copy.
   char* dup = strdup(coordinates);
   if (dup == NULL)
   {
@@ -443,10 +443,10 @@ bool ldCheckGeoQuery(const char* geometry, const char* coordinates)
     return false;
   }
 
-  Kjson  kjson;
-  Kjson* kjsonP = kjBufferCreate(&kjson, &corRest.kalloc);
+  CorJson corJson;
+  CorJson* corJsonP = corJsonCreate(&corJson, &corRest.kalloc);
 
-  KjNode* coordsP = kjParse(kjsonP, dup);
+  CorNode* coordsP = corJsonParse(corJsonP, dup);
   free(dup);
   if (coordsP == NULL)
   {
@@ -455,10 +455,10 @@ bool ldCheckGeoQuery(const char* geometry, const char* coordinates)
     return false;
   }
 
-  KjNode* root = kjObject(kjsonP, NULL);
-  kjChildAdd(root, kjString(kjsonP, "type", (char*) geometry));
+  CorNode* root = corTreeObject(&corRest.kalloc, NULL);
+  corTreeChildAdd(root, corTreeString(&corRest.kalloc, "type", (char*) geometry));
   coordsP->name = (char*) "coordinates";
-  kjChildAdd(root, coordsP);
+  corTreeChildAdd(root, coordsP);
 
   return ldCheckGeo(root);
 }

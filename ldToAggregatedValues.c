@@ -24,12 +24,12 @@
 
 #include "kalloc/KAlloc.h"                              // KAlloc
 #include "kalloc/kaAlloc.h"                             // kaAlloc
-#include "kjson/kjson.h"                                // Kjson
-#include "kjson/KjNode.h"                               // KjNode
-#include "kjson/kjBuilder.h"                            // kjObject, kjArray, kjString, kjFloat, kjChildAdd
-#include "kjson/kjLookup.h"                             // kjLookup
-#include "kjson/kjRender.h"                             // kjFastRender
-#include "kjson/kjRenderSize.h"                         // kjFastRenderSize
+#include "corJson/CorJson.h"                            // CorJson
+#include "corTree/CorNode.h"                            // CorNode
+#include "corTree/corTreeBuilder.h"                     // corTreeObject, corTreeArray, corTreeString, corTreeFloat, corTreeChildAdd
+#include "corTree/corTreeLookup.h"                      // corTreeLookup
+#include "corJson/corJsonRender.h"                      // corJsonFastRender
+#include "corJson/corJsonRenderSize.h"                  // corJsonFastRenderSize
 
 #include "corNgsild/ldIsEntityKeyword.h"                  // ldIsEntityKeyword
 #include "corNgsild/ldCheckDateTime.h"                    // ldIsoToNanoseconds
@@ -242,7 +242,7 @@ static char* nsToIso(uint64_t ns, KAlloc* faP)
 //
 // distinctCount is computed across all kinds via stringified values
 // (numbers → %.17g, bools → "true"/"false", strings verbatim, arrays/
-// objects → compact JSON via kjFastRender).
+// objects → compact JSON via corJsonFastRender).
 //
 // Relationships (table 3) only allow totalCount / distinctCount and are
 // fed into the string accumulator using the relationship's `object` URI
@@ -382,13 +382,13 @@ static void bucketAddString(Bucket* b, const char* s)
 
 // Render a JSON node (compact) into a fresh kalloc buffer. Used for arrays
 // and objects to feed distinctCount.
-static const char* renderNodeJson(KjNode* nP, KAlloc* faP)
+static const char* renderNodeJson(CorNode* nP, KAlloc* faP)
 {
-  // kjFastRender's contract for KjArray/KjObject is "open with [ or {, walk
+  // corJsonFastRender's contract for CorArray/CorObject is "open with [ or {, walk
   // children, close" — the parent name is NOT emitted, exactly what we want.
-  int   sz  = kjFastRenderSize(nP) + 1;
+  int   sz  = corJsonFastRenderSize(nP) + 1;
   char* buf = (char*) kaAlloc(faP, sz);
-  kjFastRender(nP, buf);
+  corJsonFastRender(nP, buf);
   return buf;
 }
 
@@ -397,10 +397,10 @@ static const char* renderNodeJson(KjNode* nP, KAlloc* faP)
 // Array: feed the size into the numeric sub-accumulator (per table 1's
 // JSON-Array column: avg/sum/min/max are all "of the sizes"); feed the
 // canonical JSON into distinctCount.
-static void bucketAddArray(Bucket* b, KjNode* arrayP, KAlloc* faP)
+static void bucketAddArray(Bucket* b, CorNode* arrayP, KAlloc* faP)
 {
   int sz = 0;
-  for (KjNode* p = arrayP->value.firstChildP; p != NULL; p = p->next)
+  for (CorNode* p = arrayP->value.firstChildP; p != NULL; p = p->next)
     sz++;
 
   // Replicate the numeric accumulator update without growing distinct
@@ -418,7 +418,7 @@ static void bucketAddArray(Bucket* b, KjNode* arrayP, KAlloc* faP)
 
 
 // Object: only totalCount and distinctCount per table 1.
-static void bucketAddObject(Bucket* b, KjNode* objP, KAlloc* faP)
+static void bucketAddObject(Bucket* b, CorNode* objP, KAlloc* faP)
 {
   b->objectCount++;
   bucketTrackDistinct(b, renderNodeJson(objP, faP));
@@ -440,14 +440,14 @@ static double bucketStddev(const Bucket* b)
 //
 // emitValueArray - build [[v, ts-start, ts-end], ...] for one method.
 //
-static KjNode* emitValueArray(const char*   method,
+static CorNode* emitValueArray(const char*  method,
                               Bucket*       buckets,
                               int           bucketCount,
                               const char*   attrType,
-                              Kjson*        kjsonP,
+                              KAlloc*       allocP,
                               KAlloc*       faP)
 {
-  KjNode* arr = kjArray(kjsonP, method);
+  CorNode* arr = corTreeArray(allocP, method);
 
   // § 4.5.19.1 table 3: Relationships only support totalCount and
   // distinctCount; everything else is N/A.
@@ -515,14 +515,14 @@ static KjNode* emitValueArray(const char*   method,
       continue;
     }
 
-    KjNode* tuple = kjArray(kjsonP, NULL);
+    CorNode* tuple = corTreeArray(allocP, NULL);
     if (tupleString != NULL)
-      kjChildAdd(tuple, kjString(kjsonP, NULL, tupleString));
+      corTreeChildAdd(tuple, corTreeString(allocP, NULL, tupleString));
     else
-      kjChildAdd(tuple, kjFloat(kjsonP, NULL, tupleNumeric));
-    kjChildAdd(tuple, kjString(kjsonP, NULL, nsToIso(b->startNs, faP)));
-    kjChildAdd(tuple, kjString(kjsonP, NULL, nsToIso(b->endNs, faP)));
-    kjChildAdd(arr, tuple);
+      corTreeChildAdd(tuple, corTreeFloat(allocP, NULL, tupleNumeric));
+    corTreeChildAdd(tuple, corTreeString(allocP, NULL, nsToIso(b->startNs, faP)));
+    corTreeChildAdd(tuple, corTreeString(allocP, NULL, nsToIso(b->endNs, faP)));
+    corTreeChildAdd(arr, tuple);
   }
 
   return arr;
@@ -536,26 +536,26 @@ static KjNode* emitValueArray(const char*   method,
 //                 simplified-aggregated shape:
 //                   { type, "<method>": [[v, t-start, t-end], ...], ... }
 //
-static void aggregateAttr(KjNode*      attrP,
+static void aggregateAttr(CorNode*     attrP,
                           char**       methodsV,
                           uint32_t      periodMonths,
                           uint64_t     periodNs,
                           uint64_t     startNs,
                           uint64_t     endNs,
                           const char*  timeProp,
-                          Kjson*       kjsonP,
+                          KAlloc*      allocP,
                           KAlloc*      faP)
 {
-  if (attrP == NULL || attrP->type != KjArray)
+  if (attrP == NULL || attrP->type != CorArray)
     return;
 
   // First pass: figure out attr type + scan instances.
-  KjNode* firstP = attrP->value.firstChildP;
-  if (firstP == NULL || firstP->type != KjObject)
+  CorNode* firstP = attrP->value.firstChildP;
+  if (firstP == NULL || firstP->type != CorObject)
     return;
 
-  KjNode* typeP = kjLookup(firstP, "type");
-  const char* attrType = (typeP != NULL && typeP->type == KjString) ? typeP->value.s : "Property";
+  CorNode* typeP = corTreeLookup(firstP, "type");
+  const char* attrType = (typeP != NULL && typeP->type == CorString) ? typeP->value.s : "Property";
 
   // § 4.5.19.1 covers only Property (table 1) and Relationship (table 3).
   // GeoProperty / LanguageProperty / VocabProperty / List* / Json are
@@ -584,11 +584,11 @@ static void aggregateAttr(KjNode*      attrP,
   {
     uint64_t earliest = UINT64_MAX;
     uint64_t latest   = 0;
-    for (KjNode* instP = firstP; instP != NULL; instP = instP->next)
+    for (CorNode* instP = firstP; instP != NULL; instP = instP->next)
     {
-      if (instP->type != KjObject) continue;
-      KjNode* tsP = kjLookup(instP, timeProp);
-      if (tsP == NULL || tsP->type != KjString) continue;
+      if (instP->type != CorObject) continue;
+      CorNode* tsP = corTreeLookup(instP, timeProp);
+      if (tsP == NULL || tsP->type != CorString) continue;
       uint64_t ts = isoToNs(tsP->value.s);
       if (ts > latest)   latest   = ts;
       if (ts < earliest) earliest = ts;
@@ -642,14 +642,14 @@ static void aggregateAttr(KjNode*      attrP,
   //   Property:     Number / Boolean / String / Array / Object — different
   //                 sub-accumulators per kind (the bucket holds all three).
   //   Relationship: object URI → string sub-accumulator only.
-  for (KjNode* instP = firstP; instP != NULL; instP = instP->next)
+  for (CorNode* instP = firstP; instP != NULL; instP = instP->next)
   {
-    if (instP->type != KjObject) continue;
-    KjNode* valP = kjLookup(instP, valueKey);
+    if (instP->type != CorObject) continue;
+    CorNode* valP = corTreeLookup(instP, valueKey);
     if (valP == NULL) continue;
 
-    KjNode* tsP = kjLookup(instP, timeProp);
-    if (tsP == NULL || tsP->type != KjString) continue;
+    CorNode* tsP = corTreeLookup(instP, timeProp);
+    if (tsP == NULL || tsP->type != CorString) continue;
     uint64_t ts = isoToNs(tsP->value.s);
     if (ts < winStart || ts >= winEnd) continue;
 
@@ -659,33 +659,33 @@ static void aggregateAttr(KjNode*      attrP,
 
     if (isRelationship)
     {
-      if (valP->type == KjString) bucketAddString(b, valP->value.s);
+      if (valP->type == CorString) bucketAddString(b, valP->value.s);
       continue;
     }
 
     switch (valP->type)
     {
-      case KjInt:     bucketAddNumber(b, (double) valP->value.i, faP); break;
-      case KjFloat:   bucketAddNumber(b, valP->value.f, faP);          break;
-      case KjBoolean: bucketAddBool  (b, valP->value.b != 0, faP);     break;
-      case KjString:  bucketAddString(b, valP->value.s);               break;
-      case KjArray:   bucketAddArray (b, valP, faP);                   break;
-      case KjObject:  bucketAddObject(b, valP, faP);                   break;
+      case CorInt:    bucketAddNumber(b, (double) valP->value.i, faP); break;
+      case CorFloat:  bucketAddNumber(b, valP->value.f, faP);          break;
+      case CorBoolean: bucketAddBool (b, valP->value.b != 0, faP);     break;
+      case CorString: bucketAddString(b, valP->value.s);               break;
+      case CorArray:  bucketAddArray (b, valP, faP);                   break;
+      case CorObject: bucketAddObject(b, valP, faP);                   break;
       default: break;
     }
   }
 
   // Replace the array contents with { type, "<method>": [...], ... }.
-  attrP->type              = KjObject;
+  attrP->type              = CorObject;
   attrP->value.firstChildP = NULL;
   attrP->lastChild         = NULL;
-  kjChildAdd(attrP, kjString(kjsonP, "type", attrType));
+  corTreeChildAdd(attrP, corTreeString(allocP, "type", attrType));
 
   for (int m = 0; methodsV != NULL && methodsV[m] != NULL; m++)
   {
-    KjNode* methodArr = emitValueArray(methodsV[m], buckets, bucketCount,
-                                       attrType, kjsonP, faP);
-    kjChildAdd(attrP, methodArr);
+    CorNode* methodArr = emitValueArray(methodsV[m], buckets, bucketCount,
+                                       attrType, allocP, faP);
+    corTreeChildAdd(attrP, methodArr);
   }
 }
 
@@ -696,26 +696,26 @@ static void aggregateAttr(KjNode*      attrP,
 // aggregateEntity - apply aggregateAttr to every Property and Relationship
 //                   attribute of one entity.
 //
-static void aggregateEntity(KjNode*       entityP,
+static void aggregateEntity(CorNode*      entityP,
                             char**        methodsV,
                             uint32_t       periodMonths,
                             uint64_t      periodNs,
                             uint64_t      startNs,
                             uint64_t      endNs,
                             const char*   timeProp,
-                            Kjson*        kjsonP,
+                            KAlloc*       allocP,
                             KAlloc*       faP)
 {
-  if (entityP == NULL || entityP->type != KjObject)
+  if (entityP == NULL || entityP->type != CorObject)
     return;
 
-  for (KjNode* childP = entityP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = entityP->value.firstChildP; childP != NULL; childP = childP->next)
   {
     if (childP->name == NULL || ldIsEntityKeyword(childP->name))
       continue;
-    if (childP->type != KjArray)
+    if (childP->type != CorArray)
       continue;
-    aggregateAttr(childP, methodsV, periodMonths, periodNs, startNs, endNs, timeProp, kjsonP, faP);
+    aggregateAttr(childP, methodsV, periodMonths, periodNs, startNs, endNs, timeProp, allocP, faP);
   }
 }
 
@@ -725,14 +725,14 @@ static void aggregateEntity(KjNode*       entityP,
 //
 // ldToAggregatedValues -
 //
-void ldToAggregatedValues(KjNode*       treeP,
+void ldToAggregatedValues(CorNode*      treeP,
                           char**        methodsV,
                           uint32_t       periodMonths,
                           uint64_t      periodNs,
                           uint64_t      startNs,
                           uint64_t      endNs,
                           const char*   timeProp,
-                          Kjson*        kjsonP,
+                          KAlloc*       allocP,
                           KAlloc*       faP)
 {
   if (treeP == NULL || methodsV == NULL || methodsV[0] == NULL)
@@ -740,13 +740,13 @@ void ldToAggregatedValues(KjNode*       treeP,
   if (timeProp == NULL || timeProp[0] == 0)
     timeProp = "observedAt";
 
-  if (treeP->type == KjArray)
+  if (treeP->type == CorArray)
   {
-    for (KjNode* itemP = treeP->value.firstChildP; itemP != NULL; itemP = itemP->next)
-      aggregateEntity(itemP, methodsV, periodMonths, periodNs, startNs, endNs, timeProp, kjsonP, faP);
+    for (CorNode* itemP = treeP->value.firstChildP; itemP != NULL; itemP = itemP->next)
+      aggregateEntity(itemP, methodsV, periodMonths, periodNs, startNs, endNs, timeProp, allocP, faP);
   }
   else
   {
-    aggregateEntity(treeP, methodsV, periodMonths, periodNs, startNs, endNs, timeProp, kjsonP, faP);
+    aggregateEntity(treeP, methodsV, periodMonths, periodNs, startNs, endNs, timeProp, allocP, faP);
   }
 }

@@ -10,7 +10,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 //
-#include "kjson/KjNode.h"                              // KjNode
+#include "corTree/CorNode.h"                           // CorNode
 
 
 
@@ -35,7 +35,7 @@ extern int ldInit(void);
 // xsd:dateTime. An unknown datatype passes — JSON-LD leaves its semantics to the
 // application. Returns true (no error) for a non-typed value.
 //
-extern bool ldTypedValueCheck(const char* subject, const char* datatype, KjNode* valueP, bool attrContext);
+extern bool ldTypedValueCheck(const char* subject, const char* datatype, CorNode* valueP, bool attrContext);
 
 
 

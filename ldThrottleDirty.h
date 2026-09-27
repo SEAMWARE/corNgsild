@@ -17,7 +17,7 @@
 //
 #include <stdint.h>                                    // uint64_t
 
-#include "kjson/KjNode.h"                              // KjNode
+#include "corTree/CorNode.h"                           // CorNode
 #include "corNgsild/LdSubCache.h"                       // LdSubCacheItem, LdThrottleEntry
 
 
@@ -37,7 +37,7 @@ extern void ldThrottleDirtyUpsert(LdSubCacheItem* itemP,
                                   int             reasonsMask,
                                   int             op,
                                   uint64_t        deletedAtNs,
-                                  KjNode*         entityP);
+                                  CorNode*        entityP);
 
 
 

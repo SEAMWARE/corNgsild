@@ -9,8 +9,8 @@
 
 #include <string.h>                                       // strcmp
 
-#include "kjson/KjNode.h"                                 // KjNode
-#include "kjson/kjBuilder.h"                              // kjChildRemove
+#include "corTree/CorNode.h"                              // CorNode
+#include "corTree/corTreeBuilder.h"                       // corTreeChildRemove
 
 #include "corNgsild/ldStripAtContext.h"                    // Own interface
 
@@ -20,27 +20,27 @@
 //
 // ldStripAtContext -
 //
-void ldStripAtContext(KjNode* treeP)
+void ldStripAtContext(CorNode* treeP)
 {
   if (treeP == NULL)
     return;
 
-  if (treeP->type == KjObject)
+  if (treeP->type == CorObject)
   {
-    KjNode* childP = treeP->value.firstChildP;
+    CorNode* childP = treeP->value.firstChildP;
     while (childP != NULL)
     {
-      KjNode* nextP = childP->next;
+      CorNode* nextP = childP->next;
       if (childP->name != NULL && strcmp(childP->name, "@context") == 0)
-        kjChildRemove(treeP, childP);
+        corTreeChildRemove(treeP, childP);
       else
         ldStripAtContext(childP);
       childP = nextP;
     }
   }
-  else if (treeP->type == KjArray)
+  else if (treeP->type == CorArray)
   {
-    for (KjNode* childP = treeP->value.firstChildP; childP != NULL; childP = childP->next)
+    for (CorNode* childP = treeP->value.firstChildP; childP != NULL; childP = childP->next)
       ldStripAtContext(childP);
   }
 }

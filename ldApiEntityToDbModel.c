@@ -12,10 +12,10 @@
 #include <string.h>                                      // strcmp, memset
 
 #include "kalloc/KAlloc.h"                             // KAlloc
-#include "kjson/KjNode.h"                               // KjNode
-#include "kjson/kjBuilder.h"                             // kjObject
-#include "kjson/kjChildReplace.h"                       // kjChildReplace
-#include "kjson/kjLookup.h"                             // kjLookup
+#include "corTree/CorNode.h"                            // CorNode
+#include "corTree/corTreeBuilder.h"                      // corTreeObject
+#include "corTree/corTreeChildReplace.h"                // corTreeChildReplace
+#include "corTree/corTreeLookup.h"                      // corTreeLookup
 #include "corRest/corRest.h"                             // corRest
 
 #include "corJsonld/corLdExpand.h"                          // KJF_ATTR_TERM
@@ -42,34 +42,34 @@
 //
 // This modifies the tree in-place by repointing name/value strings.
 //
-static void ldGeoValueUnexpand(KjNode* geoValueP)
+static void ldGeoValueUnexpand(CorNode* geoValueP)
 {
-  if (geoValueP == NULL || geoValueP->type != KjObject)
+  if (geoValueP == NULL || geoValueP->type != CorObject)
     return;
 
-  for (KjNode* childP = geoValueP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = geoValueP->value.firstChildP; childP != NULL; childP = childP->next)
   {
     // Un-expand key names: "https://purl.org/geojson/vocab#coordinates" -> "coordinates"
     if (strncmp(childP->name, LD_VOCAB_GEOJSON_PREFIX, LD_VOCAB_GEOJSON_PREFIX_LEN) == 0)
       childP->name = childP->name + LD_VOCAB_GEOJSON_PREFIX_LEN;
 
     // Un-expand the "type" value: "https://purl.org/geojson/vocab#Point" -> "Point"
-    if (strcmp(childP->name, "type") == 0 && childP->type == KjString)
+    if (strcmp(childP->name, "type") == 0 && childP->type == CorString)
     {
       if (strncmp(childP->value.s, LD_VOCAB_GEOJSON_PREFIX, LD_VOCAB_GEOJSON_PREFIX_LEN) == 0)
         childP->value.s = childP->value.s + LD_VOCAB_GEOJSON_PREFIX_LEN;
     }
 
     // Recurse into nested objects (e.g. GeometryCollection members)
-    if (childP->type == KjObject)
+    if (childP->type == CorObject)
       ldGeoValueUnexpand(childP);
 
     // Recurse into arrays of objects (e.g. GeometryCollection "geometries" array)
-    if (childP->type == KjArray)
+    if (childP->type == CorArray)
     {
-      for (KjNode* elemP = childP->value.firstChildP; elemP != NULL; elemP = elemP->next)
+      for (CorNode* elemP = childP->value.firstChildP; elemP != NULL; elemP = elemP->next)
       {
-        if (elemP->type == KjObject)
+        if (elemP->type == CorObject)
           ldGeoValueUnexpand(elemP);
       }
     }
@@ -101,18 +101,18 @@ static const char* expandedValueKeys[] =
 
 // -----------------------------------------------------------------------------
 //
-// temporalPropertiesToNanoseconds - convert observedAt string children to KjInt nanoseconds
+// temporalPropertiesToNanoseconds - convert observedAt string children to CorInt nanoseconds
 //
-static void temporalPropertiesToNanoseconds(KjNode* attrP)
+static void temporalPropertiesToNanoseconds(CorNode* attrP)
 {
-  for (KjNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
   {
     bool isTemporal = (strcmp(childP->name, LD_VOCAB_OBSERVED_AT) == 0 ||
                        strcmp(childP->name, LD_VOCAB_EXPIRES_AT)  == 0);
     if (!isTemporal)
       continue;
 
-    if (childP->type == KjString)
+    if (childP->type == CorString)
     {
       // NGSI-LD Null marker: leave the bare string so a merge/update apply
       // removes the temporal sub-attribute (§ 5.4.1) — converting it here would
@@ -121,17 +121,17 @@ static void temporalPropertiesToNanoseconds(KjNode* attrP)
       if (strcmp(childP->value.s, LD_VOCAB_NGSILD_NULL) == 0)
         continue;
       childP->value.i = isoToNanoseconds(childP->value.s);
-      childP->type = KjInt;
+      childP->type = CorInt;
     }
-    else if (childP->type == KjObject)
+    else if (childP->type == CorObject)
     {
       // JSON-LD expanded DateTime: {"@value": "2026-...", "@type": "DateTime"}
-      for (KjNode* m = childP->value.firstChildP; m != NULL; m = m->next)
+      for (CorNode* m = childP->value.firstChildP; m != NULL; m = m->next)
       {
-        if (strcmp(m->name, "@value") == 0 && m->type == KjString)
+        if (strcmp(m->name, "@value") == 0 && m->type == CorString)
         {
           childP->value.i = isoToNanoseconds(m->value.s);
-          childP->type = KjInt;
+          childP->type = CorInt;
           break;
         }
       }
@@ -145,12 +145,12 @@ static void temporalPropertiesToNanoseconds(KjNode* attrP)
 //
 // normalizeValueKey - rename any HAS_* value key to "value" in an attribute instance
 //
-static void normalizeValueKey(KjNode* attrP)
+static void normalizeValueKey(CorNode* attrP)
 {
-  if (attrP->type != KjObject)
+  if (attrP->type != CorObject)
     return;
 
-  for (KjNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
     for (const char** vk = expandedValueKeys; *vk != NULL; vk++)
       if (strcmp(childP->name, *vk) == 0) { childP->name = "value"; return; }
 }
@@ -159,12 +159,12 @@ static void normalizeValueKey(KjNode* attrP)
 
 // -----------------------------------------------------------------------------
 //
-// timestampSet - add createdAt/modifiedAt to an KjObject node
+// timestampSet - add createdAt/modifiedAt to an CorObject node
 //
-static void timestampSet(KjNode* objP, uint64_t createdAt, uint64_t modifiedAt, KAlloc* faP)
+static void timestampSet(CorNode* objP, uint64_t createdAt, uint64_t modifiedAt, KAlloc* faP)
 {
-  kjChildAdd(objP, kjInteger(corRest.kjsonP, LD_VOCAB_CREATED_AT,  (long long) createdAt));
-  kjChildAdd(objP, kjInteger(corRest.kjsonP, LD_VOCAB_MODIFIED_AT, (long long) modifiedAt));
+  corTreeChildAdd(objP, corTreeInteger(corRest.kallocP, LD_VOCAB_CREATED_AT, (long long) createdAt));
+  corTreeChildAdd(objP, corTreeInteger(corRest.kallocP, LD_VOCAB_MODIFIED_AT, (long long) modifiedAt));
 }
 
 
@@ -175,16 +175,16 @@ static void timestampSet(KjNode* objP, uint64_t createdAt, uint64_t modifiedAt, 
 //
 // Returns the datasetId value string, or "@none" if not present.
 //
-static const char* extractDatasetId(KjNode* attrP)
+static const char* extractDatasetId(CorNode* attrP)
 {
-  KjNode* dsP = kjLookup(attrP, LD_VOCAB_DATASET_ID);
+  CorNode* dsP = corTreeLookup(attrP, LD_VOCAB_DATASET_ID);
 
   if (dsP == NULL)
     return "@none";
 
   const char* dsId = dsP->value.s;
 
-  kjChildRemove(attrP, dsP);
+  corTreeChildRemove(attrP, dsP);
   return dsId;
 }
 
@@ -198,7 +198,7 @@ static const char* extractDatasetId(KjNode* attrP)
 // during corLdExpandTree (and stamped on the structural keys ldNormalizeInput
 // creates). A single bit test instead of a strcmp chain.
 //
-static bool isCoreAttrTerm(const KjNode* nodeP)
+static bool isCoreAttrTerm(const CorNode* nodeP)
 {
   return ((nodeP->flags & KJF_ATTR_TERM) != 0);
 }
@@ -210,24 +210,24 @@ static bool isCoreAttrTerm(const KjNode* nodeP)
 // attrToDbModel - transform an attribute instance to DB format
 //
 // Adds timestamps and recurses into sub-attributes.
-// Sub-attributes are children that are KjObject and NOT core context terms.
+// Sub-attributes are children that are CorObject and NOT core context terms.
 //
-static void attrToDbModel(KjNode* attrP, uint64_t ts, KAlloc* faP)
+static void attrToDbModel(CorNode* attrP, uint64_t ts, KAlloc* faP)
 {
-  if (attrP->type != KjObject)
+  if (attrP->type != CorObject)
     return;
 
   // Recurse into sub-attributes (non-core-context object children)
-  for (KjNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
   {
-    if (childP->type == KjObject && !isCoreAttrTerm(childP))
+    if (childP->type == CorObject && !isCoreAttrTerm(childP))
       attrToDbModel(childP, ts, faP);
   }
 
   // For GeoProperty, un-expand the GeoJSON hasValue so MongoDB can use 2dsphere index
   if (ldAttrTypeDetect(attrP) == LdAttrGeoProperty)
   {
-    KjNode* hasValueP = kjLookup(attrP, LD_VOCAB_HAS_VALUE);
+    CorNode* hasValueP = corTreeLookup(attrP, LD_VOCAB_HAS_VALUE);
     if (hasValueP != NULL)
       ldGeoValueUnexpand(hasValueP);
   }
@@ -251,17 +251,17 @@ static void attrToDbModel(KjNode* attrP, uint64_t ts, KAlloc* faP)
 // Before: "attrName": { "type": "Property", "value": 100, "datasetId": "urn:x" }
 // After:  "attrName": { "urn:x": { "type": "Property", "value": 100 } }
 //
-static KjNode* wrapSingleAttr(KjNode* attrP, uint64_t ts, KAlloc* faP)
+static CorNode* wrapSingleAttr(CorNode* attrP, uint64_t ts, KAlloc* faP)
 {
   const char* dsKey = extractDatasetId(attrP);
 
   attrToDbModel(attrP, ts, faP);
 
   // Create wrapper object with same name as the attribute
-  KjNode* wrapperP = kjObject(corRest.kjsonP, attrP->name);
+  CorNode* wrapperP = corTreeObject(corRest.kallocP, attrP->name);
 
   // Move attrP into the wrapper as a child keyed by datasetId
-  // Keep attrP->next intact — kjChildReplace needs it to link wrapperP to the next sibling
+  // Keep attrP->next intact — corTreeChildReplace needs it to link wrapperP to the next sibling
   attrP->name = (char*) dsKey;
   wrapperP->value.firstChildP = attrP;
   wrapperP->lastChild         = attrP;
@@ -280,7 +280,7 @@ static KjNode* wrapSingleAttr(KjNode* attrP, uint64_t ts, KAlloc* faP)
 // After:  "attrName": { "@none": { "type": "Property", "value": 100 },
 //                        "urn:x": { "type": "Property", "value": 98 } }
 //
-static KjNode* wrapMultiAttr(KjNode* arrayP, uint64_t ts, KAlloc* faP)
+static CorNode* wrapMultiAttr(CorNode* arrayP, uint64_t ts, KAlloc* faP)
 {
   //
   // An array of non-objects is not a multi-attribute: it is the simplified value
@@ -296,17 +296,17 @@ static KjNode* wrapMultiAttr(KjNode* arrayP, uint64_t ts, KAlloc* faP)
   // leads with an object, and one that turns non-object further along is still
   // rejected by ldCheckEntity.
   //
-  if (arrayP->value.firstChildP != NULL && arrayP->value.firstChildP->type != KjObject)
+  if (arrayP->value.firstChildP != NULL && arrayP->value.firstChildP->type != CorObject)
     return NULL;
 
-  KjNode* wrapperP = kjObject(corRest.kjsonP, arrayP->name);
+  CorNode* wrapperP = corTreeObject(corRest.kallocP, arrayP->name);
 
   // Move each array element into the wrapper, keyed by its datasetId
-  KjNode* instP = arrayP->value.firstChildP;
+  CorNode* instP = arrayP->value.firstChildP;
 
   while (instP != NULL)
   {
-    KjNode* nextP = instP->next;
+    CorNode* nextP = instP->next;
 
     const char* dsKey = extractDatasetId(instP);
 
@@ -314,7 +314,7 @@ static KjNode* wrapMultiAttr(KjNode* arrayP, uint64_t ts, KAlloc* faP)
 
     instP->name = (char*) dsKey;
     instP->next = NULL;
-    kjChildAdd(wrapperP, instP);
+    corTreeChildAdd(wrapperP, instP);
 
     instP = nextP;
   }
@@ -328,31 +328,31 @@ static KjNode* wrapMultiAttr(KjNode* arrayP, uint64_t ts, KAlloc* faP)
 //
 // ldApiEntityToDbModel - transform API-format entity tree to DB storage format
 //
-void ldApiEntityToDbModel(KjNode* entityP, KAlloc* faP, int64_t createdAt)
+void ldApiEntityToDbModel(CorNode* entityP, KAlloc* faP, int64_t createdAt)
 {
-  if (entityP == NULL || entityP->type != KjObject)
+  if (entityP == NULL || entityP->type != CorObject)
     return;
 
   uint64_t ts = corRest.requestStartTime;
 
-  KjNode* childP = entityP->value.firstChildP;
+  CorNode* childP = entityP->value.firstChildP;
 
   while (childP != NULL)
   {
-    KjNode* nextP = childP->next;
+    CorNode* nextP = childP->next;
 
     if (childP->name != NULL && !ldIsEntityKeyword(childP->name))
     {
-      KjNode* replacementP = NULL;
+      CorNode* replacementP = NULL;
 
-      if (childP->type == KjObject)
+      if (childP->type == CorObject)
         replacementP = wrapSingleAttr(childP, ts, faP);
-      else if (childP->type == KjArray)
+      else if (childP->type == CorArray)
         replacementP = wrapMultiAttr(childP, ts, faP);
 
       if (replacementP != NULL)
       {
-        kjChildReplace(entityP, childP, replacementP);
+        corTreeChildReplace(entityP, childP, replacementP);
         childP->next = NULL;  // childP is now inside the wrapper
       }
     }
@@ -362,14 +362,14 @@ void ldApiEntityToDbModel(KjNode* entityP, KAlloc* faP, int64_t createdAt)
 
   // Convert entity-level expiresAt from ISO string to nanoseconds
   // After JSON-LD expansion, DateTime-typed values may be:
-  //   - KjString: bare string (no expansion of value)
-  //   - KjObject: {"@value": "2026-...", "@type": "DateTime"} (expanded by JSON-LD)
-  for (KjNode* cP = entityP->value.firstChildP; cP != NULL; cP = cP->next)
+  //   - CorString: bare string (no expansion of value)
+  //   - CorObject: {"@value": "2026-...", "@type": "DateTime"} (expanded by JSON-LD)
+  for (CorNode* cP = entityP->value.firstChildP; cP != NULL; cP = cP->next)
   {
     if (strcmp(cP->name, LD_VOCAB_EXPIRES_AT) != 0)
       continue;
 
-    if (cP->type == KjString)
+    if (cP->type == CorString)
     {
       //
       // The NGSI-LD Null is not a DateTime - it is the request to delete the member (§ 5.4.1),
@@ -380,15 +380,15 @@ void ldApiEntityToDbModel(KjNode* entityP, KAlloc* faP, int64_t createdAt)
         continue;
 
       cP->value.i = isoToNanoseconds(cP->value.s);
-      cP->type    = KjInt;
+      cP->type    = CorInt;
     }
-    else if (cP->type == KjObject)
+    else if (cP->type == CorObject)
     {
       // Extract @value from the expanded DateTime object
-      KjNode* atValueP = NULL;
-      for (KjNode* m = cP->value.firstChildP; m != NULL; m = m->next)
+      CorNode* atValueP = NULL;
+      for (CorNode* m = cP->value.firstChildP; m != NULL; m = m->next)
       {
-        if (strcmp(m->name, "@value") == 0 && m->type == KjString)
+        if (strcmp(m->name, "@value") == 0 && m->type == CorString)
         {
           atValueP = m;
           break;
@@ -398,7 +398,7 @@ void ldApiEntityToDbModel(KjNode* entityP, KAlloc* faP, int64_t createdAt)
       {
         // Collapse the object to a plain integer
         cP->value.i = isoToNanoseconds(atValueP->value.s);
-        cP->type    = KjInt;
+        cP->type    = CorInt;
       }
     }
     break;

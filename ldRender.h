@@ -13,7 +13,7 @@
 #include <stdbool.h>                                     // bool
 
 #include "kalloc/KAlloc.h"                             // KAlloc
-#include "kjson/KjNode.h"                               // KjNode
+#include "corTree/CorNode.h"                            // CorNode
 
 
 
@@ -21,7 +21,7 @@
 //
 // ldToConcise -
 //
-extern bool ldToConcise(KjNode* entityP, KAlloc* faP);
+extern bool ldToConcise(CorNode* entityP, KAlloc* faP);
 
 
 
@@ -29,7 +29,7 @@ extern bool ldToConcise(KjNode* entityP, KAlloc* faP);
 //
 // ldToSimplified -
 //
-extern bool ldToSimplified(KjNode* entityP, KAlloc* faP);
+extern bool ldToSimplified(CorNode* entityP, KAlloc* faP);
 
 
 
@@ -39,6 +39,6 @@ extern bool ldToSimplified(KjNode* entityP, KAlloc* faP);
 //                   (value / object / languageMap / vocab / valueList /
 //                   objectList / json); NULL if none.
 //
-extern KjNode* ldAttrValueNode(KjNode* attrP);
+extern CorNode* ldAttrValueNode(CorNode* attrP);
 
 #endif  // CORNGSILD_LDRENDER_H_

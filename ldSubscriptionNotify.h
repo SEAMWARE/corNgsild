@@ -22,7 +22,7 @@
 #include <stdint.h>                                    // uint64_t
 #include <string.h>                                    // strcmp (for inline helpers)
 
-#include "kjson/KjNode.h"
+#include "corTree/CorNode.h"
 
 #include "corNgsild/ldEntityMerge.h"                    // LdMergeReport
 #include "corNgsild/LdSubCache.h"                       // LdSubCache
@@ -100,7 +100,7 @@ static inline int ldTriggerFromReport(const char* reason)
 //
 typedef struct LdNotifyPendingEntry
 {
-  KjNode*        entityP;
+  CorNode*       entityP;
   LdNotifyOp     op;
   bool           hasReport;
   LdMergeReport  report;
@@ -140,7 +140,7 @@ extern void ldSubscriptionNotifyBatch(LdSubCache*           cacheP,
 // (db.entityRetrieve on tenant0). allocP is the flush scratch allocator.
 // Returns NULL if the entity is gone.
 //
-typedef KjNode* (*LdThrottleRetrieveFunc)(const char* entityId, void* allocP);
+typedef CorNode* (*LdThrottleRetrieveFunc)(const char* entityId, void* allocP);
 
 
 

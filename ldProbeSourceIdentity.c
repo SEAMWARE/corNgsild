@@ -14,11 +14,11 @@
 #include "kalloc/KAlloc.h"                              // KAlloc
 #include "kalloc/kaBufferInit.h"                        // kaBufferInit
 #include "kalloc/kaBufferReset.h"                       // kaBufferReset
-#include "kjson/kjson.h"                                // Kjson
-#include "kjson/kjBufferCreate.h"                       // kjBufferCreate
-#include "kjson/KjNode.h"                               // KjNode
-#include "kjson/kjParse.h"                              // kjParse
-#include "kjson/kjLookup.h"                             // kjLookup
+#include "corJson/CorJson.h"                            // CorJson
+#include "corJson/corJsonCreate.h"                      // corJsonCreate
+#include "corTree/CorNode.h"                            // CorNode
+#include "corJson/corJsonParse.h"                       // corJsonParse
+#include "corTree/corTreeLookup.h"                      // corTreeLookup
 #include "corRest/CorRestKeyValue.h"                      // CorRestKeyValue
 #include "corRest/CorRestVerb.h"                          // CorVerbGet
 
@@ -124,9 +124,9 @@ char* ldProbeSourceIdentity(const char* endpoint, const char* tenant, int timeou
   //
   // Parse the body and extract contextSourceAlias.
   //
-  Kjson   kjsonLocal;
-  Kjson*  kjsonP = kjBufferCreate(&kjsonLocal, &scratchKa);
-  KjNode* treeP  = kjParse(kjsonP, resp.body);
+  CorJson corJsonLocal;
+  CorJson* corJsonP = corJsonCreate(&corJsonLocal, &scratchKa);
+  CorNode* treeP = corJsonParse(corJsonP, resp.body);
   if (treeP == NULL)
   {
     kaBufferReset(&scratchKa, 0);
@@ -135,8 +135,8 @@ char* ldProbeSourceIdentity(const char* endpoint, const char* tenant, int timeou
 
   ldStripAtContext(treeP);
 
-  KjNode* aliasP = kjLookup(treeP, "contextSourceAlias");
-  if (aliasP == NULL || aliasP->type != KjString || aliasP->value.s == NULL)
+  CorNode* aliasP = corTreeLookup(treeP, "contextSourceAlias");
+  if (aliasP == NULL || aliasP->type != CorString || aliasP->value.s == NULL)
   {
     kaBufferReset(&scratchKa, 0);
     return NULL;

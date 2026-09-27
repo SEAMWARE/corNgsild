@@ -23,21 +23,21 @@
 
 // -----------------------------------------------------------------------------
 //
-// ldPaginationTrim - trim KjNode array to limit, return true if there were more
+// ldPaginationTrim - trim CorNode array to limit, return true if there were more
 //
 // If the array has more than 'limit' children, unlink the last one and return true.
 // This implements the "limit+1" strategy: fetch limit+1 from DB, trim to limit,
 // and use the return value to know if more results exist.
 //
-bool ldPaginationTrim(KjNode* arrayP, int limit)
+bool ldPaginationTrim(CorNode* arrayP, int limit)
 {
   if (arrayP == NULL || limit <= 0)
     return false;
 
   // Count children and find the node before the last one
   int      count = 0;
-  KjNode*  prevP = NULL;
-  KjNode*  nodeP = arrayP->value.firstChildP;
+  CorNode* prevP = NULL;
+  CorNode* nodeP = arrayP->value.firstChildP;
 
   while (nodeP != NULL)
   {

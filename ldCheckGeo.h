@@ -12,7 +12,7 @@
 //
 #include <stdbool.h>                                     // bool
 
-#include "kjson/KjNode.h"                               // KjNode
+#include "corTree/CorNode.h"                            // CorNode
 
 
 
@@ -20,7 +20,7 @@
 //
 // ldCheckGeo -
 //
-extern bool ldCheckGeo(KjNode* geoValueP);
+extern bool ldCheckGeo(CorNode* geoValueP);
 
 
 

@@ -14,7 +14,7 @@
 //
 #include <stdbool.h>                                  // bool
 
-#include "kjson/KjNode.h"                             // KjNode
+#include "corTree/CorNode.h"                          // CorNode
 
 #include "corNgsild/LdQ.h"                             // LdQNode
 #include "corNgsild/LdScopeExpr.h"                     // LdScopeExpr
@@ -26,7 +26,7 @@
 //
 // ldEntityMatchType - check if entity type matches a type selection expression
 //
-extern bool ldEntityMatchType(KjNode* typeP, LdTypeExpr* expr);
+extern bool ldEntityMatchType(CorNode* typeP, LdTypeExpr* expr);
 
 
 
@@ -34,7 +34,7 @@ extern bool ldEntityMatchType(KjNode* typeP, LdTypeExpr* expr);
 //
 // ldEntityMatchScope - check if entity scope matches a scopeQ expression
 //
-extern bool ldEntityMatchScope(KjNode* scopeP, LdScopeExpr* expr);
+extern bool ldEntityMatchScope(CorNode* scopeP, LdScopeExpr* expr);
 
 
 
@@ -49,7 +49,7 @@ extern bool ldEntityMatchScope(KjNode* scopeP, LdScopeExpr* expr);
 // non-zero / NULL means the target is unavailable; the linked sub-q
 // then evaluates to false (linking entity is excluded from results).
 //
-typedef int (*LdQEntityFetchFunc)(const char* entityId, KjNode** entityPP, void* userData);
+typedef int (*LdQEntityFetchFunc)(const char* entityId, CorNode** entityPP, void* userData);
 
 
 
@@ -61,8 +61,8 @@ typedef int (*LdQEntityFetchFunc)(const char* entityId, KjNode** entityPP, void*
 // Relationship target. ldEntityMatchQ wraps ldEntityMatchQEx with a
 // NULL fetcher — Linked nodes evaluate to false in that mode.
 //
-extern bool ldEntityMatchQ  (KjNode* entityP, LdQNode* node);
-extern bool ldEntityMatchQEx(KjNode* entityP, LdQNode* node,
+extern bool ldEntityMatchQ  (CorNode* entityP, LdQNode* node);
+extern bool ldEntityMatchQEx(CorNode* entityP, LdQNode* node,
                              LdQEntityFetchFunc fetcher, void* userData);
 
 #endif  // CORNGSILD_LDENTITYMATCH_H_

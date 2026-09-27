@@ -27,7 +27,7 @@
 #define OBJECT_CHECK(nodeP, title, detail)                                                                          \
 do                                                                                                                 \
 {                                                                                                                  \
-  if ((nodeP) == NULL || (nodeP)->type != KjObject)                                                                \
+  if ((nodeP) == NULL || (nodeP)->type != CorObject)                                                               \
   {                                                                                                                \
     ldError(400, LD_ERROR_BAD_REQUEST_DATA, title, "%s", detail);                                                  \
     return false;                                                                                                  \
@@ -47,7 +47,7 @@ do                                                                              
 #define OBJECT_CHECK_IR(nodeP, title, detail)                                                                       \
 do                                                                                                                 \
 {                                                                                                                  \
-  if ((nodeP) == NULL || (nodeP)->type != KjObject)                                                                \
+  if ((nodeP) == NULL || (nodeP)->type != CorObject)                                                               \
   {                                                                                                                \
     ldError(400, LD_ERROR_INVALID_REQUEST, title, "%s", detail);                                                   \
     return false;                                                                                                  \
@@ -63,7 +63,7 @@ do                                                                              
 #define ARRAY_CHECK(nodeP, title, detail)                                                                           \
 do                                                                                                                 \
 {                                                                                                                  \
-  if ((nodeP)->type != KjArray)                                                                                    \
+  if ((nodeP)->type != CorArray)                                                                                   \
   {                                                                                                                \
     ldError(400, LD_ERROR_BAD_REQUEST_DATA, title, "%s", detail);                                                  \
     return false;                                                                                                  \
@@ -79,7 +79,7 @@ do                                                                              
 #define STRING_CHECK(nodeP, title, detail)                                                                          \
 do                                                                                                                 \
 {                                                                                                                  \
-  if ((nodeP)->type != KjString)                                                                                   \
+  if ((nodeP)->type != CorString)                                                                                  \
   {                                                                                                                \
     ldError(400, LD_ERROR_BAD_REQUEST_DATA, title, "%s", detail);                                                  \
     return false;                                                                                                  \
@@ -95,7 +95,7 @@ do                                                                              
 #define NUMBER_CHECK(nodeP, title, detail)                                                                          \
 do                                                                                                                 \
 {                                                                                                                  \
-  if ((nodeP)->type != KjInt && (nodeP)->type != KjFloat)                                                          \
+  if ((nodeP)->type != CorInt && (nodeP)->type != CorFloat)                                                        \
   {                                                                                                                \
     ldError(400, LD_ERROR_BAD_REQUEST_DATA, title, "%s", detail);                                                  \
     return false;                                                                                                  \
@@ -221,7 +221,7 @@ do                                                                              
 #define POSITIVE_NUMBER_CHECK(nodeP, detail)                                                                        \
 do                                                                                                                 \
 {                                                                                                                  \
-  if (((nodeP)->type == KjInt && (nodeP)->value.i < 0) || ((nodeP)->type == KjFloat && (nodeP)->value.f < 0.0))    \
+  if (((nodeP)->type == CorInt && (nodeP)->value.i < 0) || ((nodeP)->type == CorFloat && (nodeP)->value.f < 0.0))  \
   {                                                                                                                \
     ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Negative Number", "%s", detail);                                      \
     return false;                                                                                                  \

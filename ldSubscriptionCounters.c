@@ -15,11 +15,11 @@
 #include <stdio.h>                                     // snprintf
 #include <time.h>                                      // gmtime_r, strftime
 
-#include "kjson/KjNode.h"                              // KjNode
-#include "kjson/kjLookup.h"                            // kjLookup
-#include "kjson/kjBuilder.h"                           // kjInteger, kjString, kjChildAdd, kjChildRemove
+#include "corTree/CorNode.h"                           // CorNode
+#include "corTree/corTreeLookup.h"                     // corTreeLookup
+#include "corTree/corTreeBuilder.h"                    // corTreeInteger, corTreeString, corTreeChildAdd, corTreeChildRemove
 
-#include "corRest/CorRestState.h"                        // corRest (kjsonP — the per-request render arena)
+#include "corRest/CorRestState.h"                        // corRest (kallocP — the per-request arena)
 #include "corNgsild/LdVocab.h"                          // LD_VOCAB_NOTIFICATION
 #include "corNgsild/LdSubCache.h"                       // LdSubCacheItem
 #include "corNgsild/ldSubscriptionCounters.h"           // Own interface
@@ -33,7 +33,7 @@
 // fields may have been loaded by db.subscriptionRetrieve from a mongo doc
 // that was flushed by us (or another broker) at some point.
 //
-static void stripStoredStats(KjNode* notifP)
+static void stripStoredStats(CorNode* notifP)
 {
   static const char* fields[] = {
     "timesSent", "timesFailed", "lastNotification", "lastSuccess", "lastFailure", "status"
@@ -41,9 +41,9 @@ static void stripStoredStats(KjNode* notifP)
 
   for (int i = 0; i < 6; i++)
   {
-    KjNode* existing;
-    while ((existing = kjLookup(notifP, fields[i])) != NULL)
-      kjChildRemove(notifP, existing);
+    CorNode* existing;
+    while ((existing = corTreeLookup(notifP, fields[i])) != NULL)
+      corTreeChildRemove(notifP, existing);
   }
 }
 
@@ -77,16 +77,16 @@ static void nsToIso(uint64_t epochNs, char* buf, int bufSize)
 //
 // ldSubscriptionCountersInject -
 //
-void ldSubscriptionCountersInject(KjNode* subP, LdSubCacheItem* itemP)
+void ldSubscriptionCountersInject(CorNode* subP, LdSubCacheItem* itemP)
 {
   if (subP == NULL || itemP == NULL)
     return;
 
   // Find the notification object
-  KjNode* notifP = kjLookup(subP, LD_VOCAB_NOTIFICATION);
+  CorNode* notifP = corTreeLookup(subP, LD_VOCAB_NOTIFICATION);
   if (notifP == NULL)
-    notifP = kjLookup(subP, "notification");
-  if (notifP == NULL || notifP->type != KjObject)
+    notifP = corTreeLookup(subP, "notification");
+  if (notifP == NULL || notifP->type != CorObject)
     return;
 
   // Strip any persisted copies — our in-memory counters are authoritative
@@ -100,27 +100,27 @@ void ldSubscriptionCountersInject(KjNode* subP, LdSubCacheItem* itemP)
 
   char isoBuf[64];
 
-  kjChildAdd(notifP, kjInteger(corRest.kjsonP, "timesSent", itemP->timesSent));
+  corTreeChildAdd(notifP, corTreeInteger(corRest.kallocP, "timesSent", itemP->timesSent));
 
   if (itemP->timesFailed > 0)
-    kjChildAdd(notifP, kjInteger(corRest.kjsonP, "timesFailed", itemP->timesFailed));
+    corTreeChildAdd(notifP, corTreeInteger(corRest.kallocP, "timesFailed", itemP->timesFailed));
 
   if (itemP->lastNotification > 0)
   {
     nsToIso(itemP->lastNotification, isoBuf, sizeof(isoBuf));
-    kjChildAdd(notifP, kjString(corRest.kjsonP, "lastNotification", isoBuf));
+    corTreeChildAdd(notifP, corTreeString(corRest.kallocP, "lastNotification", isoBuf));
   }
 
   if (itemP->lastSuccess > 0)
   {
     nsToIso(itemP->lastSuccess, isoBuf, sizeof(isoBuf));
-    kjChildAdd(notifP, kjString(corRest.kjsonP, "lastSuccess", isoBuf));
+    corTreeChildAdd(notifP, corTreeString(corRest.kallocP, "lastSuccess", isoBuf));
   }
 
   if (itemP->lastFailure > 0)
   {
     nsToIso(itemP->lastFailure, isoBuf, sizeof(isoBuf));
-    kjChildAdd(notifP, kjString(corRest.kjsonP, "lastFailure", isoBuf));
+    corTreeChildAdd(notifP, corTreeString(corRest.kallocP, "lastFailure", isoBuf));
   }
 
   // notification.status (§ 5.2.14.2): "ok" if the most recent attempt
@@ -132,7 +132,7 @@ void ldSubscriptionCountersInject(KjNode* subP, LdSubCacheItem* itemP)
   const char* statusStr = "ok";
   if (itemP->lastFailure > itemP->lastSuccess)
     statusStr = "failed";
-  kjChildAdd(notifP, kjString(corRest.kjsonP, "status", (char*) statusStr));
+  corTreeChildAdd(notifP, corTreeString(corRest.kallocP, "status", (char*) statusStr));
 }
 
 
@@ -141,15 +141,15 @@ void ldSubscriptionCountersInject(KjNode* subP, LdSubCacheItem* itemP)
 //
 // ldPernotCountersInject - inject pernot subscription counters into a sub tree
 //
-void ldPernotCountersInject(KjNode* subP, LdPernotItem* itemP)
+void ldPernotCountersInject(CorNode* subP, LdPernotItem* itemP)
 {
   if (subP == NULL || itemP == NULL)
     return;
 
-  KjNode* notifP = kjLookup(subP, LD_VOCAB_NOTIFICATION);
+  CorNode* notifP = corTreeLookup(subP, LD_VOCAB_NOTIFICATION);
   if (notifP == NULL)
-    notifP = kjLookup(subP, "notification");
-  if (notifP == NULL || notifP->type != KjObject)
+    notifP = corTreeLookup(subP, "notification");
+  if (notifP == NULL || notifP->type != CorObject)
     return;
 
   stripStoredStats(notifP);
@@ -159,31 +159,31 @@ void ldPernotCountersInject(KjNode* subP, LdPernotItem* itemP)
 
   char isoBuf[64];
 
-  kjChildAdd(notifP, kjInteger(corRest.kjsonP, "timesSent", itemP->timesSent));
+  corTreeChildAdd(notifP, corTreeInteger(corRest.kallocP, "timesSent", itemP->timesSent));
 
   if (itemP->timesFailed > 0)
-    kjChildAdd(notifP, kjInteger(corRest.kjsonP, "timesFailed", itemP->timesFailed));
+    corTreeChildAdd(notifP, corTreeInteger(corRest.kallocP, "timesFailed", itemP->timesFailed));
 
   if (itemP->lastNotification > 0)
   {
     nsToIso(itemP->lastNotification, isoBuf, sizeof(isoBuf));
-    kjChildAdd(notifP, kjString(corRest.kjsonP, "lastNotification", isoBuf));
+    corTreeChildAdd(notifP, corTreeString(corRest.kallocP, "lastNotification", isoBuf));
   }
 
   if (itemP->lastSuccess > 0)
   {
     nsToIso(itemP->lastSuccess, isoBuf, sizeof(isoBuf));
-    kjChildAdd(notifP, kjString(corRest.kjsonP, "lastSuccess", isoBuf));
+    corTreeChildAdd(notifP, corTreeString(corRest.kallocP, "lastSuccess", isoBuf));
   }
 
   if (itemP->lastFailure > 0)
   {
     nsToIso(itemP->lastFailure, isoBuf, sizeof(isoBuf));
-    kjChildAdd(notifP, kjString(corRest.kjsonP, "lastFailure", isoBuf));
+    corTreeChildAdd(notifP, corTreeString(corRest.kallocP, "lastFailure", isoBuf));
   }
 
   const char* statusStr = "ok";
   if (itemP->lastFailure > itemP->lastSuccess)
     statusStr = "failed";
-  kjChildAdd(notifP, kjString(corRest.kjsonP, "status", (char*) statusStr));
+  corTreeChildAdd(notifP, corTreeString(corRest.kallocP, "status", (char*) statusStr));
 }

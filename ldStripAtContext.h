@@ -10,7 +10,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-#include "kjson/KjNode.h"                                 // KjNode
+#include "corTree/CorNode.h"                              // CorNode
 
 
 
@@ -28,6 +28,6 @@
 // Operates in-place on the given tree. Walks objects and arrays at all
 // depths; any child whose name is exactly "@context" is removed.
 //
-extern void ldStripAtContext(KjNode* treeP);
+extern void ldStripAtContext(CorNode* treeP);
 
 #endif  // CORNGSILD_LD_STRIP_AT_CONTEXT_H_

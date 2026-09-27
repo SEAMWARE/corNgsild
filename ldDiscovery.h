@@ -9,7 +9,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 #include <stdbool.h>
-#include "kjson/KjNode.h"
+#include "corTree/CorNode.h"
 #include "corNgsild/LdRegCache.h"
 
 //
@@ -18,7 +18,7 @@
 // produced by db.typeList / db.attrList. See ldDiscovery.c for the
 // exact semantics.
 //
-extern void ldDiscoveryRegAugmentTypes(KjNode* agg, LdRegCache* cacheP, bool details);
-extern void ldDiscoveryRegAugmentAttrs(KjNode* agg, LdRegCache* cacheP, bool details);
+extern void ldDiscoveryRegAugmentTypes(CorNode* agg, LdRegCache* cacheP, bool details);
+extern void ldDiscoveryRegAugmentAttrs(CorNode* agg, LdRegCache* cacheP, bool details);
 
 #endif

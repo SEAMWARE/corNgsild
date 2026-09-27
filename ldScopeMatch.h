@@ -13,7 +13,7 @@
 #include <stdbool.h>                                    // bool
 
 #include "kalloc/KAlloc.h"                              // KAlloc
-#include "kjson/KjNode.h"                               // KjNode
+#include "corTree/CorNode.h"                            // CorNode
 
 
 
@@ -61,6 +61,6 @@ extern int ldScopeToRegex(const char* pattern, char* buf, int bufSize);
 //
 // Takes an Entity/Registration object or an array of them (batch operations).
 //
-extern void ldScopeCanonicalize(KjNode* treeP, KAlloc* kaP);
+extern void ldScopeCanonicalize(CorNode* treeP, KAlloc* kaP);
 
 #endif  // CORNGSILD_LDSCOPEMATCH_H_

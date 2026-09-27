@@ -25,7 +25,7 @@
 //
 #include <stdbool.h>                                     // bool
 
-#include "kjson/KjNode.h"                                // KjNode
+#include "corTree/CorNode.h"                             // CorNode
 
 
 
@@ -59,8 +59,8 @@ extern bool ldIsMqttUri(const char* uri);
 // notifBodyJson  - the rendered Notification JSON to put under "body".
 // contentType    - "application/json" or "application/ld+json".
 // linkHeader     - RFC 5988 Link header value (NULL allowed).
-// receiverInfo   - KjArray of {key, value} pairs to copy into "metadata".
-// notifierInfo   - KjArray of {key, value} pairs; honours MQTT-QoS, MQTT-Version.
+// receiverInfo   - CorArray of {key, value} pairs to copy into "metadata".
+// notifierInfo   - CorArray of {key, value} pairs; honours MQTT-QoS, MQTT-Version.
 //
 // Returns true on success. On failure, ldError is NOT set — the caller
 // should bump failure counters as it does for HTTP failures.
@@ -69,7 +69,7 @@ extern bool ldMqttNotify(const char* uri,
                          const char* notifBodyJson,
                          const char* contentType,
                          const char* linkHeader,
-                         KjNode*     receiverInfo,
-                         KjNode*     notifierInfo);
+                         CorNode*    receiverInfo,
+                         CorNode*    notifierInfo);
 
 #endif  // CORNGSILD_LDMQTTNOTIFY_H_

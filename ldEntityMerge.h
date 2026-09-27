@@ -13,8 +13,8 @@
 #include <stdbool.h>                                  // bool
 #include <stdint.h>                                   // uint64_t
 
-#include "kjson/KjNode.h"                             // KjNode
-#include "kjson/kjson.h"                              // Kjson
+#include "kalloc/KAlloc.h"                            // KAlloc
+#include "corTree/CorNode.h"                          // CorNode
 
 
 
@@ -22,13 +22,13 @@
 //
 // LdMergeReport - per-attribute change record for Merge Entity (PATCH).
 //
-// changes is a KjArray (allocator: request-scoped) whose children are KjObjects
+// changes is a CorArray (allocator: request-scoped) whose children are CorObjects
 // with the following members:
 //
-//   "attr"     : KjString   — expanded IRI of the top-level attribute that changed
-//   "reason"   : KjString   — one of "attributeCreated", "attributeModified",
+//   "attr"     : CorString  — expanded IRI of the top-level attribute that changed
+//   "reason"   : CorString  — one of "attributeCreated", "attributeModified",
 //                             "attributeDeleted"
-//   "preValue" : KjObject   — deep-cloned old attribute subtree (dataset-keyed
+//   "preValue" : CorObject  — deep-cloned old attribute subtree (dataset-keyed
 //                             wrapper), present for "attributeModified" and
 //                             "attributeDeleted" only
 //
@@ -49,7 +49,7 @@
 //
 typedef struct LdMergeReport
 {
-  KjNode*  changes;
+  CorNode* changes;
 } LdMergeReport;
 
 
@@ -71,14 +71,14 @@ typedef struct LdMergeReport
 // reportP:        out-param. Non-NULL — the function fills changes as described
 //                 on LdMergeReport. Caller allocates the struct; the changes
 //                 array and the cloned preValue subtrees are allocated from the
-//                 request-scoped kjson arena (corRest.kjsonP) since the report is
+//                 request-scoped arena (corRest.kallocP) since the report is
 //                 consumed within the same request.
 // ts:             epoch-nanoseconds timestamp to stamp onto modifiedAt for
 //                 touched entity/attribute/sub-attribute containers.
-// targetAllocP:   kjson allocator for any node newly grafted into target. Must
+// targetAllocP:   allocator for any node newly grafted into target. Must
 //                 match target's lifetime — for an in-memory (malloc-backed)
 //                 store pass NULL; for a request-scoped buffer pass
-//                 corRest.kjsonP.
+//                 corRest.kallocP.
 //
 // Returns true on success, false on semantic error (ldError set by callee).
 //
@@ -96,11 +96,11 @@ typedef struct LdMergeReport
 //   * Any object that gets mutated (attribute, sub-attribute, ..., entity)
 //     has its modifiedAt bumped to `ts`.
 //
-extern bool ldEntityMerge(KjNode*         target,
-                          KjNode*         fragment,
+extern bool ldEntityMerge(CorNode*        target,
+                          CorNode*        fragment,
                           LdMergeReport*  reportP,
                           uint64_t        ts,
-                          struct Kjson*   targetAllocP);
+                          struct KAlloc*  targetAllocP);
 
 
 
@@ -111,11 +111,11 @@ extern bool ldEntityMerge(KjNode*         target,
 // Attribute). Same plumbing as ldEntityMerge but the primary value is replaced
 // wholesale instead of being deep-merged. See ldEntityMerge.c.
 //
-extern bool ldEntityFragmentApply(KjNode*         target,
-                                  KjNode*         fragment,
+extern bool ldEntityFragmentApply(CorNode*        target,
+                                  CorNode*        fragment,
                                   LdMergeReport*  reportP,
                                   uint64_t        ts,
-                                  struct Kjson*   targetAllocP);
+                                  struct KAlloc*  targetAllocP);
 
 
 
@@ -124,6 +124,6 @@ extern bool ldEntityFragmentApply(KjNode*         target,
 // ldEntityReplaceReport - change-report by diffing the old vs the new entity
 //                         (Replace / PUT): created / modified / deleted attrs.
 //
-extern void ldEntityReplaceReport(KjNode* oldEntityP, KjNode* newEntityP, LdMergeReport* reportP);
+extern void ldEntityReplaceReport(CorNode* oldEntityP, CorNode* newEntityP, LdMergeReport* reportP);
 
 #endif  // CORNGSILD_LDENTITYMERGE_H_

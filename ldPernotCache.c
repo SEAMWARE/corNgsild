@@ -12,11 +12,11 @@
 
 #include "kalloc/KAlloc.h"                             // KAlloc, kaAlloc
 #include "kalloc/kaBufferInit.h"                       // kaBufferInit
-#include "kjson/KjNode.h"                              // KjNode
-#include "kjson/kjLookup.h"                            // kjLookup
-#include "kjson/kjClone.h"                             // kjClone
-#include "kjson/kjBuilder.h"                           // kjChildRemove
-#include "kjson/kjFree.h"                              // kjFree
+#include "corTree/CorNode.h"                           // CorNode
+#include "corTree/corTreeLookup.h"                     // corTreeLookup
+#include "corTree/corTreeClone.h"                      // corTreeClone
+#include "corTree/corTreeBuilder.h"                    // corTreeChildRemove
+#include "corTree/corTreeFree.h"                       // corTreeFree
 
 #include "corNgsild/LdVocab.h"                          // LD_VOCAB_*
 #include "corNgsild/LdPernotCache.h"                    // LdPernotCache, LdPernotItem
@@ -27,23 +27,23 @@
 
 // -----------------------------------------------------------------------------
 //
-// stringArrayExtract - build NULL-terminated string array from a KjArray of strings
+// stringArrayExtract - build NULL-terminated string array from a CorArray of strings
 //
-static char** stringArrayExtract(KjNode* arrayP)
+static char** stringArrayExtract(CorNode* arrayP)
 {
-  if (arrayP == NULL || arrayP->type != KjArray)
+  if (arrayP == NULL || arrayP->type != CorArray)
     return NULL;
 
   int count = 0;
-  for (KjNode* p = arrayP->value.firstChildP; p != NULL; p = p->next)
-    if (p->type == KjString) count++;
+  for (CorNode* p = arrayP->value.firstChildP; p != NULL; p = p->next)
+    if (p->type == CorString) count++;
   if (count == 0)
     return NULL;
 
   char** v = (char**) malloc((count + 1) * sizeof(char*));
   int ix = 0;
-  for (KjNode* p = arrayP->value.firstChildP; p != NULL; p = p->next)
-    if (p->type == KjString)
+  for (CorNode* p = arrayP->value.firstChildP; p != NULL; p = p->next)
+    if (p->type == CorString)
       v[ix++] = p->value.s;
   v[ix] = NULL;
   return v;
@@ -55,27 +55,27 @@ static char** stringArrayExtract(KjNode* arrayP)
 //
 // entitySelectorsExtractPernot - same as ldSubCache's but local
 //
-static LdSubEntitySelector* entitySelectorsExtractPernot(KjNode* entitiesP)
+static LdSubEntitySelector* entitySelectorsExtractPernot(CorNode* entitiesP)
 {
-  if (entitiesP == NULL || entitiesP->type != KjArray)
+  if (entitiesP == NULL || entitiesP->type != CorArray)
     return NULL;
 
   LdSubEntitySelector* head = NULL;
   LdSubEntitySelector* tail = NULL;
 
-  for (KjNode* entP = entitiesP->value.firstChildP; entP != NULL; entP = entP->next)
+  for (CorNode* entP = entitiesP->value.firstChildP; entP != NULL; entP = entP->next)
   {
-    if (entP->type != KjObject) continue;
+    if (entP->type != CorObject) continue;
 
-    KjNode* typeP      = kjLookup(entP, "type");
-    KjNode* idP        = kjLookup(entP, "id");
-    KjNode* idPatternP = kjLookup(entP, "idPattern");
+    CorNode* typeP     = corTreeLookup(entP, "type");
+    CorNode* idP       = corTreeLookup(entP, "id");
+    CorNode* idPatternP = corTreeLookup(entP, "idPattern");
 
     LdSubEntitySelector* esP = (LdSubEntitySelector*) calloc(1, sizeof(LdSubEntitySelector));
-    esP->type = (typeP != NULL && typeP->type == KjString) ? typeP->value.s : NULL;
-    esP->id   = (idP   != NULL && idP->type   == KjString) ? idP->value.s   : NULL;
+    esP->type = (typeP != NULL && typeP->type == CorString) ? typeP->value.s : NULL;
+    esP->id   = (idP   != NULL && idP->type   == CorString) ? idP->value.s  : NULL;
 
-    if (idPatternP != NULL && idPatternP->type == KjString)
+    if (idPatternP != NULL && idPatternP->type == CorString)
     {
       LdSubIdPattern* ripP = (LdSubIdPattern*) calloc(1, sizeof(LdSubIdPattern));
       if (regcomp(&ripP->regex, idPatternP->value.s, REG_EXTENDED | REG_NOSUB) == 0)
@@ -127,7 +127,7 @@ LdPernotCache* ldPernotCacheCreate(void)
 
 
 // ldPernotCacheItemAdd
-LdPernotItem* ldPernotCacheItemAdd(LdPernotCache* cacheP, KjNode* subTree,
+LdPernotItem* ldPernotCacheItemAdd(LdPernotCache* cacheP, CorNode* subTree,
                                     LdQNode* qExpr, void* tenantP)
 {
   if (cacheP == NULL || subTree == NULL)
@@ -135,99 +135,99 @@ LdPernotItem* ldPernotCacheItemAdd(LdPernotCache* cacheP, KjNode* subTree,
 
   LdPernotItem* itemP = (LdPernotItem*) calloc(1, sizeof(LdPernotItem));
 
-  KjNode* idP = kjLookup(subTree, "id");
-  itemP->subId   = (idP != NULL && idP->type == KjString) ? strdup(idP->value.s) : NULL;
-  itemP->subTree = kjClone(NULL, subTree);
+  CorNode* idP = corTreeLookup(subTree, "id");
+  itemP->subId   = (idP != NULL && idP->type == CorString) ? strdup(idP->value.s) : NULL;
+  itemP->subTree = corTreeClone(NULL, subTree);
 
   // timeInterval
-  KjNode* tiP = kjLookup(itemP->subTree, "timeInterval");
-  itemP->timeInterval = (tiP != NULL && (tiP->type == KjInt || tiP->type == KjFloat))
+  CorNode* tiP = corTreeLookup(itemP->subTree, "timeInterval");
+  itemP->timeInterval = (tiP != NULL && (tiP->type == CorInt || tiP->type == CorFloat))
                         ? (int) tiP->value.i : 0;
 
   // Entity selectors
-  KjNode* entitiesP = kjLookup(itemP->subTree, LD_VOCAB_ENTITIES);
+  CorNode* entitiesP = corTreeLookup(itemP->subTree, LD_VOCAB_ENTITIES);
   itemP->entitySelectors = entitySelectorsExtractPernot(entitiesP);
 
   // Notification attrs + datasetId
-  KjNode* notifP     = kjLookup(itemP->subTree, LD_VOCAB_NOTIFICATION);
-  KjNode* notifAttrs = (notifP != NULL) ? kjLookup(notifP, LD_VOCAB_ATTRIBUTES) : NULL;
+  CorNode* notifP    = corTreeLookup(itemP->subTree, LD_VOCAB_NOTIFICATION);
+  CorNode* notifAttrs = (notifP != NULL) ? corTreeLookup(notifP, LD_VOCAB_ATTRIBUTES) : NULL;
   itemP->notifAttrsV = stringArrayExtract(notifAttrs);
 
-  KjNode* datasetIdP = kjLookup(itemP->subTree, LD_VOCAB_DATASET_ID);
+  CorNode* datasetIdP = corTreeLookup(itemP->subTree, LD_VOCAB_DATASET_ID);
   itemP->datasetIdV  = stringArrayExtract(datasetIdP);
 
   // q
   itemP->qExpr = qExpr;
 
   // scopeQ
-  KjNode* scopeQP = kjLookup(itemP->subTree, "scopeQ");
+  CorNode* scopeQP = corTreeLookup(itemP->subTree, "scopeQ");
   // For now, store raw — scopeQ parsing from cache is same as ldSubCache
   (void) scopeQP;
 
   // geoQ
-  KjNode* geoQP = kjLookup(itemP->subTree, "geoQ");
+  CorNode* geoQP = corTreeLookup(itemP->subTree, "geoQ");
   if (geoQP != NULL)
   {
     // TODO: parse geoQ fields into geoRel/geoGeometry/geoCoordinates/geoProperty
   }
 
   // Notification endpoint
-  KjNode* endpointP = (notifP != NULL) ? kjLookup(notifP, LD_VOCAB_ENDPOINT) : NULL;
-  KjNode* uriP      = (endpointP != NULL) ? kjLookup(endpointP, LD_VOCAB_URI) : NULL;
-  itemP->endpointUri = (uriP != NULL && uriP->type == KjString) ? uriP->value.s : NULL;
+  CorNode* endpointP = (notifP != NULL) ? corTreeLookup(notifP, LD_VOCAB_ENDPOINT) : NULL;
+  CorNode* uriP     = (endpointP != NULL) ? corTreeLookup(endpointP, LD_VOCAB_URI) : NULL;
+  itemP->endpointUri = (uriP != NULL && uriP->type == CorString) ? uriP->value.s : NULL;
 
   // § 5.2.15 endpoint.cooldown — minimum ms before retrying after failure.
-  KjNode* coolP = (endpointP != NULL) ? kjLookup(endpointP, "cooldown") : NULL;
-  if (coolP != NULL && (coolP->type == KjInt || coolP->type == KjFloat))
+  CorNode* coolP = (endpointP != NULL) ? corTreeLookup(endpointP, "cooldown") : NULL;
+  if (coolP != NULL && (coolP->type == CorInt || coolP->type == CorFloat))
   {
-    double ms = (coolP->type == KjInt) ? (double) coolP->value.i : coolP->value.f;
+    double ms = (coolP->type == CorInt) ? (double) coolP->value.i : coolP->value.f;
     if (ms > 0)
       itemP->cooldownNs = (uint64_t) (ms * 1000000.0);
   }
 
   // § 5.2.15 endpoint.timeout — max ms to wait for a notification reply.
-  KjNode* tmoP = (endpointP != NULL) ? kjLookup(endpointP, "timeout") : NULL;
-  if (tmoP != NULL && (tmoP->type == KjInt || tmoP->type == KjFloat))
+  CorNode* tmoP = (endpointP != NULL) ? corTreeLookup(endpointP, "timeout") : NULL;
+  if (tmoP != NULL && (tmoP->type == CorInt || tmoP->type == CorFloat))
   {
-    double ms = (tmoP->type == KjInt) ? (double) tmoP->value.i : tmoP->value.f;
+    double ms = (tmoP->type == CorInt) ? (double) tmoP->value.i : tmoP->value.f;
     if (ms > 0)
       itemP->timeoutMs = (int) ms;
   }
 
   // § 5.2.15 endpoint.receiverInfo — KeyValuePair[] forwarded as outbound headers.
-  KjNode* riP = (endpointP != NULL) ? kjLookup(endpointP, "receiverInfo") : NULL;
-  if (riP != NULL && riP->type == KjArray)
+  CorNode* riP = (endpointP != NULL) ? corTreeLookup(endpointP, "receiverInfo") : NULL;
+  if (riP != NULL && riP->type == CorArray)
     itemP->receiverInfo = riP;
 
   // § 5.2.14 notification.join + notification.joinLevel — linked-entity retrieval (§ 4.5.23)
-  KjNode* joinP      = (notifP != NULL) ? kjLookup(notifP, "join")      : NULL;
-  KjNode* joinLevelP = (notifP != NULL) ? kjLookup(notifP, "joinLevel") : NULL;
-  if (joinP != NULL && joinP->type == KjString)
+  CorNode* joinP     = (notifP != NULL) ? corTreeLookup(notifP, "join") : NULL;
+  CorNode* joinLevelP = (notifP != NULL) ? corTreeLookup(notifP, "joinLevel") : NULL;
+  if (joinP != NULL && joinP->type == CorString)
     itemP->notifJoin = joinP->value.s;
-  if (joinLevelP != NULL && joinLevelP->type == KjInt && joinLevelP->value.i > 0)
+  if (joinLevelP != NULL && joinLevelP->type == CorInt && joinLevelP->value.i > 0)
     itemP->notifJoinLevel = (int) joinLevelP->value.i;
 
-  KjNode* formatP = (notifP != NULL) ? kjLookup(notifP, LD_VOCAB_FORMAT) : NULL;
-  itemP->format = (formatP != NULL && formatP->type == KjString) ? formatP->value.s : NULL;
+  CorNode* formatP = (notifP != NULL) ? corTreeLookup(notifP, LD_VOCAB_FORMAT) : NULL;
+  itemP->format = (formatP != NULL && formatP->type == CorString) ? formatP->value.s : NULL;
 
   // User-provided `jsonldContext` wins; otherwise fall back to broker-filled
   // `_jcResolved`. Same convention as the regular sub cache.
-  KjNode* jcP = kjLookup(itemP->subTree, "jsonldContext");
-  if (jcP == NULL || jcP->type != KjString)
-    jcP = kjLookup(itemP->subTree, "_jcResolved");
-  itemP->contextUrl = (jcP != NULL && jcP->type == KjString) ? jcP->value.s : NULL;
+  CorNode* jcP = corTreeLookup(itemP->subTree, "jsonldContext");
+  if (jcP == NULL || jcP->type != CorString)
+    jcP = corTreeLookup(itemP->subTree, "_jcResolved");
+  itemP->contextUrl = (jcP != NULL && jcP->type == CorString) ? jcP->value.s : NULL;
 
   // State
-  KjNode* statusP = kjLookup(itemP->subTree, LD_VOCAB_STATUS);
-  char* statusStr = (statusP != NULL && statusP->type == KjString) ? statusP->value.s : "active";
+  CorNode* statusP = corTreeLookup(itemP->subTree, LD_VOCAB_STATUS);
+  char* statusStr = (statusP != NULL && statusP->type == CorString) ? statusP->value.s : "active";
   if (strcmp(statusStr, "paused") == 0)
     itemP->state = LdPernotPaused;
   else
     itemP->state = LdPernotActive;
 
   // Expiration
-  KjNode* expiresP = kjLookup(itemP->subTree, LD_VOCAB_EXPIRES_AT);
-  if (expiresP != NULL && expiresP->type == KjString)
+  CorNode* expiresP = corTreeLookup(itemP->subTree, LD_VOCAB_EXPIRES_AT);
+  if (expiresP != NULL && expiresP->type == CorString)
     itemP->expiresAt = ldIsoToNanoseconds(expiresP->value.s);
 
   itemP->tenantP = tenantP;
@@ -237,42 +237,42 @@ LdPernotItem* ldPernotCacheItemAdd(LdPernotCache* cacheP, KjNode* subTree,
   // flush persisted them). Extract into cache fields and remove from the
   // stored subTree so the GET-response injector owns the final values.
   //
-  if (notifP != NULL && notifP->type == KjObject)
+  if (notifP != NULL && notifP->type == CorObject)
   {
-    KjNode* tsP = kjLookup(notifP, "timesSent");
-    KjNode* tfP = kjLookup(notifP, "timesFailed");
-    KjNode* lnP = kjLookup(notifP, "lastNotification");
-    KjNode* lsP = kjLookup(notifP, "lastSuccess");
-    KjNode* lfP = kjLookup(notifP, "lastFailure");
+    CorNode* tsP = corTreeLookup(notifP, "timesSent");
+    CorNode* tfP = corTreeLookup(notifP, "timesFailed");
+    CorNode* lnP = corTreeLookup(notifP, "lastNotification");
+    CorNode* lsP = corTreeLookup(notifP, "lastSuccess");
+    CorNode* lfP = corTreeLookup(notifP, "lastFailure");
 
-    if (tsP != NULL && tsP->type == KjInt) itemP->timesSent   = (int) tsP->value.i;
-    if (tfP != NULL && tfP->type == KjInt) itemP->timesFailed = (int) tfP->value.i;
+    if (tsP != NULL && tsP->type == CorInt) itemP->timesSent  = (int) tsP->value.i;
+    if (tfP != NULL && tfP->type == CorInt) itemP->timesFailed = (int) tfP->value.i;
     if (lnP != NULL)
     {
-      if      (lnP->type == KjInt)    itemP->lastNotification = (uint64_t) lnP->value.i;
-      else if (lnP->type == KjString) itemP->lastNotification = ldIsoToNanoseconds(lnP->value.s);
+      if      (lnP->type == CorInt)   itemP->lastNotification = (uint64_t) lnP->value.i;
+      else if (lnP->type == CorString) itemP->lastNotification = ldIsoToNanoseconds(lnP->value.s);
     }
     if (lsP != NULL)
     {
-      if      (lsP->type == KjInt)    itemP->lastSuccess = (uint64_t) lsP->value.i;
-      else if (lsP->type == KjString) itemP->lastSuccess = ldIsoToNanoseconds(lsP->value.s);
+      if      (lsP->type == CorInt)   itemP->lastSuccess = (uint64_t) lsP->value.i;
+      else if (lsP->type == CorString) itemP->lastSuccess = ldIsoToNanoseconds(lsP->value.s);
     }
     if (lfP != NULL)
     {
-      if      (lfP->type == KjInt)    itemP->lastFailure = (uint64_t) lfP->value.i;
-      else if (lfP->type == KjString) itemP->lastFailure = ldIsoToNanoseconds(lfP->value.s);
+      if      (lfP->type == CorInt)   itemP->lastFailure = (uint64_t) lfP->value.i;
+      else if (lfP->type == CorString) itemP->lastFailure = ldIsoToNanoseconds(lfP->value.s);
     }
 
     itemP->lastFlushedSent   = itemP->timesSent;
     itemP->lastFlushedFailed = itemP->timesFailed;
 
-    // kjChildRemove only unlinks; subTree is a malloc clone, so free each
+    // corTreeChildRemove only unlinks; subTree is a malloc clone, so free each
     // stripped stat node or it leaks on reload of a flushed (persisted-stats) sub.
-    if (tsP != NULL) { kjChildRemove(notifP, tsP); kjFree(tsP); }
-    if (tfP != NULL) { kjChildRemove(notifP, tfP); kjFree(tfP); }
-    if (lnP != NULL) { kjChildRemove(notifP, lnP); kjFree(lnP); }
-    if (lsP != NULL) { kjChildRemove(notifP, lsP); kjFree(lsP); }
-    if (lfP != NULL) { kjChildRemove(notifP, lfP); kjFree(lfP); }
+    if (tsP != NULL) { corTreeChildRemove(notifP, tsP); corTreeFree(tsP); }
+    if (tfP != NULL) { corTreeChildRemove(notifP, tfP); corTreeFree(tfP); }
+    if (lnP != NULL) { corTreeChildRemove(notifP, lnP); corTreeFree(lnP); }
+    if (lsP != NULL) { corTreeChildRemove(notifP, lsP); corTreeFree(lsP); }
+    if (lfP != NULL) { corTreeChildRemove(notifP, lfP); corTreeFree(lfP); }
   }
 
   // Append
@@ -314,7 +314,7 @@ bool ldPernotCacheItemRemove(LdPernotCache* cacheP, const char* subId)
       if (cacheP->tail == p) cacheP->tail = prev;
 
       free(p->subId);
-      if (p->subTree)     kjFree(p->subTree);
+      if (p->subTree)     corTreeFree(p->subTree);
       entitySelectorsFree(p->entitySelectors);
       if (p->notifAttrsV) free(p->notifAttrsV);
       if (p->datasetIdV)  free(p->datasetIdV);
@@ -337,7 +337,7 @@ void ldPernotCacheRelease(LdPernotCache* cacheP)
   {
     LdPernotItem* next = p->next;
     free(p->subId);
-    if (p->subTree)     kjFree(p->subTree);
+    if (p->subTree)     corTreeFree(p->subTree);
     entitySelectorsFree(p->entitySelectors);
     if (p->notifAttrsV) free(p->notifAttrsV);
     if (p->datasetIdV)  free(p->datasetIdV);

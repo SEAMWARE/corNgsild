@@ -14,9 +14,9 @@
 
 #include "kalloc/KAlloc.h"                             // KAlloc, kaAlloc
 #include "kalloc/kaStrdup.h"                           // kaStrdup
-#include "kjson/KjNode.h"                              // KjNode
-#include "kjson/kjRenderSize.h"                        // kjFastRenderSize
-#include "kjson/kjRender.h"                            // kjFastRender
+#include "corTree/CorNode.h"                           // CorNode
+#include "corJson/corJsonRenderSize.h"                 // corJsonFastRenderSize
+#include "corJson/corJsonRender.h"                     // corJsonFastRender
 
 #include "corRest/CorRestState.h"                        // corRest (per-request scratch allocator)
 
@@ -64,11 +64,11 @@ static uint64_t fnv1a64(const char* s, int len)
 // The cache is therefore bounded by the number of DISTINCT inline contexts
 // seen in a TTL window, not by request count.
 //
-CorLdContext* ldContextHostVolatile(KjNode* ctxBody)
+CorLdContext* ldContextHostVolatile(CorNode* ctxBody)
 {
   if (ctxBody == NULL)
     return NULL;
-  if (ctxBody->type != KjObject && ctxBody->type != KjArray)
+  if (ctxBody->type != CorObject && ctxBody->type != CorArray)
     return NULL;
 
   CorLdContextCache* cacheP = corLdCacheGet();
@@ -80,14 +80,14 @@ CorLdContext* ldContextHostVolatile(KjNode* ctxBody)
   // allocator (not the cache arena): on a dedup hit we discard it with the
   // request and never touch the arena — so repeated identical contexts under
   // load don't grow the cache allocator at all.
-  int   bodyLen = kjFastRenderSize(ctxBody) + 32;
+  int   bodyLen = corJsonFastRenderSize(ctxBody) + 32;
   char* scratch = (char*) kaAlloc(&corRest.kalloc, bodyLen);
   if (scratch == NULL)
     return NULL;
 
   int p = 0;
   p += snprintf(scratch + p, bodyLen - p, "{\"@context\":");
-  kjFastRender(ctxBody, scratch + p);
+  corJsonFastRender(ctxBody, scratch + p);
   p += strlen(scratch + p);
   p += snprintf(scratch + p, bodyLen - p, "}");
 
@@ -113,7 +113,7 @@ CorLdContext* ldContextHostVolatile(KjNode* ctxBody)
   // Miss — build the entry. Copy id + body into the cache arena (they must
   // outlive the request); the maps come from the same parse the sub/reg
   // auto-population uses.
-  CorLdContext* ctxP = (ctxBody->type == KjObject)
+  CorLdContext* ctxP = (ctxBody->type == CorObject)
                         ? corLdContextFromObject(ctxBody, storeP, NULL)
                         : corLdContextFromTree(ctxBody, storeP, NULL);  // Hosted @context - identified by localId, no URL of its own to resolve against
   if (ctxP == NULL)

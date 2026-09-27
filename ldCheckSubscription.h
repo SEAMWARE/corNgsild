@@ -13,7 +13,7 @@
 #include <stdbool.h>                                     // bool
 
 #include "kalloc/KAlloc.h"                             // KAlloc
-#include "kjson/KjNode.h"                               // KjNode
+#include "corTree/CorNode.h"                            // CorNode
 #include "corNgsild/LdOp.h"                               // LdOp
 #include "corNgsild/LdFormat.h"                           // LdFormat
 
@@ -30,7 +30,7 @@
 // notifFormatP (optional, may be NULL): on success, receives the parsed
 // notification.format so the caller can hand it to ldSubCacheItemAdd without
 // re-matching the string (LdFormatNone when no 'format' member is present).
-extern bool ldCheckSubscription(KjNode* subP, LdOp op, bool merged, LdFormat* notifFormatP, KAlloc* faP);
+extern bool ldCheckSubscription(CorNode* subP, LdOp op, bool merged, LdFormat* notifFormatP, KAlloc* faP);
 
 
 

@@ -10,8 +10,8 @@
 #include <stdlib.h>                              // realloc, free
 #include <string.h>                              // strcmp
 
-#include "kjson/KjNode.h"                        // KjNode
-#include "kjson/kjLookup.h"                      // kjLookup
+#include "corTree/CorNode.h"                     // CorNode
+#include "corTree/corTreeLookup.h"               // corTreeLookup
 
 #include "corNgsild/ldSubscriptionNotify.h"       // ldSubscriptionNotifyBatch, LdNotifyPendingEntry
 #include "corNgsild/CorNgsild.h"                   // corNgsild (per-conn pending* cache)
@@ -38,48 +38,48 @@
 
 // -----------------------------------------------------------------------------
 //
-// kjDeepEqual - structural equality of two KjNode subtrees
+// nodeDeepEqual - structural equality of two CorNode subtrees
 //
 // Scalars compare by value; arrays compare element-wise in order; objects
 // compare by name-matched members (order-independent). Used to tell whether an
 // attribute's stored value actually changed.
 //
-static bool kjDeepEqual(KjNode* a, KjNode* b)
+static bool nodeDeepEqual(CorNode* a, CorNode* b)
 {
   if (a == NULL || b == NULL)  return (a == b);
   if (a->type != b->type)      return false;
 
   switch (a->type)
   {
-  case KjString:   return (strcmp(a->value.s, b->value.s) == 0);
-  case KjInt:      return (a->value.i == b->value.i);
-  case KjFloat:    return (a->value.f == b->value.f);
-  case KjBoolean:  return (a->value.b == b->value.b);
-  case KjNull:     return true;
+  case CorString:  return (strcmp(a->value.s, b->value.s) == 0);
+  case CorInt:     return (a->value.i == b->value.i);
+  case CorFloat:   return (a->value.f == b->value.f);
+  case CorBoolean: return (a->value.b == b->value.b);
+  case CorNull:    return true;
 
-  case KjArray:
+  case CorArray:
   {
-    KjNode* ca = a->value.firstChildP;
-    KjNode* cb = b->value.firstChildP;
+    CorNode* ca = a->value.firstChildP;
+    CorNode* cb = b->value.firstChildP;
     while (ca != NULL && cb != NULL)
     {
-      if (!kjDeepEqual(ca, cb))  return false;
+      if (!nodeDeepEqual(ca, cb)) return false;
       ca = ca->next;
       cb = cb->next;
     }
     return (ca == NULL && cb == NULL);
   }
 
-  case KjObject:
+  case CorObject:
   {
     int na = 0, nb = 0;
-    for (KjNode* c = a->value.firstChildP; c != NULL; c = c->next)  na++;
-    for (KjNode* c = b->value.firstChildP; c != NULL; c = c->next)  nb++;
+    for (CorNode* c = a->value.firstChildP; c != NULL; c = c->next) na++;
+    for (CorNode* c = b->value.firstChildP; c != NULL; c = c->next) nb++;
     if (na != nb)  return false;
-    for (KjNode* c = a->value.firstChildP; c != NULL; c = c->next)
+    for (CorNode* c = a->value.firstChildP; c != NULL; c = c->next)
     {
-      KjNode* m = kjLookup(b, c->name);
-      if (m == NULL || !kjDeepEqual(c, m))  return false;
+      CorNode* m = corTreeLookup(b, c->name);
+      if (m == NULL || !nodeDeepEqual(c, m)) return false;
     }
     return true;
   }
@@ -101,22 +101,22 @@ static bool kjDeepEqual(KjNode* a, KjNode* b)
 // of "value" covers Property / Relationship / LanguageProperty / … uniformly.
 // A dataset instance added or removed also counts as a change.
 //
-static bool attrValueChanged(KjNode* preWrapper, KjNode* curWrapper)
+static bool attrValueChanged(CorNode* preWrapper, CorNode* curWrapper)
 {
   if (preWrapper == NULL || curWrapper == NULL)
     return true;
 
-  for (KjNode* oldInst = preWrapper->value.firstChildP; oldInst != NULL; oldInst = oldInst->next)
+  for (CorNode* oldInst = preWrapper->value.firstChildP; oldInst != NULL; oldInst = oldInst->next)
   {
-    KjNode* newInst = kjLookup(curWrapper, oldInst->name);
+    CorNode* newInst = corTreeLookup(curWrapper, oldInst->name);
     if (newInst == NULL)
       return true;  // dataset instance removed
-    if (!kjDeepEqual(kjLookup(oldInst, "value"), kjLookup(newInst, "value")))
+    if (!nodeDeepEqual(corTreeLookup(oldInst, "value"), corTreeLookup(newInst, "value")))
       return true;
   }
 
-  for (KjNode* newInst = curWrapper->value.firstChildP; newInst != NULL; newInst = newInst->next)
-    if (kjLookup(preWrapper, newInst->name) == NULL)
+  for (CorNode* newInst = curWrapper->value.firstChildP; newInst != NULL; newInst = newInst->next)
+    if (corTreeLookup(preWrapper, newInst->name) == NULL)
       return true;  // dataset instance added
 
   return false;
@@ -132,22 +132,22 @@ static bool attrValueChanged(KjNode* preWrapper, KjNode* curWrapper)
 // counts only when its "value" key actually differs (a sub-attribute or
 // timestamp-only modification does not).
 //
-static bool reportHasValueChange(KjNode* entityP, LdMergeReport* reportP)
+static bool reportHasValueChange(CorNode* entityP, LdMergeReport* reportP)
 {
   if (reportP == NULL || reportP->changes == NULL)
     return true;  // no report ⇒ can't prove it's value-neutral ⇒ notify
 
-  for (KjNode* chP = reportP->changes->value.firstChildP; chP != NULL; chP = chP->next)
+  for (CorNode* chP = reportP->changes->value.firstChildP; chP != NULL; chP = chP->next)
   {
-    KjNode*     reasonP = kjLookup(chP, "reason");
-    const char* reason  = (reasonP != NULL && reasonP->type == KjString) ? reasonP->value.s : "";
+    CorNode*    reasonP = corTreeLookup(chP, "reason");
+    const char* reason  = (reasonP != NULL && reasonP->type == CorString) ? reasonP->value.s : "";
 
     if (strcmp(reason, "attributeModified") != 0)
       return true;  // attributeCreated / attributeDeleted ⇒ value change
 
-    KjNode* attrP    = kjLookup(chP, "attr");
-    KjNode* curAttrP = (attrP != NULL && attrP->type == KjString) ? kjLookup(entityP, attrP->value.s) : NULL;
-    if (attrValueChanged(kjLookup(chP, "preValue"), curAttrP))
+    CorNode* attrP   = corTreeLookup(chP, "attr");
+    CorNode* curAttrP = (attrP != NULL && attrP->type == CorString) ? corTreeLookup(entityP, attrP->value.s) : NULL;
+    if (attrValueChanged(corTreeLookup(chP, "preValue"), curAttrP))
       return true;
   }
 
@@ -160,7 +160,7 @@ static bool reportHasValueChange(KjNode* entityP, LdMergeReport* reportP)
 //
 // ldNotifyDefer -
 //
-void ldNotifyDefer(LdSubCache* cacheP, KjNode* entityP, LdNotifyOp op, LdMergeReport* reportP)
+void ldNotifyDefer(LdSubCache* cacheP, CorNode* entityP, LdNotifyOp op, LdMergeReport* reportP)
 {
   if (cacheP == NULL || entityP == NULL)
     return;
@@ -194,10 +194,10 @@ void ldNotifyDefer(LdSubCache* cacheP, KjNode* entityP, LdNotifyOp op, LdMergeRe
   corNgsild.pendingV[corNgsild.pendingN].reasonsMask = 0;
   if (reportP != NULL && reportP->changes != NULL)
   {
-    for (KjNode* chP = reportP->changes->value.firstChildP; chP != NULL; chP = chP->next)
+    for (CorNode* chP = reportP->changes->value.firstChildP; chP != NULL; chP = chP->next)
     {
-      KjNode* reasonP = kjLookup(chP, "reason");
-      if (reasonP != NULL && reasonP->type == KjString)
+      CorNode* reasonP = corTreeLookup(chP, "reason");
+      if (reasonP != NULL && reasonP->type == CorString)
         corNgsild.pendingV[corNgsild.pendingN].reasonsMask |= ldTriggerFromReport(reasonP->value.s);
     }
   }
@@ -212,7 +212,7 @@ void ldNotifyDefer(LdSubCache* cacheP, KjNode* entityP, LdNotifyOp op, LdMergeRe
 //
 // ldNotifyDeferDelete -
 //
-void ldNotifyDeferDelete(LdSubCache* cacheP, KjNode* entityP, uint64_t deletedAtNs)
+void ldNotifyDeferDelete(LdSubCache* cacheP, CorNode* entityP, uint64_t deletedAtNs)
 {
   if (cacheP == NULL || entityP == NULL)
     return;

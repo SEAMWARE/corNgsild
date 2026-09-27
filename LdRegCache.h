@@ -12,12 +12,12 @@
 // Per-tenant Context Source Registration cache (NGSI-LD § 5.9 / § 5.10).
 //
 // Mirrors the LdSubCache shape: a linked list of LdRegCacheItem, one per
-// registration, each holding the raw KjNode tree (used for rendering on
+// registration, each holding the raw CorNode tree (used for rendering on
 // GET) plus pre-parsed shortcuts used to match registrations against
 // incoming Discovery (§ 5.10.2) and — later — distributed-dispatch
 // requests (§ 4.3.6).
 //
-// The raw KjNode tree is in @context-expanded form (as stored in DB).
+// The raw CorNode tree is in @context-expanded form (as stored in DB).
 // Pre-parsed fields exist to avoid re-parsing on every request.
 //
 // First cut covers CRUD and Discovery. Mode-specific conflict checks
@@ -31,7 +31,7 @@
 #include <pthread.h>                                   // pthread_rwlock_t
 
 #include "kalloc/KAlloc.h"                             // KAlloc
-#include "kjson/KjNode.h"                              // KjNode
+#include "corTree/CorNode.h"                           // CorNode
 
 #include "corNgsild/LdOp.h"                             // LdOp
 #include "corNgsild/LdGeoRel.h"                         // LdGeoRel
@@ -112,8 +112,8 @@ typedef struct LdRegInfo
 typedef struct LdRegCacheItem
 {
   char*                  regId;              // registration ID (malloc'd copy)
-  KjNode*                regTree;            // full registration tree, expanded URIs
-                                             // (kjClone'd, malloc allocator)
+  CorNode*               regTree;            // full registration tree, expanded URIs
+                                             // (corTreeClone'd, malloc allocator)
 
   // Pre-parsed matching shortcuts
   LdRegInfo*             infoV;              // linked list of RegistrationInfo entries
@@ -154,14 +154,14 @@ typedef struct LdRegCacheItem
   // (CSR matches regardless of entity scope).
   char**                 scopeV;
 
-  // Geo coverage (§ 5.2.9). KjNode pointers into regTree, borrowed. All
+  // Geo coverage (§ 5.2.9). CorNode pointers into regTree, borrowed. All
   // three are full GeoJSON Geometry objects with "type" and "coordinates".
   // Match-time filtering is performed in the dispatch loop via the
   // registered db.geoMatchFunc (shared plugin GEOS) — corNgsild has no
   // direct GEOS dependency, it routes through that function pointer.
-  KjNode*                locationP;           // where the source has Entities
-  KjNode*                observationSpaceP;   // union of observationSpaces (§ 4.7)
-  KjNode*                operationSpaceP;     // union of operationSpaces (§ 4.7)
+  CorNode*               locationP;           // where the source has Entities
+  CorNode*               observationSpaceP;   // union of observationSpaces (§ 4.7)
+  CorNode*               operationSpaceP;     // union of operationSpaces (§ 4.7)
 
   // management.timeout (§ 5.2.34) — max ms before a forwarded request is
   // assumed failed. 0 = plugin default (no per-CSR override).
@@ -206,7 +206,7 @@ typedef struct LdRegCacheItem
 // or `operationSpace`. NULL means the CSR didn't declare that field;
 // implementations should return true (do not filter the CSR out).
 //
-typedef bool (*LdCsrGeoMatchFunc)(KjNode* csrGeoP, LdGeoRel* geoRel, const char* geometry, const char* coordinates);
+typedef bool (*LdCsrGeoMatchFunc)(CorNode* csrGeoP, LdGeoRel* geoRel, const char* geometry, const char* coordinates);
 
 
 

@@ -11,7 +11,7 @@
 //
 #include <stdbool.h>                                     // bool
 
-#include "kjson/KjNode.h"                                // KjNode
+#include "corTree/CorNode.h"                             // CorNode
 
 
 
@@ -35,8 +35,8 @@
 //
 typedef struct LdWriteResult
 {
-  KjNode* updatedP;
-  KjNode* notUpdatedP;
+  CorNode* updatedP;
+  CorNode* notUpdatedP;
   bool    anyOk;
 } LdWriteResult;
 
@@ -46,7 +46,7 @@ typedef struct LdWriteResult
 //
 // ldWriteResultInit - bind the accumulator to caller-owned updated/notUpdated arrays
 //
-extern void ldWriteResultInit(LdWriteResult* wrP, KjNode* updatedP, KjNode* notUpdatedP);
+extern void ldWriteResultInit(LdWriteResult* wrP, CorNode* updatedP, CorNode* notUpdatedP);
 
 
 
@@ -54,7 +54,7 @@ extern void ldWriteResultInit(LdWriteResult* wrP, KjNode* updatedP, KjNode* notU
 //
 // ldWriteResultUpdatedAdd - add an attribute name to updated[] (deduplicated)
 //
-extern void ldWriteResultUpdatedAdd(KjNode* updatedP, const char* attrName);
+extern void ldWriteResultUpdatedAdd(CorNode* updatedP, const char* attrName);
 
 
 
@@ -67,7 +67,7 @@ extern void ldWriteResultUpdatedAdd(KjNode* updatedP, const char* attrName);
 // the field — for local rejections (e.g. noOverwrite conflict) that have no
 // HTTP status of their own.
 //
-extern void ldWriteResultNotUpdatedAdd(KjNode* notUpdatedP, const char* attrName,
+extern void ldWriteResultNotUpdatedAdd(CorNode* notUpdatedP, const char* attrName,
                                        const char* reason, const char* regId, int statusCode);
 
 
@@ -80,8 +80,8 @@ extern void ldWriteResultNotUpdatedAdd(KjNode* notUpdatedP, const char* attrName
 // For legs decided without a CSR round-trip — e.g. a registration that does not
 // support the operation, recorded as notUpdated before anything is forwarded.
 //
-extern void ldWriteResultFragUpdated(KjNode* updatedP, KjNode* fragP);
-extern void ldWriteResultFragNotUpdated(KjNode* notUpdatedP, KjNode* fragP,
+extern void ldWriteResultFragUpdated(CorNode* updatedP, CorNode* fragP);
+extern void ldWriteResultFragNotUpdated(CorNode* notUpdatedP, CorNode* fragP,
                                         const char* reason, const char* regId, int statusCode);
 
 
@@ -112,7 +112,7 @@ extern void ldWriteResultFragNotUpdated(KjNode* notUpdatedP, KjNode* fragP,
 //
 extern void ldWriteResultMerge(LdWriteResult* wrP, const char* regId,
                                int statusCode, const char* errorDetail,
-                               KjNode* responseTree,
-                               KjNode* forwardedFrag, bool tolerate404);
+                               CorNode* responseTree,
+                               CorNode* forwardedFrag, bool tolerate404);
 
 #endif  // CORNGSILD_LD_WRITE_RESULT_H_

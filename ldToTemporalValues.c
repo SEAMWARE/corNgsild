@@ -12,11 +12,10 @@
 #include <string.h>                                      // strcmp
 
 #include "kalloc/KAlloc.h"                              // KAlloc
-#include "kjson/kjson.h"                                // Kjson
-#include "kjson/KjNode.h"                               // KjNode
-#include "kjson/kjBuilder.h"                            // kjObject, kjArray, kjString
-#include "kjson/kjLookup.h"                             // kjLookup
-#include "kjson/kjClone.h"                              // kjClone
+#include "corTree/CorNode.h"                             // CorNode
+#include "corTree/corTreeBuilder.h"                      // corTreeObject, corTreeArray, corTreeString
+#include "corTree/corTreeLookup.h"                       // corTreeLookup
+#include "corTree/corTreeClone.h"                        // corTreeClone
 
 #include "corJsonld/corLdCompact.h"                        // corLdCompact
 #include "corJsonld/corLdInit.h"                           // corLdCoreContext
@@ -39,7 +38,7 @@
 // gets compacted to its short form ("monument"). Compact here, inline,
 // using the response @context (request context, falling back to core).
 //
-static void vocabCompactInPlace(KjNode* valP)
+static void vocabCompactInPlace(CorNode* valP)
 {
   if (valP == NULL)
     return;
@@ -48,17 +47,17 @@ static void vocabCompactInPlace(KjNode* valP)
   if (ctxP == NULL)
     return;
 
-  if (valP->type == KjString)
+  if (valP->type == CorString)
   {
     const char* cv = corLdCompact(ctxP, valP->value.s);
     if (cv != NULL)
       valP->value.s = (char*) cv;
   }
-  else if (valP->type == KjArray)
+  else if (valP->type == CorArray)
   {
-    for (KjNode* itemP = valP->value.firstChildP; itemP != NULL; itemP = itemP->next)
+    for (CorNode* itemP = valP->value.firstChildP; itemP != NULL; itemP = itemP->next)
     {
-      if (itemP->type != KjString)
+      if (itemP->type != CorString)
         continue;
       const char* cv = corLdCompact(ctxP, itemP->value.s);
       if (cv != NULL)
@@ -149,20 +148,20 @@ static bool firstElementWrapped(const char* attrType)
 //
 // addPair - render one instance's [value, timestamp] pair into valuesArray.
 //
-static void addPair(KjNode*      valuesArray,
-                    KjNode*      instP,
+static void addPair(CorNode*     valuesArray,
+                    CorNode*     instP,
                     const char*  firstKey,
                     bool         wrapped,
                     const char*  timeProp,
-                    Kjson*       kjsonP)
+                    KAlloc*      allocP)
 {
-  KjNode* valP = kjLookup(instP, firstKey);
-  KjNode* tsP  = kjLookup(instP, timeProp);
-  KjNode* pair = kjArray(kjsonP, NULL);
+  CorNode* valP = corTreeLookup(instP, firstKey);
+  CorNode* tsP = corTreeLookup(instP, timeProp);
+  CorNode* pair = corTreeArray(allocP, NULL);
 
   if (valP != NULL)
   {
-    KjNode* clone = kjClone(kjsonP, valP);
+    CorNode* clone = corTreeClone(allocP, valP);
     if (wrapped)
     {
       // JsonProperty / VocabProperty: pair is [{json/vocab: value}, ts].
@@ -171,34 +170,34 @@ static void addPair(KjNode*      valuesArray,
       if (strcmp(firstKey, "vocab") == 0)
         vocabCompactInPlace(clone);
       clone->name = (char*) firstKey;
-      KjNode* wrapper = kjObject(kjsonP, NULL);
-      kjChildAdd(wrapper, clone);
-      kjChildAdd(pair, wrapper);
+      CorNode* wrapper = corTreeObject(allocP, NULL);
+      corTreeChildAdd(wrapper, clone);
+      corTreeChildAdd(pair, wrapper);
     }
     else
     {
       clone->name = NULL;
-      kjChildAdd(pair, clone);
+      corTreeChildAdd(pair, clone);
     }
   }
   else
   {
-    kjChildAdd(pair, kjNull(kjsonP, NULL));
+    corTreeChildAdd(pair, corTreeNull(allocP, NULL));
   }
 
-  if (tsP != NULL && tsP->type == KjString)
-    kjChildAdd(pair, kjString(kjsonP, NULL, tsP->value.s));
+  if (tsP != NULL && tsP->type == CorString)
+    corTreeChildAdd(pair, corTreeString(allocP, NULL, tsP->value.s));
   else
-    kjChildAdd(pair, kjNull(kjsonP, NULL));
+    corTreeChildAdd(pair, corTreeNull(allocP, NULL));
 
-  kjChildAdd(valuesArray, pair);
+  corTreeChildAdd(valuesArray, pair);
 }
 
 
 
 // -----------------------------------------------------------------------------
 //
-// transformAttr - replace a KjArray-of-instances attr with the simplified
+// transformAttr - replace a CorArray-of-instances attr with the simplified
 //                 simplified-temporal shape. The attr's instances are grouped
 //                 by datasetId (§ 4.5.5: Attribute instances with distinct
 //                 datasetId are independent series). When there is exactly
@@ -208,26 +207,26 @@ static void addPair(KjNode*      valuesArray,
 //                 multiple groups, the attr becomes an ARRAY of such
 //                 objects, each carrying its own "datasetId" member.
 //
-static void transformAttr(KjNode* attrP, const char* timeProp, Kjson* kjsonP, KAlloc* faP)
+static void transformAttr(CorNode* attrP, const char* timeProp, KAlloc* allocP, KAlloc* faP)
 {
-  if (attrP == NULL || attrP->type != KjArray)
+  if (attrP == NULL || attrP->type != CorArray)
     return;
 
   // Inspect the first instance to learn the attr type and key shape.
-  KjNode* firstP = attrP->value.firstChildP;
-  if (firstP == NULL || firstP->type != KjObject)
+  CorNode* firstP = attrP->value.firstChildP;
+  if (firstP == NULL || firstP->type != CorObject)
   {
     // Empty or malformed — collapse to a minimal Property/values:[] object.
-    attrP->type = KjObject;
+    attrP->type = CorObject;
     attrP->value.firstChildP = NULL;
     attrP->lastChild         = NULL;
-    kjChildAdd(attrP, kjString(kjsonP, "type", "Property"));
-    kjChildAdd(attrP, kjArray(kjsonP, "values"));
+    corTreeChildAdd(attrP, corTreeString(allocP, "type", "Property"));
+    corTreeChildAdd(attrP, corTreeArray(allocP, "values"));
     return;
   }
 
-  KjNode* typeP = kjLookup(firstP, "type");
-  const char* attrType  = (typeP != NULL && typeP->type == KjString) ? typeP->value.s : "Property";
+  CorNode* typeP = corTreeLookup(firstP, "type");
+  const char* attrType  = (typeP != NULL && typeP->type == CorString) ? typeP->value.s : "Property";
   const char* valuesKey = valuesKeyForType(attrType);
   const char* firstKey  = firstElementKey(attrType);
   bool        wrapped   = firstElementWrapped(attrType);
@@ -239,16 +238,16 @@ static void transformAttr(KjNode* attrP, const char* timeProp, Kjson* kjsonP, KA
   // Cap at 32 distinct series — typical entities have <10.
   enum { MAX_DATASETS = 32 };
   const char* dsId[MAX_DATASETS];        // NULL = default-dataset bucket
-  KjNode*     valuesArrV[MAX_DATASETS];
+  CorNode*    valuesArrV[MAX_DATASETS];
   int         dsCount = 0;
 
-  for (KjNode* instP = firstP; instP != NULL; instP = instP->next)
+  for (CorNode* instP = firstP; instP != NULL; instP = instP->next)
   {
-    if (instP->type != KjObject)
+    if (instP->type != CorObject)
       continue;
 
-    KjNode* dsP = kjLookup(instP, "datasetId");
-    const char* ds = (dsP != NULL && dsP->type == KjString) ? dsP->value.s : NULL;
+    CorNode* dsP = corTreeLookup(instP, "datasetId");
+    const char* ds = (dsP != NULL && dsP->type == CorString) ? dsP->value.s : NULL;
 
     // Find or create the bucket for this datasetId.
     int slot = -1;
@@ -263,10 +262,10 @@ static void transformAttr(KjNode* attrP, const char* timeProp, Kjson* kjsonP, KA
       if (dsCount >= MAX_DATASETS) continue;   // bail safely on pathological input
       slot              = dsCount++;
       dsId[slot]        = ds;
-      valuesArrV[slot]  = kjArray(kjsonP, valuesKey);
+      valuesArrV[slot]  = corTreeArray(allocP, valuesKey);
     }
 
-    addPair(valuesArrV[slot], instP, firstKey, wrapped, timeProp, kjsonP);
+    addPair(valuesArrV[slot], instP, firstKey, wrapped, timeProp, allocP);
   }
 
   if (dsCount == 0)
@@ -274,11 +273,11 @@ static void transformAttr(KjNode* attrP, const char* timeProp, Kjson* kjsonP, KA
     // No instances at all (every one was malformed). Render an empty
     // single-bucket shape for consistency with the no-instances guard
     // above.
-    attrP->type              = KjObject;
+    attrP->type              = CorObject;
     attrP->value.firstChildP = NULL;
     attrP->lastChild         = NULL;
-    kjChildAdd(attrP, kjString(kjsonP, "type", attrType));
-    kjChildAdd(attrP, kjArray(kjsonP, valuesKey));
+    corTreeChildAdd(attrP, corTreeString(allocP, "type", attrType));
+    corTreeChildAdd(attrP, corTreeArray(allocP, valuesKey));
     return;
   }
 
@@ -286,27 +285,27 @@ static void transformAttr(KjNode* attrP, const char* timeProp, Kjson* kjsonP, KA
   // array of per-datasetId objects when more than one.
   if (dsCount == 1)
   {
-    attrP->type              = KjObject;
+    attrP->type              = CorObject;
     attrP->value.firstChildP = NULL;
     attrP->lastChild         = NULL;
-    kjChildAdd(attrP, kjString(kjsonP, "type", attrType));
+    corTreeChildAdd(attrP, corTreeString(allocP, "type", attrType));
     if (dsId[0] != NULL)
-      kjChildAdd(attrP, kjString(kjsonP, "datasetId", (char*) dsId[0]));
-    kjChildAdd(attrP, valuesArrV[0]);
+      corTreeChildAdd(attrP, corTreeString(allocP, "datasetId", (char*) dsId[0]));
+    corTreeChildAdd(attrP, valuesArrV[0]);
     return;
   }
 
-  // Multi-datasetId: keep attrP as a KjArray, replace its children.
+  // Multi-datasetId: keep attrP as a CorArray, replace its children.
   attrP->value.firstChildP = NULL;
   attrP->lastChild         = NULL;
   for (int i = 0; i < dsCount; i++)
   {
-    KjNode* obj = kjObject(kjsonP, NULL);
-    kjChildAdd(obj, kjString(kjsonP, "type", attrType));
+    CorNode* obj = corTreeObject(allocP, NULL);
+    corTreeChildAdd(obj, corTreeString(allocP, "type", attrType));
     if (dsId[i] != NULL)
-      kjChildAdd(obj, kjString(kjsonP, "datasetId", (char*) dsId[i]));
-    kjChildAdd(obj, valuesArrV[i]);
-    kjChildAdd(attrP, obj);
+      corTreeChildAdd(obj, corTreeString(allocP, "datasetId", (char*) dsId[i]));
+    corTreeChildAdd(obj, valuesArrV[i]);
+    corTreeChildAdd(attrP, obj);
   }
 }
 
@@ -316,12 +315,12 @@ static void transformAttr(KjNode* attrP, const char* timeProp, Kjson* kjsonP, KA
 //
 // transformEntity - apply transformAttr to every attribute child of one entity
 //
-static void transformEntity(KjNode* entityP, const char* timeProp, Kjson* kjsonP, KAlloc* faP)
+static void transformEntity(CorNode* entityP, const char* timeProp, KAlloc* allocP, KAlloc* faP)
 {
-  if (entityP == NULL || entityP->type != KjObject)
+  if (entityP == NULL || entityP->type != CorObject)
     return;
 
-  for (KjNode* childP = entityP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = entityP->value.firstChildP; childP != NULL; childP = childP->next)
   {
     if (childP->name == NULL)
       continue;
@@ -331,9 +330,9 @@ static void transformEntity(KjNode* entityP, const char* timeProp, Kjson* kjsonP
     // entity keyword stays untouched.
     if (ldIsEntityKeyword(childP->name) && strcmp(childP->name, "scope") != 0)
       continue;
-    if (childP->type != KjArray)
+    if (childP->type != CorArray)
       continue;
-    transformAttr(childP, timeProp, kjsonP, faP);
+    transformAttr(childP, timeProp, allocP, faP);
   }
 }
 
@@ -343,7 +342,7 @@ static void transformEntity(KjNode* entityP, const char* timeProp, Kjson* kjsonP
 //
 // ldToTemporalValues -
 //
-void ldToTemporalValues(KjNode* treeP, const char* timeProp, Kjson* kjsonP, KAlloc* faP)
+void ldToTemporalValues(CorNode* treeP, const char* timeProp, KAlloc* allocP, KAlloc* faP)
 {
   if (treeP == NULL)
     return;
@@ -351,13 +350,13 @@ void ldToTemporalValues(KjNode* treeP, const char* timeProp, Kjson* kjsonP, KAll
   if (timeProp == NULL || timeProp[0] == 0)
     timeProp = "observedAt";
 
-  if (treeP->type == KjArray)
+  if (treeP->type == CorArray)
   {
-    for (KjNode* itemP = treeP->value.firstChildP; itemP != NULL; itemP = itemP->next)
-      transformEntity(itemP, timeProp, kjsonP, faP);
+    for (CorNode* itemP = treeP->value.firstChildP; itemP != NULL; itemP = itemP->next)
+      transformEntity(itemP, timeProp, allocP, faP);
   }
   else
   {
-    transformEntity(treeP, timeProp, kjsonP, faP);
+    transformEntity(treeP, timeProp, allocP, faP);
   }
 }

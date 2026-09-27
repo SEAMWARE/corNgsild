@@ -13,7 +13,7 @@
 #include <stdbool.h>                                     // bool
 
 #include "kalloc/KAlloc.h"                             // KAlloc
-#include "kjson/KjNode.h"                               // KjNode
+#include "corTree/CorNode.h"                            // CorNode
 #include "corNgsild/LdOp.h"                               // LdOp
 
 
@@ -27,6 +27,6 @@
 // expiresAt that has since elapsed (the create-only future-check is skipped) and
 // the server-owned read-only fields a stored document carries.
 //
-extern bool ldCheckRegistration(KjNode* regP, LdOp op, bool merged, KAlloc* faP);
+extern bool ldCheckRegistration(CorNode* regP, LdOp op, bool merged, KAlloc* faP);
 
 #endif  // CORNGSILD_LDCHECKREGISTRATION_H_

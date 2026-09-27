@@ -31,8 +31,8 @@
 #include <stdbool.h>                                     // bool
 #include <string.h>                                      // strchr, strcmp
 
-#include "kjson/KjNode.h"                                // KjNode
-#include "kjson/kjLookup.h"                              // kjLookup
+#include "corTree/CorNode.h"                             // CorNode
+#include "corTree/corTreeLookup.h"                       // corTreeLookup
 
 #include "corNgsild/ldError.h"                            // ldError
 #include "corNgsild/LdProblem.h"                          // LD_ERROR_BAD_REQUEST_DATA

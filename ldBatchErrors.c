@@ -11,9 +11,9 @@
 
 #include "kalloc/kaAlloc.h"                            // kaAlloc
 #include "kalloc/kaStrdup.h"                           // kaStrdup
-#include "kjson/KjNode.h"                              // KjNode
-#include "kjson/kjson.h"                               // Kjson
-#include "kjson/kjBuilder.h"                           // kjObject, kjArray, kjString, kjInteger, kjChildAdd
+#include "kalloc/KAlloc.h"                             // KAlloc
+#include "corTree/CorNode.h"                           // CorNode
+#include "corTree/corTreeBuilder.h"                    // corTreeObject, corTreeArray, corTreeString, corTreeInteger, corTreeChildAdd
 
 #include "corNgsild/LdBatchErrors.h"                    // Own interface
 
@@ -88,9 +88,9 @@ void ldBatchErrorListAdd(LdBatchErrorList* listP,
 //
 // ldBatchErrorListToTree -
 //
-KjNode* ldBatchErrorListToTree(const LdBatchErrorList* listP, Kjson* kjsonP)
+CorNode* ldBatchErrorListToTree(const LdBatchErrorList* listP, KAlloc* allocP)
 {
-  KjNode* arrayP = kjArray(kjsonP, "errors");
+  CorNode* arrayP = corTreeArray(allocP, "errors");
   if (listP == NULL)
     return arrayP;
 
@@ -98,20 +98,20 @@ KjNode* ldBatchErrorListToTree(const LdBatchErrorList* listP, Kjson* kjsonP)
   {
     const LdBatchError* e = &listP->entries[i];
 
-    KjNode* entry = kjObject(kjsonP, NULL);
-    kjChildAdd(entry, kjString(kjsonP, "entityId", e->entityId));
+    CorNode* entry = corTreeObject(allocP, NULL);
+    corTreeChildAdd(entry, corTreeString(allocP, "entityId", e->entityId));
 
-    KjNode* pd = kjObject(kjsonP, "error");
-    kjChildAdd(pd, kjString (kjsonP, "type",   e->errorType));
-    kjChildAdd(pd, kjString (kjsonP, "title",  e->errorTitle));
-    kjChildAdd(pd, kjInteger(kjsonP, "status", e->statusCode));
-    kjChildAdd(pd, kjString (kjsonP, "detail", e->errorDetail));
-    kjChildAdd(entry, pd);
+    CorNode* pd = corTreeObject(allocP, "error");
+    corTreeChildAdd(pd, corTreeString (allocP, "type", e->errorType));
+    corTreeChildAdd(pd, corTreeString (allocP, "title", e->errorTitle));
+    corTreeChildAdd(pd, corTreeInteger(allocP, "status", e->statusCode));
+    corTreeChildAdd(pd, corTreeString (allocP, "detail", e->errorDetail));
+    corTreeChildAdd(entry, pd);
 
     if (e->regId != NULL)
-      kjChildAdd(entry, kjString(kjsonP, "registrationId", e->regId));
+      corTreeChildAdd(entry, corTreeString(allocP, "registrationId", e->regId));
 
-    kjChildAdd(arrayP, entry);
+    corTreeChildAdd(arrayP, entry);
   }
 
   return arrayP;

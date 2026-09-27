@@ -12,10 +12,10 @@
 // Per-tenant subscription cache with pre-parsed matching fields.
 //
 // The cache is a linked list of LdSubCacheItem, one per subscription.
-// Each item holds the raw KjNode subscription tree (for rendering on GET)
+// Each item holds the raw CorNode subscription tree (for rendering on GET)
 // plus pre-parsed shortcuts for fast matching on entity writes.
 //
-// The raw KjNode tree is in @context-expanded form (as stored in DB).
+// The raw CorNode tree is in @context-expanded form (as stored in DB).
 // The pre-parsed fields avoid re-parsing on every entity write.
 //
 #include <regex.h>                                     // regex_t
@@ -24,7 +24,7 @@
 #include <pthread.h>                                   // pthread_rwlock_t
 
 #include "kalloc/KAlloc.h"                             // KAlloc
-#include "kjson/KjNode.h"                              // KjNode
+#include "corTree/CorNode.h"                           // CorNode
 
 #include "corNgsild/LdFormat.h"                     // LdFormat
 #include "corRest/CorRestIn.h"                  // CorMimeType
@@ -107,7 +107,7 @@ typedef struct LdThrottleEntry
   int      reasonsMask;  // OR of LD_TRIGGER_* across the buffered changes
   int      op;           // latest LdNotifyOp (delete wins over update)
   uint64_t deletedAtNs;  // epoch-ns when op is a delete; 0 otherwise
-  KjNode*  deleteState;  // malloc clone of the entity at delete time (delete op only), else NULL
+  CorNode* deleteState;  // malloc clone of the entity at delete time (delete op only), else NULL
 } LdThrottleEntry;
 
 
@@ -119,7 +119,7 @@ typedef struct LdThrottleEntry
 typedef struct LdSubCacheItem
 {
   char*                     subId;          // subscription ID (malloc'd copy)
-  KjNode*                   subTree;        // full subscription tree, expanded URIs (kjClone'd, malloc)
+  CorNode*                  subTree;        // full subscription tree, expanded URIs (corTreeClone'd, malloc)
 
   // Pre-parsed matching shortcuts
   LdSubEntitySelector*      entitySelectors;// linked list of parsed entities[] items (NULL = match all)
@@ -172,8 +172,8 @@ typedef struct LdSubCacheItem
   int                       timeInterval;     // § 5.11.7 periodic CSR-Sub notification period in seconds (0 = change-driven only)
   uint64_t                  cooldownNs;       // notification.endpoint.cooldown (§ 5.2.15) in ns; 0 = use 30s default
   int                       timeoutMs;        // notification.endpoint.timeout  (§ 5.2.15) in ms; 0 = use 10s default
-  KjNode*                   receiverInfo;     // notification.endpoint.receiverInfo (§ 5.2.15) — Array of {key, value} from subTree, NULL if none
-  KjNode*                   notifierInfo;     // notification.endpoint.notifierInfo (§ 5.2.15) — used by transport-specific params (e.g. MQTT-QoS per § 7.2)
+  CorNode*                  receiverInfo;     // notification.endpoint.receiverInfo (§ 5.2.15) — Array of {key, value} from subTree, NULL if none
+  CorNode*                  notifierInfo;     // notification.endpoint.notifierInfo (§ 5.2.15) — used by transport-specific params (e.g. MQTT-QoS per § 7.2)
   char*                     notifJoin;        // notification.join (§ 5.2.14) — "flat" / "inline" / "@none" / NULL = absent
   bool                      notifJoinActive;  // precomputed: notifJoin set and != "@none"
   int                       notifJoinLevel;   // notification.joinLevel (§ 5.2.14) — depth; 0 = absent (use spec default 1)
@@ -216,7 +216,7 @@ typedef struct LdSubCacheItem
 //
 // Used for both subscription notification matching and queryEntities post-assembly.
 //
-typedef bool (*LdGeoMatchFunc)(KjNode* entityP, LdGeoRel* geoRel, const char* geometry,
+typedef bool (*LdGeoMatchFunc)(CorNode* entityP, LdGeoRel* geoRel, const char* geometry,
                                 const char* coordinates, const char* geoproperty);
 
 

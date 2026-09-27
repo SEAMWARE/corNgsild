@@ -17,7 +17,7 @@
 #include <stdbool.h>                                   // bool
 #include <stdint.h>                                    // uint64_t
 
-#include "kjson/KjNode.h"                              // KjNode
+#include "corTree/CorNode.h"                           // CorNode
 #include "kalloc/KAlloc.h"                             // KAlloc
 
 #include "corNgsild/LdQ.h"                              // LdQNode
@@ -48,7 +48,7 @@ typedef enum LdPernotState
 typedef struct LdPernotItem
 {
   char*                  subId;            // subscription ID (malloc'd copy)
-  KjNode*                subTree;          // full subscription tree (kjClone'd, malloc)
+  CorNode*               subTree;          // full subscription tree (corTreeClone'd, malloc)
   int                    timeInterval;     // notification period in seconds
 
   // Pre-parsed query filters (built at cache-add time)
@@ -72,7 +72,7 @@ typedef struct LdPernotItem
   uint64_t               expiresAt;       // epoch nanoseconds (0 = never)
   uint64_t               cooldownNs;      // notification.endpoint.cooldown (§ 5.2.15) in ns; 0 = use 30s default
   int                    timeoutMs;       // notification.endpoint.timeout  (§ 5.2.15) in ms; 0 = use 10s default
-  KjNode*                receiverInfo;    // notification.endpoint.receiverInfo (§ 5.2.15) — Array of {key, value} from subTree, NULL if none
+  CorNode*               receiverInfo;    // notification.endpoint.receiverInfo (§ 5.2.15) — Array of {key, value} from subTree, NULL if none
   char*                  notifJoin;       // notification.join (§ 5.2.14) — "flat" / "inline" / "@none" / NULL = absent
   int                    notifJoinLevel;  // notification.joinLevel (§ 5.2.14) — depth; 0 = absent (use spec default 1)
 

@@ -12,8 +12,9 @@
 #include <string.h>                                     // strcmp, strlen, memcpy
 
 #include "kalloc/kaAlloc.h"                             // kaAlloc
-#include "kjson/KjNode.h"                               // KjNode
-#include "kjson/kjLookup.h"                             // kjLookup
+#include "kalloc/KAlloc.h"                              // KAlloc
+#include "corTree/CorNode.h"                            // CorNode
+#include "corTree/corTreeLookup.h"                      // corTreeLookup
 
 #include "corNgsild/LdVocab.h"                           // LD_VOCAB_SCOPE, LD_VOCAB_NGSILD_NULL
 #include "corNgsild/ldScopeMatch.h"                      // Own interface
@@ -155,9 +156,9 @@ int ldScopeToRegex(const char* pattern, char* buf, int bufSize)
 //
 // scopeValueCanonicalize - give one Scope its implicit leading '/'
 //
-static void scopeValueCanonicalize(KjNode* valueP, KAlloc* kaP)
+static void scopeValueCanonicalize(CorNode* valueP, KAlloc* kaP)
 {
-  if ((valueP->type != KjString) || (valueP->value.s == NULL) || (valueP->value.s[0] == '/'))
+  if ((valueP->type != CorString) || (valueP->value.s == NULL) || (valueP->value.s[0] == '/'))
     return;
 
   if (strcmp(valueP->value.s, LD_VOCAB_NGSILD_NULL) == 0)   // the NGSI-LD Null marks a deleted Scope, it is not one
@@ -178,18 +179,18 @@ static void scopeValueCanonicalize(KjNode* valueP, KAlloc* kaP)
 //
 // objectCanonicalize - canonicalize the "scope" member of one Entity/Registration
 //
-static void objectCanonicalize(KjNode* objectP, KAlloc* kaP)
+static void objectCanonicalize(CorNode* objectP, KAlloc* kaP)
 {
-  if (objectP == NULL || objectP->type != KjObject)
+  if (objectP == NULL || objectP->type != CorObject)
     return;
 
-  KjNode* scopeP = kjLookup(objectP, LD_VOCAB_SCOPE);
+  CorNode* scopeP = corTreeLookup(objectP, LD_VOCAB_SCOPE);
   if (scopeP == NULL)
     return;
 
-  if (scopeP->type == KjArray)
+  if (scopeP->type == CorArray)
   {
-    for (KjNode* valueP = scopeP->value.firstChildP; valueP != NULL; valueP = valueP->next)
+    for (CorNode* valueP = scopeP->value.firstChildP; valueP != NULL; valueP = valueP->next)
       scopeValueCanonicalize(valueP, kaP);
   }
   else
@@ -202,18 +203,18 @@ static void objectCanonicalize(KjNode* objectP, KAlloc* kaP)
 //
 // ldScopeCanonicalize -
 //
-void ldScopeCanonicalize(KjNode* treeP, KAlloc* kaP)
+void ldScopeCanonicalize(CorNode* treeP, KAlloc* kaP)
 {
   if (treeP == NULL)
     return;
 
-  if (treeP->type == KjObject)
+  if (treeP->type == CorObject)
   {
     objectCanonicalize(treeP, kaP);
   }
-  else if (treeP->type == KjArray)
+  else if (treeP->type == CorArray)
   {
-    for (KjNode* itemP = treeP->value.firstChildP; itemP != NULL; itemP = itemP->next)
+    for (CorNode* itemP = treeP->value.firstChildP; itemP != NULL; itemP = itemP->next)
       objectCanonicalize(itemP, kaP);
   }
 }

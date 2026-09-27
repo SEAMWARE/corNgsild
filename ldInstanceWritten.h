@@ -11,7 +11,7 @@
 //
 #include <stdbool.h>                                  // bool
 
-#include "kjson/KjNode.h"                             // KjNode
+#include "corTree/CorNode.h"                          // CorNode
 
 
 
@@ -28,6 +28,6 @@
 // The ONE answer to "which instances did this write touch" - a subscription
 // watching attr@datasetId and the temporal history both ask it.
 //
-extern bool ldInstanceWritten(KjNode* preAttrP, KjNode* postAttrP, const char* dsKey);
+extern bool ldInstanceWritten(CorNode* preAttrP, CorNode* postAttrP, const char* dsKey);
 
 #endif  // CORNGSILD_LD_INSTANCE_WRITTEN_H_

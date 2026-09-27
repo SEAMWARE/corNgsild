@@ -15,9 +15,9 @@
 #include "corRest/corRest.h"                            // corRest
 
 #include "kalloc/KAlloc.h"                             // KAlloc
-#include "kjson/KjNode.h"                               // KjNode
-#include "kjson/kjBuilder.h"                             // kjString
-#include "kjson/kjChildReplace.h"                       // kjChildReplace
+#include "corTree/CorNode.h"                            // CorNode
+#include "corTree/corTreeBuilder.h"                      // corTreeString
+#include "corTree/corTreeChildReplace.h"                // corTreeChildReplace
 
 #include "corNgsild/ldIsEntityKeyword.h"                   // ldIsEntityKeyword
 #include "corNgsild/ldLangReduce.h"                       // Own interface
@@ -59,16 +59,16 @@ static bool isAttrKeyword(const char* name)
 // 5. Add a "lang" sub-property with the chosen language tag
 // 6. Recurse into sub-attributes
 //
-static void attrLangReduce(KjNode* attrP, const char* lang, KAlloc* faP)
+static void attrLangReduce(CorNode* attrP, const char* lang, KAlloc* faP)
 {
-  if (attrP->type != KjObject)
+  if (attrP->type != CorObject)
     return;
 
   // Find languageMap child — if not found, this is not a LanguageProperty
-  KjNode* langMapP = NULL;
-  KjNode* typeP    = NULL;
+  CorNode* langMapP = NULL;
+  CorNode* typeP   = NULL;
 
-  for (KjNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
   {
     if (strcmp(childP->name, "languageMap") == 0)
       langMapP = childP;
@@ -76,18 +76,18 @@ static void attrLangReduce(KjNode* attrP, const char* lang, KAlloc* faP)
       typeP = childP;
   }
 
-  if (langMapP != NULL && langMapP->type == KjObject)
+  if (langMapP != NULL && langMapP->type == CorObject)
   {
     // Find the best matching language key. Fallback order when the requested
     // language is absent (clause 10): @none if present (spec), then "en" as our
     // implementation-defined default for the "up to the implementation" choice,
     // then the first key.
-    KjNode* matchP = NULL;
-    KjNode* noneP  = NULL;
-    KjNode* enP    = NULL;
-    KjNode* firstP = langMapP->value.firstChildP;
+    CorNode* matchP = NULL;
+    CorNode* noneP = NULL;
+    CorNode* enP   = NULL;
+    CorNode* firstP = langMapP->value.firstChildP;
 
-    for (KjNode* keyP = langMapP->value.firstChildP; keyP != NULL; keyP = keyP->next)
+    for (CorNode* keyP = langMapP->value.firstChildP; keyP != NULL; keyP = keyP->next)
     {
       if (strcmp(keyP->name, lang) == 0)
       {
@@ -106,26 +106,26 @@ static void attrLangReduce(KjNode* attrP, const char* lang, KAlloc* faP)
       const char* chosenLang = matchP->name;
 
       // Create "value" node with the matched value
-      KjNode* valueP = kjString(corRest.kjsonP, "value", matchP->value.s);
+      CorNode* valueP = corTreeString(corRest.kallocP, "value", matchP->value.s);
       valueP->type = matchP->type;
-      if (matchP->type != KjString)
+      if (matchP->type != CorString)
         valueP->value = matchP->value;
 
       // Replace "languageMap" with "value"
-      kjChildReplace(attrP, langMapP, valueP);
+      corTreeChildReplace(attrP, langMapP, valueP);
 
       // Change type from "LanguageProperty" to "Property"
-      if (typeP != NULL && typeP->type == KjString)
+      if (typeP != NULL && typeP->type == CorString)
         typeP->value.s = (char*) "Property";
 
       // Add "lang" sub-property with the chosen language tag
-      KjNode* langNodeP = kjString(corRest.kjsonP, "lang", chosenLang);
-      kjChildAdd(attrP, langNodeP);
+      CorNode* langNodeP = corTreeString(corRest.kallocP, "lang", chosenLang);
+      corTreeChildAdd(attrP, langNodeP);
     }
   }
 
   // Recurse into sub-attributes
-  for (KjNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
   {
     if (isAttrKeyword(childP->name) == false)
       attrLangReduce(childP, lang, faP);
@@ -142,19 +142,19 @@ static void attrLangReduce(KjNode* attrP, const char* lang, KAlloc* faP)
 // instance objects rather than a single object. When the entity-level child
 // is an array, walk it and reduce each instance.
 //
-void ldLangReduce(KjNode* entityP, const char* lang, KAlloc* faP)
+void ldLangReduce(CorNode* entityP, const char* lang, KAlloc* faP)
 {
-  if (entityP == NULL || entityP->type != KjObject)
+  if (entityP == NULL || entityP->type != CorObject)
     return;
 
-  for (KjNode* childP = entityP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = entityP->value.firstChildP; childP != NULL; childP = childP->next)
   {
     if (childP->name == NULL || ldIsEntityKeyword(childP->name))
       continue;
 
-    if (childP->type == KjArray)
+    if (childP->type == CorArray)
     {
-      for (KjNode* instP = childP->value.firstChildP; instP != NULL; instP = instP->next)
+      for (CorNode* instP = childP->value.firstChildP; instP != NULL; instP = instP->next)
         attrLangReduce(instP, lang, faP);
     }
     else

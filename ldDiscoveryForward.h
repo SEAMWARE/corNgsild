@@ -9,7 +9,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 #include <stdbool.h>
-#include "kjson/KjNode.h"
+#include "corTree/CorNode.h"
 #include "corNgsild/LdRegCache.h"
 
 //
@@ -25,8 +25,8 @@ extern bool ldDiscoveryShouldForward(void);
 // Requests ?details=true from subordinates so the response carries
 // full IRIs; the caller's own details / list shaping is decided later.
 //
-extern void ldDiscoveryForwardTypes(KjNode* agg, LdRegCache* cacheP, bool details, const char* ownAlias);
-extern void ldDiscoveryForwardAttrs(KjNode* agg, LdRegCache* cacheP, bool details, const char* ownAlias);
+extern void ldDiscoveryForwardTypes(CorNode* agg, LdRegCache* cacheP, bool details, const char* ownAlias);
+extern void ldDiscoveryForwardAttrs(CorNode* agg, LdRegCache* cacheP, bool details, const char* ownAlias);
 
 
 //
@@ -34,10 +34,10 @@ extern void ldDiscoveryForwardAttrs(KjNode* agg, LdRegCache* cacheP, bool detail
 // (resp. `attrShort`) is the short name to use on the outgoing URL;
 // `typeIri` / `attrIri` is retained only for logging.
 //
-extern void ldDiscoveryForwardType(KjNode* agg, LdRegCache* cacheP,
+extern void ldDiscoveryForwardType(CorNode* agg, LdRegCache* cacheP,
                                    const char* typeIri, const char* typeShort,
                                    const char* ownAlias);
-extern void ldDiscoveryForwardAttr(KjNode* agg, LdRegCache* cacheP,
+extern void ldDiscoveryForwardAttr(CorNode* agg, LdRegCache* cacheP,
                                    const char* attrIri, const char* attrShort,
                                    const char* ownAlias);
 

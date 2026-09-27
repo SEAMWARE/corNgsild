@@ -15,9 +15,9 @@
 
 #include "kalloc/KAlloc.h"                             // KAlloc
 #include "kalloc/kaAlloc.h"                            // kaAlloc
-#include "kjson/KjNode.h"                               // KjNode
-#include "kjson/kjBuilder.h"                              // kjArray
-#include "kjson/kjChildReplace.h"                       // kjChildReplace
+#include "corTree/CorNode.h"                            // CorNode
+#include "corTree/corTreeBuilder.h"                       // corTreeArray
+#include "corTree/corTreeChildReplace.h"                // corTreeChildReplace
 #include "corNgsild/LdVocab.h"                            // LD_VOCAB_DATASET_ID, LD_VOCAB_SCOPE
 #include "corNgsild/ldTypes.h"                            // ldAttrTypeFromString, ldValueKeyForType
 
@@ -111,14 +111,14 @@ static bool isValueKey(const char* name)
 // Walks the children of an object, finds createdAt/modifiedAt integer nodes,
 // and converts them in-place to string nodes.
 //
-static void timestampsToIsoStrings(KjNode* objP, KAlloc* allocP)
+static void timestampsToIsoStrings(CorNode* objP, KAlloc* allocP)
 {
-  if (objP == NULL || objP->type != KjObject)
+  if (objP == NULL || objP->type != CorObject)
     return;
 
-  for (KjNode* childP = objP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = objP->value.firstChildP; childP != NULL; childP = childP->next)
   {
-    if (childP->type == KjInt &&
+    if (childP->type == CorInt &&
         (strcmp(childP->name, LD_VOCAB_CREATED_AT)  == 0 ||
          strcmp(childP->name, LD_VOCAB_MODIFIED_AT) == 0 ||
          strcmp(childP->name, LD_VOCAB_DELETED_AT)  == 0 ||
@@ -132,28 +132,28 @@ static void timestampsToIsoStrings(KjNode* objP, KAlloc* allocP)
       if (isoStr != NULL)
       {
         strcpy(isoStr, isoBuf);
-        childP->type    = KjString;
+        childP->type    = CorString;
         childP->value.s = isoStr;
       }
     }
   }
 
   // Recurse into sub-attributes so their createdAt/modifiedAt/... convert too.
-  // A sub-attribute is a KjObject child carrying a "type" of a known NGSI-LD
+  // A sub-attribute is a CorObject child carrying a "type" of a known NGSI-LD
   // attribute type — and never the value node, whose contents are the user's
   // (see isValueKey). Without that second half an integer the user happened to
   // call "observedAt" inside a value came back as an ISO string.
-  for (KjNode* childP = objP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = objP->value.firstChildP; childP != NULL; childP = childP->next)
   {
-    if (childP->type != KjObject)
+    if (childP->type != CorObject)
       continue;
 
     if (isValueKey(childP->name))
       continue;
 
-    for (KjNode* gcP = childP->value.firstChildP; gcP != NULL; gcP = gcP->next)
+    for (CorNode* gcP = childP->value.firstChildP; gcP != NULL; gcP = gcP->next)
     {
-      if (gcP->name != NULL && strcmp(gcP->name, "type") == 0 && gcP->type == KjString &&
+      if (gcP->name != NULL && strcmp(gcP->name, "type") == 0 && gcP->type == CorString &&
           ldAttrTypeFromString(gcP->value.s) != LdAttrNone)
       {
         timestampsToIsoStrings(childP, allocP);
@@ -174,17 +174,17 @@ static void timestampsToIsoStrings(KjNode* objP, KAlloc* allocP)
 // based on the attribute's "type" field, so JSON-LD compaction produces the
 // right short names.
 //
-static void restoreValueKey(KjNode* instP, bool collapseSingletonArrays)
+static void restoreValueKey(CorNode* instP, bool collapseSingletonArrays)
 {
-  if (instP->type != KjObject)
+  if (instP->type != CorObject)
     return;
 
-  KjNode* typeP  = NULL;
-  KjNode* valueP = NULL;
+  CorNode* typeP = NULL;
+  CorNode* valueP = NULL;
 
-  for (KjNode* childP = instP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = instP->value.firstChildP; childP != NULL; childP = childP->next)
   {
-    if (strcmp(childP->name, "type") == 0 && childP->type == KjString)  typeP  = childP;
+    if (strcmp(childP->name, "type") == 0 && childP->type == CorString) typeP  = childP;
     if (strcmp(childP->name, "value") == 0)                             valueP = childP;
   }
 
@@ -210,11 +210,11 @@ static void restoreValueKey(KjNode* instP, bool collapseSingletonArrays)
     //
     if (collapseSingletonArrays &&
         (aType == LdAttrProperty || aType == LdAttrRelationship) &&
-        valueP->type == KjArray &&
+        valueP->type == CorArray &&
         valueP->value.firstChildP != NULL &&
         valueP->value.firstChildP->next == NULL)
     {
-      KjNode* onlyP     = valueP->value.firstChildP;
+      CorNode* onlyP    = valueP->value.firstChildP;
       valueP->type      = onlyP->type;
       valueP->value     = onlyP->value;
       valueP->lastChild = onlyP->lastChild;
@@ -231,18 +231,18 @@ static void restoreValueKey(KjNode* instP, bool collapseSingletonArrays)
   // which compact straight back to "value" / "object", so only the types whose
   // value key is spelled differently ever showed it.
   //
-  for (KjNode* childP = instP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = instP->value.firstChildP; childP != NULL; childP = childP->next)
   {
-    if (childP->type != KjObject)
+    if (childP->type != CorObject)
       continue;
 
     if (isValueKey(childP->name))
       continue;
 
     // Check if this child is a sub-attribute by looking for a "type" field with a known attr type
-    for (KjNode* gcP = childP->value.firstChildP; gcP != NULL; gcP = gcP->next)
+    for (CorNode* gcP = childP->value.firstChildP; gcP != NULL; gcP = gcP->next)
     {
-      if (strcmp(gcP->name, "type") == 0 && gcP->type == KjString && ldAttrTypeFromString(gcP->value.s) != LdAttrNone)
+      if (strcmp(gcP->name, "type") == 0 && gcP->type == CorString && ldAttrTypeFromString(gcP->value.s) != LdAttrNone)
       {
         restoreValueKey(childP, collapseSingletonArrays);
         break;
@@ -257,14 +257,14 @@ static void restoreValueKey(KjNode* instP, bool collapseSingletonArrays)
 //
 // childCount - count the children of a container node
 //
-static int childCount(KjNode* containerP)
+static int childCount(CorNode* containerP)
 {
-  if (containerP->type != KjObject && containerP->type != KjArray)
+  if (containerP->type != CorObject && containerP->type != CorArray)
     return 0;
 
   int count = 0;
 
-  for (KjNode* p = containerP->value.firstChildP; p != NULL; p = p->next)
+  for (CorNode* p = containerP->value.firstChildP; p != NULL; p = p->next)
     ++count;
 
   return count;
@@ -276,22 +276,22 @@ static int childCount(KjNode* containerP)
 //
 // ldEntityToApi - transform storage-format entity tree to API-format
 //
-// Every entity-level KjObject child (non-keyword) is a dataset-keyed wrapper.
+// Every entity-level CorObject child (non-keyword) is a dataset-keyed wrapper.
 // Unwrap them back to NGSI-LD API format:
 //   - Single "@none" key  -> plain attribute object (no datasetId field)
 //   - Single named key    -> plain attribute object with datasetId field
 //   - Multiple keys       -> array of attribute objects with datasetId fields
 //
-void ldEntityToApi(KjNode* entityP, KAlloc* faP)
+void ldEntityToApi(CorNode* entityP, KAlloc* faP)
 {
-  if (entityP == NULL || entityP->type != KjObject)
+  if (entityP == NULL || entityP->type != CorObject)
     return;
 
-  KjNode* childP = entityP->value.firstChildP;
+  CorNode* childP = entityP->value.firstChildP;
 
   while (childP != NULL)
   {
-    KjNode* nextP = childP->next;
+    CorNode* nextP = childP->next;
 
     // Skip entity keywords (id, type, scope, ...).
     if (childP->name == NULL || ldIsEntityKeyword(childP->name))
@@ -300,21 +300,21 @@ void ldEntityToApi(KjNode* entityP, KAlloc* faP)
       continue;
     }
 
-    // Temporal attribute: KjArray of instance objects (not the
-    // dataset-keyed KjObject wrapper). ldEntityToApi's unwrap logic
+    // Temporal attribute: CorArray of instance objects (not the
+    // dataset-keyed CorObject wrapper). ldEntityToApi's unwrap logic
     // doesn't apply, but each instance's "value" key still needs
     // restoring to the type-appropriate IRI (e.g. JsonProperty stores
     // `value` but the API names it `json`).
-    if (childP->type == KjArray)
+    if (childP->type == CorArray)
     {
-      for (KjNode* instP = childP->value.firstChildP; instP != NULL; instP = instP->next)
+      for (CorNode* instP = childP->value.firstChildP; instP != NULL; instP = instP->next)
         restoreValueKey(instP, false);  // temporal: keep raw array values for aggregation
       childP = nextP;
       continue;
     }
 
-    // Otherwise must be the dataset-keyed wrapper (KjObject).
-    if (childP->type != KjObject)
+    // Otherwise must be the dataset-keyed wrapper (CorObject).
+    if (childP->type != CorObject)
     {
       childP = nextP;
       continue;
@@ -325,9 +325,9 @@ void ldEntityToApi(KjNode* entityP, KAlloc* faP)
     if (nInstances == 1)
     {
       // Single instance — unwrap to plain object
-      KjNode* instP = childP->value.firstChildP;
+      CorNode* instP = childP->value.firstChildP;
 
-      if (instP == NULL || instP->type != KjObject)
+      if (instP == NULL || instP->type != CorObject)
       {
         childP = nextP;
         continue;
@@ -339,14 +339,14 @@ void ldEntityToApi(KjNode* entityP, KAlloc* faP)
       // If the key is not "@none", add datasetId back to the instance
       if (instP->name != NULL && strcmp(instP->name, "@none") != 0)
       {
-        KjNode* dsNodeP = kjString(corRest.kjsonP, LD_VOCAB_DATASET_ID, instP->name);
-        kjChildAdd(instP, dsNodeP);
+        CorNode* dsNodeP = corTreeString(corRest.kallocP, LD_VOCAB_DATASET_ID, instP->name);
+        corTreeChildAdd(instP, dsNodeP);
       }
 
       // Unwrap: replace wrapper with the instance, keeping the attribute name
       instP->name = childP->name;
       instP->next = nextP;
-      kjChildReplace(entityP, childP, instP);
+      corTreeChildReplace(entityP, childP, instP);
 
       if (entityP->lastChild == childP)
         entityP->lastChild = instP;
@@ -354,32 +354,32 @@ void ldEntityToApi(KjNode* entityP, KAlloc* faP)
     else if (nInstances > 1)
     {
       // Multiple instances — build array
-      KjNode* arrayP = kjArray(corRest.kjsonP, childP->name);
+      CorNode* arrayP = corTreeArray(corRest.kallocP, childP->name);
 
-      KjNode* instP = childP->value.firstChildP;
+      CorNode* instP = childP->value.firstChildP;
       while (instP != NULL)
       {
-        KjNode* instNextP = instP->next;
+        CorNode* instNextP = instP->next;
 
         // Restore normalized "value" key to correct expanded IRI
         restoreValueKey(instP, true);
 
         // Add datasetId back for named instances (not @none)
-        if (instP->type == KjObject && instP->name != NULL && strcmp(instP->name, "@none") != 0)
+        if (instP->type == CorObject && instP->name != NULL && strcmp(instP->name, "@none") != 0)
         {
-          KjNode* dsNodeP = kjString(corRest.kjsonP, LD_VOCAB_DATASET_ID, instP->name);
-          kjChildAdd(instP, dsNodeP);
+          CorNode* dsNodeP = corTreeString(corRest.kallocP, LD_VOCAB_DATASET_ID, instP->name);
+          corTreeChildAdd(instP, dsNodeP);
         }
 
         instP->name = NULL;  // array elements have no name
         instP->next = NULL;
-        kjChildAdd(arrayP, instP);
+        corTreeChildAdd(arrayP, instP);
 
         instP = instNextP;
       }
 
       arrayP->next = nextP;
-      kjChildReplace(entityP, childP, arrayP);
+      corTreeChildReplace(entityP, childP, arrayP);
 
       if (entityP->lastChild == childP)
         entityP->lastChild = arrayP;
@@ -391,15 +391,15 @@ void ldEntityToApi(KjNode* entityP, KAlloc* faP)
   // Convert integer timestamps to ISO 8601 strings (entity-level + inside each attribute)
   timestampsToIsoStrings(entityP, faP);
 
-  for (KjNode* attrP = entityP->value.firstChildP; attrP != NULL; attrP = attrP->next)
+  for (CorNode* attrP = entityP->value.firstChildP; attrP != NULL; attrP = attrP->next)
   {
-    if (attrP->type == KjObject)
+    if (attrP->type == CorObject)
       timestampsToIsoStrings(attrP, faP);
-    else if (attrP->type == KjArray)
+    else if (attrP->type == CorArray)
     {
-      for (KjNode* instP = attrP->value.firstChildP; instP != NULL; instP = instP->next)
+      for (CorNode* instP = attrP->value.firstChildP; instP != NULL; instP = instP->next)
       {
-        if (instP->type == KjObject)
+        if (instP->type == CorObject)
           timestampsToIsoStrings(instP, faP);
       }
     }

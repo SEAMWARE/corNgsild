@@ -6,7 +6,7 @@
 // Copyright 2026 Seamware
 // SPDX-License-Identifier: Apache-2.0
 //
-// Sort a KjArray of entities in-place per NGSI-LD orderBy terms (§ 4.23).
+// Sort a CorArray of entities in-place per NGSI-LD orderBy terms (§ 4.23).
 // Entities are in storage format: each attr is a dataset-keyed wrapper
 // { "@none": { type, value, ... } }.
 //
@@ -17,8 +17,8 @@
 #include <unicode/ucol.h>                              // UCollator, ucol_open, ucol_strcollUTF8
 #endif
 
-#include "kjson/KjNode.h"                              // KjNode, KjObject, KjArray
-#include "kjson/kjLookup.h"                            // kjLookup
+#include "corTree/CorNode.h"                           // CorNode, CorObject, CorArray
+#include "corTree/corTreeLookup.h"                     // corTreeLookup
 
 #include "corNgsild/LdOrder.h"                          // LdOrderTerm, LdOrderDir
 #include "corNgsild/ldOrderSort.h"                      // Own interface
@@ -77,19 +77,19 @@ static int strCollate(const char* a, const char* b)
 //
 // Numbers < Strings < Object < Array < Boolean < Null < Missing
 //
-static int valueRank(KjNode* valP)
+static int valueRank(CorNode* valP)
 {
   if (valP == NULL)         return 99;
 
   switch (valP->type)
   {
-    case KjInt:
-    case KjFloat:           return 0;
-    case KjString:          return 1;
-    case KjObject:          return 2;
-    case KjArray:           return 3;
-    case KjBoolean:         return 4;
-    case KjNull:            return 5;
+    case CorInt:
+    case CorFloat:          return 0;
+    case CorString:         return 1;
+    case CorObject:         return 2;
+    case CorArray:          return 3;
+    case CorBoolean:        return 4;
+    case CorNull:           return 5;
     default:                return 6;
   }
 }
@@ -110,19 +110,19 @@ static int valueRank(KjNode* valP)
 // element). That gives users an intuitive "most recent value" for orderBy
 // rather than the SQL-ordered first/last entry, which would flip with lastN.
 //
-static KjNode* temporalLatestInstance(KjNode* arrayP)
+static CorNode* temporalLatestInstance(CorNode* arrayP)
 {
-  KjNode* bestP = NULL;
+  CorNode* bestP = NULL;
   const char* bestKey = NULL;
 
-  for (KjNode* instP = arrayP->value.firstChildP; instP != NULL; instP = instP->next)
+  for (CorNode* instP = arrayP->value.firstChildP; instP != NULL; instP = instP->next)
   {
-    if (instP->type != KjObject)
+    if (instP->type != CorObject)
       continue;
 
-    KjNode* obsP = kjLookup(instP, "observedAt");
-    if (obsP == NULL) obsP = kjLookup(instP, "modifiedAt");
-    const char* key = (obsP != NULL && obsP->type == KjString) ? obsP->value.s : "";
+    CorNode* obsP = corTreeLookup(instP, "observedAt");
+    if (obsP == NULL) obsP = corTreeLookup(instP, "modifiedAt");
+    const char* key = (obsP != NULL && obsP->type == CorString) ? obsP->value.s : "";
 
     if (bestP == NULL || (bestKey != NULL && strcmp(key, bestKey) > 0))
     {
@@ -135,19 +135,19 @@ static KjNode* temporalLatestInstance(KjNode* arrayP)
 }
 
 
-static KjNode* temporalLatestValue(KjNode* arrayP)
+static CorNode* temporalLatestValue(CorNode* arrayP)
 {
-  KjNode* bestP = temporalLatestInstance(arrayP);
-  return (bestP != NULL) ? kjLookup(bestP, "value") : NULL;
+  CorNode* bestP = temporalLatestInstance(arrayP);
+  return (bestP != NULL) ? corTreeLookup(bestP, "value") : NULL;
 }
 
 
-// lookupSeg - linear lookup of a child by exact name in a KjObject.
-static KjNode* lookupSeg(KjNode* base, const char* seg)
+// lookupSeg - linear lookup of a child by exact name in a CorObject.
+static CorNode* lookupSeg(CorNode* base, const char* seg)
 {
-  if (base == NULL || base->type != KjObject || seg == NULL)
+  if (base == NULL || base->type != CorObject || seg == NULL)
     return NULL;
-  for (KjNode* c = base->value.firstChildP; c != NULL; c = c->next)
+  for (CorNode* c = base->value.firstChildP; c != NULL; c = c->next)
     if (c->name != NULL && strcmp(c->name, seg) == 0)
       return c;
   return NULL;
@@ -165,7 +165,7 @@ static KjNode* lookupSeg(KjNode* base, const char* seg)
 //   orderBy=name.createdAt                  → segV=["<iri-name>", "createdAt"]
 //   orderBy=name.subProperty                → segV=["<iri-name>", "<iri-sub>"] → sub.value
 //
-static KjNode* getAttrValueByPath(KjNode* entityP, char** segV, int segN)
+static CorNode* getAttrValueByPath(CorNode* entityP, char** segV, int segN)
 {
   if (entityP == NULL || segV == NULL || segN <= 0)
     return NULL;
@@ -181,14 +181,14 @@ static KjNode* getAttrValueByPath(KjNode* entityP, char** segV, int segN)
        strcmp(first, "createdAt")  == 0 ||
        strcmp(first, "modifiedAt") == 0))
   {
-    return kjLookup(entityP, first);
+    return corTreeLookup(entityP, first);
   }
 
-  KjNode* wrapperP = kjLookup(entityP, first);
+  CorNode* wrapperP = corTreeLookup(entityP, first);
   if (wrapperP == NULL)
     return NULL;
 
-  if (wrapperP->type == KjArray)            // temporal store
+  if (wrapperP->type == CorArray)           // temporal store
   {
     if (segN == 1)
       return temporalLatestValue(wrapperP);
@@ -196,53 +196,53 @@ static KjNode* getAttrValueByPath(KjNode* entityP, char** segV, int segN)
     // segN > 1: path-into-temporal — drill into the most-recent instance
     // and resolve segments[1..] inside it (e.g. orderBy=name.createdAt
     // sorts by the createdAt of the latest `name` instance).
-    KjNode* instP = temporalLatestInstance(wrapperP);
+    CorNode* instP = temporalLatestInstance(wrapperP);
     if (instP == NULL)
       return NULL;
 
-    KjNode* cur = instP;
+    CorNode* cur = instP;
     for (int i = 1; i < segN; i++)
     {
-      cur = kjLookup(cur, segV[i]);
+      cur = corTreeLookup(cur, segV[i]);
       if (cur == NULL) return NULL;
     }
-    if (cur != NULL && cur->type == KjObject)
+    if (cur != NULL && cur->type == CorObject)
     {
-      KjNode* v = kjLookup(cur, "value");
+      CorNode* v = corTreeLookup(cur, "value");
       if (v != NULL) return v;
     }
     return cur;
   }
-  if (wrapperP->type != KjObject)
+  if (wrapperP->type != CorObject)
     return NULL;
 
-  KjNode* noneP = kjLookup(wrapperP, "@none");
-  if (noneP == NULL || noneP->type != KjObject)
+  CorNode* noneP = corTreeLookup(wrapperP, "@none");
+  if (noneP == NULL || noneP->type != CorObject)
     return NULL;
 
   if (segN == 1)
-    return kjLookup(noneP, "value");
+    return corTreeLookup(noneP, "value");
 
   // Walk remaining segments inside @none.
-  KjNode* cur = noneP;
+  CorNode* cur = noneP;
   for (int i = 1; i < segN; i++)
   {
     cur = lookupSeg(cur, segV[i]);
     if (cur == NULL) return NULL;
 
     // If more segments follow, peel any nested @none wrapper.
-    if (i + 1 < segN && cur->type == KjObject)
+    if (i + 1 < segN && cur->type == CorObject)
     {
-      KjNode* none = kjLookup(cur, "@none");
-      if (none != NULL && none->type == KjObject)
+      CorNode* none = corTreeLookup(cur, "@none");
+      if (none != NULL && none->type == CorObject)
         cur = none;
     }
   }
 
   // Leaf: a Property-shaped object → return its scalar `value`.
-  if (cur != NULL && cur->type == KjObject)
+  if (cur != NULL && cur->type == CorObject)
   {
-    KjNode* v = kjLookup(cur, "value");
+    CorNode* v = corTreeLookup(cur, "value");
     if (v != NULL) return v;
   }
   return cur;
@@ -254,7 +254,7 @@ static KjNode* getAttrValueByPath(KjNode* entityP, char** segV, int segN)
 //
 // compareValues - compare two attr values for sorting
 //
-static int compareValues(KjNode* a, KjNode* b)
+static int compareValues(CorNode* a, CorNode* b)
 {
   int ra = valueRank(a);
   int rb = valueRank(b);
@@ -266,16 +266,16 @@ static int compareValues(KjNode* a, KjNode* b)
 
   switch (a->type)
   {
-    case KjInt:
+    case CorInt:
       return (a->value.i < b->value.i) ? -1 : (a->value.i > b->value.i) ? 1 : 0;
 
-    case KjFloat:
+    case CorFloat:
       return (a->value.f < b->value.f) ? -1 : (a->value.f > b->value.f) ? 1 : 0;
 
-    case KjString:
+    case CorString:
       return strCollate(a->value.s, b->value.s);
 
-    case KjBoolean:
+    case CorBoolean:
       return (int)(a->value.b) - (int)(b->value.b);
 
     default:
@@ -294,10 +294,10 @@ static int compareValues(KjNode* a, KjNode* b)
 // is "non-existent" (§ 7.6.2.3), so the entity sorts last via the null-last
 // rule in entityCompare.
 //
-static KjNode* descendValuePath(KjNode* valP, char** memberV, int memberN)
+static CorNode* descendValuePath(CorNode* valP, char** memberV, int memberN)
 {
   for (int i = 0; (i < memberN) && (valP != NULL); i++)
-    valP = (valP->type == KjObject) ? kjLookup(valP, memberV[i]) : NULL;
+    valP = (valP->type == CorObject) ? corTreeLookup(valP, memberV[i]) : NULL;
   return valP;
 }
 
@@ -309,8 +309,8 @@ static KjNode* descendValuePath(KjNode* valP, char** memberV, int memberN)
 //
 static int entityCompare(const void* pa, const void* pb)
 {
-  KjNode* a = *(KjNode**) pa;
-  KjNode* b = *(KjNode**) pb;
+  CorNode* a = *(CorNode**) pa;
+  CorNode* b = *(CorNode**) pb;
 
   for (int i = 0; i < sortTermCount; i++)
   {
@@ -321,18 +321,18 @@ static int entityCompare(const void* pa, const void* pb)
       // present) rank ahead of those that do not, regardless of direction; among
       // geo-bearing entities the order is ascending (nearest first) or, for
       // dist-desc, descending.
-      KjNode* da = kjLookup(a, "geoDistance");
-      KjNode* dbn = kjLookup(b, "geoDistance");
-      bool    ha = (da  != NULL) && (da->type  == KjFloat || da->type  == KjInt);
-      bool    hb = (dbn != NULL) && (dbn->type == KjFloat || dbn->type == KjInt);
+      CorNode* da = corTreeLookup(a, "geoDistance");
+      CorNode* dbn = corTreeLookup(b, "geoDistance");
+      bool    ha = (da  != NULL) && (da->type  == CorFloat || da->type == CorInt);
+      bool    hb = (dbn != NULL) && (dbn->type == CorFloat || dbn->type == CorInt);
 
       if (ha != hb)
         return ha ? -1 : 1;   // geo-bearing first
       if (!ha)
         continue;             // neither carries a distance — try the next term
 
-      double va = (da->type  == KjFloat) ? da->value.f  : (double) da->value.i;
-      double vb = (dbn->type == KjFloat) ? dbn->value.f : (double) dbn->value.i;
+      double va = (da->type  == CorFloat) ? da->value.f : (double) da->value.i;
+      double vb = (dbn->type == CorFloat) ? dbn->value.f : (double) dbn->value.i;
       if (va != vb)
       {
         int cmp = (va < vb) ? -1 : 1;
@@ -341,8 +341,8 @@ static int entityCompare(const void* pa, const void* pb)
       continue;               // equal distance — try the next term
     }
 
-    KjNode* va = getAttrValueByPath(a, sortTerms[i].pathSegV, sortTerms[i].pathSegN);
-    KjNode* vb = getAttrValueByPath(b, sortTerms[i].pathSegV, sortTerms[i].pathSegN);
+    CorNode* va = getAttrValueByPath(a, sortTerms[i].pathSegV, sortTerms[i].pathSegN);
+    CorNode* vb = getAttrValueByPath(b, sortTerms[i].pathSegV, sortTerms[i].pathSegN);
 
     // § 7.6.2.3 trailing path: descend into the attribute's compound JSON value.
     if (sortTerms[i].valuePathN > 0)
@@ -355,8 +355,8 @@ static int entityCompare(const void* pa, const void* pb)
     // does not exist, shall always sort LAST — irrespective of the asc/desc
     // direction. Handle it before the directional negation below, which would
     // otherwise flip a null/missing entity to the front on ;desc.
-    bool aNil = (va == NULL) || (va->type == KjNull);
-    bool bNil = (vb == NULL) || (vb->type == KjNull);
+    bool aNil = (va == NULL) || (va->type == CorNull);
+    bool bNil = (vb == NULL) || (vb->type == CorNull);
     if (aNil != bNil)
       return aNil ? 1 : -1;
     if (aNil)
@@ -376,23 +376,23 @@ static int entityCompare(const void* pa, const void* pb)
 //
 // ldOrderSort - sort an entity array in-place
 //
-void ldOrderSort(KjNode* arrayP, LdOrderTerm* terms, int termCount, const char* collation)
+void ldOrderSort(CorNode* arrayP, LdOrderTerm* terms, int termCount, const char* collation)
 {
-  if (arrayP == NULL || arrayP->type != KjArray || terms == NULL || termCount == 0)
+  if (arrayP == NULL || arrayP->type != CorArray || terms == NULL || termCount == 0)
     return;
 
   // Count entities
   int count = 0;
-  for (KjNode* p = arrayP->value.firstChildP; p != NULL; p = p->next)
+  for (CorNode* p = arrayP->value.firstChildP; p != NULL; p = p->next)
     count++;
 
   if (count < 2)
     return;
 
   // Build pointer array for qsort
-  KjNode** ptrV = (KjNode**) malloc(count * sizeof(KjNode*));
+  CorNode** ptrV = (CorNode**) malloc(count * sizeof(CorNode*));
   int ix = 0;
-  for (KjNode* p = arrayP->value.firstChildP; p != NULL; p = p->next)
+  for (CorNode* p = arrayP->value.firstChildP; p != NULL; p = p->next)
     ptrV[ix++] = p;
 
   // Set thread-local sort context
@@ -412,7 +412,7 @@ void ldOrderSort(KjNode* arrayP, LdOrderTerm* terms, int termCount, const char* 
   (void) collation;
 #endif
 
-  qsort(ptrV, count, sizeof(KjNode*), entityCompare);
+  qsort(ptrV, count, sizeof(CorNode*), entityCompare);
 
 #ifdef COR_WITH_ICU
   if (sortCollatorP != NULL)

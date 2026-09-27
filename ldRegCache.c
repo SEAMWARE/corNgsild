@@ -14,10 +14,10 @@
 #include <time.h>                                      // clock_gettime
 
 #include "kalloc/kaBufferInit.h"                       // kaBufferInit
-#include "kjson/KjNode.h"                              // KjNode
-#include "kjson/kjClone.h"                             // kjClone
-#include "kjson/kjFree.h"                              // kjFree
-#include "kjson/kjLookup.h"                            // kjLookup
+#include "corTree/CorNode.h"                           // CorNode
+#include "corTree/corTreeClone.h"                      // corTreeClone
+#include "corTree/corTreeFree.h"                       // corTreeFree
+#include "corTree/corTreeLookup.h"                     // corTreeLookup
 
 #include "kalloc/KAlloc.h"                              // KAlloc
 #include "corJsonld/corLdExpand.h"                       // corLdExpand, corLdAlreadyExpanded
@@ -161,30 +161,30 @@ static LdRegIdPattern* idPatternCompile(const char* pattern)
 // becomes a separate LdRegEntityInfo entry sharing the entry's id /
 // idPattern (matching is OR over all entries).
 //
-static LdRegEntityInfo* entityInfoExtract(KjNode* entP)
+static LdRegEntityInfo* entityInfoExtract(CorNode* entP)
 {
-  if (entP == NULL || entP->type != KjObject)
+  if (entP == NULL || entP->type != CorObject)
     return NULL;
 
-  KjNode* typeP    = kjLookup(entP, "type");
-  KjNode* idP      = kjLookup(entP, "id");
-  KjNode* idPatP   = kjLookup(entP, LD_VOCAB_ID_PATTERN);
+  CorNode* typeP   = corTreeLookup(entP, "type");
+  CorNode* idP     = corTreeLookup(entP, "id");
+  CorNode* idPatP  = corTreeLookup(entP, LD_VOCAB_ID_PATTERN);
 
   if (typeP == NULL)
     return NULL;
 
-  char* idVal       = (idP    != NULL && idP->type    == KjString) ? idP->value.s    : NULL;
-  char* idPatternS  = (idPatP != NULL && idPatP->type == KjString) ? idPatP->value.s : NULL;
+  char* idVal       = (idP    != NULL && idP->type    == CorString) ? idP->value.s   : NULL;
+  char* idPatternS  = (idPatP != NULL && idPatP->type == CorString) ? idPatP->value.s : NULL;
 
   LdRegEntityInfo* head = NULL;
   LdRegEntityInfo* tail = NULL;
 
-  // Walk type values (one for KjString, N for KjArray of strings)
-  KjNode* tValP = (typeP->type == KjArray) ? typeP->value.firstChildP : typeP;
+  // Walk type values (one for CorString, N for CorArray of strings)
+  CorNode* tValP = (typeP->type == CorArray) ? typeP->value.firstChildP : typeP;
 
-  for (; tValP != NULL; tValP = (typeP->type == KjArray) ? tValP->next : NULL)
+  for (; tValP != NULL; tValP = (typeP->type == CorArray) ? tValP->next : NULL)
   {
-    if (tValP->type != KjString)
+    if (tValP->type != CorString)
       continue;
 
     LdRegEntityInfo* eiP = (LdRegEntityInfo*) calloc(1, sizeof(LdRegEntityInfo));
@@ -208,21 +208,21 @@ static LdRegEntityInfo* entityInfoExtract(KjNode* entP)
 
 // -----------------------------------------------------------------------------
 //
-// stringArrayExtract - build NULL-terminated string array from a KjArray
+// stringArrayExtract - build NULL-terminated string array from a CorArray
 //
 // Returns NULL if input is absent or empty. Strings are borrowed pointers
 // into the cloned regTree. Use this for verbatim string lists (operations,
 // etc.). For attribute-name lists (propertyNames / relationshipNames) use
 // attrIRIArrayExtract which also vocab-expands each entry.
 //
-static char** stringArrayExtract(KjNode* arrP)
+static char** stringArrayExtract(CorNode* arrP)
 {
-  if (arrP == NULL || arrP->type != KjArray)
+  if (arrP == NULL || arrP->type != CorArray)
     return NULL;
 
   int count = 0;
-  for (KjNode* sP = arrP->value.firstChildP; sP != NULL; sP = sP->next)
-    if (sP->type == KjString)
+  for (CorNode* sP = arrP->value.firstChildP; sP != NULL; sP = sP->next)
+    if (sP->type == CorString)
       count++;
 
   if (count == 0)
@@ -231,9 +231,9 @@ static char** stringArrayExtract(KjNode* arrP)
   char** v = (char**) malloc((count + 1) * sizeof(char*));
   int    ix = 0;
 
-  for (KjNode* sP = arrP->value.firstChildP; sP != NULL; sP = sP->next)
+  for (CorNode* sP = arrP->value.firstChildP; sP != NULL; sP = sP->next)
   {
-    if (sP->type == KjString)
+    if (sP->type == CorString)
       v[ix++] = sP->value.s;
   }
 
@@ -255,7 +255,7 @@ static char** stringArrayExtract(KjNode* arrP)
 // ARE stored fully-expanded) needs the IRI form, so we expand here at
 // cache-ingest time, once. Mirrors ldSubCache.c's notifAttrsV expansion.
 //
-static char** attrIRIArrayExtract(KjNode* arrP, KAlloc* allocP)
+static char** attrIRIArrayExtract(CorNode* arrP, KAlloc* allocP)
 {
   char** v = stringArrayExtract(arrP);
   if (v == NULL)
@@ -279,30 +279,30 @@ static char** attrIRIArrayExtract(KjNode* arrP, KAlloc* allocP)
 //
 // infoListExtract - parse the information[] array into a linked list
 //
-static LdRegInfo* infoListExtract(KjNode* infoArrayP, KAlloc* allocP)
+static LdRegInfo* infoListExtract(CorNode* infoArrayP, KAlloc* allocP)
 {
-  if (infoArrayP == NULL || infoArrayP->type != KjArray)
+  if (infoArrayP == NULL || infoArrayP->type != CorArray)
     return NULL;
 
   LdRegInfo* head = NULL;
   LdRegInfo* tail = NULL;
 
-  for (KjNode* infoP = infoArrayP->value.firstChildP; infoP != NULL; infoP = infoP->next)
+  for (CorNode* infoP = infoArrayP->value.firstChildP; infoP != NULL; infoP = infoP->next)
   {
-    if (infoP->type != KjObject)
+    if (infoP->type != CorObject)
       continue;
 
     LdRegInfo* riP = (LdRegInfo*) calloc(1, sizeof(LdRegInfo));
 
-    KjNode* entitiesP   = kjLookup(infoP, LD_VOCAB_ENTITIES);
-    KjNode* attrNamesP  = kjLookup(infoP, "attributeNames");
+    CorNode* entitiesP  = corTreeLookup(infoP, LD_VOCAB_ENTITIES);
+    CorNode* attrNamesP = corTreeLookup(infoP, "attributeNames");
 
-    if (entitiesP != NULL && entitiesP->type == KjArray)
+    if (entitiesP != NULL && entitiesP->type == CorArray)
     {
       LdRegEntityInfo* eHead = NULL;
       LdRegEntityInfo* eTail = NULL;
 
-      for (KjNode* entP = entitiesP->value.firstChildP; entP != NULL; entP = entP->next)
+      for (CorNode* entP = entitiesP->value.firstChildP; entP != NULL; entP = entP->next)
       {
         LdRegEntityInfo* sub = entityInfoExtract(entP);
         if (sub == NULL)
@@ -515,7 +515,7 @@ static void cacheItemRetireOrFree(LdRegCache* cacheP, LdRegCacheItem* itemP)
 //
 // ldRegCacheItemAdd -
 //
-LdRegCacheItem* ldRegCacheItemAdd(LdRegCache* cacheP, KjNode* regTree, KAlloc* kaP)
+LdRegCacheItem* ldRegCacheItemAdd(LdRegCache* cacheP, CorNode* regTree, KAlloc* kaP)
 {
   if (cacheP == NULL || regTree == NULL)
     return NULL;
@@ -525,30 +525,30 @@ LdRegCacheItem* ldRegCacheItemAdd(LdRegCache* cacheP, KjNode* regTree, KAlloc* k
   LdRegCacheItem* itemP = (LdRegCacheItem*) calloc(1, sizeof(LdRegCacheItem));
 
   // Clone the registration tree (malloc allocator — persists across requests)
-  itemP->regTree = kjClone(NULL, regTree);
+  itemP->regTree = corTreeClone(NULL, regTree);
 
   // Extract registration ID
-  KjNode* idP = kjLookup(itemP->regTree, "id");
-  itemP->regId = (idP != NULL && idP->type == KjString) ? strdup(idP->value.s) : NULL;
+  CorNode* idP = corTreeLookup(itemP->regTree, "id");
+  itemP->regId = (idP != NULL && idP->type == CorString) ? strdup(idP->value.s) : NULL;
 
   // Pre-parse RegistrationInfo[] for matching
-  KjNode* infoP = kjLookup(itemP->regTree, LD_VOCAB_INFORMATION);
+  CorNode* infoP = corTreeLookup(itemP->regTree, LD_VOCAB_INFORMATION);
   itemP->infoV = infoListExtract(infoP, &cacheP->alloc);
 
   // mode (default inclusive)
-  KjNode* modeP = kjLookup(itemP->regTree, LD_VOCAB_MODE);
-  itemP->mode = (modeP != NULL && modeP->type == KjString) ? modeFromString(modeP->value.s) : LdRegModeInclusive;
+  CorNode* modeP = corTreeLookup(itemP->regTree, LD_VOCAB_MODE);
+  itemP->mode = (modeP != NULL && modeP->type == CorString) ? modeFromString(modeP->value.s) : LdRegModeInclusive;
 
   // operations — OR'd LdOp bits. § 4.20: when operations[] is absent,
   // the default group "federationOps" applies. Resolve that once here
   // so the match path is a single AND with no default fallback logic.
-  KjNode* opsP = kjLookup(itemP->regTree, "operations");
-  if (opsP != NULL && opsP->type == KjArray && opsP->value.firstChildP != NULL)
+  CorNode* opsP = corTreeLookup(itemP->regTree, "operations");
+  if (opsP != NULL && opsP->type == CorArray && opsP->value.firstChildP != NULL)
   {
     itemP->operationsMask = 0;
-    for (KjNode* e = opsP->value.firstChildP; e != NULL; e = e->next)
+    for (CorNode* e = opsP->value.firstChildP; e != NULL; e = e->next)
     {
-      if (e->type != KjString)
+      if (e->type != CorString)
         continue;
 
       LdOp bit = ldOpFromName(e->value.s);
@@ -564,14 +564,14 @@ LdRegCacheItem* ldRegCacheItemAdd(LdRegCache* cacheP, KjNode* regTree, KAlloc* k
   }
 
   // endpoint (borrowed)
-  KjNode* endpointP = kjLookup(itemP->regTree, LD_VOCAB_ENDPOINT);
-  itemP->endpoint = (endpointP != NULL && endpointP->type == KjString) ? endpointP->value.s : NULL;
+  CorNode* endpointP = corTreeLookup(itemP->regTree, LD_VOCAB_ENDPOINT);
+  itemP->endpoint = (endpointP != NULL && endpointP->type == CorString) ? endpointP->value.s : NULL;
 
   // tenant (borrowed; NGSI-LD § 5.2.9 — forwarded requests carry
   // NGSILD-Tenant: <tenant>, letting a single broker instance back itself
   // under a different tenancy without a Via-loop false positive)
-  KjNode* tenantP = kjLookup(itemP->regTree, "tenant");
-  itemP->tenant = (tenantP != NULL && tenantP->type == KjString) ? tenantP->value.s : NULL;
+  CorNode* tenantP = corTreeLookup(itemP->regTree, "tenant");
+  itemP->tenant = (tenantP != NULL && tenantP->type == CorString) ? tenantP->value.s : NULL;
 
   // contextSourceAlias (borrowed; NGSI-LD § 5.2.9 — distribution loop
   // detection). If the client didn't provide one, the CSR's
@@ -582,8 +582,8 @@ LdRegCacheItem* ldRegCacheItemAdd(LdRegCache* cacheP, KjNode* regTree, KAlloc* k
   // which runs post-response on this same thread. Until then (and on
   // probe failure) csourceAlias stays NULL — reactive Via-based
   // detection still protects us.
-  KjNode* aliasP = kjLookup(itemP->regTree, "contextSourceAlias");
-  if (aliasP != NULL && aliasP->type == KjString)
+  CorNode* aliasP = corTreeLookup(itemP->regTree, "contextSourceAlias");
+  if (aliasP != NULL && aliasP->type == CorString)
   {
     itemP->csourceAlias = aliasP->value.s;
     itemP->probedAlias  = NULL;
@@ -593,53 +593,53 @@ LdRegCacheItem* ldRegCacheItemAdd(LdRegCache* cacheP, KjNode* regTree, KAlloc* k
 
   // Geo coverage borrowed pointers — § 5.2.9. Match-time filtering
   // requires GEOS integration into corNgsild; tracked as a gap.
-  itemP->locationP         = kjLookup(itemP->regTree, "location");
-  itemP->observationSpaceP = kjLookup(itemP->regTree, "observationSpace");
-  itemP->operationSpaceP   = kjLookup(itemP->regTree, "operationSpace");
+  itemP->locationP         = corTreeLookup(itemP->regTree, "location");
+  itemP->observationSpaceP = corTreeLookup(itemP->regTree, "observationSpace");
+  itemP->operationSpaceP   = corTreeLookup(itemP->regTree, "operationSpace");
 
   // management.timeout (§ 5.2.34) — per-CSR request timeout in ms
-  KjNode* mgmtP = kjLookup(itemP->regTree, "management");
-  if (mgmtP != NULL && mgmtP->type == KjObject)
+  CorNode* mgmtP = corTreeLookup(itemP->regTree, "management");
+  if (mgmtP != NULL && mgmtP->type == CorObject)
   {
-    KjNode* toP = kjLookup(mgmtP, "timeout");
+    CorNode* toP = corTreeLookup(mgmtP, "timeout");
     if (toP != NULL)
     {
-      if (toP->type == KjInt)    itemP->timeoutMs = (int) toP->value.i;
-      else if (toP->type == KjFloat) itemP->timeoutMs = (int) toP->value.f;
+      if (toP->type == CorInt)   itemP->timeoutMs = (int) toP->value.i;
+      else if (toP->type == CorFloat) itemP->timeoutMs = (int) toP->value.f;
     }
 
     // management.cooldown (§ 5.2.34) — after a forward failure, decline
     // to contact the endpoint until this many ms have elapsed
-    KjNode* cdP = kjLookup(mgmtP, "cooldown");
+    CorNode* cdP = corTreeLookup(mgmtP, "cooldown");
     if (cdP != NULL)
     {
-      if (cdP->type == KjInt)        itemP->cooldownMs = (int) cdP->value.i;
-      else if (cdP->type == KjFloat) itemP->cooldownMs = (int) cdP->value.f;
+      if (cdP->type == CorInt)       itemP->cooldownMs = (int) cdP->value.i;
+      else if (cdP->type == CorFloat) itemP->cooldownMs = (int) cdP->value.f;
     }
   }
 
   // scope (§ 5.2.9) — scope or scope[] the CSR claims. Normalize both
-  // KjString and KjArray cases into a NULL-terminated char* array.
-  KjNode* scopeP = kjLookup(itemP->regTree, LD_VOCAB_SCOPE);
+  // CorString and CorArray cases into a NULL-terminated char* array.
+  CorNode* scopeP = corTreeLookup(itemP->regTree, LD_VOCAB_SCOPE);
   if (scopeP != NULL)
   {
-    if (scopeP->type == KjString)
+    if (scopeP->type == CorString)
     {
       itemP->scopeV = (char**) malloc(2 * sizeof(char*));
       itemP->scopeV[0] = scopeP->value.s;
       itemP->scopeV[1] = NULL;
     }
-    else if (scopeP->type == KjArray)
+    else if (scopeP->type == CorArray)
     {
       int n = 0;
-      for (KjNode* sP = scopeP->value.firstChildP; sP != NULL; sP = sP->next)
-        if (sP->type == KjString) n++;
+      for (CorNode* sP = scopeP->value.firstChildP; sP != NULL; sP = sP->next)
+        if (sP->type == CorString) n++;
       if (n > 0)
       {
         itemP->scopeV = (char**) malloc((n + 1) * sizeof(char*));
         int ix = 0;
-        for (KjNode* sP = scopeP->value.firstChildP; sP != NULL; sP = sP->next)
-          if (sP->type == KjString)
+        for (CorNode* sP = scopeP->value.firstChildP; sP != NULL; sP = sP->next)
+          if (sP->type == CorString)
             itemP->scopeV[ix++] = sP->value.s;
         itemP->scopeV[ix] = NULL;
       }
@@ -648,25 +648,25 @@ LdRegCacheItem* ldRegCacheItemAdd(LdRegCache* cacheP, KjNode* regTree, KAlloc* k
 
   // contextSourceInfo (§ 5.2.22) — arbitrary KV pairs forwarded as HTTP
   // headers. Flatten [{key,value}, ...] → [k0, v0, k1, v1, ..., NULL].
-  KjNode* csiP = kjLookup(itemP->regTree, "contextSourceInfo");
-  if (csiP != NULL && csiP->type == KjArray)
+  CorNode* csiP = corTreeLookup(itemP->regTree, "contextSourceInfo");
+  if (csiP != NULL && csiP->type == CorArray)
   {
     int n = 0;
-    for (KjNode* kvP = csiP->value.firstChildP; kvP != NULL; kvP = kvP->next)
-      if (kvP->type == KjObject)
+    for (CorNode* kvP = csiP->value.firstChildP; kvP != NULL; kvP = kvP->next)
+      if (kvP->type == CorObject)
         n++;
 
     if (n > 0)
     {
       itemP->contextSourceInfoKV = (char**) malloc((n * 2 + 1) * sizeof(char*));
       int ix = 0;
-      for (KjNode* kvP = csiP->value.firstChildP; kvP != NULL; kvP = kvP->next)
+      for (CorNode* kvP = csiP->value.firstChildP; kvP != NULL; kvP = kvP->next)
       {
-        if (kvP->type != KjObject) continue;
-        KjNode* keyP = kjLookup(kvP, "key");
-        KjNode* valP = kjLookup(kvP, "value");
-        if (keyP == NULL || keyP->type != KjString) continue;
-        if (valP == NULL || valP->type != KjString) continue;
+        if (kvP->type != CorObject) continue;
+        CorNode* keyP = corTreeLookup(kvP, "key");
+        CorNode* valP = corTreeLookup(kvP, "value");
+        if (keyP == NULL || keyP->type != CorString) continue;
+        if (valP == NULL || valP->type != CorString) continue;
 
         // Borrow from regTree (cache owns regTree lifetime)
         itemP->contextSourceInfoKV[ix++] = keyP->value.s;
@@ -705,8 +705,8 @@ LdRegCacheItem* ldRegCacheItemAdd(LdRegCache* cacheP, KjNode* regTree, KAlloc* k
     itemP->forwardCtxP = corLdCoreContext();
 
   // expiresAt
-  KjNode* expiresP = kjLookup(itemP->regTree, LD_VOCAB_EXPIRES_AT);
-  if (expiresP != NULL && expiresP->type == KjString)
+  CorNode* expiresP = corTreeLookup(itemP->regTree, LD_VOCAB_EXPIRES_AT);
+  if (expiresP != NULL && expiresP->type == CorString)
     itemP->expiresAt = ldIsoToNanoseconds(expiresP->value.s);
 
   // Append to cache linked list
@@ -754,7 +754,7 @@ static void cacheItemFree(LdRegCacheItem* itemP)
     free(itemP->probedAlias);
 
   if (itemP->regTree != NULL)
-    kjFree(itemP->regTree);
+    corTreeFree(itemP->regTree);
 
   infoListFree(itemP->infoV);
 
@@ -1348,63 +1348,63 @@ bool ldRegCacheAttrExclusivelyClaimed(LdRegCache* cacheP,
 //
 const char* ldRegCacheLocalWriteConflictTree(LdRegCache* cacheP,
                                              const char* entityId,
-                                             KjNode*     fragP,
+                                             CorNode*    fragP,
                                              KAlloc*     kaP)
 {
-  if (cacheP == NULL || entityId == NULL || fragP == NULL || fragP->type != KjObject)
+  if (cacheP == NULL || entityId == NULL || fragP == NULL || fragP->type != CorObject)
     return NULL;
 
   // type — string or array of strings
-  KjNode* typeP      = kjLookup(fragP, "type");
+  CorNode* typeP     = corTreeLookup(fragP, "type");
   char*   typeBuf[2] = { NULL, NULL };
   char**  typeV      = NULL;
-  if (typeP != NULL && typeP->type == KjString)
+  if (typeP != NULL && typeP->type == CorString)
   {
     typeBuf[0] = typeP->value.s;
     typeV      = typeBuf;
   }
-  else if (typeP != NULL && typeP->type == KjArray)
+  else if (typeP != NULL && typeP->type == CorArray)
   {
     int n = 0;
-    for (KjNode* tP = typeP->value.firstChildP; tP != NULL; tP = tP->next)
-      if (tP->type == KjString) n++;
+    for (CorNode* tP = typeP->value.firstChildP; tP != NULL; tP = tP->next)
+      if (tP->type == CorString) n++;
     if (n > 0)
     {
       typeV = (char**) kaAlloc(kaP, (n + 1) * sizeof(char*));
       int ix = 0;
-      for (KjNode* tP = typeP->value.firstChildP; tP != NULL; tP = tP->next)
-        if (tP->type == KjString) typeV[ix++] = tP->value.s;
+      for (CorNode* tP = typeP->value.firstChildP; tP != NULL; tP = tP->next)
+        if (tP->type == CorString) typeV[ix++] = tP->value.s;
       typeV[ix] = NULL;
     }
   }
 
   // scope — string or array of strings
-  KjNode* scopeP      = kjLookup(fragP, "scope");
+  CorNode* scopeP     = corTreeLookup(fragP, "scope");
   char*   scopeBuf[2] = { NULL, NULL };
   char**  scopeV      = NULL;
-  if (scopeP != NULL && scopeP->type == KjString)
+  if (scopeP != NULL && scopeP->type == CorString)
   {
     scopeBuf[0] = scopeP->value.s;
     scopeV      = scopeBuf;
   }
-  else if (scopeP != NULL && scopeP->type == KjArray)
+  else if (scopeP != NULL && scopeP->type == CorArray)
   {
     int n = 0;
-    for (KjNode* sP = scopeP->value.firstChildP; sP != NULL; sP = sP->next)
-      if (sP->type == KjString) n++;
+    for (CorNode* sP = scopeP->value.firstChildP; sP != NULL; sP = sP->next)
+      if (sP->type == CorString) n++;
     if (n > 0)
     {
       scopeV = (char**) kaAlloc(kaP, (n + 1) * sizeof(char*));
       int ix = 0;
-      for (KjNode* sP = scopeP->value.firstChildP; sP != NULL; sP = sP->next)
-        if (sP->type == KjString) scopeV[ix++] = sP->value.s;
+      for (CorNode* sP = scopeP->value.firstChildP; sP != NULL; sP = sP->next)
+        if (sP->type == CorString) scopeV[ix++] = sP->value.s;
       scopeV[ix] = NULL;
     }
   }
 
   // attribute IRIs — every non-keyword member
   int attrN = 0;
-  for (KjNode* aP = fragP->value.firstChildP; aP != NULL; aP = aP->next)
+  for (CorNode* aP = fragP->value.firstChildP; aP != NULL; aP = aP->next)
   {
     if (aP->name == NULL || aP->name[0] == '@')   continue;
     if (strcmp(aP->name, "id")    == 0)           continue;
@@ -1415,7 +1415,7 @@ const char* ldRegCacheLocalWriteConflictTree(LdRegCache* cacheP,
 
   char** attrIriV = (char**) kaAlloc(kaP, (attrN + 1) * sizeof(char*));
   int    aIx      = 0;
-  for (KjNode* aP = fragP->value.firstChildP; aP != NULL; aP = aP->next)
+  for (CorNode* aP = fragP->value.firstChildP; aP != NULL; aP = aP->next)
   {
     if (aP->name == NULL || aP->name[0] == '@')   continue;
     if (strcmp(aP->name, "id")    == 0)           continue;

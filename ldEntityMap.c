@@ -11,10 +11,10 @@
 #include <stdio.h>                                     // snprintf
 #include <time.h>                                      // clock_gettime
 
-#include "kjson/KjNode.h"                              // KjNode
-#include "kjson/kjBuilder.h"                           // kjObject, kjString, kjArray, kjChildAdd
+#include "corTree/CorNode.h"                           // CorNode
+#include "corTree/corTreeBuilder.h"                    // corTreeObject, corTreeString, corTreeArray, corTreeChildAdd
 
-#include "corRest/CorRestState.h"                        // corRest (kjsonP — per-request render arena)
+#include "corRest/CorRestState.h"                        // corRest (kallocP — the per-request arena)
 #include "corNgsild/LdEntityMap.h"                      // LdEntityMap, LdEntityMapStore
 #include "corNgsild/ldEntityMap.h"                      // Own interface
 
@@ -273,39 +273,39 @@ bool ldEntityMapRemove(LdEntityMapStore* storeP, const char* mapId)
 
 
 // ldEntityMapToTree
-KjNode* ldEntityMapToTree(LdEntityMap* mapP)
+CorNode* ldEntityMapToTree(LdEntityMap* mapP)
 {
   if (mapP == NULL) return NULL;
 
-  KjNode* treeP = kjObject(corRest.kjsonP, NULL);
+  CorNode* treeP = corTreeObject(corRest.kallocP, NULL);
 
-  kjChildAdd(treeP, kjString(corRest.kjsonP, "id", mapP->mapId));
-  kjChildAdd(treeP, kjString(corRest.kjsonP, "type", "EntityMap"));
+  corTreeChildAdd(treeP, corTreeString(corRest.kallocP, "id", mapP->mapId));
+  corTreeChildAdd(treeP, corTreeString(corRest.kallocP, "type", "EntityMap"));
 
   char isoBuf[64];
   isoFromNanos(mapP->expiresAt, isoBuf, sizeof(isoBuf));
-  kjChildAdd(treeP, kjString(corRest.kjsonP, "expiresAt", isoBuf));
+  corTreeChildAdd(treeP, corTreeString(corRest.kallocP, "expiresAt", isoBuf));
 
   // entityMap: { "urn:e1": ["@none", "urn:CSR:1"], "urn:e2": ["urn:CSR:2"], ... }
-  KjNode* emObj = kjObject(corRest.kjsonP, "entityMap");
+  CorNode* emObj = corTreeObject(corRest.kallocP, "entityMap");
   for (LdEntityMapEntry* entryP = mapP->head; entryP != NULL; entryP = entryP->next)
   {
-    KjNode* sourcesArr = kjArray(corRest.kjsonP, entryP->entityId);
+    CorNode* sourcesArr = corTreeArray(corRest.kallocP, entryP->entityId);
     for (int i = 0; i < entryP->sourceCount; i++)
-      kjChildAdd(sourcesArr, kjString(corRest.kjsonP, NULL, entryP->sourceIdV[i]));
-    kjChildAdd(emObj, sourcesArr);
+      corTreeChildAdd(sourcesArr, corTreeString(corRest.kallocP, NULL, entryP->sourceIdV[i]));
+    corTreeChildAdd(emObj, sourcesArr);
   }
-  kjChildAdd(treeP, emObj);
+  corTreeChildAdd(treeP, emObj);
 
   // linkedMaps: { "<csrId>": "<remoteMapId>", ... }  (§ 5.14.4.4)
-  KjNode* linkedObj = kjObject(corRest.kjsonP, "linkedMaps");
+  CorNode* linkedObj = corTreeObject(corRest.kallocP, "linkedMaps");
   for (LdEntityMapLink* linkP = mapP->linkedHead; linkP != NULL; linkP = linkP->next)
   {
     if (linkP->csrId == NULL || linkP->remoteMapId == NULL)
       continue;
-    kjChildAdd(linkedObj, kjString(corRest.kjsonP, linkP->csrId, linkP->remoteMapId));
+    corTreeChildAdd(linkedObj, corTreeString(corRest.kallocP, linkP->csrId, linkP->remoteMapId));
   }
-  kjChildAdd(treeP, linkedObj);
+  corTreeChildAdd(treeP, linkedObj);
 
   return treeP;
 }

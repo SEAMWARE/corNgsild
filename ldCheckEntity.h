@@ -13,7 +13,7 @@
 #include <stdbool.h>                                     // bool
 
 #include "kalloc/KAlloc.h"                             // KAlloc
-#include "kjson/KjNode.h"                               // KjNode
+#include "corTree/CorNode.h"                            // CorNode
 #include "corNgsild/LdOp.h"                               // LdOp
 
 
@@ -22,7 +22,7 @@
 //
 // ldCheckEntity -
 //
-extern bool ldCheckEntity(KjNode* entityP, LdOp op, KjNode* dbEntityP,
+extern bool ldCheckEntity(CorNode* entityP, LdOp op, CorNode* dbEntityP,
                            KAlloc* faP);
 
 #endif  // CORNGSILD_LDCHECKENTITY_H_

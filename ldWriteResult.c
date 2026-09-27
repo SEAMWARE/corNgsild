@@ -8,9 +8,9 @@
 //
 #include <string.h>                                     // strcmp
 
-#include "kjson/KjNode.h"                               // KjNode
-#include "kjson/kjBuilder.h"                            // kjObject, kjString, kjChildAdd, kjChildRemove
-#include "kjson/kjLookup.h"                             // kjLookup
+#include "corTree/CorNode.h"                            // CorNode
+#include "corTree/corTreeBuilder.h"                     // corTreeObject, corTreeString, corTreeChildAdd, corTreeChildRemove
+#include "corTree/corTreeLookup.h"                      // corTreeLookup
 
 #include "corRest/CorRestState.h"                         // corRest
 
@@ -35,13 +35,13 @@
 // default-context attributes (and left foreign-context IRIs expanded — so one
 // UpdateResult could carry both spellings at once).
 //
-void ldWriteResultUpdatedAdd(KjNode* updatedP, const char* attrName)
+void ldWriteResultUpdatedAdd(CorNode* updatedP, const char* attrName)
 {
-  for (KjNode* p = updatedP->value.firstChildP; p != NULL; p = p->next)
-    if ((p->type == KjString) && (strcmp(p->value.s, attrName) == 0))
+  for (CorNode* p = updatedP->value.firstChildP; p != NULL; p = p->next)
+    if ((p->type == CorString) && (strcmp(p->value.s, attrName) == 0))
       return;
 
-  kjChildAdd(updatedP, kjString(corRest.kjsonP, NULL, attrName));
+  corTreeChildAdd(updatedP, corTreeString(corRest.kallocP, NULL, attrName));
 }
 
 
@@ -50,19 +50,19 @@ void ldWriteResultUpdatedAdd(KjNode* updatedP, const char* attrName)
 //
 // ldWriteResultNotUpdatedAdd - push a NotUpdatedDetails entry (§ 5.2.19)
 //
-void ldWriteResultNotUpdatedAdd(KjNode* notUpdatedP, const char* attrName,
+void ldWriteResultNotUpdatedAdd(CorNode* notUpdatedP, const char* attrName,
                                 const char* reason, const char* regId, int statusCode)
 {
-  KjNode* entry = kjObject(corRest.kjsonP, NULL);
+  CorNode* entry = corTreeObject(corRest.kallocP, NULL);
 
-  kjChildAdd(entry, kjString(corRest.kjsonP, "attributeName", attrName));
-  kjChildAdd(entry, kjString(corRest.kjsonP, "reason",         reason));
+  corTreeChildAdd(entry, corTreeString(corRest.kallocP, "attributeName", attrName));
+  corTreeChildAdd(entry, corTreeString(corRest.kallocP, "reason", reason));
   if (regId != NULL)
-    kjChildAdd(entry, kjString(corRest.kjsonP, "registrationId", regId));
+    corTreeChildAdd(entry, corTreeString(corRest.kallocP, "registrationId", regId));
   if (statusCode > 0)
-    kjChildAdd(entry, kjInteger(corRest.kjsonP, "statusCode", statusCode));
+    corTreeChildAdd(entry, corTreeInteger(corRest.kallocP, "statusCode", statusCode));
 
-  kjChildAdd(notUpdatedP, entry);
+  corTreeChildAdd(notUpdatedP, entry);
 }
 
 
@@ -71,7 +71,7 @@ void ldWriteResultNotUpdatedAdd(KjNode* notUpdatedP, const char* attrName,
 //
 // ldWriteResultInit -
 //
-void ldWriteResultInit(LdWriteResult* wrP, KjNode* updatedP, KjNode* notUpdatedP)
+void ldWriteResultInit(LdWriteResult* wrP, CorNode* updatedP, CorNode* notUpdatedP)
 {
   wrP->updatedP    = updatedP;
   wrP->notUpdatedP = notUpdatedP;
@@ -84,12 +84,12 @@ void ldWriteResultInit(LdWriteResult* wrP, KjNode* updatedP, KjNode* notUpdatedP
 //
 // ldWriteResultFragUpdated - every non-keyword attr of fragP into updated[]
 //
-void ldWriteResultFragUpdated(KjNode* updatedP, KjNode* fragP)
+void ldWriteResultFragUpdated(CorNode* updatedP, CorNode* fragP)
 {
   if (fragP == NULL)
     return;
 
-  for (KjNode* c = fragP->value.firstChildP; c != NULL; c = c->next)
+  for (CorNode* c = fragP->value.firstChildP; c != NULL; c = c->next)
   {
     if (ldIsEntityKeyword(c->name))
       continue;
@@ -103,12 +103,12 @@ void ldWriteResultFragUpdated(KjNode* updatedP, KjNode* fragP)
 //
 // ldWriteResultFragNotUpdated - every non-keyword attr of fragP into notUpdated[] (reason + regId)
 //
-void ldWriteResultFragNotUpdated(KjNode* notUpdatedP, KjNode* fragP, const char* reason, const char* regId, int statusCode)
+void ldWriteResultFragNotUpdated(CorNode* notUpdatedP, CorNode* fragP, const char* reason, const char* regId, int statusCode)
 {
   if (fragP == NULL)
     return;
 
-  for (KjNode* c = fragP->value.firstChildP; c != NULL; c = c->next)
+  for (CorNode* c = fragP->value.firstChildP; c != NULL; c = c->next)
   {
     if (ldIsEntityKeyword(c->name))
       continue;
@@ -122,10 +122,10 @@ void ldWriteResultFragNotUpdated(KjNode* notUpdatedP, KjNode* fragP, const char*
 //
 // updatedHas - is attrName already in updated[]?
 //
-static bool updatedHas(KjNode* updatedP, const char* attrName)
+static bool updatedHas(CorNode* updatedP, const char* attrName)
 {
-  for (KjNode* p = updatedP->value.firstChildP; p != NULL; p = p->next)
-    if ((p->type == KjString) && (strcmp(p->value.s, attrName) == 0))
+  for (CorNode* p = updatedP->value.firstChildP; p != NULL; p = p->next)
+    if ((p->type == CorString) && (strcmp(p->value.s, attrName) == 0))
       return true;
   return false;
 }
@@ -138,47 +138,47 @@ static bool updatedHas(KjNode* updatedP, const char* attrName)
 //
 // The body was already parsed at reception (ldDistOpResultTree); the remote speaks
 // UpdateResult { updated[], notUpdated[] } with short attribute names. We SPLICE its
-// nodes across (kjChildRemove + kjChildAdd) rather than rebuild them. updated[] names
+// nodes across (corTreeChildRemove + corTreeChildAdd) rather than rebuild them. updated[] names
 // fold in (skipping duplicates already aggregated); notUpdated[] entries keep their
 // own registrationId when they carry one (the failure happened deeper in the remote's
 // own distribution) and otherwise inherit the registration we forwarded to — never
 // deduplicated, since per-registration attribution is the point of the 207. Returns
 // false when there was no body tree to merge.
 //
-static bool mergeRemoteUpdateResult(LdWriteResult* wrP, const char* regId, KjNode* bodyP)
+static bool mergeRemoteUpdateResult(LdWriteResult* wrP, const char* regId, CorNode* bodyP)
 {
-  if ((bodyP == NULL) || (bodyP->type != KjObject))
+  if ((bodyP == NULL) || (bodyP->type != CorObject))
     return false;
 
-  KjNode* up = kjLookup(bodyP, "updated");
-  if ((up != NULL) && (up->type == KjArray))
+  CorNode* up = corTreeLookup(bodyP, "updated");
+  if ((up != NULL) && (up->type == CorArray))
   {
-    KjNode* a = up->value.firstChildP;
+    CorNode* a = up->value.firstChildP;
     while (a != NULL)
     {
-      KjNode* next = a->next;
-      if ((a->type == KjString) && (!updatedHas(wrP->updatedP, a->value.s)))
+      CorNode* next = a->next;
+      if ((a->type == CorString) && (!updatedHas(wrP->updatedP, a->value.s)))
       {
-        kjChildRemove(up, a);
-        kjChildAdd(wrP->updatedP, a);
+        corTreeChildRemove(up, a);
+        corTreeChildAdd(wrP->updatedP, a);
       }
       a = next;
     }
   }
 
-  KjNode* nu = kjLookup(bodyP, "notUpdated");
-  if ((nu != NULL) && (nu->type == KjArray))
+  CorNode* nu = corTreeLookup(bodyP, "notUpdated");
+  if ((nu != NULL) && (nu->type == CorArray))
   {
-    KjNode* e = nu->value.firstChildP;
+    CorNode* e = nu->value.firstChildP;
     while (e != NULL)
     {
-      KjNode* next = e->next;
-      if (e->type == KjObject)
+      CorNode* next = e->next;
+      if (e->type == CorObject)
       {
-        if (kjLookup(e, "registrationId") == NULL)
-          kjChildAdd(e, kjString(corRest.kjsonP, "registrationId", regId));
-        kjChildRemove(nu, e);
-        kjChildAdd(wrP->notUpdatedP, e);
+        if (corTreeLookup(e, "registrationId") == NULL)
+          corTreeChildAdd(e, corTreeString(corRest.kallocP, "registrationId", regId));
+        corTreeChildRemove(nu, e);
+        corTreeChildAdd(wrP->notUpdatedP, e);
       }
       e = next;
     }
@@ -195,8 +195,8 @@ static bool mergeRemoteUpdateResult(LdWriteResult* wrP, const char* regId, KjNod
 //
 void ldWriteResultMerge(LdWriteResult* wrP, const char* regId,
                         int statusCode, const char* errorDetail,
-                        KjNode* responseTree,
-                        KjNode* forwardedFrag, bool tolerate404)
+                        CorNode* responseTree,
+                        CorNode* forwardedFrag, bool tolerate404)
 {
   // Clean success — every 2xx that is NOT a 207 Multi-Status.
   if ((statusCode >= 200) && (statusCode < 300) && (statusCode != 207))

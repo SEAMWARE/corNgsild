@@ -19,10 +19,10 @@
 // return immediately — ldError has already been set on the response).
 //
 #include <stdbool.h>                                  // bool
-#include "kjson/KjNode.h"                             // KjNode
+#include "corTree/CorNode.h"                          // CorNode
 
 
 
-extern bool ldQueryBodyToParams(KjNode* bodyP);
+extern bool ldQueryBodyToParams(CorNode* bodyP);
 
 #endif  // CORNGSILD_LDQUERYBODY_H_

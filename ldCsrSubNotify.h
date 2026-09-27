@@ -20,7 +20,7 @@
 #include <stdbool.h>                                    // bool
 
 #include "kalloc/KAlloc.h"                              // KAlloc
-#include "kjson/KjNode.h"                               // KjNode
+#include "corTree/CorNode.h"                            // CorNode
 
 #include "corNgsild/LdSubCache.h"                        // LdSubCacheItem
 #include "corNgsild/LdRegCache.h"                        // LdRegCache
@@ -36,7 +36,7 @@
 typedef struct CsrSubPending
 {
   LdSubCacheItem*  subItemP;
-  KjNode*          notification;   // built at enqueue time — see csourceNotificationBuild
+  CorNode*         notification;   // built at enqueue time — see csourceNotificationBuild
 } CsrSubPending;
 
 

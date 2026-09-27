@@ -32,8 +32,8 @@
 #include <stdbool.h>                                  // bool
 #include <stdint.h>                                   // uint64_t
 
-#include "kjson/KjNode.h"                             // KjNode
-#include "kjson/kjson.h"                              // Kjson
+#include "kalloc/KAlloc.h"                            // KAlloc
+#include "corTree/CorNode.h"                          // CorNode
 
 #include "corNgsild/ldEntityMerge.h"                   // LdMergeReport
 
@@ -49,14 +49,14 @@
 // ts              nanoseconds to stamp as modifiedAt on touched objects.
 // reportP         optional — when non-NULL, per-attr change records are
 //                 appended to reportP->changes (request-scoped allocator).
-// targetAllocP    kjson allocator for nodes grafted into target (NULL for
+// targetAllocP    allocator for nodes grafted into target (NULL for
 //                 malloc-backed stores).
 //
-extern void ldEntityAttrsSet(KjNode*         target,
-                             KjNode*         fragment,
+extern void ldEntityAttrsSet(CorNode*        target,
+                             CorNode*        fragment,
                              bool            overwriteScope,
                              uint64_t        ts,
                              LdMergeReport*  reportP,
-                             Kjson*          targetAllocP);
+                             KAlloc*         targetAllocP);
 
 #endif  // CORNGSILD_LDENTITYATTRSSET_H_

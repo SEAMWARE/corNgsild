@@ -14,9 +14,9 @@
 #include "corRest/corRest.h"                            // corRest
 #include "kalloc/KAlloc.h"                             // KAlloc
 #include "kalloc/kaAlloc.h"                            // kaAlloc
-#include "kjson/KjNode.h"                               // KjNode
-#include "kjson/kjBuilder.h"                              // kjInteger, kjChildAdd
-#include "kjson/kjLookup.h"                              // kjLookup
+#include "corTree/CorNode.h"                            // CorNode
+#include "corTree/corTreeBuilder.h"                       // corTreeInteger, corTreeChildAdd
+#include "corTree/corTreeLookup.h"                       // corTreeLookup
 #include "corNgsild/LdVocab.h"                            // LD_VOCAB_CREATED_AT, LD_VOCAB_MODIFIED_AT
 #include "corNgsild/ldSysTimestamp.h"                     // Own interface
 
@@ -71,14 +71,14 @@ void ldSysTimestampToIso(long long nsec, char* buf, int bufSize)
 // top level (unlike entities, whose attributes each carry their own), so a
 // non-recursive pass is enough.
 //
-void ldSysTimestampsToIso(KjNode* treeP, KAlloc* allocP)
+void ldSysTimestampsToIso(CorNode* treeP, KAlloc* allocP)
 {
-  if (treeP == NULL || treeP->type != KjObject)
+  if (treeP == NULL || treeP->type != CorObject)
     return;
 
-  for (KjNode* childP = treeP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = treeP->value.firstChildP; childP != NULL; childP = childP->next)
   {
-    if (childP->type == KjInt &&
+    if (childP->type == CorInt &&
         (strcmp(childP->name, LD_VOCAB_CREATED_AT)  == 0 ||
          strcmp(childP->name, LD_VOCAB_MODIFIED_AT) == 0))
     {
@@ -89,7 +89,7 @@ void ldSysTimestampsToIso(KjNode* treeP, KAlloc* allocP)
       if (isoStr != NULL)
       {
         strcpy(isoStr, isoBuf);
-        childP->type    = KjString;
+        childP->type    = CorString;
         childP->value.s = isoStr;
       }
     }
@@ -102,15 +102,15 @@ void ldSysTimestampsToIso(KjNode* treeP, KAlloc* allocP)
 //
 // ldSysTimestampCreate - stamp createdAt AND modifiedAt = request time
 //
-void ldSysTimestampCreate(KjNode* treeP)
+void ldSysTimestampCreate(CorNode* treeP)
 {
-  if (treeP == NULL || treeP->type != KjObject)
+  if (treeP == NULL || treeP->type != CorObject)
     return;
 
   long long now = (long long) corRest.requestStartTime;
 
-  kjChildAdd(treeP, kjInteger(corRest.kjsonP, LD_VOCAB_CREATED_AT,  now));
-  kjChildAdd(treeP, kjInteger(corRest.kjsonP, LD_VOCAB_MODIFIED_AT, now));
+  corTreeChildAdd(treeP, corTreeInteger(corRest.kallocP, LD_VOCAB_CREATED_AT, now));
+  corTreeChildAdd(treeP, corTreeInteger(corRest.kallocP, LD_VOCAB_MODIFIED_AT, now));
 }
 
 
@@ -119,19 +119,19 @@ void ldSysTimestampCreate(KjNode* treeP)
 //
 // ldSysTimestampModify - set/replace modifiedAt = request time
 //
-void ldSysTimestampModify(KjNode* treeP)
+void ldSysTimestampModify(CorNode* treeP)
 {
-  if (treeP == NULL || treeP->type != KjObject)
+  if (treeP == NULL || treeP->type != CorObject)
     return;
 
   long long now  = (long long) corRest.requestStartTime;
-  KjNode*   modP = kjLookup(treeP, LD_VOCAB_MODIFIED_AT);
+  CorNode*  modP = corTreeLookup(treeP, LD_VOCAB_MODIFIED_AT);
 
   if (modP != NULL)
   {
-    modP->type    = KjInt;
+    modP->type    = CorInt;
     modP->value.i = now;
   }
   else
-    kjChildAdd(treeP, kjInteger(corRest.kjsonP, LD_VOCAB_MODIFIED_AT, now));
+    corTreeChildAdd(treeP, corTreeInteger(corRest.kallocP, LD_VOCAB_MODIFIED_AT, now));
 }

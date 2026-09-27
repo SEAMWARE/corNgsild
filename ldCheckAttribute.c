@@ -13,8 +13,8 @@
 
 #include "kbase/kLibLog.h"                             // KLOG_T
 #include "kalloc/KAlloc.h"                             // KAlloc
-#include "kjson/KjNode.h"                               // KjNode
-#include "kjson/kjLookup.h"                             // kjLookup
+#include "corTree/CorNode.h"                            // CorNode
+#include "corTree/corTreeLookup.h"                      // corTreeLookup
 #include "corJsonld/corLdExpand.h"                        // corLdValueObjectIs, corLdValueObjectCheck
 
 #include "corNgsild/LdAttrType.h"                         // LdAttrType
@@ -146,15 +146,15 @@ static bool ldIsCoreAttrTerm(const char* name)
 //   § 5.2.4 observedAt is a DateTime · § 5.2.6 unitCode is a string ·
 //   datasetId is a URI string.
 //
-static bool checkPartialSubAttrs(KjNode* attrP, bool nullAllowed)
+static bool checkPartialSubAttrs(CorNode* attrP, bool nullAllowed)
 {
-  KjNode* observedAtP = kjLookup(attrP, LD_VOCAB_OBSERVED_AT);
-  KjNode* unitCodeP   = kjLookup(attrP, LD_VOCAB_UNIT_CODE);
-  KjNode* datasetIdP  = kjLookup(attrP, LD_VOCAB_DATASET_ID);
+  CorNode* observedAtP = corTreeLookup(attrP, LD_VOCAB_OBSERVED_AT);
+  CorNode* unitCodeP  = corTreeLookup(attrP, LD_VOCAB_UNIT_CODE);
+  CorNode* datasetIdP = corTreeLookup(attrP, LD_VOCAB_DATASET_ID);
 
   if (observedAtP != NULL)
   {
-    if (observedAtP->type != KjString)
+    if (observedAtP->type != CorString)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid observedAt", "Attribute '%s': 'observedAt' must be a string", attrP->name);
       return false;
@@ -172,7 +172,7 @@ static bool checkPartialSubAttrs(KjNode* attrP, bool nullAllowed)
     }
   }
 
-  if ((unitCodeP != NULL) && (unitCodeP->type != KjString))
+  if ((unitCodeP != NULL) && (unitCodeP->type != CorString))
   {
     ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid unitCode", "Attribute '%s': 'unitCode' must be a string", attrP->name);
     return false;
@@ -180,7 +180,7 @@ static bool checkPartialSubAttrs(KjNode* attrP, bool nullAllowed)
 
   if (datasetIdP != NULL)
   {
-    if (datasetIdP->type != KjString)
+    if (datasetIdP->type != CorString)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid datasetId", "Attribute '%s': 'datasetId' must be a URI string", attrP->name);
       return false;
@@ -304,15 +304,15 @@ static bool languageTagWellFormed(const char* tag)
 //
 // checkLanguageMap - validate a languageMap value (object with string values)
 //
-static bool checkLanguageMap(KjNode* lmP)
+static bool checkLanguageMap(CorNode* lmP)
 {
-  if (lmP->type != KjObject)
+  if (lmP->type != CorObject)
   {
     ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid LanguageProperty", "'languageMap' must be a JSON object");
     return false;
   }
 
-  for (KjNode* childP = lmP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = lmP->value.firstChildP; childP != NULL; childP = childP->next)
   {
     // § 5.2.6.4.6 — a languageMap key shall be an RFC 5646 language tag, or @none
     // (the JSON-LD default when no more specific language matches; it is also what
@@ -330,30 +330,30 @@ static bool checkLanguageMap(KjNode* lmP)
       return false;
     }
 
-    if (childP->type != KjString && childP->type != KjArray)
+    if (childP->type != CorString && childP->type != CorArray)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid LanguageProperty", "languageMap values must be strings or arrays of strings (key '%s')", childP->name);
       return false;
     }
 
     // A scalar value must be a non-empty string.
-    if (childP->type == KjString && childP->value.s[0] == 0)
+    if (childP->type == CorString && childP->value.s[0] == 0)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid LanguageProperty", "languageMap value for '%s' is an empty string", childP->name);
       return false;
     }
 
     // An array value must be non-empty and hold only non-empty strings.
-    if (childP->type == KjArray)
+    if (childP->type == CorArray)
     {
       if (childP->value.firstChildP == NULL)
       {
         ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid LanguageProperty", "languageMap value for '%s' is an empty array", childP->name);
         return false;
       }
-      for (KjNode* elemP = childP->value.firstChildP; elemP != NULL; elemP = elemP->next)
+      for (CorNode* elemP = childP->value.firstChildP; elemP != NULL; elemP = elemP->next)
       {
-        if (elemP->type != KjString || elemP->value.s[0] == 0)
+        if (elemP->type != CorString || elemP->value.s[0] == 0)
         {
           ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid LanguageProperty", "languageMap value for '%s' must be a non-empty string", childP->name);
           return false;
@@ -363,13 +363,13 @@ static bool checkLanguageMap(KjNode* lmP)
 
     // § 5.2.6.4.6 — an array of ONE string collapses to a scalar on storage,
     // so it round-trips as a String in every format and under lang reduction.
-    if ((childP->type == KjArray) &&
+    if ((childP->type == CorArray) &&
         (childP->value.firstChildP != NULL) &&
         (childP->value.firstChildP->next == NULL) &&
-        (childP->value.firstChildP->type == KjString))
+        (childP->value.firstChildP->type == CorString))
     {
-      KjNode* onlyP = childP->value.firstChildP;
-      childP->type    = KjString;
+      CorNode* onlyP = childP->value.firstChildP;
+      childP->type    = CorString;
       childP->value.s = onlyP->value.s;
     }
   }
@@ -383,17 +383,17 @@ static bool checkLanguageMap(KjNode* lmP)
 //
 // checkObjectList - validate an objectList (array of URIs)
 //
-static bool checkObjectList(KjNode* listP)
+static bool checkObjectList(CorNode* listP)
 {
-  if (listP->type != KjArray)
+  if (listP->type != CorArray)
   {
     ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid ListRelationship", "'objectList' must be a JSON array");
     return false;
   }
 
-  for (KjNode* itemP = listP->value.firstChildP; itemP != NULL; itemP = itemP->next)
+  for (CorNode* itemP = listP->value.firstChildP; itemP != NULL; itemP = itemP->next)
   {
-    if (itemP->type != KjString)
+    if (itemP->type != CorString)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid ListRelationship", "'objectList' items must be URI strings");
       return false;
@@ -410,7 +410,7 @@ static bool checkObjectList(KjNode* listP)
 //
 // ldCheckAttribute -
 //
-bool ldCheckAttribute(KjNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc* faP)
+bool ldCheckAttribute(CorNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc* faP)
 {
   if (attrP == NULL)
   {
@@ -419,7 +419,7 @@ bool ldCheckAttribute(KjNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc*
   }
 
   // If it's not an object, it's simplified format - nothing more to validate
-  if (attrP->type != KjObject)
+  if (attrP->type != CorObject)
     return true;
 
   // Step 1: Detect attribute type
@@ -472,14 +472,14 @@ bool ldCheckAttribute(KjNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc*
 
   // Step 3: Check required value field and validate it
   const char*  expectedKey    = valueKeyForType(attrType);
-  KjNode*      valueNodeP     = NULL;
-  KjNode*      wrongValueKeyP = NULL;
+  CorNode*     valueNodeP     = NULL;
+  CorNode*     wrongValueKeyP = NULL;
   int          valueKeyCount  = 0;
 
-  for (KjNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
   {
     // JSON null not allowed inside attributes (except JsonProperty's "json" value is opaque)
-    if (childP->type == KjNull && attrType != LdAttrJsonProperty)
+    if (childP->type == CorNull && attrType != LdAttrJsonProperty)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Value", "JSON null is not allowed in NGSI-LD (attribute '%s', field '%s')", attrP->name, childP->name);
       return false;
@@ -531,7 +531,7 @@ bool ldCheckAttribute(KjNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc*
   // A scalar value/object/vocab carrying the sentinel. A JsonProperty's `json`
   // is opaque (value-opaqueness) — there the sentinel is literal data, never a
   // marker — so it is deliberately excluded.
-  if (valueNodeP->type == KjString && strcmp(valueNodeP->value.s, "urn:ngsi-ld:null") == 0)
+  if (valueNodeP->type == CorString && strcmp(valueNodeP->value.s, "urn:ngsi-ld:null") == 0)
   {
     if (!nullAllowed && (attrType == LdAttrProperty || attrType == LdAttrRelationship || attrType == LdAttrVocabProperty))
     {
@@ -549,11 +549,11 @@ bool ldCheckAttribute(KjNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc*
   // temporal evolution. Without this a Create stored the delete marker as if it
   // were data: {"languageMap": {"@none": "urn:ngsi-ld:null"}} came back from a
   // subsequent GET verbatim.
-  else if ((attrType == LdAttrLanguageProperty) && (valueNodeP->type == KjObject))
+  else if ((attrType == LdAttrLanguageProperty) && (valueNodeP->type == CorObject))
   {
-    KjNode* noneP = kjLookup(valueNodeP, "@none");
+    CorNode* noneP = corTreeLookup(valueNodeP, "@none");
 
-    if ((noneP != NULL) && (noneP->type == KjString) && (strcmp(noneP->value.s, "urn:ngsi-ld:null") == 0))
+    if ((noneP != NULL) && (noneP->type == CorString) && (strcmp(noneP->value.s, "urn:ngsi-ld:null") == 0))
     {
       if (!nullAllowed)
       {
@@ -569,11 +569,11 @@ bool ldCheckAttribute(KjNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc*
   // element is not a delete position (the merge/update flows delete a whole
   // attribute via a top-level sentinel). § 4.5.5: an NGSI-LD Null encountered
   // anywhere it has no delete meaning is BadRequestData.
-  else if ((attrType == LdAttrListProperty || attrType == LdAttrListRelationship) && valueNodeP->type == KjArray)
+  else if ((attrType == LdAttrListProperty || attrType == LdAttrListRelationship) && valueNodeP->type == CorArray)
   {
-    for (KjNode* elemP = valueNodeP->value.firstChildP; elemP != NULL; elemP = elemP->next)
+    for (CorNode* elemP = valueNodeP->value.firstChildP; elemP != NULL; elemP = elemP->next)
     {
-      if (elemP->type == KjString && strcmp(elemP->value.s, "urn:ngsi-ld:null") == 0)
+      if (elemP->type == CorString && strcmp(elemP->value.s, "urn:ngsi-ld:null") == 0)
       {
         ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Value", "'urn:ngsi-ld:null' is not allowed as a list element of attribute '%s'", attrP->name);
         return false;
@@ -586,13 +586,13 @@ bool ldCheckAttribute(KjNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc*
   {
   case LdAttrRelationship:
     // 'object' is a URI string or, per spec clause 5 (String or String[]), an array of URI strings.
-    if (valueNodeP->type == KjString)
+    if (valueNodeP->type == CorString)
       URI_CHECK(valueNodeP->value.s);
-    else if (valueNodeP->type == KjArray)
+    else if (valueNodeP->type == CorArray)
     {
-      for (KjNode* itemP = valueNodeP->value.firstChildP; itemP != NULL; itemP = itemP->next)
+      for (CorNode* itemP = valueNodeP->value.firstChildP; itemP != NULL; itemP = itemP->next)
       {
-        if (itemP->type != KjString)
+        if (itemP->type != CorString)
         {
           ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Relationship", "Relationship '%s': 'object' array items must be URI strings", attrP->name);
           return false;
@@ -618,26 +618,26 @@ bool ldCheckAttribute(KjNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc*
     break;
 
   case LdAttrVocabProperty:
-    if (valueNodeP->type != KjString && valueNodeP->type != KjArray)
+    if (valueNodeP->type != CorString && valueNodeP->type != CorArray)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid VocabProperty", "VocabProperty '%s': 'vocab' must be a string or array of strings", attrP->name);
       return false;
     }
 
     // Array of one - collapse to scalar so it round-trips as a String.
-    if ((valueNodeP->type == KjArray) &&
+    if ((valueNodeP->type == CorArray) &&
         (valueNodeP->value.firstChildP != NULL) &&
         (valueNodeP->value.firstChildP->next == NULL) &&
-        (valueNodeP->value.firstChildP->type == KjString))
+        (valueNodeP->value.firstChildP->type == CorString))
     {
-      KjNode* onlyP       = valueNodeP->value.firstChildP;
-      valueNodeP->type    = KjString;
+      CorNode* onlyP      = valueNodeP->value.firstChildP;
+      valueNodeP->type    = CorString;
       valueNodeP->value.s = onlyP->value.s;
     }
     break;
 
   case LdAttrListProperty:
-    if (valueNodeP->type != KjArray)
+    if (valueNodeP->type != CorArray)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid ListProperty", "ListProperty '%s': 'valueList' must be an array", attrP->name);
       return false;
@@ -653,7 +653,7 @@ bool ldCheckAttribute(KjNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc*
     // A Property value may be a JSON-LD typed value { "@type":…, "@value":… }.
     // corJsonld owns its structural rules; NGSI-LD owns the datatype semantics
     // (e.g. @type:DateTime ⇒ @value must be a valid ISO 8601 DateTime).
-    if ((valueNodeP->type == KjObject) && corLdValueObjectIs(valueNodeP))
+    if ((valueNodeP->type == CorObject) && corLdValueObjectIs(valueNodeP))
     {
       char* detail = NULL;
       if (corLdValueObjectCheck(valueNodeP, &detail) == false)
@@ -667,9 +667,9 @@ bool ldCheckAttribute(KjNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc*
       // here as in the JSON-LD expansion / free-property path — not DateTime
       // only. NGSI-LD `DateTime` maps onto xsd:dateTime (the checker keys off
       // xsd local names); attrContext=true phrases the error as an attribute one.
-      KjNode* atTypeP  = kjLookup(valueNodeP, "@type");
-      KjNode* atValueP = kjLookup(valueNodeP, "@value");
-      if ((atTypeP != NULL) && (atTypeP->type == KjString) && (atValueP != NULL))
+      CorNode* atTypeP = corTreeLookup(valueNodeP, "@type");
+      CorNode* atValueP = corTreeLookup(valueNodeP, "@value");
+      if ((atTypeP != NULL) && (atTypeP->type == CorString) && (atValueP != NULL))
       {
         const char* dt = atTypeP->value.s;
         if ((strcmp(dt, "DateTime") == 0) || (strcmp(dt, "https://uri.etsi.org/ngsi-ld/DateTime") == 0))
@@ -685,7 +685,7 @@ bool ldCheckAttribute(KjNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc*
   }
 
   // Step 5: Check sub-fields (optional fields + forbidden core terms + sub-attributes)
-  for (KjNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = attrP->value.firstChildP; childP != NULL; childP = childP->next)
   {
     // Core context term -- must be in the allowlist for this attribute type
     if (ldIsCoreAttrTerm(childP->name))
@@ -698,7 +698,7 @@ bool ldCheckAttribute(KjNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc*
 
       if (strcmp(childP->name, LD_VOCAB_OBSERVED_AT) == 0)
       {
-        if (childP->type != KjString)
+        if (childP->type != CorString)
         {
           ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid observedAt", "Attribute '%s': 'observedAt' must be a string", attrP->name);
           return false;
@@ -717,7 +717,7 @@ bool ldCheckAttribute(KjNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc*
       }
       else if (strcmp(childP->name, LD_VOCAB_UNIT_CODE) == 0)
       {
-        if (childP->type != KjString)
+        if (childP->type != CorString)
         {
           ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid unitCode", "Attribute '%s': 'unitCode' must be a string", attrP->name);
           return false;
@@ -725,7 +725,7 @@ bool ldCheckAttribute(KjNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc*
       }
       else if (strcmp(childP->name, LD_VOCAB_DATASET_ID) == 0)
       {
-        if (childP->type != KjString)
+        if (childP->type != CorString)
         {
           ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid datasetId", "Attribute '%s': 'datasetId' must be a URI string", attrP->name);
           return false;
@@ -740,7 +740,7 @@ bool ldCheckAttribute(KjNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc*
       }
       else if (strcmp(childP->name, "valueType") == 0)
       {
-        if (childP->type != KjString)
+        if (childP->type != CorString)
         {
           ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid valueType", "Attribute '%s': 'valueType' must be a string", attrP->name);
           return false;
@@ -751,7 +751,7 @@ bool ldCheckAttribute(KjNode* attrP, LdOp op, LdAttrType attrTypeFromDb, KAlloc*
     }
 
     // Not a core context term -- it's a user-defined sub-attribute
-    if (childP->type == KjObject)
+    if (childP->type == CorObject)
     {
       if (ldCheckAttribute(childP, op, LdAttrNone, faP) == false)
         return false;

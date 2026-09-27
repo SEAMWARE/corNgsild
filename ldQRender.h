@@ -15,7 +15,7 @@
 //
 #include <stdbool.h>                                   // bool
 #include "kalloc/KAlloc.h"                             // KAlloc
-#include "kjson/KjNode.h"                              // KjNode (unused but conventional)
+#include "corTree/CorNode.h"                           // CorNode (unused but conventional)
 #include "corJsonld/CorLdContext.h"                      // CorLdContext
 
 #include "corNgsild/LdQ.h"                              // LdQNode

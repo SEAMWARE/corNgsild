@@ -14,9 +14,9 @@
 #include "kalloc/KAlloc.h"                             // KAlloc
 
 #include "corRest/corRest.h"                              // corRest
-#include "kjson/KjNode.h"                               // KjNode
-#include "kjson/kjLookup.h"                             // kjLookup
-#include "kjson/kjBuilder.h"                            // kjChildRemove
+#include "corTree/CorNode.h"                            // CorNode
+#include "corTree/corTreeLookup.h"                      // corTreeLookup
+#include "corTree/corTreeBuilder.h"                     // corTreeChildRemove
 
 #include "corNgsild/LdOp.h"                               // LdOp
 #include "corNgsild/LdCheck.h"                            // OBJECT_CHECK, STRING_CHECK, ...
@@ -66,12 +66,12 @@ static bool isUpdateOp(LdOp op)
 //
 // findAttrTypeInDb - find an attribute's type from the DB entity
 //
-static LdAttrType findAttrTypeInDb(KjNode* dbEntityP, const char* attrName)
+static LdAttrType findAttrTypeInDb(CorNode* dbEntityP, const char* attrName)
 {
   if (dbEntityP == NULL)
     return LdAttrNone;
 
-  for (KjNode* attrP = dbEntityP->value.firstChildP; attrP != NULL; attrP = attrP->next)
+  for (CorNode* attrP = dbEntityP->value.firstChildP; attrP != NULL; attrP = attrP->next)
   {
     if (strcmp(attrP->name, attrName) == 0)
       return ldAttrTypeDetect(attrP);
@@ -87,36 +87,36 @@ static LdAttrType findAttrTypeInDb(KjNode* dbEntityP, const char* attrName)
 //
 // ldCheckEntity -
 //
-bool ldCheckEntity(KjNode* entityP, LdOp op, KjNode* dbEntityP, KAlloc* faP)
+bool ldCheckEntity(CorNode* entityP, LdOp op, CorNode* dbEntityP, KAlloc* faP)
 {
   OBJECT_CHECK_IR(entityP, "Invalid Entity", "Entity payload must be a JSON object");
 
   KLOG_T(LdTCheckEnt, "Checking entity payload for op %s", ldOpToString(op));
 
   // Silently remove system-managed timestamps if present in payload
-  KjNode* rmP;
-  if ((rmP = kjLookup(entityP, LD_VOCAB_CREATED_AT))  != NULL)  kjChildRemove(entityP, rmP);
-  if ((rmP = kjLookup(entityP, LD_VOCAB_MODIFIED_AT)) != NULL)  kjChildRemove(entityP, rmP);
+  CorNode* rmP;
+  if ((rmP = corTreeLookup(entityP, LD_VOCAB_CREATED_AT)) != NULL) corTreeChildRemove(entityP, rmP);
+  if ((rmP = corTreeLookup(entityP, LD_VOCAB_MODIFIED_AT)) != NULL) corTreeChildRemove(entityP, rmP);
 
-  KjNode*  idNodeP    = NULL;
-  KjNode*  typeNodeP  = NULL;
+  CorNode* idNodeP    = NULL;
+  CorNode* typeNodeP  = NULL;
   bool     hasId      = false;
   bool     hasAtId    = false;
   bool     hasType    = false;
   bool     hasAtType  = false;
 
   // First pass: find id and type, check for duplicates, null values, and attribute names
-  for (KjNode* childP = entityP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = entityP->value.firstChildP; childP != NULL; childP = childP->next)
   {
     // JSON null is not allowed in NGSI-LD (JSON-LD drops null values)
-    if (childP->type == KjNull)
+    if (childP->type == CorNull)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Value", "JSON null is not allowed in NGSI-LD (field: '%s')", childP->name);
       return false;
     }
 
     // urn:ngsi-ld:null is not allowed as a first-level value in Create Entity
-    if (isCreateOp(op) && childP->type == KjString && strcmp(childP->value.s, "urn:ngsi-ld:null") == 0)
+    if (isCreateOp(op) && childP->type == CorString && strcmp(childP->value.s, "urn:ngsi-ld:null") == 0)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Value", "'urn:ngsi-ld:null' is not allowed as a first-level value in Create Entity (field: '%s')", childP->name);
       return false;
@@ -195,7 +195,7 @@ bool ldCheckEntity(KjNode* entityP, LdOp op, KjNode* dbEntityP, KAlloc* faP)
   // entity with `@type` as its type.
   if (typeNodeP != NULL)
   {
-    if (typeNodeP->type == KjString)
+    if (typeNodeP->type == CorString)
     {
       //
       // § 5.4.1 has the NGSI-LD Null remove the member it is the value of, but the Entity
@@ -216,7 +216,7 @@ bool ldCheckEntity(KjNode* entityP, LdOp op, KjNode* dbEntityP, KAlloc* faP)
         return false;
       }
     }
-    else if (typeNodeP->type == KjArray)
+    else if (typeNodeP->type == CorArray)
     {
       if (typeNodeP->value.firstChildP == NULL)
       {
@@ -224,9 +224,9 @@ bool ldCheckEntity(KjNode* entityP, LdOp op, KjNode* dbEntityP, KAlloc* faP)
         return false;
       }
 
-      for (KjNode* elemP = typeNodeP->value.firstChildP; elemP != NULL; elemP = elemP->next)
+      for (CorNode* elemP = typeNodeP->value.firstChildP; elemP != NULL; elemP = elemP->next)
       {
-        if (elemP->type != KjString)
+        if (elemP->type != CorString)
         {
           ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Entity Type", "Entity 'type' array elements must be strings");
           return false;
@@ -261,11 +261,11 @@ bool ldCheckEntity(KjNode* entityP, LdOp op, KjNode* dbEntityP, KAlloc* faP)
   }
 
   // Validate scope if present
-  for (KjNode* childP = entityP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = entityP->value.firstChildP; childP != NULL; childP = childP->next)
   {
     if (strcmp(childP->name, LD_VOCAB_SCOPE) == 0)
     {
-      if (childP->type == KjString)
+      if (childP->type == CorString)
       {
         if (childP->value.s[0] == 0)
         {
@@ -273,7 +273,7 @@ bool ldCheckEntity(KjNode* entityP, LdOp op, KjNode* dbEntityP, KAlloc* faP)
           return false;
         }
       }
-      else if (childP->type == KjArray)
+      else if (childP->type == CorArray)
       {
         if (childP->value.firstChildP == NULL)
         {
@@ -281,9 +281,9 @@ bool ldCheckEntity(KjNode* entityP, LdOp op, KjNode* dbEntityP, KAlloc* faP)
           return false;
         }
 
-        for (KjNode* elemP = childP->value.firstChildP; elemP != NULL; elemP = elemP->next)
+        for (CorNode* elemP = childP->value.firstChildP; elemP != NULL; elemP = elemP->next)
         {
-          if (elemP->type != KjString)
+          if (elemP->type != CorString)
           {
             ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Scope", "Entity 'scope' array elements must be strings");
             return false;
@@ -325,12 +325,12 @@ bool ldCheckEntity(KjNode* entityP, LdOp op, KjNode* dbEntityP, KAlloc* faP)
   // The NGSI-LD Null is the one non-DateTime value allowed, and only on the operations that can
   // delete a member (§ 5.4.1); on create the first-level check above has already refused it.
   //
-  for (KjNode* childP = entityP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = entityP->value.firstChildP; childP != NULL; childP = childP->next)
   {
     if (strcmp(childP->name, LD_VOCAB_EXPIRES_AT) != 0)
       continue;
 
-    if (childP->type != KjString)
+    if (childP->type != CorString)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid expiresAt", "Entity 'expiresAt' must be a DateTime string");
       return false;
@@ -348,7 +348,7 @@ bool ldCheckEntity(KjNode* entityP, LdOp op, KjNode* dbEntityP, KAlloc* faP)
   }
 
   // Second pass: validate each attribute
-  for (KjNode* childP = entityP->value.firstChildP; childP != NULL; childP = childP->next)
+  for (CorNode* childP = entityP->value.firstChildP; childP != NULL; childP = childP->next)
   {
     if (ldIsEntityKeyword(childP->name) == true)
       continue;
@@ -358,7 +358,7 @@ bool ldCheckEntity(KjNode* entityP, LdOp op, KjNode* dbEntityP, KAlloc* faP)
 
     LdAttrType dbAttrType = findAttrTypeInDb(dbEntityP, childP->name);
 
-    if (childP->type == KjArray)
+    if (childP->type == CorArray)
     {
       // Multi-attribute: each element must be a valid attribute instance
       if (childP->value.firstChildP == NULL)
@@ -379,13 +379,13 @@ bool ldCheckEntity(KjNode* entityP, LdOp op, KjNode* dbEntityP, KAlloc* faP)
       // an array raw when the request declared ?format=simplified. Undeclared, it
       // has already been wrapped as a Property and cannot arrive as a bare array.
       //
-      if (op == LdOpMergeEntity && childP->value.firstChildP->type != KjObject)
+      if (op == LdOpMergeEntity && childP->value.firstChildP->type != CorObject)
         continue;
 
       // Each element must be an object (shape check before dedup).
-      for (KjNode* instP = childP->value.firstChildP; instP != NULL; instP = instP->next)
+      for (CorNode* instP = childP->value.firstChildP; instP != NULL; instP = instP->next)
       {
-        if (instP->type != KjObject)
+        if (instP->type != CorObject)
         {
           ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Multi-Attribute", "Multi-attribute '%s': each instance must be a JSON object", childP->name);
           return false;
@@ -398,9 +398,9 @@ bool ldCheckEntity(KjNode* entityP, LdOp op, KjNode* dbEntityP, KAlloc* faP)
       // multiple Context Sources, not a single local write — so a conflicting
       // single payload is rejected, not resolved.)
       bool defaultFound = false;
-      for (KjNode* instP = childP->value.firstChildP; instP != NULL; instP = instP->next)
+      for (CorNode* instP = childP->value.firstChildP; instP != NULL; instP = instP->next)
       {
-        KjNode* dsP = kjLookup(instP, "datasetId");
+        CorNode* dsP = corTreeLookup(instP, "datasetId");
 
         if (dsP == NULL)
         {
@@ -411,14 +411,14 @@ bool ldCheckEntity(KjNode* entityP, LdOp op, KjNode* dbEntityP, KAlloc* faP)
           }
           defaultFound = true;
         }
-        else if (dsP->type == KjString)
+        else if (dsP->type == CorString)
         {
           // Duplicate datasetId among earlier instances of the same attribute?
           // (full datasetId URI validation is done by ldCheckAttribute below)
-          for (KjNode* otherP = childP->value.firstChildP; otherP != instP; otherP = otherP->next)
+          for (CorNode* otherP = childP->value.firstChildP; otherP != instP; otherP = otherP->next)
           {
-            KjNode* otherDsP = kjLookup(otherP, "datasetId");
-            if ((otherDsP != NULL) && (otherDsP->type == KjString) && (strcmp(otherDsP->value.s, dsP->value.s) == 0))
+            CorNode* otherDsP = corTreeLookup(otherP, "datasetId");
+            if ((otherDsP != NULL) && (otherDsP->type == CorString) && (strcmp(otherDsP->value.s, dsP->value.s) == 0))
             {
               ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Multi-Attribute", "Attribute '%s': duplicate datasetId '%s'", childP->name, dsP->value.s);
               return false;
@@ -428,7 +428,7 @@ bool ldCheckEntity(KjNode* entityP, LdOp op, KjNode* dbEntityP, KAlloc* faP)
       }
 
       // Validate each instance.
-      for (KjNode* instP = childP->value.firstChildP; instP != NULL; instP = instP->next)
+      for (CorNode* instP = childP->value.firstChildP; instP != NULL; instP = instP->next)
       {
         instP->name = childP->name;
         if (ldCheckAttribute(instP, op, dbAttrType, faP) == false)

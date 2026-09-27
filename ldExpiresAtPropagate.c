@@ -11,9 +11,10 @@
 #include <stdint.h>                                      // int64_t
 #include <string.h>                                      // strcmp
 
-#include "kjson/KjNode.h"                                // KjNode
-#include "kjson/kjLookup.h"                              // kjLookup
-#include "kjson/kjBuilder.h"                             // kjString, kjInteger, kjChildAdd
+#include "kalloc/KAlloc.h"                               // KAlloc
+#include "corTree/CorNode.h"                             // CorNode
+#include "corTree/corTreeLookup.h"                       // corTreeLookup
+#include "corTree/corTreeBuilder.h"                      // corTreeString, corTreeInteger, corTreeChildAdd
 
 #include "corNgsild/LdVocab.h"                            // LD_VOCAB_EXPIRES_AT
 #include "corNgsild/ldCheckDateTime.h"                    // ldIsoToNanoseconds
@@ -27,7 +28,7 @@
 // isAttributeContainer - top-level child of an entity that carries attribute
 //                        instances (i.e., not a system field or "id"/"type").
 //
-static bool isAttributeContainer(KjNode* nodeP)
+static bool isAttributeContainer(CorNode* nodeP)
 {
   if (nodeP == NULL || nodeP->name == NULL)              return false;
   if (nodeP->name[0] == '@')                             return false;
@@ -38,7 +39,7 @@ static bool isAttributeContainer(KjNode* nodeP)
   if (strcmp(nodeP->name, "modifiedAt")          == 0)   return false;
   if (strcmp(nodeP->name, "deletedAt")           == 0)   return false;
   if (strcmp(nodeP->name, LD_VOCAB_EXPIRES_AT)   == 0)   return false;
-  return (nodeP->type == KjObject);
+  return (nodeP->type == CorObject);
 }
 
 
@@ -56,21 +57,21 @@ static bool isAttributeContainer(KjNode* nodeP)
 // capture path). An instance inherits the shape of the value it copies, and an
 // instance that already has one keeps its own shape.
 //
-static void applyToInstance(KjNode* instP, KjNode* entityExpP, int64_t entityNs, Kjson* kjsonP)
+static void applyToInstance(CorNode* instP, CorNode* entityExpP, int64_t entityNs, KAlloc* allocP)
 {
-  KjNode* attrExpP = kjLookup(instP, LD_VOCAB_EXPIRES_AT);
+  CorNode* attrExpP = corTreeLookup(instP, LD_VOCAB_EXPIRES_AT);
 
   if (attrExpP == NULL)
   {
-    KjNode* newP = (entityExpP->type == KjInt)
-                     ? kjInteger(kjsonP, LD_VOCAB_EXPIRES_AT, entityExpP->value.i)
-                     : kjString (kjsonP, LD_VOCAB_EXPIRES_AT, entityExpP->value.s);
-    kjChildAdd(instP, newP);
+    CorNode* newP = (entityExpP->type == CorInt)
+                     ? corTreeInteger(allocP, LD_VOCAB_EXPIRES_AT, entityExpP->value.i)
+                     : corTreeString (allocP, LD_VOCAB_EXPIRES_AT, entityExpP->value.s);
+    corTreeChildAdd(instP, newP);
     return;
   }
 
   // Nanosecond-int form (DB model): compare and shorten in place.
-  if (attrExpP->type == KjInt)
+  if (attrExpP->type == CorInt)
   {
     if (attrExpP->value.i > entityNs)
       attrExpP->value.i = entityNs;
@@ -80,13 +81,13 @@ static void applyToInstance(KjNode* instP, KjNode* entityExpP, int64_t entityNs,
   // Attr-level expiresAt may arrive as a non-reified string OR a reified
   // Property object {"type": "Property", "value": "<iso>"}. Locate the
   // ISO-8601 string in either shape.
-  KjNode* dateP = NULL;
-  if (attrExpP->type == KjString)
+  CorNode* dateP = NULL;
+  if (attrExpP->type == CorString)
     dateP = attrExpP;
-  else if (attrExpP->type == KjObject)
+  else if (attrExpP->type == CorObject)
   {
-    KjNode* valP = kjLookup(attrExpP, "value");
-    if (valP != NULL && valP->type == KjString)
+    CorNode* valP = corTreeLookup(attrExpP, "value");
+    if (valP != NULL && valP->type == CorString)
       dateP = valP;
   }
   if (dateP == NULL)
@@ -106,34 +107,34 @@ static void applyToInstance(KjNode* instP, KjNode* entityExpP, int64_t entityNs,
 //
 // ldExpiresAtPropagate -
 //
-void ldExpiresAtPropagate(KjNode* entityP, Kjson* kjsonP)
+void ldExpiresAtPropagate(CorNode* entityP, KAlloc* allocP)
 {
-  if (entityP == NULL || entityP->type != KjObject)
+  if (entityP == NULL || entityP->type != CorObject)
     return;
 
-  KjNode* entityExpP = kjLookup(entityP, LD_VOCAB_EXPIRES_AT);
+  CorNode* entityExpP = corTreeLookup(entityP, LD_VOCAB_EXPIRES_AT);
   if (entityExpP == NULL)
     return;
 
   int64_t entityNs = 0;
-  if      (entityExpP->type == KjString)  entityNs = ldIsoToNanoseconds(entityExpP->value.s);
-  else if (entityExpP->type == KjInt)     entityNs = (int64_t) entityExpP->value.i;
+  if      (entityExpP->type == CorString) entityNs = ldIsoToNanoseconds(entityExpP->value.s);
+  else if (entityExpP->type == CorInt)    entityNs = (int64_t) entityExpP->value.i;
 
   if (entityNs == 0)
     return;
 
-  for (KjNode* attrP = entityP->value.firstChildP; attrP != NULL; attrP = attrP->next)
+  for (CorNode* attrP = entityP->value.firstChildP; attrP != NULL; attrP = attrP->next)
   {
     if (!isAttributeContainer(attrP))
       continue;
 
     // Storage shape: attrP is an object whose children are instance objects
     // keyed by datasetId (or "@none" for the default).
-    for (KjNode* instP = attrP->value.firstChildP; instP != NULL; instP = instP->next)
+    for (CorNode* instP = attrP->value.firstChildP; instP != NULL; instP = instP->next)
     {
-      if (instP->type != KjObject)
+      if (instP->type != CorObject)
         continue;
-      applyToInstance(instP, entityExpP, entityNs, kjsonP);
+      applyToInstance(instP, entityExpP, entityNs, allocP);
     }
   }
 }
