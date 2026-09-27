@@ -16,7 +16,7 @@
 
 #include <mosquitto.h>                                   // mosquitto_*
 
-#include "kbase/kLibLog.h"                               // kLogFunction
+#include "corBase/corLibLog.h"                           // COR_LIB_*
 #include "corAlloc/corAlloc.h"                           // corAlloc
 #include "corTree/CorNode.h"                             // CorNode
 #include "corTree/corTreeBuilder.h"                      // corTreeObject, corTreeArray, corTreeString, corTreeChildAdd
@@ -277,8 +277,7 @@ bool ldMqttNotify(const char* uri,
   MqttUri parsed;
   if (!parseMqttUri(uri, &parsed))
   {
-    if (kLogFunction != NULL)
-      kLogFunction(2, 0, __FILE__, __LINE__, __func__, "MQTT notify: invalid URI '%s'", uri);
+    COR_LIB_W("MQTT notify: invalid URI '%s'", uri);
     return false;
   }
 
@@ -377,10 +376,8 @@ bool ldMqttNotify(const char* uri,
 
   mosquitto_destroy(mosq);
 
-  if (!ok && kLogFunction != NULL)
-    kLogFunction(2, 0, __FILE__, __LINE__, __func__,
-                 "MQTT notify failed: host=%s port=%d topic=%s",
-                 parsed.host, parsed.port, parsed.topic);
+  if (!ok)
+    COR_LIB_W("MQTT notify failed: host=%s port=%d topic=%s", parsed.host, parsed.port, parsed.topic);
 
   return ok;
 }

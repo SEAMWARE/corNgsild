@@ -13,7 +13,7 @@
 #include <time.h>                                        // time
 #include <regex.h>                                       // regcomp, regfree, REG_EXTENDED
 
-#include "kbase/kLibLog.h"                             // KLOG_T
+#include "corBase/corLibLog.h"                         // COR_LIB_*
 #include "corAlloc/CorAlloc.h"                         // CorAlloc
 #include "corAlloc/corAlloc.h"                         // corAlloc
 #include "corAlloc/corAllocStrdup.h"                   // corAllocStrdup
@@ -806,7 +806,7 @@ bool ldCheckSubscription(CorNode* subP, LdOp op, bool merged, LdFormat* notifFor
 {
   OBJECT_CHECK(subP, "Invalid Subscription", "Subscription payload must be a JSON object");
 
-  KLOG_T(LdTCheckSub, "Checking subscription payload for op %s%s", ldOpToString(op), merged ? " (merged)" : "");
+  COR_LIB_T(LdTCheckSub, "Checking subscription payload for op %s%s", ldOpToString(op), merged ? " (merged)" : "");
 
   // Default: no 'format' member ⇒ the normalized default. checkNotification
   // overwrites this with the parsed value when a 'format' is present and valid.
@@ -1253,6 +1253,6 @@ bool ldCheckSubscription(CorNode* subP, LdOp op, bool merged, LdFormat* notifFor
     STRING_CHECK(descriptionP, "Invalid Subscription", "'description' must be a string");
   }
 
-  KLOG_T(LdTCheckSub, "Subscription payload valid");
+  COR_LIB_T(LdTCheckSub, "Subscription payload valid");
   return true;
 }

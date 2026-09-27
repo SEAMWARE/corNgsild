@@ -11,7 +11,6 @@
 #include <stdlib.h>                                      // malloc, free
 #include <string.h>                                      // strcmp
 
-#include "kbase/kLibLog.h"                             // KLOG_T
 #include "corTree/CorNode.h"                            // CorNode
 #include "corJson/corJsonCreate.h"                      // corJsonCreate
 #include "corJson/corJsonParse.h"                       // corJsonParse

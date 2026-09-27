@@ -9,7 +9,6 @@
 //
 #include <string.h>                                      // strcmp
 
-#include "kbase/kLibLog.h"                             // KLOG_T
 
 #include "corNgsild/LdVocab.h"                            // LD_VOCAB_HAS_*
 #include "corNgsild/ldTypes.h"                            // Own interface

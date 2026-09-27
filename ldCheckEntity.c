@@ -10,7 +10,7 @@
 #include <stdbool.h>                                     // bool
 #include <string.h>                                      // strcmp
 
-#include "kbase/kLibLog.h"                             // KLOG_T
+#include "corBase/corLibLog.h"                         // COR_LIB_*
 #include "corAlloc/CorAlloc.h"                         // CorAlloc
 
 #include "corRest/corRest.h"                              // corRest
@@ -91,7 +91,7 @@ bool ldCheckEntity(CorNode* entityP, LdOp op, CorNode* dbEntityP, CorAlloc* faP)
 {
   OBJECT_CHECK_IR(entityP, "Invalid Entity", "Entity payload must be a JSON object");
 
-  KLOG_T(LdTCheckEnt, "Checking entity payload for op %s", ldOpToString(op));
+  COR_LIB_T(LdTCheckEnt, "Checking entity payload for op %s", ldOpToString(op));
 
   // Silently remove system-managed timestamps if present in payload
   CorNode* rmP;
@@ -439,6 +439,6 @@ bool ldCheckEntity(CorNode* entityP, LdOp op, CorNode* dbEntityP, CorAlloc* faP)
       return false;
   }
 
-  KLOG_T(LdTCheckEnt, "Entity payload valid");
+  COR_LIB_T(LdTCheckEnt, "Entity payload valid");
   return true;
 }
