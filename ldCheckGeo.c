@@ -18,6 +18,10 @@
 
 #include "corRest/CorRestState.h"                         // corRest
 
+#include "corJsonld/corLdInit.h"                          // corLdCoreContext
+#include "corJsonld/corLdCompact.h"                       // corLdCompact
+
+#include "corNgsild/CorNgsild.h"                          // corNgsild
 #include "corNgsild/LdProblem.h"                          // LD_ERROR_*
 #include "corNgsild/LdVocab.h"                            // LD_VOCAB_COORDINATES, LD_VOCAB_GEO_*
 #include "corNgsild/ldError.h"                            // ldError
@@ -418,7 +422,14 @@ bool ldCheckGeo(CorNode* geoValueP)
     return false;
   }
 
-  ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid GeoJSON", "Unknown GeoJSON geometry type: '%s'", geoType);
+  //
+  // A GeoProperty's value is JSON-LD, so its "type" string arrives expanded; the core
+  // geometry names are core terms and stay short, an unknown one is an IRI here -
+  // the error names what the client sent.
+  //
+  const char* sentType = corLdCompact((corNgsild.contextP != NULL) ? corNgsild.contextP : corLdCoreContext(), geoType);
+
+  ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid GeoJSON", "Unknown GeoJSON geometry type: '%s'", (sentType != NULL) ? sentType : geoType);
   return false;
 }
 

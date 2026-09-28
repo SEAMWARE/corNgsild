@@ -26,6 +26,8 @@
 #include "corNgsild/ldError.h"                            // ldError
 #include "corNgsild/ldInit.h"                             // ldTypedValueCheck
 #include "corNgsild/ldCheckGeo.h"                         // ldCheckGeo
+#include "corNgsild/ldLanguageKey.h"                       // ldLanguageTag
+#include "corNgsild/CorNgsild.h"                           // corNgsild
 #include "corNgsild/ldCheckAttribute.h"                   // Own interface
 #include "corNgsild/ldTraceLevels.h"                      // LdTCheckAttr
 
@@ -317,29 +319,35 @@ static bool checkLanguageMap(CorNode* lmP)
     // § 5.2.6.4.6 — a languageMap key shall be an RFC 5646 language tag, or @none
     // (the JSON-LD default when no more specific language matches; it is also what
     // the NGSI-LD Null encoding {"@none": "urn:ngsi-ld:null"} uses).
-    if (childP->name == NULL || childP->name[0] == 0)
+    //
+    // The key arrives EXPANDED (the broker's internal encoding of a language tag -
+    // see ldLanguageKey.h): every check below, and every error, is about the TAG.
+    //
+    const char* tag = (childP->name != NULL) ? ldLanguageTag(childP->name, corNgsild.contextP) : NULL;
+
+    if ((tag == NULL) || (tag[0] == 0))
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid LanguageProperty", "'languageMap' has an empty language key");
       return false;
     }
 
-    if ((strcmp(childP->name, "@none") != 0) && (!languageTagWellFormed(childP->name)))
+    if ((strcmp(tag, "@none") != 0) && (!languageTagWellFormed(tag)))
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid LanguageProperty",
-              "'languageMap' key is not an RFC 5646 language tag: '%s'", childP->name);
+              "'languageMap' key is not an RFC 5646 language tag: '%s'", tag);
       return false;
     }
 
     if (childP->type != CorString && childP->type != CorArray)
     {
-      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid LanguageProperty", "languageMap values must be strings or arrays of strings (key '%s')", childP->name);
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid LanguageProperty", "languageMap values must be strings or arrays of strings (key '%s')", tag);
       return false;
     }
 
     // A scalar value must be a non-empty string.
     if (childP->type == CorString && childP->value.s[0] == 0)
     {
-      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid LanguageProperty", "languageMap value for '%s' is an empty string", childP->name);
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid LanguageProperty", "languageMap value for '%s' is an empty string", tag);
       return false;
     }
 
@@ -348,14 +356,14 @@ static bool checkLanguageMap(CorNode* lmP)
     {
       if (childP->value.head == NULL)
       {
-        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid LanguageProperty", "languageMap value for '%s' is an empty array", childP->name);
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid LanguageProperty", "languageMap value for '%s' is an empty array", tag);
         return false;
       }
       for (CorNode* elemP = childP->value.head; elemP != NULL; elemP = elemP->next)
       {
         if (elemP->type != CorString || elemP->value.s[0] == 0)
         {
-          ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid LanguageProperty", "languageMap value for '%s' must be a non-empty string", childP->name);
+          ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid LanguageProperty", "languageMap value for '%s' must be a non-empty string", tag);
           return false;
         }
       }

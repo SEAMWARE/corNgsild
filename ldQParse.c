@@ -536,9 +536,12 @@ static LdQNode* parseTerm(const char** pp, CorAlloc* kaP)
   expandAttrPath(&nodeP->term, attrStart, attrLen, kaP);
 
   //
-  // § 4.9 "[...]" — path INTO the value. Opaque JSON member names: NO
-  // context expansion, dots separate members, %XX decoded per segment
-  // (a literal dot inside a member name travels %2E-encoded).
+  // § 4.9 "[...]" — path INTO the value. Dots separate members, %XX decoded per
+  // segment (a literal dot inside a member name travels %2E-encoded), and each
+  // member name is a TERM, expanded with the request @context exactly as the
+  // compound value's own keys were when it was stored (TS 104 175 clause 7: the
+  // attribute path, trailing path included, is "a composition of short hand
+  // names"). "*" stays the wildcard.
   //
   nodeP->term.valuePathV = NULL;
   nodeP->term.valuePathN = 0;
@@ -566,7 +569,23 @@ static LdQNode* parseTerm(const char** pp, CorAlloc* kaP)
     {
       if (i == vpLen || vpStart[i] == '.')
       {
-        nodeP->term.valuePathV[nodeP->term.valuePathN++] = urlDecodeSegment(vpStart + segStart, i - segStart, kaP);
+        char* segP = urlDecodeSegment(vpStart + segStart, i - segStart, kaP);
+
+        if ((segP != NULL) && (strcmp(segP, "*") != 0) && (corLdAlreadyExpanded(segP) == false))
+        {
+          //
+          // Expanded exactly as the value's own member names were (corLdExpandValueKey:
+          // no name-grammar check - "es-419" or "my key" are valid member names), and
+          // copied: the result may point into the request's context, and a q tree
+          // outlives the request in the subscription cache.
+          //
+          char* expandedP = corLdExpandValueKey(corNgsild.contextP, segP, kaP, NULL, NULL);
+
+          if ((expandedP != NULL) && (expandedP != segP))
+            segP = corAllocStrdup(kaP, expandedP);
+        }
+
+        nodeP->term.valuePathV[nodeP->term.valuePathN++] = segP;
         segStart = i + 1;
       }
     }

@@ -264,6 +264,19 @@ void ldExpandParams(CorAlloc* kaP)
         out[outLen] = 0;
       }
       corNgsild.orderByV[i].attrName = out;
+
+      //
+      // The trailing path ("attr[a.b]", § 7.6.2.3) points into a compound value,
+      // whose member names are expanded like the value's own keys were - with
+      // corLdExpandValueKey: no name-grammar check.
+      //
+      for (int v = 0; v < corNgsild.orderByV[i].valuePathN; v++)
+      {
+        char* exp = corLdExpandValueKey(corNgsild.contextP, corNgsild.orderByV[i].valuePathV[v], kaP, NULL, NULL);
+
+        if (exp != NULL)
+          corNgsild.orderByV[i].valuePathV[v] = exp;
+      }
     }
   }
 }
