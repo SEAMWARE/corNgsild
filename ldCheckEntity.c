@@ -350,7 +350,7 @@ bool ldCheckEntity(CorNode* entityP, LdOp op, CorNode* dbEntityP, CorAlloc* faP)
   // Second pass: validate each attribute
   for (CorNode* childP = entityP->value.head; childP != NULL; childP = childP->next)
   {
-    if (ldIsEntityKeyword(childP->name) == true)
+    if (ldIsEntityMember(childP) == true)
       continue;
 
     // Duplicate attributes are rejected uniformly by the duplicate-member check

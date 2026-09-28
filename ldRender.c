@@ -167,7 +167,7 @@ bool ldToConcise(CorNode* entityP, CorAlloc* faP)
 
   for (CorNode* childP = entityP->value.head; childP != NULL; childP = childP->next)
   {
-    if (ldIsEntityKeyword(childP->name) == true)
+    if (ldIsEntityMember(childP) == true)
       continue;
 
     //
@@ -265,7 +265,7 @@ bool ldToSimplified(CorNode* entityP, CorAlloc* faP)
     // "@none" (annex C.2.2.4.2). Leaving the array alone shipped the fully
     // NORMALIZED instances - type, value key and all - in a simplified response.
     //
-    if (ldIsEntityKeyword(childP->name) == false && childP->type == CorArray)
+    if (ldIsEntityMember(childP) == false && childP->type == CorArray)
     {
       CorNode* datasetMap = corTreeObject(allocP, "dataset");
 
@@ -309,7 +309,7 @@ bool ldToSimplified(CorNode* entityP, CorAlloc* faP)
       continue;
     }
 
-    if (ldIsEntityKeyword(childP->name) == false && childP->type == CorObject)
+    if (ldIsEntityMember(childP) == false && childP->type == CorObject)
     {
       // § 4.5.23 + § 4.5.4: join=inline attaches the linked Entity under
       // `entity` on the Relationship instance. In simplified format with

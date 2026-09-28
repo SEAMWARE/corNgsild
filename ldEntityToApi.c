@@ -294,7 +294,7 @@ void ldEntityToApi(CorNode* entityP, CorAlloc* faP)
     CorNode* nextP = childP->next;
 
     // Skip entity keywords (id, type, scope, ...).
-    if (childP->name == NULL || ldIsEntityKeyword(childP->name))
+    if (childP->name == NULL || ldIsEntityMember(childP))
     {
       childP = nextP;
       continue;

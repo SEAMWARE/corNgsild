@@ -159,7 +159,7 @@ void ldLangReduce(CorNode* entityP, const char* lang, CorAlloc* faP)
 
   for (CorNode* childP = entityP->value.head; childP != NULL; childP = childP->next)
   {
-    if (childP->name == NULL || ldIsEntityKeyword(childP->name))
+    if (childP->name == NULL || ldIsEntityMember(childP))
       continue;
 
     if (childP->type == CorArray)

@@ -91,7 +91,7 @@ void ldWriteResultFragUpdated(CorNode* updatedP, CorNode* fragP)
 
   for (CorNode* c = fragP->value.head; c != NULL; c = c->next)
   {
-    if (ldIsEntityKeyword(c->name))
+    if (ldIsEntityMember(c))
       continue;
     ldWriteResultUpdatedAdd(updatedP, c->name);
   }
@@ -110,7 +110,7 @@ void ldWriteResultFragNotUpdated(CorNode* notUpdatedP, CorNode* fragP, const cha
 
   for (CorNode* c = fragP->value.head; c != NULL; c = c->next)
   {
-    if (ldIsEntityKeyword(c->name))
+    if (ldIsEntityMember(c))
       continue;
     ldWriteResultNotUpdatedAdd(notUpdatedP, c->name, reason, regId, statusCode);
   }

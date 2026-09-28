@@ -341,7 +341,7 @@ void ldApiEntityToDbModel(CorNode* entityP, CorAlloc* faP, int64_t createdAt)
   {
     CorNode* nextP = childP->next;
 
-    if (childP->name != NULL && !ldIsEntityKeyword(childP->name))
+    if (childP->name != NULL && !ldIsEntityMember(childP))
     {
       CorNode* replacementP = NULL;
 

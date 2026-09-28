@@ -641,7 +641,7 @@ bool ldNormalizeInput(CorNode* entityP, CorAlloc* kaP, bool mergeMode, bool simp
   {
     CorNode* nextP = childP->next; // save before normalizeAttr may replace childP
 
-    if (ldIsEntityKeyword(childP->name) == false)
+    if (ldIsEntityMember(childP) == false)
     {
       if (normalizeAttr(entityP, childP, kaP, mergeMode, simplified) == false)
         return false;

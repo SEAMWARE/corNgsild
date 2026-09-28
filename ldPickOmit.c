@@ -122,7 +122,7 @@ void ldAttrsFilter(CorNode* entityP, char** attrsV)
   {
     CorNode* nextP = childP->next;
 
-    if (childP->name != NULL && !ldIsEntityKeyword(childP->name))
+    if (childP->name != NULL && !ldIsEntityMember(childP))
     {
       if (!inStringV(childP->name, attrsV) && !isGeoJsonProtected(childP->name))
         corTreeChildRemove(entityP, childP);

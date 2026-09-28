@@ -527,7 +527,7 @@ void ldEntityReplaceReport(CorNode* oldEntityP, CorNode* newEntityP, LdMergeRepo
   // new vs old → attributeCreated (new-only) / attributeModified (in both)
   for (CorNode* nAttrP = newEntityP->value.head; nAttrP != NULL; nAttrP = nAttrP->next)
   {
-    if ((nAttrP->name == NULL) || ldIsEntityKeyword(nAttrP->name) || (strcmp(nAttrP->name, "_id") == 0))
+    if ((nAttrP->name == NULL) || ldIsEntityMember(nAttrP) || (strcmp(nAttrP->name, "_id") == 0))
       continue;
 
     CorNode* oAttrP = corTreeLookup(oldEntityP, nAttrP->name);
@@ -540,7 +540,7 @@ void ldEntityReplaceReport(CorNode* oldEntityP, CorNode* newEntityP, LdMergeRepo
   // old not in new → attributeDeleted
   for (CorNode* oAttrP = oldEntityP->value.head; oAttrP != NULL; oAttrP = oAttrP->next)
   {
-    if ((oAttrP->name == NULL) || ldIsEntityKeyword(oAttrP->name) || (strcmp(oAttrP->name, "_id") == 0))
+    if ((oAttrP->name == NULL) || ldIsEntityMember(oAttrP) || (strcmp(oAttrP->name, "_id") == 0))
       continue;
 
     if (corTreeLookup(newEntityP, oAttrP->name) == NULL)

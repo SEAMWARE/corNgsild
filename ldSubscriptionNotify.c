@@ -361,7 +361,7 @@ static CorNode* buildNotifDataEntry(LdSubCacheItem*      itemP,
       for (CorNode* attrP = entityP->value.head; attrP != NULL; attrP = attrP->next)
       {
         if (attrP->name == NULL || attrP->type != CorObject) continue;
-        if (ldIsEntityKeyword(attrP->name))                 continue;
+        if (ldIsEntityMember(attrP))                 continue;
 
         // watchedAttributes filter (already-expanded IRIs in the cache).
         if (itemP->watchedAttrsV != NULL)

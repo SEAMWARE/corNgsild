@@ -86,6 +86,8 @@ debug: all
 LIB_SOURCES   = corNgsild.c \
                 ldCoreTermIds.c \
                 ldLanguageKey.c \
+                ldTermId.c \
+                ldTermClass.c \
                 ldInit.c \
                 ldError.c \
                 ldParams.c \

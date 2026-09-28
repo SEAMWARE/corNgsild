@@ -417,7 +417,7 @@ void ldEntityAttrsSet(CorNode* target, CorNode* fragment,
   for (CorNode* fAttrP = fragment->value.head; fAttrP != NULL; fAttrP = fAttrP->next)
   {
     // type, scope and expiresAt were handled in the first pass - and are Entity members anyway
-    if (ldIsNotAttributeName(fAttrP->name))
+    if (ldIsNotAttribute(fAttrP))
       continue;
 
     //

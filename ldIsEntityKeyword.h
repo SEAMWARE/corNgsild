@@ -13,6 +13,10 @@
 #include <string.h>
 
 #include "corNgsild/LdVocab.h"
+#include "corTree/CorNode.h"                            // CorNode
+#include "corNgsild/CorTerm.h"                          // CorTerm*
+#include "corNgsild/ldTermId.h"                         // ldTermId
+#include "corNgsild/ldTermClass.h"                      // ldTermClass, LD_TC_*
 
 
 
@@ -55,6 +59,36 @@ static inline bool ldIsNotAttributeName(const char* name)
   if (name[0] == '@')  return true;
 
   return ldIsEntityKeyword(name);
+}
+
+// -----------------------------------------------------------------------------
+//
+// ldIsEntityMember - ldIsEntityKeyword for a NODE: by its term id, not by its name
+//
+// The Entity members are core terms (id, type, scope, createdAt, modifiedAt, expiresAt -
+// and "@id"/"@type", their aliases, resolve to id/type), so one table load answers it.
+// "@context" is not a term; it is the one JSON-LD keyword asked about by name.
+//
+static inline bool ldIsEntityMember(CorNode* nodeP)
+{
+  if ((ldTermClass[ldTermId(nodeP)] & LD_TC_ENTITY_MEMBER) != 0)
+    return true;
+
+  return (nodeP->name != NULL) && (nodeP->name[0] == '@') && (strcmp(nodeP->name, "@context") == 0);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldIsNotAttribute - ldIsNotAttributeName for a NODE
+//
+static inline bool ldIsNotAttribute(CorNode* nodeP)
+{
+  if (nodeP->name == NULL)    return true;
+  if (nodeP->name[0] == '@')  return true;
+
+  return (ldTermClass[ldTermId(nodeP)] & LD_TC_ENTITY_MEMBER) != 0;
 }
 
 #endif  // CORNGSILD_LD_IS_ENTITY_KEYWORD_H_
