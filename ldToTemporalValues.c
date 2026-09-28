@@ -17,13 +17,13 @@
 #include "corTree/corTreeLookup.h"                       // corTreeLookup
 #include "corTree/corTreeClone.h"                        // corTreeClone
 
-#include "corJsonld/corLdCompact.h"                        // corLdCompact
-#include "corJsonld/corLdInit.h"                           // corLdCoreContext
+#include "corJsonld/corLdCompact.h"                      // corLdCompact
+#include "corJsonld/corLdInit.h"                         // corLdCoreContext
 
-#include "corNgsild/CorNgsild.h"                           // corNgsild (for response @context)
-#include "corNgsild/ldIsEntityKeyword.h"                  // ldIsEntityKeyword
+#include "corNgsild/CorNgsild.h"                         // corNgsild (for response @context)
+#include "corNgsild/ldIsEntityKeyword.h"                 // ldIsEntityKeyword
+#include "corNgsild/ldTermId.h"                           // ldTermId, CorTerm*
 #include "corNgsild/ldToTemporalValues.h"                 // Own interface
-#include "corNgsild/ldTermId.h"                         // ldTermId, CorTerm*
 
 
 

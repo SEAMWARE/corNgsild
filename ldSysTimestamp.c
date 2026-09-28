@@ -15,11 +15,11 @@
 #include "corAlloc/CorAlloc.h"                         // CorAlloc
 #include "corAlloc/corAlloc.h"                         // corAlloc
 #include "corTree/CorNode.h"                            // CorNode
-#include "corTree/corTreeBuilder.h"                       // corTreeInteger, corTreeChildAdd
+#include "corTree/corTreeBuilder.h"                     // corTreeInteger, corTreeChildAdd
 #include "corTree/corTreeLookup.h"                       // corTreeLookup
 #include "corNgsild/LdVocab.h"                            // LD_VOCAB_CREATED_AT, LD_VOCAB_MODIFIED_AT
+#include "corNgsild/ldTermId.h"                           // ldTermId, CorTerm*
 #include "corNgsild/ldSysTimestamp.h"                     // Own interface
-#include "corNgsild/ldTermId.h"                         // ldTermId, CorTerm*
 
 
 

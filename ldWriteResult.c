@@ -16,7 +16,7 @@
 
 #include "corJsonld/corLdInit.h"                          // corLdCoreContext
 
-#include "corNgsild/ldIsEntityKeyword.h"                 // ldIsEntityKeyword
+#include "corNgsild/ldIsEntityKeyword.h"                  // ldIsEntityKeyword
 #include "corNgsild/ldDistOp.h"                          // ldDistOpForwardFailureReason
 
 #include "corNgsild/ldWriteResult.h"                     // Own interface

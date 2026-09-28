@@ -11,7 +11,9 @@
 #include <string.h>                                    // strcmp
 
 #include "corTree/CorNode.h"                          // CorNode
-#include "corTree/corTreeBuilder.h"               // corTreeChildRemove
+#include "corTree/corTreeBuilder.h"                   // corTreeChildRemove
+#include "corNgsild/ldTermClass.h"                    // ldTermClass, LD_TC_*
+#include "corNgsild/ldTermId.h"                       // ldTermId
 #include "corNgsild/LdVocab.h"                          // LD_VOCAB_*
 
 #include "corNgsild/ldStripSysAttrs.h"                  // Own interface
@@ -22,11 +24,9 @@
 //
 // isSysAttr -
 //
-static bool isSysAttr(const char* name)
+static bool isSysAttr(CorNode* nodeP)
 {
-  if (strcmp(name, LD_VOCAB_CREATED_AT)  == 0)  return true;
-  if (strcmp(name, LD_VOCAB_MODIFIED_AT) == 0)  return true;
-  return false;
+  return (ldTermClass[ldTermId(nodeP)] & LD_TC_SYS_ATTR) != 0;
 }
 
 
@@ -35,16 +35,9 @@ static bool isSysAttr(const char* name)
 //
 // isValueKey - value keys should NOT be recursed into
 //
-static bool isValueKey(const char* name)
+static bool isValueKey(CorNode* nodeP)
 {
-  if (strcmp(name, LD_VOCAB_HAS_VALUE)        == 0)  return true;
-  if (strcmp(name, LD_VOCAB_HAS_OBJECT)       == 0)  return true;
-  if (strcmp(name, LD_VOCAB_HAS_LANGUAGE_MAP) == 0)  return true;
-  if (strcmp(name, LD_VOCAB_HAS_VOCAB)        == 0)  return true;
-  if (strcmp(name, LD_VOCAB_HAS_VALUE_LIST)   == 0)  return true;
-  if (strcmp(name, LD_VOCAB_HAS_OBJECT_LIST)  == 0)  return true;
-  if (strcmp(name, LD_VOCAB_HAS_JSON)         == 0)  return true;
-  return false;
+  return (ldTermClass[ldTermId(nodeP)] & LD_TC_VALUE_KEY) != 0;
 }
 
 
@@ -64,9 +57,9 @@ static void stripObject(CorNode* objectP)
   {
     CorNode* nextP = childP->next;
 
-    if (childP->name != NULL && isSysAttr(childP->name))
+    if (childP->name != NULL && isSysAttr(childP))
       corTreeChildRemove(objectP, childP);
-    else if (childP->type == CorObject && childP->name != NULL && !isValueKey(childP->name))
+    else if (childP->type == CorObject && childP->name != NULL && !isValueKey(childP))
       stripObject(childP);
     else if (childP->type == CorArray)
     {

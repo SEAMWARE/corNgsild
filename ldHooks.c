@@ -19,17 +19,17 @@
 #include "corTree/corTreeNodeDecouple.h"                 // corTreeNodeDecouple
 #include "corRest/corRest.h"                             // corRest
 #include "corRest/CorRestService.h"                      // CorRestService.ldOp
-#include "corJsonld/corLdInit.h"                             // corLdCoreContext
+#include "corJsonld/corLdInit.h"                         // corLdCoreContext
 #include "corJsonld/corLdExpandTree.h"                       // corLdExpandTree
 #include "corJsonld/corLdCompactTree.h"                      // corLdCompactTree, corLdCompactTreeWith
 #include "corJsonld/corLdDownload.h"                         // corLdContextFromUrl
 
-#include "corNgsild/ldAliasCanonicalize.h"                // ldAliasCanonicalize
+#include "corNgsild/ldAliasCanonicalize.h"                   // ldAliasCanonicalize
 #include "corNgsild/ldContextHost.h"                      // ldContextHostVolatile
 #include "corNgsild/LdProblem.h"                          // LD_ERROR_*
 #include "corNgsild/LdVocab.h"                            // LD_VOCAB_*
 #include "corNgsild/LdOp.h"                               // LdOpRetrieveEntity, LdOpQueryEntities
-#include "corNgsild/CorNgsild.h"                           // corNgsild, ldParamHook
+#include "corNgsild/CorNgsild.h"                          // corNgsild, ldParamHook
 #include "corNgsild/ldError.h"                            // ldError
 #include "corNgsild/ldEntityToApi.h"                      // ldEntityToApi
 #include "corNgsild/ldPickOmit.h"                         // ldPickOmit
@@ -43,8 +43,8 @@
 #include "corRest/CorRestIn.h"                      // corAcceptParse, CorMimeType
 #include "corNgsild/ldRender.h"                           // ldToSimplified, ldToConcise
 #include "corNgsild/LdNormalizeInput.h"                    // ldNormalizeInput
+#include "corNgsild/ldTermId.h"                           // ldTermId, CorTerm*
 #include "corNgsild/ldHooks.h"                            // Own interface
-#include "corNgsild/ldTermId.h"                         // ldTermId, CorTerm*
 
 
 

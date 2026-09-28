@@ -23,6 +23,9 @@
 //
 #define LD_TC_ENTITY_MEMBER   0x01   // a member of an Entity that is not an Attribute
 #define LD_TC_VALUE_KEY       0x02   // the member of an Attribute that holds its value (value, object, languageMap, ...)
+#define LD_TC_SUBATTR_ONLY    0x10   // a name only valid as a member of an Attribute, never as an Attribute (observedAt, unitCode)
+#define LD_TC_SYS_ATTR        0x20   // a system attribute stripped without sysAttrs (createdAt, modifiedAt)
+#define LD_TC_WELL_KNOWN_GEO  0x40   // an Attribute name that must be a GeoProperty (location, observationSpace, operationSpace)
 
 
 

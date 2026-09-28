@@ -37,7 +37,7 @@
 #include "corNgsild/LdRegCache.h"                      // LdRegCache, LdRegCacheItem
 #include "corNgsild/ldRegCache.h"                      // ldRegOpSupported
 #include "corNgsild/ldDistOp.h"                        // ldDistOpSendReceive, ldDistOpCsrWouldLoop
-#include "corNgsild/CorNgsild.h"                        // corNgsild (hops)
+#include "corNgsild/CorNgsild.h"                       // corNgsild (hops)
 #include "corNgsild/ldStripAtContext.h"                // ldStripAtContext
 #include "corNgsild/ldDiscoveryForward.h"              // Own interface
 

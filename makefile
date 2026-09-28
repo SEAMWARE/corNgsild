@@ -89,6 +89,7 @@ LIB_SOURCES   = corNgsild.c \
                 ldTermId.c \
                 ldTermClass.c \
                 ldAliasCanonicalize.c \
+                ldAttrMember.c \
                 ldInit.c \
                 ldError.c \
                 ldParams.c \

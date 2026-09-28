@@ -41,10 +41,10 @@
 #include "corNgsild/ldTypes.h"                         // ldAttrTypeFromString, ldAttrTypeToString
 #include "corNgsild/ldError.h"                         // ldError
 #include "corNgsild/LdProblem.h"                       // LD_ERROR_*
-#include "corNgsild/CorNgsild.h"                        // corNgsild (lang, observedAtNs)
+#include "corNgsild/CorNgsild.h"                       // corNgsild (lang, observedAtNs)
 #include "corNgsild/ldIsEntityKeyword.h"               // ldIsEntityKeyword
+#include "corNgsild/ldTermId.h"                        // ldTermId, CorTerm*
 #include "corNgsild/ldEntityMerge.h"                   // Own interface
-#include "corNgsild/ldTermId.h"                         // ldTermId, CorTerm*
 
 
 

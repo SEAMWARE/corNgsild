@@ -27,7 +27,7 @@
 #include "corNgsild/ldError.h"                            // ldError
 #include "corNgsild/ldCheckGeo.h"                         // Own interface
 #include "corNgsild/ldTraceLevels.h"                      // LdTCheckGeo
-#include "corNgsild/ldTermId.h"                         // ldTermId, CorTerm*
+#include "corNgsild/ldTermId.h"                           // ldTermId, CorTerm*
 
 
 
@@ -360,7 +360,7 @@ bool ldCheckGeo(CorNode* geoValueP)
   for (CorNode* childP = geoValueP->value.head; childP != NULL; childP = childP->next)
   {
     if      (ldTermId(childP) == CorTermType)               typeP   = childP;
-    else if (ldTermId(childP) == CorTermCoordinates) coordsP = childP;
+    else if (ldTermId(childP) == CorTermCoordinates)  coordsP = childP;
   }
 
   if (typeP == NULL || typeP->type != CorString)

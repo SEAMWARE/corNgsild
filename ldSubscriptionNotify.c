@@ -42,7 +42,7 @@
 #include "corNgsild/ldTraceLevels.h"                    // LdTNotif*
 #include "corNgsild/ldTypes.h"                          // ldFormatToString
 #include "corNgsild/LdVocab.h"                          // LD_VOCAB_*
-#include "corNgsild/CorNgsild.h"                         // corNgsild
+#include "corNgsild/CorNgsild.h"                        // corNgsild
 #include "corNgsild/LdSubCache.h"                       // LdSubCache, LdSubCacheItem
 #include "corNgsild/ldSubCache.h"                       // ldSubCacheRdLock, ldSubCacheItemPin, ...
 #include "corNgsild/ldEntityToApi.h"                    // ldEntityToApi
@@ -52,7 +52,7 @@
 #include "corNgsild/ldToGeoJson.h"                     // ldToGeoJson
 #include "corNgsild/ldConformanceDowngrade.h"          // ldConformanceDowngrade
 #include "corNgsild/ldEntityMerge.h"                    // LdMergeReport
-#include "corJsonld/corLdInit.h"                          // corLdCoreContext
+#include "corJsonld/corLdInit.h"                        // corLdCoreContext
 #include "corJsonld/CorLdContext.h"                       // CorLdContext
 #include "corNgsild/ldRender.h"                          // ldToConcise, ldToSimplified
 #include "corNgsild/ldPickOmit.h"                       // ldPickOmit
@@ -63,8 +63,8 @@
 #include "corNgsild/ldMqttNotify.h"                     // ldIsMqttUri, ldMqttNotify
 #include "corNgsild/ldThrottleDirty.h"                  // ldThrottleDirtyUpsert/Drain/EntriesFree
 #include "corNgsild/ldPeriodicLoop.h"                   // ldPeriodicLoopRegister
-#include "corNgsild/ldSubscriptionNotify.h"             // Own interface
 #include "corNgsild/ldTermId.h"                         // ldTermId, CorTerm*
+#include "corNgsild/ldSubscriptionNotify.h"             // Own interface
 
 
 

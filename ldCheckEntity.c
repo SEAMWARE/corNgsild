@@ -25,10 +25,10 @@
 #include "corNgsild/ldError.h"                            // ldError
 #include "corNgsild/ldAttrTypeDetect.h"                   // ldAttrTypeDetect
 #include "corNgsild/ldCheckAttribute.h"                   // ldCheckAttribute
-#include "corNgsild/ldIsEntityKeyword.h"                   // ldIsEntityKeyword
+#include "corNgsild/ldIsEntityKeyword.h"                  // ldIsEntityKeyword
 #include "corNgsild/ldCheckEntity.h"                      // Own interface
 #include "corNgsild/ldTraceLevels.h"                      // LdTCheckEnt
-#include "corNgsild/ldTermId.h"                         // ldTermId, CorTerm*
+#include "corNgsild/ldTermId.h"                           // ldTermId, CorTerm*
 
 
 

@@ -26,7 +26,7 @@
 #include "corJson/corJsonRenderSize.h"                 // corJsonFastRenderSize
 
 #include "corNgsild/LdOp.h"                               // LdOp
-#include "corNgsild/CorNgsild.h"                           // corNgsild
+#include "corNgsild/CorNgsild.h"                          // corNgsild
 #include "corNgsild/LdTypeExpr.h"                         // ldTypeExprParse, ldTypeExprFree
 #include "corNgsild/LdCheck.h"                            // OBJECT_CHECK, STRING_CHECK, ...
 #include "corNgsild/ldCheckUri.h"                         // ldCheckUri
@@ -42,7 +42,7 @@
 #include "corNgsild/ldCheckSubscription.h"                // Own interface
 #include "corNgsild/ldConformanceDowngrade.h"             // ldConformanceParse
 #include "corNgsild/ldTraceLevels.h"                      // LdTCheckSub
-#include "corNgsild/ldTermId.h"                         // ldTermId, CorTerm*
+#include "corNgsild/ldTermId.h"                           // ldTermId, CorTerm*
 
 
 

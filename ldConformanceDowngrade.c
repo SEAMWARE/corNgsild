@@ -18,8 +18,8 @@
 #include "corTree/corTreeLookup.h"                       // corTreeLookup
 #include "corTree/corTreeChildReplace.h"                 // corTreeChildReplace
 
+#include "corNgsild/ldTermId.h"                           // ldTermId, CorTerm*
 #include "corNgsild/ldConformanceDowngrade.h"             // Own interface
-#include "corNgsild/ldTermId.h"                         // ldTermId, CorTerm*
 
 
 

@@ -15,7 +15,7 @@
 
 #include "corRest/corRestOutHeader.h"                       // corRestOutHeaderAdd
 
-#include "corNgsild/CorNgsild.h"                           // corNgsild
+#include "corNgsild/CorNgsild.h"                            // corNgsild
 #include "corNgsild/ldCheckDateTime.h"                    // Own interface
 
 

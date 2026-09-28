@@ -16,8 +16,8 @@
 #include "corTree/corTreeClone.h"                      // corTreeClone
 
 #include "corNgsild/LdVocab.h"                          // LD_VOCAB_NGSILD_NULL
-#include "corNgsild/ldRegSubMerge.h"                    // Own interface
 #include "corNgsild/ldTermId.h"                         // ldTermId, CorTerm*
+#include "corNgsild/ldRegSubMerge.h"                    // Own interface
 
 
 

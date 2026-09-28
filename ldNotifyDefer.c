@@ -14,7 +14,7 @@
 #include "corTree/corTreeLookup.h"               // corTreeLookup
 
 #include "corNgsild/ldSubscriptionNotify.h"       // ldSubscriptionNotifyBatch, LdNotifyPendingEntry
-#include "corNgsild/CorNgsild.h"                   // corNgsild (per-conn pending* cache)
+#include "corNgsild/CorNgsild.h"                  // corNgsild (per-conn pending* cache)
 #include "corNgsild/ldNotifyDefer.h"              // Own interface
 
 

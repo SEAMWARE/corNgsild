@@ -12,10 +12,10 @@
 #include <string.h>                                    // strcmp
 
 #include "corTree/CorNode.h"                        // CorNode
-#include "corTree/corTreeBuilder.h"             // corTreeChildRemove
+#include "corTree/corTreeBuilder.h"                 // corTreeChildRemove
 
-#include "corNgsild/ldIsEntityKeyword.h"          // ldIsEntityKeyword
-#include "corNgsild/CorNgsild.h"                   // corNgsild (geometryPropertyExpanded)
+#include "corNgsild/ldIsEntityKeyword.h"            // ldIsEntityKeyword
+#include "corNgsild/CorNgsild.h"                    // corNgsild (geometryPropertyExpanded)
 #include "corNgsild/ldPickOmit.h"                     // Own interface
 
 

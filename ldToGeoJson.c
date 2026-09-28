@@ -15,7 +15,7 @@
 #include "corTree/corTreeLookup.h"                       // corTreeLookup
 #include "corTree/corTreeClone.h"                        // corTreeClone
 
-#include "corNgsild/CorNgsild.h"                           // corNgsild (geoJsonGeomForced)
+#include "corNgsild/CorNgsild.h"                         // corNgsild (geoJsonGeomForced)
 #include "corNgsild/ldToGeoJson.h"                        // Own interface
 
 

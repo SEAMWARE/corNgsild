@@ -31,7 +31,7 @@
 #include "corJson/corJsonRender.h"                      // corJsonFastRender
 #include "corJson/corJsonRenderSize.h"                  // corJsonFastRenderSize
 
-#include "corNgsild/ldIsEntityKeyword.h"                  // ldIsEntityKeyword
+#include "corNgsild/ldIsEntityKeyword.h"                // ldIsEntityKeyword
 #include "corNgsild/ldCheckDateTime.h"                    // ldIsoToNanoseconds
 #include "corNgsild/ldToAggregatedValues.h"               // Own interface
 

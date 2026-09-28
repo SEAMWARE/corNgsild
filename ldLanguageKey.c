@@ -10,11 +10,11 @@
 
 #include "corAlloc/CorAlloc.h"                         // CorAlloc
 #include "corJsonld/CorLdContext.h"                    // CorLdContext
-#include "corJsonld/corLdInit.h"                        // corLdCoreContext
+#include "corJsonld/corLdInit.h"                       // corLdCoreContext
 #include "corJsonld/corLdExpand.h"                      // corLdExpand
 #include "corJsonld/corLdCompact.h"                     // corLdCompact
 
-#include "corNgsild/ldLanguageKey.h"                   // Own interface
+#include "corNgsild/ldLanguageKey.h"                    // Own interface
 
 
 

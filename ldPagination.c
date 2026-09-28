@@ -13,7 +13,7 @@
 #include "corAlloc/CorAlloc.h"                         // corAlloc
 #include "corAlloc/corAlloc.h"                         // corAlloc
 #include "corRest/corRest.h"                             // corRest
-#include "corNgsild/CorNgsild.h"                           // corNgsild
+#include "corNgsild/CorNgsild.h"                         // corNgsild
 #include "corNgsild/ldParams.h"                           // LD_PARAM_LIMIT, LD_PARAM_OFFSET
 #include "corRest/CorRestIn.h"                      // corAcceptParse, CorMimeType
 

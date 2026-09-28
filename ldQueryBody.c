@@ -31,8 +31,8 @@
 #include "corNgsild/corNgsild.h"                          // ldError, LD_ERROR_*, corNgsild, ldParamHook
 #include "corNgsild/LdProblem.h"                         // LD_ERROR_BAD_REQUEST_DATA
 #include "corNgsild/ldError.h"                           // ldError
+#include "corNgsild/ldTermId.h"                          // ldTermId, CorTerm*
 #include "corNgsild/ldQueryBody.h"                       // Own interface
-#include "corNgsild/ldTermId.h"                         // ldTermId, CorTerm*
 
 
 
@@ -220,7 +220,7 @@ bool ldQueryBodyToParams(CorNode* bodyP)
   {
     if (fP->name == NULL)                       continue;
     if (fP->name[0] == '@')                     continue;
-    if (ldTermId(fP) == CorTermType)          continue;
+    if (ldTermId(fP) == CorTermType)  continue;
 
     if (ldTermId(fP) == CorTermEntities)
     {

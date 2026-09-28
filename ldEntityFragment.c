@@ -15,6 +15,8 @@
 #include "corTree/corTreeClone.h"                      // corTreeClone
 #include "corTree/corTreeLookup.h"                     // corTreeLookup
 
+#include "corNgsild/ldTermClass.h"                     // ldTermClass, LD_TC_*
+#include "corNgsild/ldTermId.h"                        // ldTermId
 #include "corNgsild/LdRegCache.h"                       // LdRegInfo
 
 #include "corNgsild/ldEntityFragment.h"                 // Own interface
@@ -42,13 +44,11 @@ static bool nameInList(const char* s, char** v)
 //
 // isKeywordAttr - top-level nodes that are never "attributes" in NGSI-LD sense
 //
-static bool isKeywordAttr(const char* name)
+static bool isKeywordAttr(CorNode* nodeP)
 {
-  if (name == NULL)              return true;
-  if (name[0] == '@')            return true;          // @context, @id, ...
-  if (strcmp(name, "id")   == 0) return true;
-  if (strcmp(name, "type") == 0) return true;
-  return false;
+  CorTerm term = ldTermId(nodeP);
+
+  return (term == CorTermId) || (term == CorTermType);
 }
 
 
@@ -73,7 +73,7 @@ CorNode* ldEntityFragmentForInfo(CorNode*   entityP,
   int matched = 0;
   for (CorNode* curP = entityP->value.head; curP != NULL; curP = curP->next)
   {
-    if (isKeywordAttr(curP->name))
+    if (isKeywordAttr(curP))
       continue;
 
     if (wildcard ||
@@ -106,7 +106,7 @@ CorNode* ldEntityFragmentForInfo(CorNode*   entityP,
   {
     CorNode* nextP = curP->next;
 
-    if (isKeywordAttr(curP->name))
+    if (isKeywordAttr(curP))
     {
       curP = nextP;
       continue;

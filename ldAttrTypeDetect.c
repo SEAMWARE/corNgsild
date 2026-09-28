@@ -16,7 +16,7 @@
 #include "corNgsild/ldTypes.h"                            // ldAttrTypeFromString, ldAttrTypeToString
 #include "corNgsild/ldAttrTypeDetect.h"                   // Own interface
 #include "corNgsild/ldTraceLevels.h"                      // LdTDetect
-#include "corNgsild/ldTermId.h"                         // ldTermId, CorTerm*
+#include "corNgsild/ldTermId.h"                           // ldTermId, CorTerm*
 
 
 
@@ -71,12 +71,12 @@ LdAttrType ldAttrTypeDetect(CorNode* attrP)
   for (CorNode* childP = attrP->value.head; childP != NULL; childP = childP->next)
   {
     if      (ldTermId(childP) == CorTermValue)  detected = LdAttrProperty;
-    else if (ldTermId(childP) == CorTermObject)  detected = LdAttrRelationship;
+    else if (ldTermId(childP) == CorTermObject)       detected = LdAttrRelationship;
     else if (ldTermId(childP) == CorTermLanguageMap)  detected = LdAttrLanguageProperty;
-    else if (ldTermId(childP) == CorTermVocab)  detected = LdAttrVocabProperty;
-    else if (ldTermId(childP) == CorTermValueList)  detected = LdAttrListProperty;
-    else if (ldTermId(childP) == CorTermObjectList)  detected = LdAttrListRelationship;
-    else if (ldTermId(childP) == CorTermJson)  detected = LdAttrJsonProperty;
+    else if (ldTermId(childP) == CorTermVocab)        detected = LdAttrVocabProperty;
+    else if (ldTermId(childP) == CorTermValueList)    detected = LdAttrListProperty;
+    else if (ldTermId(childP) == CorTermObjectList)   detected = LdAttrListRelationship;
+    else if (ldTermId(childP) == CorTermJson)         detected = LdAttrJsonProperty;
 
     if (detected != LdAttrNone)
     {

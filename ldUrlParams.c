@@ -34,7 +34,7 @@
 #include "corNgsild/LdScopeExpr.h"                        // ldScopeExprParse
 #include "corNgsild/LdTypeExpr.h"                         // ldTypeExprParse
 #include "corNgsild/ldToAggregatedValues.h"              // ldIso8601DurationParse, LdDuration
-#include "corNgsild/CorNgsild.h"                           // Own interface
+#include "corNgsild/CorNgsild.h"                         // Own interface
 
 
 

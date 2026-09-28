@@ -19,8 +19,8 @@
 
 #include "corNgsild/LdVocab.h"                         // LD_VOCAB_*
 #include "corNgsild/ldEntityAttrsSet.h"                // Own interface
-#include "corNgsild/ldIsEntityKeyword.h"                   // ldIsNotAttributeName
-#include "corNgsild/ldTermId.h"                         // ldTermId, CorTerm*
+#include "corNgsild/ldIsEntityKeyword.h"               // ldIsNotAttributeName
+#include "corNgsild/ldTermId.h"                        // ldTermId, CorTerm*
 
 
 

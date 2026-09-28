@@ -21,20 +21,21 @@
 #include "corAlloc/CorAlloc.h"                         // CorAlloc
 #include "corAlloc/corAlloc.h"                         // corAlloc
 #include "corTree/CorNode.h"                            // CorNode
-#include "corTree/corTreeBuilder.h"                      // corTreeObject
+#include "corTree/corTreeBuilder.h"                     // corTreeObject
 #include "corTree/corTreeChildReplace.h"                // corTreeChildReplace
 #include "corTree/corTreeLookup.h"                      // corTreeLookup
 
 #include "corJsonld/corLdExpand.h"                          // KJF_CORE_TERM
+#include "corNgsild/ldAttrMember.h"                         // ldAttrMemberOf
 #include "corNgsild/ldError.h"                            // ldError
 #include "corNgsild/LdProblem.h"                          // LD_ERROR_BAD_REQUEST_DATA
 #include "corNgsild/LdVocab.h"                            // LD_VOCAB_*
 #include "corNgsild/LdAttrType.h"                         // LdAttrType
 #include "corNgsild/ldTypes.h"                             // ldAttrTypeToString, ldAttrTypeFromString
 #include "corNgsild/ldAttrTypeDetect.h"                   // ldAttrTypeDetect
-#include "corNgsild/ldIsEntityKeyword.h"                   // ldIsEntityKeyword
+#include "corNgsild/ldIsEntityKeyword.h"                  // ldIsEntityKeyword
+#include "corNgsild/ldTermId.h"                           // ldTermId, CorTerm*
 #include "corNgsild/LdNormalizeInput.h"                   // Own interface
-#include "corNgsild/ldTermId.h"                         // ldTermId, CorTerm*
 
 
 
@@ -54,7 +55,7 @@
 //
 static bool isAttrKeyword(const CorNode* nodeP)
 {
-  return ((nodeP->flags & KJF_ATTR_TERM) != 0);
+  return ldAttrMemberOf((CorNode*) nodeP) != 0;   // an Attribute's own member - not a sub-attribute
 }
 
 
@@ -67,13 +68,13 @@ static bool hasValueKey(CorNode* objP)
 {
   for (CorNode* childP = objP->value.head; childP != NULL; childP = childP->next)
   {
-    if (ldTermId(childP) == CorTermValue)  return true;
-    if (ldTermId(childP) == CorTermObject)  return true;
+    if (ldTermId(childP) == CorTermValue)        return true;
+    if (ldTermId(childP) == CorTermObject)       return true;
     if (ldTermId(childP) == CorTermLanguageMap)  return true;
-    if (ldTermId(childP) == CorTermVocab)  return true;
-    if (ldTermId(childP) == CorTermValueList)  return true;
-    if (ldTermId(childP) == CorTermObjectList)  return true;
-    if (ldTermId(childP) == CorTermJson)  return true;
+    if (ldTermId(childP) == CorTermVocab)        return true;
+    if (ldTermId(childP) == CorTermValueList)    return true;
+    if (ldTermId(childP) == CorTermObjectList)   return true;
+    if (ldTermId(childP) == CorTermJson)         return true;
   }
   return false;
 }

@@ -13,7 +13,7 @@
 
 #include "corAlloc/CorAlloc.h"                         // CorAlloc
 #include "corTree/CorNode.h"                            // CorNode
-#include "corTree/corTreeBuilder.h"                      // corTreeObject
+#include "corTree/corTreeBuilder.h"                     // corTreeObject
 #include "corTree/corTreeChildReplace.h"                // corTreeChildReplace
 #include "corTree/corTreeLookup.h"                      // corTreeLookup
 #include "corRest/corRest.h"                             // corRest
@@ -22,10 +22,10 @@
 #include "corNgsild/LdVocab.h"                            // LD_VOCAB_*
 #include "corNgsild/LdAttrType.h"                         // LdAttrType, LdAttrGeoProperty
 #include "corNgsild/ldAttrTypeDetect.h"                   // ldAttrTypeDetect
-#include "corNgsild/ldIsEntityKeyword.h"                   // ldIsEntityKeyword
+#include "corNgsild/ldIsEntityKeyword.h"                  // ldIsEntityKeyword
 #include "corNgsild/ldCheckDateTime.h"                    // ldIsoToNanoseconds
+#include "corNgsild/ldTermId.h"                           // ldTermId, CorTerm*
 #include "corNgsild/ldApiEntityToDbModel.h"               // Own interface
-#include "corNgsild/ldTermId.h"                         // ldTermId, CorTerm*
 
 
 
