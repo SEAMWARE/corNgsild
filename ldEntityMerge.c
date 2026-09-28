@@ -44,6 +44,7 @@
 #include "corNgsild/CorNgsild.h"                        // corNgsild (lang, observedAtNs)
 #include "corNgsild/ldIsEntityKeyword.h"               // ldIsEntityKeyword
 #include "corNgsild/ldEntityMerge.h"                   // Own interface
+#include "corNgsild/ldTermId.h"                         // ldTermId, CorTerm*
 
 
 
@@ -576,8 +577,8 @@ static bool rfc7396Merge(CorNode* targetP, CorNode* patchP, uint64_t ts, CorAllo
     // never be overwritten on the target, and modifiedAt is handled separately
     // by bumpModifiedAt on the way back up.
     if (pChild->name != NULL &&
-        (strcmp(pChild->name, LD_VOCAB_CREATED_AT)  == 0 ||
-         strcmp(pChild->name, LD_VOCAB_MODIFIED_AT) == 0))
+        (ldTermId(pChild) == CorTermCreatedAt ||
+         ldTermId(pChild) == CorTermModifiedAt))
     {
       pChild = pNext;
       continue;
@@ -596,7 +597,7 @@ static bool rfc7396Merge(CorNode* targetP, CorNode* patchP, uint64_t ts, CorAllo
     //   - true Merge Entity (RFC 7396, § 10.2.9): the value is a normal JSON
     //     value and a merge surgically deep-merges object values (keeping
     //     unspecified siblings; null deletes), per RFC 7396.
-    bool replaceWhole = (deepValueMerge == false) && (pChild->name != NULL && strcmp(pChild->name, "value") == 0);
+    bool replaceWhole = (deepValueMerge == false) && (pChild->name != NULL && ldTermId(pChild) == CorTermValue);
 
     if (isNgsildNull(pChild))
     {

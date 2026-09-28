@@ -28,6 +28,7 @@
 #include "corNgsild/ldIsEntityKeyword.h"                   // ldIsEntityKeyword
 #include "corNgsild/ldCheckEntity.h"                      // Own interface
 #include "corNgsild/ldTraceLevels.h"                      // LdTCheckEnt
+#include "corNgsild/ldTermId.h"                         // ldTermId, CorTerm*
 
 
 
@@ -122,7 +123,7 @@ bool ldCheckEntity(CorNode* entityP, LdOp op, CorNode* dbEntityP, CorAlloc* faP)
       return false;
     }
 
-    if (strcmp(childP->name, "id") == 0)
+    if (ldTermId(childP) == CorTermId)
     {
       DUPLICATE_FLAG_CHECK(hasId, hasAtId, "Duplicate Id", "Duplicate 'id' / '@id' in entity");
       hasId   = true;
@@ -135,7 +136,7 @@ bool ldCheckEntity(CorNode* entityP, LdOp op, CorNode* dbEntityP, CorAlloc* faP)
       childP->name = (char*) "id";    // normalize the JSON-LD keyword to the short NGSI-LD form
       idNodeP = childP;
     }
-    else if (strcmp(childP->name, "type") == 0)
+    else if (ldTermId(childP) == CorTermType)
     {
       DUPLICATE_FLAG_CHECK(hasType, hasAtType, "Duplicate Type", "Duplicate 'type' / '@type' in entity");
       hasType    = true;
@@ -263,7 +264,7 @@ bool ldCheckEntity(CorNode* entityP, LdOp op, CorNode* dbEntityP, CorAlloc* faP)
   // Validate scope if present
   for (CorNode* childP = entityP->value.head; childP != NULL; childP = childP->next)
   {
-    if (strcmp(childP->name, LD_VOCAB_SCOPE) == 0)
+    if (ldTermId(childP) == CorTermScope)
     {
       if (childP->type == CorString)
       {
@@ -327,7 +328,7 @@ bool ldCheckEntity(CorNode* entityP, LdOp op, CorNode* dbEntityP, CorAlloc* faP)
   //
   for (CorNode* childP = entityP->value.head; childP != NULL; childP = childP->next)
   {
-    if (strcmp(childP->name, LD_VOCAB_EXPIRES_AT) != 0)
+    if (ldTermId(childP) != CorTermExpiresAt)
       continue;
 
     if (childP->type != CorString)

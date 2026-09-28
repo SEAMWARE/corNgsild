@@ -25,6 +25,7 @@
 #include "corNgsild/ldIsEntityKeyword.h"                   // ldIsEntityKeyword
 #include "corNgsild/ldCheckDateTime.h"                    // ldIsoToNanoseconds
 #include "corNgsild/ldApiEntityToDbModel.h"               // Own interface
+#include "corNgsild/ldTermId.h"                         // ldTermId, CorTerm*
 
 
 
@@ -54,7 +55,7 @@ static void ldGeoValueUnexpand(CorNode* geoValueP)
       childP->name = childP->name + LD_VOCAB_GEOJSON_PREFIX_LEN;
 
     // Un-expand the "type" value: "https://purl.org/geojson/vocab#Point" -> "Point"
-    if (strcmp(childP->name, "type") == 0 && childP->type == CorString)
+    if (ldTermId(childP) == CorTermType && childP->type == CorString)
     {
       if (strncmp(childP->value.s, LD_VOCAB_GEOJSON_PREFIX, LD_VOCAB_GEOJSON_PREFIX_LEN) == 0)
         childP->value.s = childP->value.s + LD_VOCAB_GEOJSON_PREFIX_LEN;
@@ -107,8 +108,8 @@ static void temporalPropertiesToNanoseconds(CorNode* attrP)
 {
   for (CorNode* childP = attrP->value.head; childP != NULL; childP = childP->next)
   {
-    bool isTemporal = (strcmp(childP->name, LD_VOCAB_OBSERVED_AT) == 0 ||
-                       strcmp(childP->name, LD_VOCAB_EXPIRES_AT)  == 0);
+    bool isTemporal = (ldTermId(childP) == CorTermObservedAt ||
+                       ldTermId(childP) == CorTermExpiresAt);
     if (!isTemporal)
       continue;
 
@@ -366,7 +367,7 @@ void ldApiEntityToDbModel(CorNode* entityP, CorAlloc* faP, int64_t createdAt)
   //   - CorObject: {"@value": "2026-...", "@type": "DateTime"} (expanded by JSON-LD)
   for (CorNode* cP = entityP->value.head; cP != NULL; cP = cP->next)
   {
-    if (strcmp(cP->name, LD_VOCAB_EXPIRES_AT) != 0)
+    if (ldTermId(cP) != CorTermExpiresAt)
       continue;
 
     if (cP->type == CorString)

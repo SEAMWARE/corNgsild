@@ -20,6 +20,7 @@
 #include "corNgsild/LdVocab.h"                         // LD_VOCAB_*
 #include "corNgsild/ldEntityAttrsSet.h"                // Own interface
 #include "corNgsild/ldIsEntityKeyword.h"                   // ldIsNotAttributeName
+#include "corNgsild/ldTermId.h"                         // ldTermId, CorTerm*
 
 
 
@@ -380,7 +381,7 @@ void ldEntityAttrsSet(CorNode* target, CorNode* fragment,
   {
     if (fP->name == NULL)
       continue;
-    if (strcmp(fP->name, "type") == 0)
+    if (ldTermId(fP) == CorTermType)
     {
       applyType(target, fP, targetAllocP);
       anyChange = true;
@@ -390,13 +391,13 @@ void ldEntityAttrsSet(CorNode* target, CorNode* fragment,
       // hasSet, and the in-memory union wouldn't persist (ETSI 011_06_*).
       addReportEntry(reportP, "type", "entityModified", NULL);
     }
-    else if (strcmp(fP->name, LD_VOCAB_SCOPE) == 0)
+    else if (ldTermId(fP) == CorTermScope)
     {
       applyScope(target, fP, overwriteScope, targetAllocP);
       anyChange = true;
       addReportEntry(reportP, LD_VOCAB_SCOPE, "entityModified", NULL);
     }
-    else if (strcmp(fP->name, LD_VOCAB_EXPIRES_AT) == 0)
+    else if (ldTermId(fP) == CorTermExpiresAt)
     {
       //
       // An Entity member like the two above, and reported the same way - a fragment carrying

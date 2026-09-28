@@ -24,6 +24,7 @@
 #include "corJsonld/corLdCompactTree.h"                      // corLdCompactTree, corLdCompactTreeWith
 #include "corJsonld/corLdDownload.h"                         // corLdContextFromUrl
 
+#include "corNgsild/ldAliasCanonicalize.h"                // ldAliasCanonicalize
 #include "corNgsild/ldContextHost.h"                      // ldContextHostVolatile
 #include "corNgsild/LdProblem.h"                          // LD_ERROR_*
 #include "corNgsild/LdVocab.h"                            // LD_VOCAB_*
@@ -43,6 +44,7 @@
 #include "corNgsild/ldRender.h"                           // ldToSimplified, ldToConcise
 #include "corNgsild/LdNormalizeInput.h"                    // ldNormalizeInput
 #include "corNgsild/ldHooks.h"                            // Own interface
+#include "corNgsild/ldTermId.h"                         // ldTermId, CorTerm*
 
 
 
@@ -321,7 +323,7 @@ static bool checkRawInputTree(CorNode* nodeP, bool checkEmpty)
 
     for (CorNode* cP = nodeP->value.head; cP != NULL; cP = cP->next)
     {
-      if ((cP->name != NULL) && ((strcmp(cP->name, LD_VOCAB_HAS_JSON) == 0) || (strcmp(cP->name, "@context") == 0)))
+      if ((cP->name != NULL) && ((ldTermId(cP) == CorTermJson) || (strcmp(cP->name, "@context") == 0)))
         continue;  // opaque JSON literal / JSON-LD context — not NGSI-LD structure
 
       if (checkRawInputTree(cP, checkEmpty) == false)
@@ -662,7 +664,7 @@ static void ldParseHook(void)
       CorNode* prev = NULL;
       for (CorNode* c = corRest.in.requestTree->value.head; c != NULL; c = c->next)
       {
-        if (c->name != NULL && strcmp(c->name, "type") == 0) { typeP = c; typePrevP = prev; break; }
+        if (c->name != NULL && ldTermId(c) == CorTermType) { typeP = c; typePrevP = prev; break; }
         prev = c;
       }
       bool isCreate = (corRest.in.verb == CorVerbPost);
@@ -886,7 +888,7 @@ static void ldParseHook(void)
         CorNode* tP  = NULL;
         for (CorNode* c = selP->value.head; c != NULL; c = c->next)
         {
-          if (c->name != NULL && strcmp(c->name, "type") == 0) { tP = c; break; }
+          if (c->name != NULL && ldTermId(c) == CorTermType) { tP = c; break; }
           prev = c;
         }
         if (tP == NULL || tP->type != CorString || tP->value.s == NULL) continue;
@@ -978,6 +980,16 @@ static void ldParseHook(void)
       corNgsild.contextError = true;
       return;
     }
+  }
+
+  //
+  // One spelling for id and type from here on: "@id"/"@type" become "id"/"type", and a
+  // container with both is a 400 (see ldAliasCanonicalize.h).
+  //
+  if ((corRest.in.requestTree != NULL) && (ldAliasCanonicalize(corRest.in.requestTree) == false))
+  {
+    corNgsild.contextError = true;
+    return;
   }
 
   // If a user context URL was provided but expansion fell back to core context, the download failed.
@@ -1118,12 +1130,12 @@ static void filterDatasetId(CorNode* entityP, char** datasetIdV)
 
     // Skip entity-level keywords (id, type, @context, scope, timestamps)
     if (childP->type != CorObject || childP->name == NULL
-        || strcmp(childP->name, "id")   == 0 || strcmp(childP->name, "@id")   == 0
-        || strcmp(childP->name, "type") == 0 || strcmp(childP->name, "@type") == 0
+        || ldTermId(childP) == CorTermId || strcmp(childP->name, "@id")   == 0
+        || ldTermId(childP) == CorTermType || strcmp(childP->name, "@type") == 0
         || strcmp(childP->name, "@context") == 0
-        || strcmp(childP->name, LD_VOCAB_SCOPE)       == 0
-        || strcmp(childP->name, LD_VOCAB_CREATED_AT)  == 0
-        || strcmp(childP->name, LD_VOCAB_MODIFIED_AT) == 0)
+        || ldTermId(childP) == CorTermScope
+        || ldTermId(childP) == CorTermCreatedAt
+        || ldTermId(childP) == CorTermModifiedAt)
     {
       childP = nextP;
       continue;

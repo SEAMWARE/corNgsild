@@ -64,6 +64,7 @@
 #include "corNgsild/ldThrottleDirty.h"                  // ldThrottleDirtyUpsert/Drain/EntriesFree
 #include "corNgsild/ldPeriodicLoop.h"                   // ldPeriodicLoopRegister
 #include "corNgsild/ldSubscriptionNotify.h"             // Own interface
+#include "corNgsild/ldTermId.h"                         // ldTermId, CorTerm*
 
 
 
@@ -609,7 +610,7 @@ static CorNode* buildNotifDataEntry(LdSubCacheItem*      itemP,
       CorNode* nextAttr = attrP->next;
 
       if (attrP->type != CorObject || attrP->name == NULL ||
-          strcmp(attrP->name, "id") == 0 || strcmp(attrP->name, "type") == 0)
+          ldTermId(attrP) == CorTermId || ldTermId(attrP) == CorTermType)
       {
         attrP = nextAttr;
         continue;
@@ -719,9 +720,9 @@ static CorNode* buildNotifDataEntry(LdSubCacheItem*      itemP,
       CorNode* nextP = childP->next;
 
       if (childP->name != NULL &&
-          strcmp(childP->name, "id")    != 0 &&
-          strcmp(childP->name, "type")  != 0 &&
-          strcmp(childP->name, "scope") != 0)
+          ldTermId(childP) != CorTermId &&
+          ldTermId(childP) != CorTermType &&
+          ldTermId(childP) != CorTermScope)
       {
         bool keep = false;
         for (int i = 0; itemP->notifAttrsV[i] != NULL; i++)

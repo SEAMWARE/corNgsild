@@ -23,6 +23,7 @@
 #include "corNgsild/LdVocab.h"                            // LD_VOCAB_OBSERVED_AT, LD_VOCAB_MODIFIED_AT, LD_VOCAB_EXPIRES_AT, LD_VOCAB_SCOPE
 #include "corNgsild/ldCheckDateTime.h"                    // ldIsoToNanoseconds
 #include "corNgsild/ldDistMerge.h"                        // Own interface
+#include "corNgsild/ldTermId.h"                         // ldTermId, CorTerm*
 
 
 
@@ -255,9 +256,9 @@ void ldDistMergeSourceInto(CorNode* destP, CorNode* srcP, int64_t nowNs, CorAllo
     // driver) needs no filtering of its own.
     //
     if ((srcAttrP->name == NULL) || (srcAttrP->name[0] == '@') ||
-        (strcmp(srcAttrP->name, "id")   == 0) ||
+        (ldTermId(srcAttrP) == CorTermId) ||
         (strcmp(srcAttrP->name, "_id")  == 0) ||
-        (strcmp(srcAttrP->name, "type") == 0) ||
+        (ldTermId(srcAttrP) == CorTermType) ||
         (srcAttrP->type != CorObject))
     {
       srcAttrP = nextSrcAttr;

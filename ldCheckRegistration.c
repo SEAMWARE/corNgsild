@@ -36,6 +36,7 @@
 #include "corNgsild/ldError.h"                            // ldError
 #include "corNgsild/ldCheckRegistration.h"                // Own interface
 #include "corNgsild/ldTraceLevels.h"                      // LdTCheckReg
+#include "corNgsild/ldTermId.h"                         // ldTermId, CorTerm*
 
 
 
@@ -56,9 +57,9 @@ static bool checkEntityInfo(CorNode* entP)
 
   for (CorNode* fP = entP->value.head; fP != NULL; fP = fP->next)
   {
-    if      (strcmp(fP->name, "type") == 0)                    typeP  = fP;
-    else if (strcmp(fP->name, "id") == 0)                      idP    = fP;
-    else if (strcmp(fP->name, LD_VOCAB_ID_PATTERN) == 0)       idPatP = fP;
+    if      (ldTermId(fP) == CorTermType)                    typeP  = fP;
+    else if (ldTermId(fP) == CorTermId)                      idP    = fP;
+    else if (ldTermId(fP) == CorTermIdPattern)       idPatP = fP;
     else
     {
       // EntityInfo (§ 5.2.8) is a closed set: type, id, idPattern.
@@ -238,10 +239,10 @@ static bool checkInformationArray(CorNode* infoArrayP)
 
     for (CorNode* fP = infoP->value.head; fP != NULL; fP = fP->next)
     {
-      if      (strcmp(fP->name, LD_VOCAB_ENTITIES)   == 0)  entitiesP  = fP;
-      else if (strcmp(fP->name, "attributeNames")    == 0)  attrNamesP = fP;
-      else if (strcmp(fP->name, "propertyNames")     == 0)  propsP     = fP;
-      else if (strcmp(fP->name, "relationshipNames") == 0)  relsP      = fP;
+      if      (ldTermId(fP) == CorTermEntities)  entitiesP  = fP;
+      else if (ldTermId(fP) == CorTermAttributeNames)  attrNamesP = fP;
+      else if (ldTermId(fP) == CorTermPropertyNames)  propsP     = fP;
+      else if (ldTermId(fP) == CorTermRelationshipNames)  relsP      = fP;
       else
       {
         // RegistrationInfo (§ 5.2.10) is a closed set.
@@ -356,8 +357,8 @@ static bool checkContextSourceInfo(CorNode* arrP)
 
     for (CorNode* fP = kvP->value.head; fP != NULL; fP = fP->next)
     {
-      if      (strcmp(fP->name, "key")   == 0)  keyP   = fP;
-      else if (strcmp(fP->name, "value") == 0)  valueP = fP;
+      if      (ldTermId(fP) == CorTermKey)  keyP   = fP;
+      else if (ldTermId(fP) == CorTermValue)  valueP = fP;
       else
       {
         // KeyValuePair (§ 5.2.22) is a closed set: key, value.
@@ -483,8 +484,8 @@ static bool checkTimeInterval(CorNode* tiP, const char* fieldName, bool complete
   CorNode* endP  = NULL;
   for (CorNode* fP = tiP->value.head; fP != NULL; fP = fP->next)
   {
-    if      (strcmp(fP->name, "startAt") == 0) startP = fP;
-    else if (strcmp(fP->name, "endAt")   == 0) endP   = fP;
+    if      (ldTermId(fP) == CorTermStartAt) startP = fP;
+    else if (ldTermId(fP) == CorTermEndAt) endP   = fP;
   }
 
   if (complete && startP == NULL)
@@ -591,7 +592,7 @@ static bool checkManagement(CorNode* mgmtP)
 
   for (CorNode* fP = mgmtP->value.head; fP != NULL; fP = fP->next)
   {
-    if (strcmp(fP->name, "cacheDuration") == 0)
+    if (ldTermId(fP) == CorTermCacheDuration)
     {
       if (fP->type != CorString || !isIsoDuration(fP->value.s))
       {
@@ -600,7 +601,7 @@ static bool checkManagement(CorNode* mgmtP)
         return false;
       }
     }
-    else if (strcmp(fP->name, "timeout") == 0 || strcmp(fP->name, "cooldown") == 0)
+    else if (ldTermId(fP) == CorTermTimeout || ldTermId(fP) == CorTermCooldown)
     {
       double v = 0;
       if      (fP->type == CorInt)  v = (double) fP->value.i;
@@ -619,7 +620,7 @@ static bool checkManagement(CorNode* mgmtP)
         return false;
       }
     }
-    else if (strcmp(fP->name, "localOnly") == 0)
+    else if (ldTermId(fP) == CorTermLocalOnly)
     {
       if (fP->type != CorBoolean)
       {
@@ -841,7 +842,7 @@ bool ldCheckRegistration(CorNode* regP, LdOp op, bool merged, CorAlloc* faP)
       }
       if (childP->type == CorString && strcmp(childP->value.s, LD_VOCAB_NGSILD_NULL) == 0)
       {
-        if (strcmp(childP->name, LD_VOCAB_INFORMATION) == 0 || strcmp(childP->name, LD_VOCAB_ENDPOINT) == 0)
+        if (ldTermId(childP) == CorTermInformation || ldTermId(childP) == CorTermEndpoint)
         {
           ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
                   "'%s' is mandatory and cannot be deleted", childP->name);
@@ -858,26 +859,26 @@ bool ldCheckRegistration(CorNode* regP, LdOp op, bool merged, CorAlloc* faP)
       return false;
     }
 
-    if      (strcmp(childP->name, "type")                 == 0)  typeP                = childP;
-    else if (strcmp(childP->name, LD_VOCAB_INFORMATION)   == 0)  infoP                = childP;
-    else if (strcmp(childP->name, LD_VOCAB_ENDPOINT)      == 0)  endpointP            = childP;
-    else if (strcmp(childP->name, LD_VOCAB_MODE)          == 0)  modeP                = childP;
-    else if (strcmp(childP->name, LD_VOCAB_EXPIRES_AT)    == 0)  expiresAtP           = childP;
-    else if (strcmp(childP->name, "operations")           == 0)  operationsP          = childP;
-    else if (strcmp(childP->name, "contextSourceInfo")    == 0)  contextSrcInfoP      = childP;
-    else if (strcmp(childP->name, "description")          == 0)  descriptionP         = childP;
-    else if (strcmp(childP->name, "registrationName")     == 0)  registrationNameP    = childP;
-    else if (strcmp(childP->name, "contextSourceAlias")   == 0)  csourceAliasP        = childP;
-    else if (strcmp(childP->name, "tenant")               == 0)  tenantP              = childP;
-    else if (strcmp(childP->name, LD_VOCAB_SCOPE)         == 0)  scopeP               = childP;
-    else if (strcmp(childP->name, "refreshRate")          == 0)  refreshRateP         = childP;
-    else if (strcmp(childP->name, "observationInterval")  == 0)  observationIntervalP = childP;
-    else if (strcmp(childP->name, "managementInterval")   == 0)  managementIntervalP  = childP;
-    else if (strcmp(childP->name, "management")           == 0)  managementP          = childP;
-    else if (strcmp(childP->name, LD_VOCAB_DATASET_ID)    == 0)  datasetIdP           = childP;
-    else if (strcmp(childP->name, "location")             == 0)  locationP            = childP;
-    else if (strcmp(childP->name, "observationSpace")     == 0)  observationSpaceP    = childP;
-    else if (strcmp(childP->name, "operationSpace")       == 0)  operationSpaceP      = childP;
+    if      (ldTermId(childP) == CorTermType)  typeP                = childP;
+    else if (ldTermId(childP) == CorTermInformation)  infoP                = childP;
+    else if (ldTermId(childP) == CorTermEndpoint)  endpointP            = childP;
+    else if (ldTermId(childP) == CorTermMode)  modeP                = childP;
+    else if (ldTermId(childP) == CorTermExpiresAt)  expiresAtP           = childP;
+    else if (ldTermId(childP) == CorTermOperations)  operationsP          = childP;
+    else if (ldTermId(childP) == CorTermContextSourceInfo)  contextSrcInfoP      = childP;
+    else if (ldTermId(childP) == CorTermDescription)  descriptionP         = childP;
+    else if (ldTermId(childP) == CorTermRegistrationName)  registrationNameP    = childP;
+    else if (ldTermId(childP) == CorTermContextSourceAlias)  csourceAliasP        = childP;
+    else if (ldTermId(childP) == CorTermTenant)  tenantP              = childP;
+    else if (ldTermId(childP) == CorTermScope)  scopeP               = childP;
+    else if (ldTermId(childP) == CorTermRefreshRate)  refreshRateP         = childP;
+    else if (ldTermId(childP) == CorTermObservationInterval)  observationIntervalP = childP;
+    else if (ldTermId(childP) == CorTermManagementInterval)  managementIntervalP  = childP;
+    else if (ldTermId(childP) == CorTermManagement)  managementP          = childP;
+    else if (ldTermId(childP) == CorTermDatasetId)  datasetIdP           = childP;
+    else if (ldTermId(childP) == CorTermLocation)  locationP            = childP;
+    else if (ldTermId(childP) == CorTermObservationSpace)  observationSpaceP    = childP;
+    else if (ldTermId(childP) == CorTermOperationSpace)  operationSpaceP      = childP;
   }
 
   // `type` is validated AND stripped by ldParseHook for /csourceRegistrations —

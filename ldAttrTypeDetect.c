@@ -16,6 +16,7 @@
 #include "corNgsild/ldTypes.h"                            // ldAttrTypeFromString, ldAttrTypeToString
 #include "corNgsild/ldAttrTypeDetect.h"                   // Own interface
 #include "corNgsild/ldTraceLevels.h"                      // LdTDetect
+#include "corNgsild/ldTermId.h"                         // ldTermId, CorTerm*
 
 
 
@@ -52,7 +53,7 @@ LdAttrType ldAttrTypeDetect(CorNode* attrP)
 
   for (CorNode* childP = attrP->value.head; childP != NULL; childP = childP->next)
   {
-    if (strcmp(childP->name, "type") == 0)
+    if (ldTermId(childP) == CorTermType)
     {
       if (childP->type == CorString)
       {
@@ -69,13 +70,13 @@ LdAttrType ldAttrTypeDetect(CorNode* attrP)
   // No explicit type - infer from value key (expanded IRIs)
   for (CorNode* childP = attrP->value.head; childP != NULL; childP = childP->next)
   {
-    if      (strcmp(childP->name, LD_VOCAB_HAS_VALUE)        == 0)  detected = LdAttrProperty;
-    else if (strcmp(childP->name, LD_VOCAB_HAS_OBJECT)       == 0)  detected = LdAttrRelationship;
-    else if (strcmp(childP->name, LD_VOCAB_HAS_LANGUAGE_MAP) == 0)  detected = LdAttrLanguageProperty;
-    else if (strcmp(childP->name, LD_VOCAB_HAS_VOCAB)        == 0)  detected = LdAttrVocabProperty;
-    else if (strcmp(childP->name, LD_VOCAB_HAS_VALUE_LIST)   == 0)  detected = LdAttrListProperty;
-    else if (strcmp(childP->name, LD_VOCAB_HAS_OBJECT_LIST)  == 0)  detected = LdAttrListRelationship;
-    else if (strcmp(childP->name, LD_VOCAB_HAS_JSON)         == 0)  detected = LdAttrJsonProperty;
+    if      (ldTermId(childP) == CorTermValue)  detected = LdAttrProperty;
+    else if (ldTermId(childP) == CorTermObject)  detected = LdAttrRelationship;
+    else if (ldTermId(childP) == CorTermLanguageMap)  detected = LdAttrLanguageProperty;
+    else if (ldTermId(childP) == CorTermVocab)  detected = LdAttrVocabProperty;
+    else if (ldTermId(childP) == CorTermValueList)  detected = LdAttrListProperty;
+    else if (ldTermId(childP) == CorTermObjectList)  detected = LdAttrListRelationship;
+    else if (ldTermId(childP) == CorTermJson)  detected = LdAttrJsonProperty;
 
     if (detected != LdAttrNone)
     {

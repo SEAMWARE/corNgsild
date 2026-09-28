@@ -19,6 +19,7 @@
 #include "corTree/corTreeLookup.h"                       // corTreeLookup
 #include "corNgsild/LdVocab.h"                            // LD_VOCAB_CREATED_AT, LD_VOCAB_MODIFIED_AT
 #include "corNgsild/ldSysTimestamp.h"                     // Own interface
+#include "corNgsild/ldTermId.h"                         // ldTermId, CorTerm*
 
 
 
@@ -79,8 +80,8 @@ void ldSysTimestampsToIso(CorNode* treeP, CorAlloc* allocP)
   for (CorNode* childP = treeP->value.head; childP != NULL; childP = childP->next)
   {
     if (childP->type == CorInt &&
-        (strcmp(childP->name, LD_VOCAB_CREATED_AT)  == 0 ||
-         strcmp(childP->name, LD_VOCAB_MODIFIED_AT) == 0))
+        (ldTermId(childP) == CorTermCreatedAt ||
+         ldTermId(childP) == CorTermModifiedAt))
     {
       char  isoBuf[32];
       ldSysTimestampToIso(childP->value.i, isoBuf, sizeof(isoBuf));

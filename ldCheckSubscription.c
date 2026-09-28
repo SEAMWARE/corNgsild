@@ -42,6 +42,7 @@
 #include "corNgsild/ldCheckSubscription.h"                // Own interface
 #include "corNgsild/ldConformanceDowngrade.h"             // ldConformanceParse
 #include "corNgsild/ldTraceLevels.h"                      // LdTCheckSub
+#include "corNgsild/ldTermId.h"                         // ldTermId, CorTerm*
 
 
 
@@ -258,7 +259,7 @@ static bool checkEndpoint(CorNode* endpointP, bool complete)
 
   for (CorNode* childP = endpointP->value.head; childP != NULL; childP = childP->next)
   {
-    if (strcmp(childP->name, LD_VOCAB_URI) == 0)
+    if (ldTermId(childP) == CorTermUri)
     {
       DUPLICATE_CHECK(uriP, "notification.endpoint.uri", childP);
       STRING_CHECK(childP, "Invalid Subscription", "'notification.endpoint.uri' must be a string");
@@ -269,7 +270,7 @@ static bool checkEndpoint(CorNode* endpointP, bool complete)
       }
       URI_CHECK(childP->value.s);
     }
-    else if (strcmp(childP->name, "https://uri.etsi.org/ngsi-ld/accept") == 0 || strcmp(childP->name, "accept") == 0)
+    else if (strcmp(childP->name, "https://uri.etsi.org/ngsi-ld/accept") == 0 || ldTermId(childP) == CorTermAccept)
     {
       DUPLICATE_CHECK(acceptP, "notification.endpoint.accept", childP);
       STRING_CHECK(childP, "Invalid Subscription", "'notification.endpoint.accept' must be a string");
@@ -286,11 +287,11 @@ static bool checkEndpoint(CorNode* endpointP, bool complete)
         return false;
       }
     }
-    else if (strcmp(childP->name, "notifierInfo") == 0)
+    else if (ldTermId(childP) == CorTermNotifierInfo)
     {
       if (!checkNotifierInfo(childP)) return false;
     }
-    else if (strcmp(childP->name, "receiverInfo") == 0)
+    else if (ldTermId(childP) == CorTermReceiverInfo)
     {
       receiverInfoP = childP;  // validated after the loop, once acceptP is known (member order-independent)
     }
@@ -329,11 +330,11 @@ static bool checkNotification(CorNode* notifP, bool complete, bool merged, LdFor
 
   for (CorNode* childP = notifP->value.head; childP != NULL; childP = childP->next)
   {
-    if (strcmp(childP->name, LD_VOCAB_ENDPOINT) == 0)
+    if (ldTermId(childP) == CorTermEndpoint)
     {
       DUPLICATE_CHECK(endpointP, "notification.endpoint", childP);
     }
-    else if (strcmp(childP->name, LD_VOCAB_FORMAT) == 0 || strcmp(childP->name, "format") == 0)
+    else if (ldTermId(childP) == CorTermFormat || ldTermId(childP) == CorTermFormat)
     {
       DUPLICATE_CHECK(formatP, "notification.format", childP);
       STRING_CHECK(childP, "Invalid Subscription", "'notification.format' must be a string");
@@ -359,7 +360,7 @@ static bool checkNotification(CorNode* notifP, bool complete, bool merged, LdFor
           *notifFormatP = fmt;
       }
     }
-    else if (strcmp(childP->name, LD_VOCAB_ATTRIBUTES) == 0 || strcmp(childP->name, "attributes") == 0)
+    else if (ldTermId(childP) == CorTermAttributes || ldTermId(childP) == CorTermAttributes)
     {
       DUPLICATE_CHECK(attributesP, "notification.attributes", childP);
       ARRAY_CHECK(childP, "Invalid Subscription", "'notification.attributes' must be an array");
@@ -391,7 +392,7 @@ static bool checkNotification(CorNode* notifP, bool complete, bool merged, LdFor
         }
       }
     }
-    else if (strcmp(childP->name, "pick") == 0)
+    else if (ldTermId(childP) == CorTermPick)
     {
       DUPLICATE_CHECK(pickP, "notification.pick", childP);
       ARRAY_CHECK(childP, "Invalid Subscription", "'notification.pick' must be an array");
@@ -406,7 +407,7 @@ static bool checkNotification(CorNode* notifP, bool complete, bool merged, LdFor
         }
       }
     }
-    else if (strcmp(childP->name, "omit") == 0)
+    else if (ldTermId(childP) == CorTermOmit)
     {
       DUPLICATE_CHECK(omitP, "notification.omit", childP);
       ARRAY_CHECK(childP, "Invalid Subscription", "'notification.omit' must be an array");
@@ -421,7 +422,7 @@ static bool checkNotification(CorNode* notifP, bool complete, bool merged, LdFor
         }
       }
     }
-    else if (strcmp(childP->name, "showChanges") == 0)
+    else if (ldTermId(childP) == CorTermShowChanges)
     {
       DUPLICATE_CHECK(showChangesP, "notification.showChanges", childP);
       if (childP->type != CorBoolean)
@@ -431,12 +432,12 @@ static bool checkNotification(CorNode* notifP, bool complete, bool merged, LdFor
         return false;
       }
     }
-    else if (strcmp(childP->name, "status") == 0 ||
-             strcmp(childP->name, "timesSent") == 0 ||
-             strcmp(childP->name, "timesFailed") == 0 ||
-             strcmp(childP->name, "lastNotification") == 0 ||
-             strcmp(childP->name, "lastSuccess") == 0 ||
-             strcmp(childP->name, "lastFailure") == 0)
+    else if (ldTermId(childP) == CorTermStatus ||
+             ldTermId(childP) == CorTermTimesSent ||
+             ldTermId(childP) == CorTermTimesFailed ||
+             ldTermId(childP) == CorTermLastNotification ||
+             ldTermId(childP) == CorTermLastSuccess ||
+             ldTermId(childP) == CorTermLastFailure)
     {
       // Server-owned read-only fields. Rejected when they arrive in a client
       // payload, but tolerated when re-validating a stored/merged document
@@ -573,7 +574,7 @@ static bool checkEntitiesArray(CorNode* entitiesP)
 
     for (CorNode* fieldP = entP->value.head; fieldP != NULL; fieldP = fieldP->next)
     {
-      if (strcmp(fieldP->name, "type") == 0)
+      if (ldTermId(fieldP) == CorTermType)
       {
         STRING_CHECK(fieldP, "Invalid Subscription", "'entities[].type' must be a string");
         if (fieldP->value.s[0] == 0)
@@ -601,7 +602,7 @@ static bool checkEntitiesArray(CorNode* entitiesP)
           corNgsild.subEntityTypeExprsV[entIx] = expr;
         }
       }
-      else if (strcmp(fieldP->name, "id") == 0)
+      else if (ldTermId(fieldP) == CorTermId)
       {
         STRING_CHECK(fieldP, "Invalid Subscription", "'entities[].id' must be a string");
         if (fieldP->value.s[0] == 0)
@@ -611,7 +612,7 @@ static bool checkEntitiesArray(CorNode* entitiesP)
         }
         URI_CHECK(fieldP->value.s);
       }
-      else if (strcmp(fieldP->name, LD_VOCAB_ID_PATTERN) == 0)
+      else if (ldTermId(fieldP) == CorTermIdPattern)
       {
         STRING_CHECK(fieldP, "Invalid Subscription", "'entities[].idPattern' must be a string");
         if (fieldP->value.s[0] == 0)

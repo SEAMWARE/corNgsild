@@ -58,10 +58,8 @@ static inline CorTerm ldTermId(CorNode* nodeP)
 #ifndef DEBUG
   uint16_t id = nodeP->termId;
 
-  if (id == LD_TERM_NOT_CORE)
-    return CorTermNone;
   if (id != 0)
-    return (CorTerm) id;
+    return (CorTerm) (id & ~LD_TERM_NOT_CORE);   // LD_TERM_NOT_CORE masks to 0: CorTermNone
 #endif
 
   return ldTermIdLookup(nodeP);

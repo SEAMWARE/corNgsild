@@ -34,6 +34,7 @@
 #include "corNgsild/ldAttrTypeDetect.h"                   // ldAttrTypeDetect
 #include "corNgsild/ldIsEntityKeyword.h"                   // ldIsEntityKeyword
 #include "corNgsild/LdNormalizeInput.h"                   // Own interface
+#include "corNgsild/ldTermId.h"                         // ldTermId, CorTerm*
 
 
 
@@ -66,13 +67,13 @@ static bool hasValueKey(CorNode* objP)
 {
   for (CorNode* childP = objP->value.head; childP != NULL; childP = childP->next)
   {
-    if (strcmp(childP->name, LD_VOCAB_HAS_VALUE)        == 0)  return true;
-    if (strcmp(childP->name, LD_VOCAB_HAS_OBJECT)       == 0)  return true;
-    if (strcmp(childP->name, LD_VOCAB_HAS_LANGUAGE_MAP) == 0)  return true;
-    if (strcmp(childP->name, LD_VOCAB_HAS_VOCAB)        == 0)  return true;
-    if (strcmp(childP->name, LD_VOCAB_HAS_VALUE_LIST)   == 0)  return true;
-    if (strcmp(childP->name, LD_VOCAB_HAS_OBJECT_LIST)  == 0)  return true;
-    if (strcmp(childP->name, LD_VOCAB_HAS_JSON)         == 0)  return true;
+    if (ldTermId(childP) == CorTermValue)  return true;
+    if (ldTermId(childP) == CorTermObject)  return true;
+    if (ldTermId(childP) == CorTermLanguageMap)  return true;
+    if (ldTermId(childP) == CorTermVocab)  return true;
+    if (ldTermId(childP) == CorTermValueList)  return true;
+    if (ldTermId(childP) == CorTermObjectList)  return true;
+    if (ldTermId(childP) == CorTermJson)  return true;
   }
   return false;
 }
@@ -119,9 +120,9 @@ static bool isGeoJsonObject(CorNode* objP)
 
   for (CorNode* childP = objP->value.head; childP != NULL; childP = childP->next)
   {
-    if (strcmp(childP->name, "type") == 0 && childP->type == CorString && isGeoJsonTypeName(childP->value.s))
+    if (ldTermId(childP) == CorTermType && childP->type == CorString && isGeoJsonTypeName(childP->value.s))
       hasGeoType = true;
-    else if (strcmp(childP->name, LD_VOCAB_COORDINATES) == 0)
+    else if (ldTermId(childP) == CorTermCoordinates)
       hasCoords = true;
   }
 
@@ -155,8 +156,8 @@ static bool isSimplifiedGeoProperty(CorNode* objP)
   for (CorNode* childP = objP->value.head; childP != NULL; childP = childP->next)
   {
     ++count;
-    if      (strcmp(childP->name, "type")              == 0)  typeP   = childP;
-    else if (strcmp(childP->name, LD_VOCAB_COORDINATES) == 0)  coordsP = childP;
+    if      (ldTermId(childP) == CorTermType)  typeP   = childP;
+    else if (ldTermId(childP) == CorTermCoordinates)  coordsP = childP;
   }
 
   return (count == 2 && typeP != NULL && typeP->type == CorString && coordsP != NULL);
@@ -225,7 +226,7 @@ static bool hasExplicitAttrType(CorNode* objP)
 {
   for (CorNode* childP = objP->value.head; childP != NULL; childP = childP->next)
   {
-    if (strcmp(childP->name, "type") == 0 && childP->type == CorString)
+    if (ldTermId(childP) == CorTermType && childP->type == CorString)
     {
       const char* v = childP->value.s;
 
@@ -539,7 +540,7 @@ static bool normalizeAttr(CorNode* containerP, CorNode* attrP, CorAlloc* kaP, bo
     CorNode* hasValueP = NULL;
     for (CorNode* childP = attrP->value.head; childP != NULL; childP = childP->next)
     {
-      if (strcmp(childP->name, LD_VOCAB_HAS_VALUE) == 0)
+      if (ldTermId(childP) == CorTermValue)
       {
         hasValueP = childP;
         break;

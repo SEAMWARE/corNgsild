@@ -32,6 +32,7 @@
 #include "corNgsild/ldScopeMatch.h"                     // ldScopePatternMatch
 #include "corNgsild/ldProbeSourceIdentity.h"            // ldProbeSourceIdentity
 #include "corNgsild/ldRegCache.h"                       // Own interface
+#include "corNgsild/ldTermId.h"                         // ldTermId, CorTerm*
 
 
 
@@ -1407,9 +1408,9 @@ const char* ldRegCacheLocalWriteConflictTree(LdRegCache* cacheP,
   for (CorNode* aP = fragP->value.head; aP != NULL; aP = aP->next)
   {
     if (aP->name == NULL || aP->name[0] == '@')   continue;
-    if (strcmp(aP->name, "id")    == 0)           continue;
-    if (strcmp(aP->name, "type")  == 0)           continue;
-    if (strcmp(aP->name, "scope") == 0)           continue;
+    if (ldTermId(aP) == CorTermId)           continue;
+    if (ldTermId(aP) == CorTermType)           continue;
+    if (ldTermId(aP) == CorTermScope)           continue;
     attrN++;
   }
 
@@ -1418,9 +1419,9 @@ const char* ldRegCacheLocalWriteConflictTree(LdRegCache* cacheP,
   for (CorNode* aP = fragP->value.head; aP != NULL; aP = aP->next)
   {
     if (aP->name == NULL || aP->name[0] == '@')   continue;
-    if (strcmp(aP->name, "id")    == 0)           continue;
-    if (strcmp(aP->name, "type")  == 0)           continue;
-    if (strcmp(aP->name, "scope") == 0)           continue;
+    if (ldTermId(aP) == CorTermId)           continue;
+    if (ldTermId(aP) == CorTermType)           continue;
+    if (ldTermId(aP) == CorTermScope)           continue;
     attrIriV[aIx++] = aP->name;
   }
   attrIriV[aIx] = NULL;

@@ -23,6 +23,7 @@
 #include "corNgsild/CorNgsild.h"                           // corNgsild (for response @context)
 #include "corNgsild/ldIsEntityKeyword.h"                  // ldIsEntityKeyword
 #include "corNgsild/ldToTemporalValues.h"                 // Own interface
+#include "corNgsild/ldTermId.h"                         // ldTermId, CorTerm*
 
 
 
@@ -328,7 +329,7 @@ static void transformEntity(CorNode* entityP, const char* timeProp, CorAlloc* al
     // so it gets the same pair-compression as any attr in simplified-temporal
     // mode (see TS 104-176 § A.3.4.3 for the wire example). Every other
     // entity keyword stays untouched.
-    if (ldIsEntityMember(childP) && strcmp(childP->name, "scope") != 0)
+    if (ldIsEntityMember(childP) && ldTermId(childP) != CorTermScope)
       continue;
     if (childP->type != CorArray)
       continue;

@@ -27,6 +27,7 @@
 #include "corNgsild/ldError.h"                            // ldError
 #include "corNgsild/ldCheckGeo.h"                         // Own interface
 #include "corNgsild/ldTraceLevels.h"                      // LdTCheckGeo
+#include "corNgsild/ldTermId.h"                         // ldTermId, CorTerm*
 
 
 
@@ -358,8 +359,8 @@ bool ldCheckGeo(CorNode* geoValueP)
   // duplicate-member check in ldParseHook, before this validation runs.
   for (CorNode* childP = geoValueP->value.head; childP != NULL; childP = childP->next)
   {
-    if      (strcmp(childP->name, "type") == 0)               typeP   = childP;
-    else if (strcmp(childP->name, LD_VOCAB_COORDINATES) == 0) coordsP = childP;
+    if      (ldTermId(childP) == CorTermType)               typeP   = childP;
+    else if (ldTermId(childP) == CorTermCoordinates) coordsP = childP;
   }
 
   if (typeP == NULL || typeP->type != CorString)

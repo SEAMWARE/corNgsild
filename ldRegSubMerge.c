@@ -17,6 +17,7 @@
 
 #include "corNgsild/LdVocab.h"                          // LD_VOCAB_NGSILD_NULL
 #include "corNgsild/ldRegSubMerge.h"                    // Own interface
+#include "corNgsild/ldTermId.h"                         // ldTermId, CorTerm*
 
 
 
@@ -89,7 +90,7 @@ void ldRegSubMerge(CorNode* target, CorNode* fragment, CorAlloc* allocP)
 
     // id and type are immutable — never merged (the validator strips/rejects
     // them; this is belt-and-braces against an internal caller).
-    if (strcmp(fP->name, "id") == 0 || strcmp(fP->name, "type") == 0)
+    if (ldTermId(fP) == CorTermId || ldTermId(fP) == CorTermType)
       continue;
 
     CorNode* existingP = corTreeLookup(target, fP->name);

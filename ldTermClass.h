@@ -22,6 +22,7 @@
 // caller at once, instead of the lists in ten files that drifted apart.
 //
 #define LD_TC_ENTITY_MEMBER   0x01   // a member of an Entity that is not an Attribute
+#define LD_TC_VALUE_KEY       0x02   // the member of an Attribute that holds its value (value, object, languageMap, ...)
 
 
 

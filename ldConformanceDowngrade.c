@@ -19,6 +19,7 @@
 #include "corTree/corTreeChildReplace.h"                 // corTreeChildReplace
 
 #include "corNgsild/ldConformanceDowngrade.h"             // Own interface
+#include "corNgsild/ldTermId.h"                         // ldTermId, CorTerm*
 
 
 
@@ -240,12 +241,12 @@ static void downgradeEntity(CorNode* entityP, short tMajor, short tMinor)
     CorNode* nextP = attrP->next;
 
     bool skip = (attrP->name == NULL || attrP->name[0] == '@')              ||
-                (strcmp(attrP->name, "id")         == 0)                    ||
-                (strcmp(attrP->name, "type")       == 0)                    ||
-                (strcmp(attrP->name, "scope")      == 0)                    ||
-                (strcmp(attrP->name, "expiresAt")  == 0)                    ||
-                (strcmp(attrP->name, "createdAt")  == 0)                    ||
-                (strcmp(attrP->name, "modifiedAt") == 0);
+                (ldTermId(attrP) == CorTermId)                    ||
+                (ldTermId(attrP) == CorTermType)                    ||
+                (ldTermId(attrP) == CorTermScope)                    ||
+                (ldTermId(attrP) == CorTermExpiresAt)                    ||
+                (ldTermId(attrP) == CorTermCreatedAt)                    ||
+                (ldTermId(attrP) == CorTermModifiedAt);
     if (!skip)
       downgradeAttr(entityP, attrP, tMajor, tMinor);
 
