@@ -90,6 +90,7 @@ LIB_SOURCES   = corNgsild.c \
                 ldTermClass.c \
                 ldAliasCanonicalize.c \
                 ldAttrMember.c \
+                ldParse.c \
                 ldInit.c \
                 ldError.c \
                 ldParams.c \

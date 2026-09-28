@@ -24,6 +24,7 @@
 #include "corJsonld/corLdCompactTree.h"                      // corLdCompactTree, corLdCompactTreeWith
 #include "corJsonld/corLdDownload.h"                         // corLdContextFromUrl
 
+#include "corNgsild/ldParse.h"                            // ldPrePayloadParseHook
 #include "corNgsild/ldAliasCanonicalize.h"                   // ldAliasCanonicalize
 #include "corNgsild/ldContextHost.h"                      // ldContextHostVolatile
 #include "corNgsild/LdProblem.h"                          // LD_ERROR_*
@@ -1683,6 +1684,7 @@ void corNgsildFallbackRelease(void)
 void ldHooksRegister(void)
 {
   corRestSetPreDispatchHook(ldPreDispatchHook);
+  corRestSetPrePayloadParseHook(ldPrePayloadParseHook);
   corRestSetPayloadParseHook(ldParseHook);
   corRestSetPayloadRenderHook(ldRenderHook);
   corRestSetParamHook(ldParamHook);
