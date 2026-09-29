@@ -270,7 +270,7 @@ static bool checkEndpoint(CorNode* endpointP, bool complete)
       }
       URI_CHECK(childP->value.s);
     }
-    else if (strcmp(childP->name, "https://uri.etsi.org/ngsi-ld/accept") == 0 || ldTermId(childP) == CorTermAccept)
+    else if (ldTermId(childP) == CorTermAccept)   // both spellings - the expanded IRI is the same term
     {
       DUPLICATE_CHECK(acceptP, "notification.endpoint.accept", childP);
       STRING_CHECK(childP, "Invalid Subscription", "'notification.endpoint.accept' must be a string");
@@ -666,9 +666,9 @@ static bool checkGeoQ(CorNode* geoQP, bool complete, CorAlloc* kaP)
 
   for (CorNode* childP = geoQP->value.head; childP != NULL; childP = childP->next)
   {
-    const char* name = childP->name;
+    CorTerm term = ldTermId(childP);   // either spelling, short or expanded
 
-    if (strcmp(name, "https://purl.org/geojson/vocab#geometry") == 0 || strcmp(name, "geometry") == 0)
+    if (term == CorTermGeometry)
     {
       DUPLICATE_CHECK(geometryP, "geoQ.geometry", childP);
       STRING_CHECK(childP, "Invalid Subscription", "'geoQ.geometry' must be a string");
@@ -684,7 +684,7 @@ static bool checkGeoQ(CorNode* geoQP, bool complete, CorAlloc* kaP)
         return false;
       }
     }
-    else if (strcmp(name, "https://purl.org/geojson/vocab#coordinates") == 0 || strcmp(name, "coordinates") == 0)
+    else if (term == CorTermCoordinates)
     {
       DUPLICATE_CHECK(coordinatesP, "geoQ.coordinates", childP);
       // coordinates can be a string (JSON-encoded) or an array
@@ -695,7 +695,7 @@ static bool checkGeoQ(CorNode* geoQP, bool complete, CorAlloc* kaP)
         return false;
       }
     }
-    else if (strcmp(name, "https://uri.etsi.org/ngsi-ld/georel") == 0 || strcmp(name, "georel") == 0)
+    else if (term == CorTermGeorel)
     {
       DUPLICATE_CHECK(georelP, "geoQ.georel", childP);
       STRING_CHECK(childP, "Invalid Subscription", "'geoQ.georel' must be a string");
@@ -711,7 +711,7 @@ static bool checkGeoQ(CorNode* geoQP, bool complete, CorAlloc* kaP)
         return false;
       }
     }
-    else if (strcmp(name, "https://uri.etsi.org/ngsi-ld/geoproperty") == 0 || strcmp(name, "geoproperty") == 0)
+    else if (term == CorTermGeoproperty)
     {
       DUPLICATE_CHECK(geopropertyP, "geoQ.geoproperty", childP);
       STRING_CHECK(childP, "Invalid Subscription", "'geoQ.geoproperty' must be a string");
@@ -872,7 +872,7 @@ bool ldCheckSubscription(CorNode* subP, LdOp op, bool merged, LdFormat* notifFor
       }
       if (childP->type == CorString && strcmp(childP->value.s, LD_VOCAB_NGSILD_NULL) == 0)
       {
-        if (strcmp(name, LD_VOCAB_NOTIFICATION) == 0)
+        if (ldTermId(childP) == CorTermNotification)
         {
           ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
                   "'notification' is mandatory and cannot be deleted");
@@ -889,25 +889,30 @@ bool ldCheckSubscription(CorNode* subP, LdOp op, bool merged, LdFormat* notifFor
       return false;
     }
 
-    if (strcmp(name, "type") == 0)
+    //
+    // Which member it is, by its term id - both spellings (short, expanded IRI) are the same term
+    //
+    CorTerm term = ldTermId(childP);
+
+    if (term == CorTermType)
       DUPLICATE_CHECK(typeP, "type", childP);
-    else if (strcmp(name, "id") == 0)
+    else if (term == CorTermId)
       DUPLICATE_CHECK(idP, "id", childP);
-    else if (strcmp(name, LD_VOCAB_ENTITIES) == 0)
+    else if (term == CorTermEntities)
       DUPLICATE_CHECK(entitiesP, "entities", childP);
-    else if (strcmp(name, LD_VOCAB_WATCHED_ATTRS) == 0)
+    else if (term == CorTermWatchedAttributes)
       DUPLICATE_CHECK(watchedAttrsP, "watchedAttributes", childP);
-    else if (strcmp(name, "https://uri.etsi.org/ngsi-ld/timeInterval") == 0 || strcmp(name, "timeInterval") == 0)
+    else if (term == CorTermTimeInterval)
       DUPLICATE_CHECK(timeIntervalP, "timeInterval", childP);
-    else if (strcmp(name, LD_VOCAB_NOTIFICATION) == 0)
+    else if (term == CorTermNotification)
       DUPLICATE_CHECK(notificationP, "notification", childP);
-    else if (strcmp(name, LD_VOCAB_THROTTLING) == 0)
+    else if (term == CorTermThrottling)
       DUPLICATE_CHECK(throttlingP, "throttling", childP);
-    else if (strcmp(name, LD_VOCAB_EXPIRES_AT) == 0)
+    else if (term == CorTermExpiresAt)
       DUPLICATE_CHECK(expiresAtP, "expiresAt", childP);
-    else if (strcmp(name, LD_VOCAB_IS_ACTIVE) == 0)
+    else if (term == CorTermIsActive)
       DUPLICATE_CHECK(isActiveP, "isActive", childP);
-    else if (strcmp(name, "notificationTrigger") == 0)
+    else if (term == CorTermNotificationTrigger)
     {
       DUPLICATE_CHECK(notifTriggerP, "notificationTrigger", childP);
       // § 5.2.12 — notificationTrigger is a String[] whose values must be one of
@@ -934,17 +939,17 @@ bool ldCheckSubscription(CorNode* subP, LdOp op, bool merged, LdFormat* notifFor
         }
       }
     }
-    else if (strcmp(name, "https://uri.etsi.org/ngsi-ld/q") == 0 || strcmp(name, "q") == 0)
+    else if (term == CorTermQ)
       DUPLICATE_CHECK(qP, "q", childP);
-    else if (strcmp(name, "https://uri.etsi.org/ngsi-ld/geoQ") == 0 || strcmp(name, "geoQ") == 0)
+    else if (term == CorTermGeoQ)
       DUPLICATE_CHECK(geoQP, "geoQ", childP);
-    else if (strcmp(name, "https://uri.etsi.org/ngsi-ld/scopeQ") == 0 || strcmp(name, "scopeQ") == 0)
+    else if (term == CorTermScopeQ)
       DUPLICATE_CHECK(scopeQP, "scopeQ", childP);
-    else if (strcmp(name, "https://uri.etsi.org/ngsi-ld/subscriptionName") == 0 || strcmp(name, "subscriptionName") == 0)
+    else if (term == CorTermSubscriptionName)
       DUPLICATE_CHECK(nameP, "subscriptionName", childP);
-    else if (strcmp(name, "https://uri.etsi.org/ngsi-ld/description") == 0 || strcmp(name, "description") == 0)
+    else if (term == CorTermDescription)
       DUPLICATE_CHECK(descriptionP, "description", childP);
-    else if (strcmp(name, LD_VOCAB_STATUS) == 0 || strcmp(name, "status") == 0)
+    else if (term == CorTermStatus)
     {
       // Server-owned read-only field — rejected from a client payload, tolerated
       // when re-validating a stored/merged document ('merged').
@@ -954,8 +959,7 @@ bool ldCheckSubscription(CorNode* subP, LdOp op, bool merged, LdFormat* notifFor
         return false;
       }
     }
-    else if (strcmp(name, LD_VOCAB_CREATED_AT)  == 0 || strcmp(name, "https://uri.etsi.org/ngsi-ld/createdAt")  == 0 ||
-             strcmp(name, LD_VOCAB_MODIFIED_AT) == 0 || strcmp(name, "https://uri.etsi.org/ngsi-ld/modifiedAt") == 0)
+    else if ((term == CorTermCreatedAt) || (term == CorTermModifiedAt))
     {
       // § 6.4.5 — system-generated read-only timestamps: rejected from a client
       // payload, tolerated when re-validating our own stamped/merged document.
@@ -965,7 +969,7 @@ bool ldCheckSubscription(CorNode* subP, LdOp op, bool merged, LdFormat* notifFor
         return false;
       }
     }
-    else if (strcmp(name, LD_VOCAB_DATASET_ID) == 0)
+    else if (term == CorTermDatasetId)
     {
       // datasetId: array of URIs + "@none" — restricts which attribute instances
       // are included in notifications (§ 5.8.6).
@@ -983,7 +987,7 @@ bool ldCheckSubscription(CorNode* subP, LdOp op, bool merged, LdFormat* notifFor
         }
       }
     }
-    else if (strcmp(name, "jsonldContext") == 0)
+    else if (term == CorTermJsonldContext)
     {
       // § 5.2.12 — jsonldContext is a URL from which the broker shall
       // retrieve the JSON-LD @context, so it must be dereferenceable —
@@ -998,7 +1002,7 @@ bool ldCheckSubscription(CorNode* subP, LdOp op, bool merged, LdFormat* notifFor
         return false;
       }
     }
-    else if (strcmp(name, "ngsildConformance") == 0)
+    else if (term == CorTermNgsildConformance)
     {
       // § 5.2.12 / § 4.3.6.8: backwards-compat target. Format "M.m".
       STRING_CHECK(childP, "Invalid Subscription", "'ngsildConformance' must be a string");

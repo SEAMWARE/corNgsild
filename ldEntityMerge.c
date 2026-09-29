@@ -890,7 +890,9 @@ static bool mergeApply(CorNode*       target,
     // reason ldEntityAttrsSet already uses for these two, and every driver treats a reason
     // other than "attributeDeleted" as "take this member from the merged Entity".
     //
-    if (strcmp(name, "type") == 0 || strcmp(name, "@type") == 0)
+    CorTerm term = ldTermId(fChild);   // type and @type are one term, as are scope's spellings
+
+    if (term == CorTermType)
     {
       if (typeUnion(target, fChild, targetAllocP))
       {
@@ -901,7 +903,7 @@ static bool mergeApply(CorNode*       target,
       continue;
     }
 
-    if (strcmp(name, LD_VOCAB_SCOPE) == 0)
+    if (term == CorTermScope)
     {
       if (scopeReplace(target, fChild, targetAllocP))
       {
@@ -921,7 +923,7 @@ static bool mergeApply(CorNode*       target,
     // epoch-nanosecond integer the DB model stores, or as the NGSI-LD Null string (left alone
     // there, so that the delete survives the conversion).
     //
-    if (strcmp(name, LD_VOCAB_EXPIRES_AT) == 0)
+    if (term == CorTermExpiresAt)
     {
       CorNode* tExpiresAt = corTreeLookup(target, LD_VOCAB_EXPIRES_AT);
 
