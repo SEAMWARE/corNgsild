@@ -16,6 +16,7 @@
 // The entityMap field maps each entityId to an array of source IDs:
 // "@none" = local broker, "urn:CSR:X" = registered context source.
 //
+#include <pthread.h>                                   // pthread_rwlock_t
 #include <stdint.h>                                    // uint64_t
 #include <stdbool.h>                                   // bool
 
@@ -80,6 +81,12 @@ typedef struct LdEntityMap
   char*                boundCoordinates;
   char*                boundGeoproperty;
 
+  // References (as the snapshot cache): one held by the store while the map is in it, one per
+  // pin. A request that uses the map - pages it, renders it, has its query parameters pointing
+  // at the map's bound strings - pins it for the request. Remove and the expiry purge unlink it
+  // and drop the store's reference; the last reference frees it.
+  int                  refCount;
+
   struct LdEntityMap*  next;           // linked list in store
 } LdEntityMap;
 
@@ -91,6 +98,7 @@ typedef struct LdEntityMap
 //
 typedef struct LdEntityMapStore
 {
+  pthread_rwlock_t  lock;          // walks and lookups: rd - link / unlink: wr (taken inside)
   LdEntityMap*  head;
   LdEntityMap*  tail;
 } LdEntityMapStore;

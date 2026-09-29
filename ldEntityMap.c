@@ -15,6 +15,7 @@
 #include "corTree/corTreeBuilder.h"                    // corTreeObject, corTreeString, corTreeArray, corTreeChildAdd
 
 #include "corRest/CorRestState.h"                        // corRest (kallocP — the per-request arena)
+#include "corNgsild/CorNgsild.h"                        // corNgsild.entityMapPinned
 #include "corNgsild/LdEntityMap.h"                      // LdEntityMap, LdEntityMapStore
 #include "corNgsild/ldEntityMap.h"                      // Own interface
 
@@ -54,7 +55,12 @@ static void isoFromNanos(uint64_t ns, char* buf, int bufLen)
 // ldEntityMapStoreCreate
 LdEntityMapStore* ldEntityMapStoreCreate(void)
 {
-  return (LdEntityMapStore*) calloc(1, sizeof(LdEntityMapStore));
+  LdEntityMapStore* storeP = (LdEntityMapStore*) calloc(1, sizeof(LdEntityMapStore));
+
+  if (storeP != NULL)
+    pthread_rwlock_init(&storeP->lock, NULL);
+
+  return storeP;
 }
 
 
@@ -66,6 +72,8 @@ LdEntityMap* ldEntityMapCreate(LdEntityMapStore* storeP, uint64_t lifetimeNs, vo
     return NULL;
 
   LdEntityMap* mapP = (LdEntityMap*) calloc(1, sizeof(LdEntityMap));
+  if (mapP == NULL)
+    return NULL;
 
   // Generate ID: urn:ngsi-ld:EntityMap:<hex-timestamp>
   char idBuf[80];
@@ -79,12 +87,16 @@ LdEntityMap* ldEntityMapCreate(LdEntityMapStore* storeP, uint64_t lifetimeNs, vo
   mapP->expiresAt = nowNanos() + lifetimeNs;
   mapP->tenantP   = tenantP;
 
-  // Append to store
+  mapP->refCount = 2;   // the store's reference + the caller's pin
+
+  // Append to store - under the wrlock: requests create, remove and purge concurrently
+  pthread_rwlock_wrlock(&storeP->lock);
   if (storeP->tail == NULL)
     storeP->head = mapP;
   else
     storeP->tail->next = mapP;
   storeP->tail = mapP;
+  pthread_rwlock_unlock(&storeP->lock);
 
   return mapP;
 }
@@ -254,7 +266,10 @@ bool ldEntityMapRemove(LdEntityMapStore* storeP, const char* mapId)
 {
   if (storeP == NULL || mapId == NULL) return false;
 
-  LdEntityMap* prev = NULL;
+  LdEntityMap* found = NULL;
+  LdEntityMap* prev  = NULL;
+
+  pthread_rwlock_wrlock(&storeP->lock);
   for (LdEntityMap* p = storeP->head; p != NULL; p = p->next)
   {
     if (p->mapId != NULL && strcmp(p->mapId, mapId) == 0)
@@ -262,12 +277,18 @@ bool ldEntityMapRemove(LdEntityMapStore* storeP, const char* mapId)
       if (prev == NULL) storeP->head = p->next;
       else              prev->next   = p->next;
       if (storeP->tail == p) storeP->tail = prev;
-      mapFree(p);
-      return true;
+      found = p;
+      break;
     }
     prev = p;
   }
-  return false;
+  pthread_rwlock_unlock(&storeP->lock);
+
+  // The store's reference - freed now, or by whoever still pages it, when done
+  if (found != NULL)
+    ldEntityMapUnpin(found);
+
+  return (found != NULL);
 }
 
 
@@ -317,9 +338,12 @@ void ldEntityMapPurgeExpired(LdEntityMapStore* storeP)
 {
   if (storeP == NULL) return;
 
-  uint64_t now = nowNanos();
-  LdEntityMap* prev = NULL;
-  LdEntityMap* p    = storeP->head;
+  uint64_t     now     = nowNanos();
+  LdEntityMap* prev    = NULL;
+  LdEntityMap* expired = NULL;         // unlinked here, their store references dropped below
+
+  pthread_rwlock_wrlock(&storeP->lock);
+  LdEntityMap* p = storeP->head;
 
   while (p != NULL)
   {
@@ -329,7 +353,8 @@ void ldEntityMapPurgeExpired(LdEntityMapStore* storeP)
       if (prev == NULL) storeP->head = next;
       else              prev->next   = next;
       if (storeP->tail == p) storeP->tail = prev;
-      mapFree(p);
+      p->next = expired;
+      expired = p;
     }
     else
     {
@@ -337,4 +362,67 @@ void ldEntityMapPurgeExpired(LdEntityMapStore* storeP)
     }
     p = next;
   }
+  pthread_rwlock_unlock(&storeP->lock);
+
+  //
+  // It freed them right here - while another request was paging one of them (a PATCH of the
+  // map's expiresAt to the past is enough to make that happen on the next GET). Now a map being
+  // paged is freed by that request, when it is done with it.
+  //
+  while (expired != NULL)
+  {
+    LdEntityMap* next = expired->next;
+    ldEntityMapUnpin(expired);
+    expired = next;
+  }
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// Locking and references - see ldEntityMap.h
+//
+void ldEntityMapStoreRdLock(LdEntityMapStore* storeP) { if (storeP != NULL) pthread_rwlock_rdlock(&storeP->lock); }
+void ldEntityMapStoreUnlock(LdEntityMapStore* storeP) { if (storeP != NULL) pthread_rwlock_unlock(&storeP->lock); }
+
+void ldEntityMapPin(LdEntityMap* mapP)
+{
+  if (mapP != NULL)
+    __atomic_add_fetch(&mapP->refCount, 1, __ATOMIC_SEQ_CST);
+}
+
+void ldEntityMapUnpin(LdEntityMap* mapP)
+{
+  if ((mapP != NULL) && (__atomic_sub_fetch(&mapP->refCount, 1, __ATOMIC_SEQ_CST) == 0))
+    mapFree(mapP);       // out of the store (it holds a reference while the map is in it)
+}
+
+LdEntityMap* ldEntityMapLookupPinned(LdEntityMapStore* storeP, const char* mapId)
+{
+  if (storeP == NULL)
+    return NULL;
+
+  pthread_rwlock_rdlock(&storeP->lock);
+  LdEntityMap* mapP = ldEntityMapLookup(storeP, mapId);
+  if (mapP != NULL)
+    ldEntityMapPin(mapP);
+  pthread_rwlock_unlock(&storeP->lock);
+
+  return mapP;
+}
+
+void ldEntityMapRequestPin(LdEntityMap* mapP)
+{
+  ldEntityMapRequestRelease();        // one per request
+  corNgsild.entityMapPinned = mapP;
+}
+
+void ldEntityMapRequestRelease(void)
+{
+  if (corNgsild.entityMapPinned == NULL)
+    return;
+
+  ldEntityMapUnpin(corNgsild.entityMapPinned);
+  corNgsild.entityMapPinned = NULL;
 }

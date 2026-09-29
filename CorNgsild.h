@@ -279,6 +279,10 @@ typedef struct CorNgsild
   // ldSnapshotRequestRelease (post-response hook; the pre-dispatch hook as a safety net).
   struct LdSnapshotCacheItem*  snapshotPinned;
 
+  // The EntityMap a request creates or pages, PINNED for the request (the query parameters may
+  // point at its bound strings) - released by ldEntityMapRequestRelease, like snapshotPinned.
+  struct LdEntityMap*          entityMapPinned;
+
 } CorNgsild;
 
 
