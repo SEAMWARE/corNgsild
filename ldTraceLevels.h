@@ -15,7 +15,6 @@
 //
 #define LdTInit       200   // Library initialization
 #define LdTTypes      201   // Type conversions
-#define LdTDetect     202   // Attribute type detection
 #define LdTCheckEnt   203   // Entity validation
 #define LdTCheckAttr  204   // Attribute validation
 #define LdTCheckSub   205   // Subscription validation

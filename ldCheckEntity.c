@@ -439,6 +439,5 @@ bool ldCheckEntity(CorNode* entityP, LdOp op, CorNode* dbEntityP, CorAlloc* faP)
       return false;
   }
 
-  COR_LIB_T(LdTCheckEnt, "Entity payload valid");
   return true;
 }

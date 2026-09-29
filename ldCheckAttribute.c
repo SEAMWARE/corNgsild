@@ -758,6 +758,5 @@ bool ldCheckAttribute(CorNode* attrP, LdOp op, LdAttrType attrTypeFromDb, CorAll
     }
   }
 
-  COR_LIB_T(LdTCheckAttr, "Attribute '%s' valid (type: %s)", attrP->name, ldAttrTypeToString(attrType));
   return true;
 }

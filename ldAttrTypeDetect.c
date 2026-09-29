@@ -9,13 +9,11 @@
 //
 #include <string.h>                                      // strcmp
 
-#include "corBase/corLibLog.h"                         // COR_LIB_*
 #include "corTree/CorNode.h"                            // CorNode
 
 #include "corNgsild/LdVocab.h"                            // LD_VOCAB_*
 #include "corNgsild/ldTypes.h"                            // ldAttrTypeFromString, ldAttrTypeToString
 #include "corNgsild/ldAttrTypeDetect.h"                   // Own interface
-#include "corNgsild/ldTraceLevels.h"                      // LdTDetect
 
 
 
@@ -59,7 +57,6 @@ LdAttrType ldAttrTypeDetect(CorNode* attrP)
         LdAttrType fromType = ldAttrTypeFromString(childP->value.s);
         if (fromType != LdAttrNone)
         {
-          COR_LIB_T(LdTDetect, "Detected type '%s' from explicit type field", childP->value.s);
           return fromType;
         }
       }
@@ -79,8 +76,6 @@ LdAttrType ldAttrTypeDetect(CorNode* attrP)
 
     if (detected != LdAttrNone)
     {
-      COR_LIB_T(LdTDetect, "Detected type '%s' from value key '%s'",
-           ldAttrTypeToString(detected), childP->name);
       return detected;
     }
   }
