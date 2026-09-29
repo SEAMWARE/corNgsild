@@ -18,6 +18,7 @@
 // per sub — whose `data[]` array carries every matched entity in the
 // order they were deferred.
 //
+#include "corNgsild/ldTenantCaches.h"                   // LdTenantCachesFn
 #include <stdbool.h>
 #include <stdint.h>                                    // uint64_t
 #include <string.h>                                    // strcmp (for inline helpers)
@@ -136,20 +137,20 @@ extern void ldSubscriptionNotifyBatch(LdSubCache*           cacheP,
 // -----------------------------------------------------------------------------
 //
 // LdThrottleRetrieveFunc - broker hook: retrieve one entity (storage shape) by
-// id for the throttle flush. The lib has no DB access; the broker supplies this
-// (db.entityRetrieve on tenant0). allocP is the flush scratch allocator.
+// id for the throttle flush, from the subscription's tenant. The lib has no DB
+// access; the broker supplies this. allocP is the flush scratch allocator.
 // Returns NULL if the entity is gone.
 //
-typedef CorNode* (*LdThrottleRetrieveFunc)(const char* entityId, void* allocP);
+typedef CorNode* (*LdThrottleRetrieveFunc)(void* tenantP, const char* entityId, void* allocP);
 
 
 
 // -----------------------------------------------------------------------------
 //
 // ldThrottleFlushStart - register the § 5.2.x throttling coalesce-to-latest
-// flush with the periodic loop. cacheP is the (tenant0) subscription cache;
-// retrieveFn re-queries an entity's latest state at flush time.
+// flush with the periodic loop. cachesFn walks every tenant's caches (see
+// ldTenantCaches.h); retrieveFn re-queries an entity's latest state at flush time.
 //
-extern void ldThrottleFlushStart(LdSubCache* cacheP, LdThrottleRetrieveFunc retrieveFn);
+extern void ldThrottleFlushStart(LdTenantCachesFn cachesFn, LdThrottleRetrieveFunc retrieveFn);
 
 #endif  // CORNGSILD_LDSUBSCRIPTIONNOTIFY_H_

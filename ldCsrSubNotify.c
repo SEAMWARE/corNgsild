@@ -793,13 +793,9 @@ void ldCsrSubOnRegUpdate(LdSubCache* regSubCacheP,
 // has elapsed, collects the currently-matching CSRs and POSTs a single
 // CsourceNotification with triggerReason="updated".
 //
-// `ctx` is the LdSubCache* (regSubCacheP) passed at registration time;
-// the regCacheP is read out of the same tenant via the cached `tenantP`
-// field of the cache wrapper. We pass it through cacheP->regCacheP which
-// the registration site sets for us (see ldCsrSubPeriodicLoopRegister).
-//
-// `kaP` is per-tick scratch from the engine (already reset before this
-// callback fires).
+// Every tenant, each tick: the broker's LdTenantCachesFn (given to
+// ldCsrSubPeriodicLoopRegister) hands over each tenant's CSR-subscription and
+// registration caches, and csrSubTickTenant runs on the pair.
 //
 typedef struct
 {
@@ -808,14 +804,14 @@ typedef struct
 } CsrSubTickCtx;
 
 
-static CsrSubTickCtx tickCtxStorage;
+static LdTenantCachesFn csrSubCachesFn = NULL;
 
 
-static void csrSubPeriodicTick(void* ctx, uint64_t now, CorAlloc* kaP)
+//
+// csrSubTickTenant - one tenant's CSR-subscriptions (tcP: its CSR-sub and registration caches)
+//
+static void csrSubTickTenant(CsrSubTickCtx* tcP, uint64_t now)
 {
-  (void) kaP;  // sendCsourceNotification reaches into corRest.kalloc directly
-
-  CsrSubTickCtx* tcP = (CsrSubTickCtx*) ctx;
   if (tcP == NULL || tcP->regSubCache == NULL || tcP->regCache == NULL) return;
 
   //
@@ -922,12 +918,33 @@ static void csrSubPeriodicTick(void* ctx, uint64_t now, CorAlloc* kaP)
 
 
 
-void ldCsrSubPeriodicLoopRegister(LdSubCache* regSubCacheP, LdRegCache* regCacheP)
+typedef struct { uint64_t now; } CsrSubTickArg;
+
+static void csrSubVisit(LdTenantCaches* tcP, void* arg)
 {
-  // Single-tenant for now (broker-wide tenant0). Multi-tenant requires
-  // either one registration per tenant or a shared lookup keyed on
-  // subItem->tenantP — defer until multi-tenant CSR-subs are exercised.
-  tickCtxStorage.regSubCache = regSubCacheP;
-  tickCtxStorage.regCache    = regCacheP;
-  ldPeriodicLoopRegister(csrSubPeriodicTick, &tickCtxStorage);
+  CsrSubTickCtx ctx = { tcP->regSubCacheP, tcP->regCacheP };
+  csrSubTickTenant(&ctx, ((CsrSubTickArg*) arg)->now);
+}
+
+//
+// csrSubPeriodicTick - registered with the periodic-dispatch engine: every tenant
+//
+static void csrSubPeriodicTick(void* ctx, uint64_t now, CorAlloc* kaP)
+{
+  (void) ctx;
+  (void) kaP;  // sendCsourceNotification reaches into corRest.kalloc directly
+
+  if (csrSubCachesFn == NULL)
+    return;
+
+  CsrSubTickArg arg = { now };
+  csrSubCachesFn(csrSubVisit, &arg);
+}
+
+
+
+void ldCsrSubPeriodicLoopRegister(LdTenantCachesFn cachesFn)
+{
+  csrSubCachesFn = cachesFn;
+  ldPeriodicLoopRegister(csrSubPeriodicTick, NULL);
 }

@@ -1228,17 +1228,16 @@ void ldSubscriptionNotifyBatch(LdSubCache*           cacheP,
 // the buffer stays O(1)/update); a buffered DELETE carries the state captured at
 // delete time (a gone entity can't be re-queried).
 //
-static LdThrottleRetrieveFunc throttleRetrieveFn = NULL;
+static LdThrottleRetrieveFunc throttleRetrieveFn  = NULL;
+static LdTenantCachesFn       throttleCachesFn    = NULL;
 
 
 
 //
-// throttleFlushTick - registered with the periodic-dispatch engine (1 Hz).
+// throttleFlushCache - one tenant's subscription cache
 //
-static void throttleFlushTick(void* ctx, uint64_t now, CorAlloc* kaP)
+static void throttleFlushCache(LdSubCache* cacheP, void* tenantP, uint64_t now)
 {
-  (void) kaP;
-  LdSubCache* cacheP = (LdSubCache*) ctx;
   if (cacheP == NULL)
     return;
 
@@ -1307,7 +1306,7 @@ static void throttleFlushTick(void* ctx, uint64_t now, CorAlloc* kaP)
       }
       else
       {
-        state = (throttleRetrieveFn != NULL) ? throttleRetrieveFn(e->entityId, &corRest.kalloc) : NULL;
+        state = (throttleRetrieveFn != NULL) ? throttleRetrieveFn(tenantP, e->entityId, &corRest.kalloc) : NULL;
         if (state == NULL)             // vanished without a delete record — skip
           continue;
       }
@@ -1335,14 +1334,39 @@ static void throttleFlushTick(void* ctx, uint64_t now, CorAlloc* kaP)
 
 
 
+typedef struct { uint64_t now; } ThrottleTickArg;
+
+static void throttleVisit(LdTenantCaches* tcP, void* arg)
+{
+  throttleFlushCache(tcP->subCacheP, tcP->tenantP, ((ThrottleTickArg*) arg)->now);
+}
+
+//
+// throttleFlushTick - registered with the periodic-dispatch engine (1 Hz): every tenant
+//
+static void throttleFlushTick(void* ctx, uint64_t now, CorAlloc* kaP)
+{
+  (void) ctx;
+  (void) kaP;
+
+  if (throttleCachesFn == NULL)
+    return;
+
+  ThrottleTickArg arg = { now };
+  throttleCachesFn(throttleVisit, &arg);
+}
+
+
+
 //
 // ldThrottleFlushStart - register the coalesce-to-latest flush with the
 // periodic loop. retrieveFn is the broker's "retrieve one entity by id" hook
-// (the lib has no DB access). Single-tenant (tenant0) for now, like the other
-// periodic ticks.
+// (the lib has no DB access). It was registered with tenant0's cache alone:
+// on any other tenant the coalesced notification never came.
 //
-void ldThrottleFlushStart(LdSubCache* cacheP, LdThrottleRetrieveFunc retrieveFn)
+void ldThrottleFlushStart(LdTenantCachesFn cachesFn, LdThrottleRetrieveFunc retrieveFn)
 {
+  throttleCachesFn   = cachesFn;
   throttleRetrieveFn = retrieveFn;
-  ldPeriodicLoopRegister(throttleFlushTick, cacheP);
+  ldPeriodicLoopRegister(throttleFlushTick, NULL);
 }
