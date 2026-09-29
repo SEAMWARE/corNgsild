@@ -170,14 +170,14 @@ static void addPair(CorNode*     valuesArray,
       // to come out compacted on the wire.
       if (strcmp(firstKey, "vocab") == 0)
         vocabCompactInPlace(clone);
-      clone->name = (char*) firstKey;
+      ldNodeRename(clone, (char*) firstKey);
       CorNode* wrapper = corTreeObject(allocP, NULL);
       corTreeChildAdd(wrapper, clone);
       corTreeChildAdd(pair, wrapper);
     }
     else
     {
-      clone->name = NULL;
+      ldNodeRename(clone, NULL);
       corTreeChildAdd(pair, clone);
     }
   }

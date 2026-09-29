@@ -258,7 +258,7 @@ static CorNode* buildInstanceFromScalar(const char* attrName,
   {
     corTreeChildAdd(inst, corTreeString(targetAllocP, "type", "Property"));
     CorNode* valueP = corTreeClone(targetAllocP, fragScalar);
-    valueP->name = (char*) "value";
+    ldNodeRename(valueP, (char*) "value");
     corTreeChildAdd(inst, valueP);
     break;
   }
@@ -273,7 +273,7 @@ static CorNode* buildInstanceFromScalar(const char* attrName,
     }
     corTreeChildAdd(inst, corTreeString(targetAllocP, "type", "Relationship"));
     CorNode* objP = corTreeClone(targetAllocP, fragScalar);
-    objP->name = (char*) "value";
+    ldNodeRename(objP, (char*) "value");
     corTreeChildAdd(inst, objP);
     break;
   }
@@ -330,7 +330,7 @@ static CorNode* buildInstanceFromScalar(const char* attrName,
       }
     }
     CorNode* langEntryP = corTreeClone(targetAllocP, fragScalar);
-    langEntryP->name = (char*) corNgsild.lang;
+    ldNodeRename(langEntryP, (char*) corNgsild.lang);
     corTreeChildAdd(languageMap, langEntryP);
     corTreeChildAdd(inst, languageMap);
     break;
@@ -370,7 +370,7 @@ static CorNode* buildInstanceFromScalar(const char* attrName,
     //
     corTreeChildAdd(inst, corTreeString(targetAllocP, "type", "JsonProperty"));
     CorNode* jsonP = corTreeClone(targetAllocP, fragScalar);
-    jsonP->name = (char*) "value";
+    ldNodeRename(jsonP, (char*) "value");
     corTreeChildAdd(inst, jsonP);
     break;
   }
@@ -405,7 +405,7 @@ static CorNode* buildInstanceFromScalar(const char* attrName,
     corTreeChildAdd(inst, corTreeString(targetAllocP, "type",
                               (char*) ((targetType == LdAttrListProperty) ? "ListProperty" : "ListRelationship")));
     CorNode* listP = corTreeClone(targetAllocP, fragScalar);
-    listP->name = (char*) "value";
+    ldNodeRename(listP, (char*) "value");
     corTreeChildAdd(inst, listP);
     break;
   }
@@ -428,7 +428,7 @@ static CorNode* buildInstanceFromScalar(const char* attrName,
     //
     corTreeChildAdd(inst, corTreeString(targetAllocP, "type", "Property"));
     CorNode* fallbackP = corTreeClone(targetAllocP, fragScalar);
-    fallbackP->name = (char*) "value";
+    ldNodeRename(fallbackP, (char*) "value");
     corTreeChildAdd(inst, fallbackP);
     break;
   }
@@ -498,7 +498,7 @@ static void reportAdd(LdMergeReport* reportP, const char* attrName, const char* 
   corTreeChildAdd(rec, corTreeString(corRest.kallocP, "reason", reason));
   if (preClone != NULL)
   {
-    preClone->name = (char*) "preValue";
+    ldNodeRename(preClone, (char*) "preValue");
     corTreeChildAdd(rec, preClone);
   }
 
@@ -757,7 +757,7 @@ static bool scopeReplace(CorNode* target, CorNode* fragScope, CorAlloc* targetAl
   }
 
   CorNode* cloneP = corTreeClone(targetAllocP, fragScope);
-  cloneP->name   = (char*) LD_VOCAB_SCOPE;
+  ldNodeRename(cloneP, (char*) LD_VOCAB_SCOPE);
 
   if (tScope != NULL)
     corTreeChildReplace(target, tScope, cloneP);
@@ -938,7 +938,7 @@ static bool mergeApply(CorNode*       target,
       {
         CorNode* cloneP = corTreeClone(targetAllocP, fChild);
 
-        cloneP->name = (char*) LD_VOCAB_EXPIRES_AT;
+        ldNodeRename(cloneP, (char*) LD_VOCAB_EXPIRES_AT);
 
         if (tExpiresAt != NULL)
           corTreeChildReplace(target, tExpiresAt, cloneP);
@@ -1017,7 +1017,7 @@ static bool mergeApply(CorNode*       target,
       // Wrap the new instance as { "@none": <instance> } so the rest of the
       // merge pipeline sees a dataset-keyed fragment wrapper.
       fragWrapper = corTreeObject(targetAllocP, (char*) name);
-      newInstance->name = (char*) "@none";
+      ldNodeRename(newInstance, (char*) "@none");
       corTreeChildAdd(fragWrapper, newInstance);
 
       // Stamp createdAt/modifiedAt onto the instance so the DB-model invariant

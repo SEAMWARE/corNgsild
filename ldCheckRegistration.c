@@ -316,7 +316,7 @@ static void regInfoMergeAttributeNames(CorNode* infoArrayP)
       continue;   // already 'attributeNames' (or no attribute restriction at all)
 
     CorNode* mergedP = (propsP != NULL) ? propsP : relsP;
-    mergedP->name = (char*) "attributeNames";
+    ldNodeRename(mergedP, (char*) "attributeNames");
 
     // both forms present — append every relationshipNames item to attributeNames
     if (propsP != NULL && relsP != NULL)

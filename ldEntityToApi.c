@@ -186,7 +186,7 @@ static void restoreValueKey(CorNode* instP, bool collapseSingletonArrays)
     const char* correctKey = ldValueKeyForType(aType);
 
     if (correctKey != NULL)
-      valueP->name = (char*) correctKey;
+      ldNodeRename(valueP, (char*) correctKey);
 
     //
     // JSON-LD compaction: a single-element array value of a term with no
@@ -279,6 +279,12 @@ void ldEntityToApi(CorNode* entityP, CorAlloc* faP)
   if (entityP == NULL || entityP->type != CorObject)
     return;
 
+  //
+  // A stored Entity (read from the database, cloned from the store) arrives unstamped:
+  // stamp it once, cheaply, so every ldTermId below is a load (see ldTreeStampCanonical)
+  //
+  ldTreeStampCanonical(entityP);
+
   CorNode* childP = entityP->value.head;
 
   while (childP != NULL)
@@ -336,7 +342,7 @@ void ldEntityToApi(CorNode* entityP, CorAlloc* faP)
       }
 
       // Unwrap: replace wrapper with the instance, keeping the attribute name
-      instP->name = childP->name;
+      ldNodeRename(instP, childP->name);
       instP->next = nextP;
       corTreeChildReplace(entityP, childP, instP);
 
@@ -363,7 +369,7 @@ void ldEntityToApi(CorNode* entityP, CorAlloc* faP)
           corTreeChildAdd(instP, dsNodeP);
         }
 
-        instP->name = NULL;  // array elements have no name
+        ldNodeRename(instP, NULL);  // array elements have no name
         instP->next = NULL;
         corTreeChildAdd(arrayP, instP);
 

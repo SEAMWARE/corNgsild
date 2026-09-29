@@ -52,7 +52,7 @@ static void ldGeoValueUnexpand(CorNode* geoValueP)
   {
     // Un-expand key names: "https://purl.org/geojson/vocab#coordinates" -> "coordinates"
     if (strncmp(childP->name, LD_VOCAB_GEOJSON_PREFIX, LD_VOCAB_GEOJSON_PREFIX_LEN) == 0)
-      childP->name = childP->name + LD_VOCAB_GEOJSON_PREFIX_LEN;
+      ldNodeRename(childP, childP->name + LD_VOCAB_GEOJSON_PREFIX_LEN);
 
     // Un-expand the "type" value: "https://purl.org/geojson/vocab#Point" -> "Point"
     if (ldTermId(childP) == CorTermType && childP->type == CorString)
@@ -153,7 +153,7 @@ static void normalizeValueKey(CorNode* attrP)
 
   for (CorNode* childP = attrP->value.head; childP != NULL; childP = childP->next)
     for (const char** vk = expandedValueKeys; *vk != NULL; vk++)
-      if (strcmp(childP->name, *vk) == 0) { childP->name = "value"; return; }
+      if (strcmp(childP->name, *vk) == 0) { ldNodeRename(childP, "value"); return; }
 }
 
 
@@ -164,8 +164,14 @@ static void normalizeValueKey(CorNode* attrP)
 //
 static void timestampSet(CorNode* objP, uint64_t createdAt, uint64_t modifiedAt, CorAlloc* faP)
 {
-  corTreeChildAdd(objP, corTreeInteger(corRest.kallocP, LD_VOCAB_CREATED_AT, (long long) createdAt));
-  corTreeChildAdd(objP, corTreeInteger(corRest.kallocP, LD_VOCAB_MODIFIED_AT, (long long) modifiedAt));
+  CorNode* createdAtP  = corTreeInteger(corRest.kallocP, LD_VOCAB_CREATED_AT,  (long long) createdAt);
+  CorNode* modifiedAtP = corTreeInteger(corRest.kallocP, LD_VOCAB_MODIFIED_AT, (long long) modifiedAt);
+
+  createdAtP->termId  = CorTermCreatedAt;    // built here, so stamped here - no lookup later
+  modifiedAtP->termId = CorTermModifiedAt;
+
+  corTreeChildAdd(objP, createdAtP);
+  corTreeChildAdd(objP, modifiedAtP);
 }
 
 
@@ -261,9 +267,11 @@ static CorNode* wrapSingleAttr(CorNode* attrP, uint64_t ts, CorAlloc* faP)
   // Create wrapper object with same name as the attribute
   CorNode* wrapperP = corTreeObject(corRest.kallocP, attrP->name);
 
+  wrapperP->termId = attrP->termId;          // the same name, so the same term
+
   // Move attrP into the wrapper as a child keyed by datasetId
   // Keep attrP->next intact — corTreeChildReplace needs it to link wrapperP to the next sibling
-  attrP->name = (char*) dsKey;
+  ldNodeRename(attrP, dsKey);                // now named by its datasetId - its term id goes too
   wrapperP->value.head = attrP;
   wrapperP->value.tail        = attrP;
 
@@ -302,6 +310,8 @@ static CorNode* wrapMultiAttr(CorNode* arrayP, uint64_t ts, CorAlloc* faP)
 
   CorNode* wrapperP = corTreeObject(corRest.kallocP, arrayP->name);
 
+  wrapperP->termId = arrayP->termId;         // the same name, so the same term
+
   // Move each array element into the wrapper, keyed by its datasetId
   CorNode* instP = arrayP->value.head;
 
@@ -313,7 +323,7 @@ static CorNode* wrapMultiAttr(CorNode* arrayP, uint64_t ts, CorAlloc* faP)
 
     attrToDbModel(instP, ts, faP);
 
-    instP->name = (char*) dsKey;
+    ldNodeRename(instP, (char*) dsKey);
     instP->next = NULL;
     corTreeChildAdd(wrapperP, instP);
 

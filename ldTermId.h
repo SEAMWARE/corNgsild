@@ -69,6 +69,20 @@ static inline CorTerm ldTermId(CorNode* nodeP)
 
 // -----------------------------------------------------------------------------
 //
+// ldTreeStampCanonical - stamp every unstamped node of a STORED tree, in one pass
+//
+// For trees the broker built itself - read from a database, cloned from a store. Their
+// names are canonical: a core term is always stored short, so a name holding ':' is a
+// user IRI, and one short-name probe answers the rest - none of corLdCoreLookup's IRI and
+// compact-IRI branches (whose prefix tests and long-string hashing are what made the
+// lazy path expensive on every read). Nodes already stamped are left as they are.
+//
+extern void ldTreeStampCanonical(CorNode* treeP);
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldNodeRename - change a node's name, and forget its term id
 //
 static inline void ldNodeRename(CorNode* nodeP, const char* name)

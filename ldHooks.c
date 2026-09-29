@@ -24,8 +24,7 @@
 #include "corJsonld/corLdCompactTree.h"                      // corLdCompactTree, corLdCompactTreeWith
 #include "corJsonld/corLdDownload.h"                         // corLdContextFromUrl
 
-#include "corNgsild/ldParse.h"                            // ldPrePayloadParseHook
-#include "corNgsild/ldAliasCanonicalize.h"                   // ldAliasCanonicalize
+#include "corNgsild/ldParse.h"                            // ldPrePayloadParseHook, ldParseAliasesApply
 #include "corNgsild/ldContextHost.h"                      // ldContextHostVolatile
 #include "corNgsild/LdProblem.h"                          // LD_ERROR_*
 #include "corNgsild/LdVocab.h"                            // LD_VOCAB_*
@@ -985,9 +984,9 @@ static void ldParseHook(void)
 
   //
   // One spelling for id and type from here on: "@id"/"@type" become "id"/"type", and a
-  // container with both is a 400 (see ldAliasCanonicalize.h).
+  // container with both is a 400 - from the list the key hook collected (ldParse.h).
   //
-  if ((corRest.in.requestTree != NULL) && (ldAliasCanonicalize(corRest.in.requestTree) == false))
+  if ((corRest.in.requestTree != NULL) && (ldParseAliasesApply() == false))
   {
     corNgsild.contextError = true;
     return;

@@ -103,7 +103,7 @@ static void reformatAttr(CorNode* attrP)
 
   CorNode* srcP = corTreeLookup(attrP, renameKey);
   if (srcP != NULL)
-    srcP->name = (char*) renameDest;
+    ldNodeRename(srcP, (char*) renameDest);
 
   typeP->value.s = (char*) newType;
 }
@@ -188,7 +188,7 @@ static void downgradeAttr(CorNode* entityP, CorNode* attrP, short tMajor, short 
       CorNode* firstP = attrP->value.head;
       if (firstP != NULL && firstP->type == CorObject && entityP != NULL)
       {
-        firstP->name = attrP->name;
+        ldNodeRename(firstP, attrP->name);
         firstP->next = NULL;
         corTreeChildReplace(entityP, attrP, firstP);
       }

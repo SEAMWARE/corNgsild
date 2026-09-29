@@ -286,7 +286,7 @@ bool ldToSimplified(CorNode* entityP, CorAlloc* faP)
         }
         else
         {
-          valueP->name = (char*) dsKey;
+          ldNodeRename(valueP, (char*) dsKey);
           corTreeChildAdd(datasetMap, valueP);
         }
       }

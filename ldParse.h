@@ -35,6 +35,53 @@ extern bool ldParseKeyHook(CorJson* corJsonP, CorNode* containerP, CorNode* node
 
 // -----------------------------------------------------------------------------
 //
+// LdParseState - what the key hook keeps while one body is parsed
+//
+// Per depth: the container last seen there, whether it lies inside a VALUE (a Property's
+// value, an @-member, anything under one - where names are somebody's JSON and are left
+// alone), and whether its latest member does. corJson parses depth-first, so the member
+// whose value is being parsed is always the latest one at its depth.
+//
+// aliasV: the "@id"/"@type" members met in structural positions, in document order, for
+// ldParseAliasesApply once the body is complete.
+//
+#define LD_PARSE_DEPTH_MAX  64
+
+typedef struct LdParseLevel
+{
+  CorNode*  containerP;
+  bool      inValue;          // the container lies inside a value
+  bool      memberSeen;       // a member has been met at this depth, in this branch
+  bool      memberInValue;    // ... and its value lies inside a value
+} LdParseLevel;
+
+typedef struct LdParseState
+{
+  LdParseLevel  level[LD_PARSE_DEPTH_MAX];
+  int           deepest;      // deepest level in use - the ones below are reset when the parse climbs back
+  CorNode**     aliasV;       // "@id"/"@type" members ...
+  CorNode**     aliasContainerV;  // ... and their containers
+  int           aliasN;
+  int           aliasMax;
+} LdParseState;
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldParseAliasesApply - "@id"/"@type" become "id"/"type"; both spellings in one container: 400
+//
+// "@type" IS "type" (what "type" expands to), "@id" is "id" (KZ 2026-09-28). Works on the
+// list the key hook collected - usually empty - not on the tree. A container holding
+// "@value" is a JSON-LD value object, whose "@type" is the literal's datatype: left alone.
+// Returns false with ldError set on a duplicate.
+//
+extern bool ldParseAliasesApply(void);
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldPrePayloadParseHook - corRest's pre-parse hook: the key hook for NGSI-LD bodies only
 //
 // A route with an NGSI-LD operation carries an NGSI-LD payload; any other body (an

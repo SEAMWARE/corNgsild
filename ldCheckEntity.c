@@ -133,7 +133,7 @@ bool ldCheckEntity(CorNode* entityP, LdOp op, CorNode* dbEntityP, CorAlloc* faP)
     {
       DUPLICATE_FLAG_CHECK(hasId, hasAtId, "Duplicate Id", "Duplicate 'id' / '@id' in entity");
       hasAtId = true;
-      childP->name = (char*) "id";    // normalize the JSON-LD keyword to the short NGSI-LD form
+      ldNodeRename(childP, (char*) "id");    // normalize the JSON-LD keyword to the short NGSI-LD form
       idNodeP = childP;
     }
     else if (ldTermId(childP) == CorTermType)
@@ -146,7 +146,7 @@ bool ldCheckEntity(CorNode* entityP, LdOp op, CorNode* dbEntityP, CorAlloc* faP)
     {
       DUPLICATE_FLAG_CHECK(hasType, hasAtType, "Duplicate Type", "Duplicate 'type' / '@type' in entity");
       hasAtType  = true;
-      childP->name = (char*) "type";  // normalize the JSON-LD keyword to the short NGSI-LD form
+      ldNodeRename(childP, (char*) "type");  // normalize the JSON-LD keyword to the short NGSI-LD form
       typeNodeP  = childP;
     }
   }
@@ -431,7 +431,7 @@ bool ldCheckEntity(CorNode* entityP, LdOp op, CorNode* dbEntityP, CorAlloc* faP)
       // Validate each instance.
       for (CorNode* instP = childP->value.head; instP != NULL; instP = instP->next)
       {
-        instP->name = childP->name;
+        ldNodeRename(instP, childP->name);
         if (ldCheckAttribute(instP, op, dbAttrType, faP) == false)
           return false;
       }

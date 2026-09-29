@@ -461,7 +461,7 @@ static CorNode* buildNotifDataEntry(LdSubCacheItem*      itemP,
               break;
             }
             CorNode* prev = corTreeClone(corRest.kallocP, preVal);
-            prev->name = (char*) prevKey;
+            ldNodeRename(prev, (char*) prevKey);
             corTreeChildAdd(nullAttr, prev);
           }
         }
@@ -573,7 +573,7 @@ static CorNode* buildNotifDataEntry(LdSubCacheItem*      itemP,
             continue;
 
           CorNode* marker = corTreeClone(corRest.kallocP, inst);
-          marker->name   = keyP->value.s;
+          ldNodeRename(marker, keyP->value.s);
 
           if (existingAttr == NULL)
           {
@@ -587,7 +587,7 @@ static CorNode* buildNotifDataEntry(LdSubCacheItem*      itemP,
       {
         // Whole-attribute deletion reported without instance detail (batch
         // and merge paths): a single @none instance carrying the marker.
-        inst->name = (char*) "@none";
+        ldNodeRename(inst, (char*) "@none");
         CorNode* wrapper = corTreeObject(corRest.kallocP, attrP->value.s);
         corTreeChildAdd(wrapper, inst);
         corTreeChildAdd(entityClone, wrapper);
@@ -707,7 +707,7 @@ static CorNode* buildNotifDataEntry(LdSubCacheItem*      itemP,
       if (attrOutP->type != CorObject) continue;
 
       CorNode* c = corTreeClone(corRest.kallocP, preVal);
-      c->name = (char*) prevKey;
+      ldNodeRename(c, (char*) prevKey);
       corTreeChildAdd(attrOutP, c);
     }
   }
@@ -908,7 +908,7 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
       ldToGeoJson(&newDataP, NULL /* default "location" */, corRest.kallocP);
       if (newDataP != NULL && newDataP != oldDataP)
       {
-        newDataP->name = (char*) "data";
+        ldNodeRename(newDataP, (char*) "data");
         corTreeChildReplace(notification, oldDataP, newDataP);
       }
       // § 5.2.6.11.2: ONE @context as a top-level FeatureCollection member

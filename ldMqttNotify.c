@@ -27,6 +27,7 @@
 
 #include "corRest/corRest.h"                               // corRest
 
+#include "corNgsild/ldTermId.h"                          // ldNodeRename
 #include "corNgsild/ldMqttNotify.h"                       // Own interface
 
 
@@ -250,7 +251,7 @@ static char* buildMqttMessage(const char* notifBodyJson,
   // body: parse the notification JSON and graft as a tree.
   CorNode* bodyTree = corJsonParse(corRest.corJsonP, (char*) notifBodyJson);
   if (bodyTree == NULL) return NULL;
-  bodyTree->name = (char*) "body";
+  ldNodeRename(bodyTree, (char*) "body");
   corTreeChildAdd(root, bodyTree);
 
   int    sz  = corJsonFastRenderSize(root) + 1;

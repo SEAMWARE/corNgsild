@@ -198,7 +198,7 @@ void ldDistScopeMerge(CorNode* destP, CorNode* srcP, CorAlloc* allocP)
   {
     CorNode* cloneP = corTreeClone(allocP, srcScopeP);
 
-    cloneP->name = (char*) LD_VOCAB_SCOPE;
+    ldNodeRename(cloneP, (char*) LD_VOCAB_SCOPE);
     corTreeChildAdd(destP, cloneP);
     return;
   }

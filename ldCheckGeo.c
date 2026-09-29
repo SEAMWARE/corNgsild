@@ -468,7 +468,7 @@ bool ldCheckGeoQuery(const char* geometry, const char* coordinates)
 
   CorNode* root = corTreeObject(&corRest.kalloc, NULL);
   corTreeChildAdd(root, corTreeString(&corRest.kalloc, "type", (char*) geometry));
-  coordsP->name = (char*) "coordinates";
+  ldNodeRename(coordsP, (char*) "coordinates");
   corTreeChildAdd(root, coordsP);
 
   return ldCheckGeo(root);

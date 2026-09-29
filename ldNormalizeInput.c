@@ -316,7 +316,7 @@ static void wrapAsProperty(CorNode* entityP, CorNode* childP, CorAlloc* kaP)
     return;
 
   memset(valueNodeP, 0, sizeof(CorNode));
-  valueNodeP->name  = (char*) LD_VOCAB_HAS_VALUE;
+  ldNodeRename(valueNodeP, (char*) LD_VOCAB_HAS_VALUE);
   valueNodeP->type  = childP->type;
   valueNodeP->value = childP->value;
   valueNodeP->next  = NULL;
@@ -351,7 +351,7 @@ void ldWrapAsGeoProperty(CorNode* entityP, CorNode* childP, CorAlloc* kaP)
     return;
 
   memset(valueNodeP, 0, sizeof(CorNode));
-  valueNodeP->name  = (char*) LD_VOCAB_HAS_VALUE;
+  ldNodeRename(valueNodeP, (char*) LD_VOCAB_HAS_VALUE);
   valueNodeP->type  = childP->type;
   valueNodeP->value = childP->value;
   valueNodeP->next  = NULL;
