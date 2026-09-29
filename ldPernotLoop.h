@@ -32,10 +32,20 @@ typedef CorNode* (*LdPernotQueryFunc)(void* tenantP, LdPernotItem* itemP, void* 
 
 
 
-// ldPernotLoopStart - launch the background timer thread
-// cacheP:   the global pernot cache to scan
+//
+// LdPernotCachesFn - the broker's pernot caches, one per tenant: call visit(cacheP, arg) for each
+//
+// The loop was started with ONE cache - tenant0's - so a periodic subscription on any other tenant
+// was accepted, stored and listed, and never fired. The broker owns the tenants, including those
+// created after startup, so the loop asks it for the caches on every tick.
+//
+typedef void (*LdPernotCacheVisitFn)(LdPernotCache* cacheP, void* arg);
+typedef void (*LdPernotCachesFn)(LdPernotCacheVisitFn visit, void* arg);
+
+// ldPernotLoopStart - register the periodic tick (the engine's thread runs it)
+// cachesFn: broker-provided walk of every tenant's pernot cache
 // queryFn:  broker-provided callback for entity queries
-extern void ldPernotLoopStart(LdPernotCache* cacheP, LdPernotQueryFunc queryFn);
+extern void ldPernotLoopStart(LdPernotCachesFn cachesFn, LdPernotQueryFunc queryFn);
 
 // ldPernotLoopStop - signal the thread to stop
 extern void ldPernotLoopStop(void);

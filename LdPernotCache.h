@@ -99,6 +99,12 @@ typedef struct LdPernotItem
   int                    refCount;
   bool                   retired;
 
+  // The item's own arena, for what is parsed out of subTree (q, scopeQ, geoQ): freed WITH the
+  // item. They were parsed into the cache's arena (or the subscription cache's!), which is never
+  // freed - so every create/delete of a periodic subscription leaked its parsed filters.
+  CorAlloc               alloc;
+  char                   allocBuf[512];
+
   struct LdPernotItem*   next;
 } LdPernotItem;
 

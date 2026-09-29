@@ -37,8 +37,13 @@ extern void ldPernotCacheItemUnpin(LdPernotItem* itemP);
 extern LdPernotItem* ldPernotCacheItemLookupPinned(LdPernotCache* cacheP, const char* subId);
 
 // ldPernotCacheItemAdd - add a subscription to the pernot cache (takes the wrlock)
-extern LdPernotItem* ldPernotCacheItemAdd(LdPernotCache* cacheP, CorNode* subTree,
-                                           LdQNode* qExpr, void* tenantP);
+// q, scopeQ and geoQ are parsed from subTree, into the item's own arena
+extern LdPernotItem* ldPernotCacheItemAdd(LdPernotCache* cacheP, CorNode* subTree, void* tenantP);
+
+// ldPernotCacheItemReplace - replace the item of subTree's id (PATCH): a new item from subTree,
+// with the old one's notification history (counters, last notification/success/failure), in
+// the old one's place. Takes the wrlock. false: no item of that id.
+extern bool ldPernotCacheItemReplace(LdPernotCache* cacheP, CorNode* subTree, void* tenantP);
 
 // ldPernotCacheItemLookup - find by subscription ID - caller holds the rdlock
 extern LdPernotItem* ldPernotCacheItemLookup(LdPernotCache* cacheP, const char* subId);

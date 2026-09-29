@@ -41,8 +41,8 @@
 
 
 
-static LdPernotCache*      loopCache   = NULL;
-static LdPernotQueryFunc   loopQueryFn = NULL;
+static LdPernotCachesFn    loopCachesFn = NULL;
+static LdPernotQueryFunc   loopQueryFn  = NULL;
 
 
 
@@ -194,17 +194,13 @@ static bool pernotSendNotification(LdPernotItem* itemP, CorNode* entityArray, Co
 
 // -----------------------------------------------------------------------------
 //
-// pernotTick - registered with the periodic-dispatch engine; called
-// once per second. Walks the LdPernotCache and fires any due item.
-//
-// `ctx` is the LdPernotCache* passed at registration time. `kaP` is
-// scratch from the engine; reset before every consumer's tick call.
+// pernotTickCache - one tenant's cache: fires any due item (called from pernotTick, once per
+// second, for every tenant). `kaP` is scratch from the engine; reset before every tick.
 //
 static void pernotTickOne(LdPernotItem* itemP, uint64_t now, CorAlloc* kaP);
 
-static void pernotTick(void* ctx, uint64_t now, CorAlloc* kaP)
+static void pernotTickCache(LdPernotCache* cacheP, uint64_t now, CorAlloc* kaP)
 {
-  LdPernotCache* cacheP = (LdPernotCache*) ctx;
   if (cacheP == NULL || loopQueryFn == NULL) return;
 
   //
@@ -318,11 +314,35 @@ static void pernotTickOne(LdPernotItem* itemP, uint64_t now, CorAlloc* kaP)
 //
 // Stop is a no-op — the engine outlives any single consumer.
 //
-void ldPernotLoopStart(LdPernotCache* cacheP, LdPernotQueryFunc queryFn)
+typedef struct { uint64_t now; CorAlloc* kaP; } TickArg;
+
+static void tickVisit(LdPernotCache* cacheP, void* arg)
 {
-  loopCache   = cacheP;
-  loopQueryFn = queryFn;
-  ldPeriodicLoopRegister(pernotTick, cacheP);
+  TickArg* tP = (TickArg*) arg;
+  pernotTickCache(cacheP, tP->now, tP->kaP);
+}
+
+//
+// pernotTick - the engine's tick: every tenant's cache
+//
+static void pernotTick(void* ctx, uint64_t now, CorAlloc* kaP)
+{
+  (void) ctx;
+
+  if (loopCachesFn == NULL)
+    return;
+
+  TickArg arg = { now, kaP };
+  loopCachesFn(tickVisit, &arg);
+}
+
+
+
+void ldPernotLoopStart(LdPernotCachesFn cachesFn, LdPernotQueryFunc queryFn)
+{
+  loopCachesFn = cachesFn;
+  loopQueryFn  = queryFn;
+  ldPeriodicLoopRegister(pernotTick, NULL);
 }
 
 
