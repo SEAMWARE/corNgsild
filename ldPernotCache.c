@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 #include <regex.h>                                     // regex_t, regcomp, regfree
+#include <stdio.h>                                     // snprintf
 #include <stdlib.h>                                    // calloc, malloc, free
 #include <string.h>                                    // strcmp, strdup
 
@@ -208,7 +209,7 @@ LdPernotCache* ldPernotCacheCreate(void)
 
 
 // ldPernotCacheItemAdd
-static LdPernotItem* itemBuild(CorNode* subTree, void* tenantP)
+static LdPernotItem* itemBuild(CorNode* subTree, void* tenantP, const char* tenantName)
 {
   LdPernotItem* itemP = (LdPernotItem*) calloc(1, sizeof(LdPernotItem));
   if (itemP == NULL)
@@ -354,6 +355,8 @@ static LdPernotItem* itemBuild(CorNode* subTree, void* tenantP)
     itemP->expiresAt = ldIsoToNanoseconds(expiresP->value.s);
 
   itemP->tenantP = tenantP;
+  if (tenantName != NULL)
+    snprintf(itemP->tenantName, sizeof(itemP->tenantName), "%s", tenantName);
 
   //
   // Stats fields — present when this item came from a mongo-load (a prior
@@ -407,12 +410,12 @@ static LdPernotItem* itemBuild(CorNode* subTree, void* tenantP)
 //
 // ldPernotCacheItemAdd
 //
-LdPernotItem* ldPernotCacheItemAdd(LdPernotCache* cacheP, CorNode* subTree, void* tenantP)
+LdPernotItem* ldPernotCacheItemAdd(LdPernotCache* cacheP, CorNode* subTree, void* tenantP, const char* tenantName)
 {
   if (cacheP == NULL || subTree == NULL)
     return NULL;
 
-  LdPernotItem* itemP = itemBuild(subTree, tenantP);
+  LdPernotItem* itemP = itemBuild(subTree, tenantP, tenantName);
   if (itemP == NULL)
     return NULL;
 
@@ -500,12 +503,12 @@ bool ldPernotCacheItemRemove(LdPernotCache* cacheP, const char* subId)
 // replace: the old item's history carries over, so a PATCH neither resets the counters nor makes
 // the next notification due at once.
 //
-bool ldPernotCacheItemReplace(LdPernotCache* cacheP, CorNode* subTree, void* tenantP)
+bool ldPernotCacheItemReplace(LdPernotCache* cacheP, CorNode* subTree, void* tenantP, const char* tenantName)
 {
   if (cacheP == NULL || subTree == NULL)
     return false;
 
-  LdPernotItem* newP = itemBuild(subTree, tenantP);
+  LdPernotItem* newP = itemBuild(subTree, tenantP, tenantName);
   if (newP == NULL || newP->subId == NULL)
   {
     if (newP != NULL)

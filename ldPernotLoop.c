@@ -23,6 +23,7 @@
 
 #include "corRest/CorRestState.h"                        // corRest (for thread-local init)
 #include "corRest/corRestClient.h"                       // CorRestClientRequest, corRestClientSend
+#include "corNgsild/ldTenantHeader.h"                    // ldTenantHeaderAdd
 
 #include "corJsonld/corLdCompactTree.h"                  // corLdCompactTree, corLdCompactTreeWith
 #include "corJsonld/corLdDownload.h"                     // corLdContextFromUrl
@@ -149,6 +150,7 @@ static bool pernotSendNotification(LdPernotItem* itemP, CorNode* entityArray, Co
 
   corRestClientRequestInit(&req, CorVerbPost, itemP->endpointUri, kaP);
   corRestClientRequestHeader(&req, "Content-Type", "application/json");
+  ldTenantHeaderAdd(&req, itemP->tenantName);
 
   // Link header with @context
   CorLdContext* ctxP = corLdCoreContext();

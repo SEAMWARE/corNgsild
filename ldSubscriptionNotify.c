@@ -43,6 +43,7 @@
 #include "corNgsild/ldTypes.h"                          // ldFormatToString
 #include "corNgsild/LdVocab.h"                          // LD_VOCAB_*
 #include "corNgsild/CorNgsild.h"                        // corNgsild
+#include "corNgsild/ldTenantHeader.h"                   // ldTenantHeaderAdd
 #include "corNgsild/LdSubCache.h"                       // LdSubCache, LdSubCacheItem
 #include "corNgsild/ldSubCache.h"                       // ldSubCacheRdLock, ldSubCacheItemPin, ...
 #include "corNgsild/ldEntityToApi.h"                    // ldEntityToApi
@@ -977,20 +978,9 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   corRestClientRequestInit(&req, CorVerbPost, itemP->endpointUri, NULL);
   corRestClientRequestHeader(&req, "Content-Type", contentType);
 
-  // § 6.4.8 — a notification resulting from a subscription matched under a
-  // non-default tenant carries the NGSILD-Tenant header (the same tenant the
-  // consumer addressed); without it the entity ids in the body are ambiguous.
-  // Taken from the triggering request (the change happened in the sub's tenant).
-  for (int i = 0; i < corRest.in.httpHeaderCount; i++)
-  {
-    if ((corRest.in.httpHeaderV[i].key != NULL) &&
-        (strcasecmp(corRest.in.httpHeaderV[i].key, "NGSILD-Tenant") == 0) &&
-        (corRest.in.httpHeaderV[i].value != NULL) && (corRest.in.httpHeaderV[i].value[0] != 0))
-    {
-      corRestClientRequestHeader(&req, "NGSILD-Tenant", corRest.in.httpHeaderV[i].value);
-      break;
-    }
-  }
+  // § 6.4.8 — the subscription's tenant: the request's for a change-driven notification, the
+  // visited tenant's for a throttle flush (set by the tick). See ldTenantHeaderAdd.
+  ldTenantHeaderAdd(&req, corNgsild.tenantName);
 
   // Ngsild-Attribute-Format — non-default representation format of the
   // notification data, as the lowercase NGSI-LD format value (concise /

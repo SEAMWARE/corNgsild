@@ -57,6 +57,7 @@
 #include "corNgsild/CorNgsild.h"                        // corNgsild (per-conn csrPending* cache)
 #include "corNgsild/ldPeriodicLoop.h"                   // ldPeriodicLoopRegister
 #include "corNgsild/corNgsild.h"                         // corNgsild (for tenant access via opaque)
+#include "corNgsild/ldTenantHeader.h"                    // ldTenantHeaderAdd
 #include "corNgsild/ldNotifyStatsHook.h"                // ldNotifyStatsHookInvoke
 #include "corNgsild/ldRequestSubstitute.h"              // ldRequestSubstitute
 #include "corNgsild/ldIdGenerate.h"                     // ldIdGenerate
@@ -361,6 +362,7 @@ static void csourceNotificationPost(LdSubCacheItem* subItemP, CorNode* notificat
 
   corRestClientRequestInit(&req, CorVerbPost, subItemP->endpointUri, NULL);
   corRestClientRequestHeader(&req, "Content-Type", acceptLdJson ? "application/ld+json" : "application/json");
+  ldTenantHeaderAdd(&req, corNgsild.tenantName);   // the CSR-subscription's tenant (request's, or the tick's)
 
   if (!acceptLdJson)
   {

@@ -28,6 +28,8 @@
 
 #include "corNgsild/LdSnapshotCache.h"                    // LdSnapshotCacheItem
 #include "corNgsild/ldIdGenerate.h"                       // ldIdGenerate
+#include "corNgsild/CorNgsild.h"                          // corNgsild
+#include "corNgsild/ldTenantHeader.h"                     // ldTenantHeaderAdd
 #include "corNgsild/ldSnapshotNotify.h"                   // Own interface
 #include "corNgsild/ldRequestSubstitute.h"                // ldRequestSubstitute (§ 6.3.18)
 
@@ -95,6 +97,7 @@ void ldSnapshotNotify(LdSnapshotCacheItem* itemP, bool deleted)
 
   corRestClientRequestInit(&req, CorVerbPost, endpointP->value.s, NULL);
   corRestClientRequestHeader(&req, "Content-Type", "application/json");
+  ldTenantHeaderAdd(&req, corNgsild.tenantName);   // the snapshot's tenant (set with tenantP by the capture)
 
   // § 5.16.6 / § 5.2.15 receiverInfo → HTTP headers.
   CorNode* riP = corTreeLookup(itemP->tree, "receiverInfo");

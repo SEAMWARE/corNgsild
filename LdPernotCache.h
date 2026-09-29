@@ -90,8 +90,10 @@ typedef struct LdPernotItem
   int                    noMatch;         // queries that returned 0 entities
   int                    consecutiveErrors;
 
-  // Tenant (opaque — set by the broker, used for db.entityQuery)
+  // Tenant - the one the subscription was created in: queried (opaque, for db.entityQuery) and
+  // named on its notifications (NGSILD-Tenant; "" = the default tenant)
   void*                  tenantP;
+  char                   tenantName[64];
 
   // Pinning (as LdSubCacheItem): a reader that keeps the item past the cache lock - the loop
   // across its query and its send, a GET across its rendering - pins it. A remove of a pinned

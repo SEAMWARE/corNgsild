@@ -236,8 +236,10 @@ typedef struct CorNgsild
   bool    rawResponse;  // true => renderHook skips ldEntityToApi (used for subscription responses)
   bool    entityMapOnly; // true => GET|POST /entityMaps: query + return the EntityMap (not entities)
 
-  // Tenant (resolved in preServiceHook, opaque to corNgsild)
-  void*  tenantP;
+  // Tenant (resolved in preServiceHook, opaque to corNgsild) - and its name ("" = the default
+  // tenant), for what goes out tagged with it: the NGSILD-Tenant of a notification
+  void*        tenantP;
+  const char*  tenantName;
 
   // Inc6c — per-connection deferred caches (were static __thread in their .c
   // files). Drained by the post-response hook; the realloc'd buffers are freed
