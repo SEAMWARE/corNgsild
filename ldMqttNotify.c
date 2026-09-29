@@ -13,6 +13,7 @@
 #include <string.h>                                      // strncmp, strstr, strchr, strrchr, strlen, strcpy
 #include <stdio.h>                                       // snprintf
 #include <stdlib.h>                                      // strtol
+#include <pthread.h>                                     // pthread_once
 
 #include <mosquitto.h>                                   // mosquitto_*
 
@@ -57,12 +58,25 @@ void ldMqttTlsInsecureSet(bool onoff)
 //
 // ldMqttInit -
 //
+//
+// Once per process, whichever thread gets here first. It was a check of a plain bool: the
+// first MQTT notifications on two threads at once both ran mosquitto_lib_init, which is not
+// thread-safe.
+//
+static int mqttInitResult = -1;
+
+static void mqttInitOnce(void)
+{
+  mqttInitResult = (mosquitto_lib_init() == MOSQ_ERR_SUCCESS) ? 0 : -1;
+  mqttInitDone   = (mqttInitResult == 0);
+}
+
 int ldMqttInit(void)
 {
-  if (mqttInitDone) return 0;
-  if (mosquitto_lib_init() != MOSQ_ERR_SUCCESS) return -1;
-  mqttInitDone = true;
-  return 0;
+  static pthread_once_t once = PTHREAD_ONCE_INIT;
+
+  pthread_once(&once, mqttInitOnce);
+  return mqttInitResult;
 }
 
 
@@ -273,7 +287,7 @@ bool ldMqttNotify(const char* uri,
                   CorNode*    receiverInfo,
                   CorNode*    notifierInfo)
 {
-  if (!mqttInitDone && ldMqttInit() != 0) return false;
+  if (ldMqttInit() != 0) return false;
 
   MqttUri parsed;
   if (!parseMqttUri(uri, &parsed))

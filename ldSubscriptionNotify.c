@@ -64,23 +64,8 @@
 #include "corNgsild/ldThrottleDirty.h"                  // ldThrottleDirtyUpsert/Drain/EntriesFree
 #include "corNgsild/ldPeriodicLoop.h"                   // ldPeriodicLoopRegister
 #include "corNgsild/ldTermId.h"                         // ldTermId, CorTerm*
+#include "corNgsild/ldIdGenerate.h"                     // ldIdGenerate
 #include "corNgsild/ldSubscriptionNotify.h"             // Own interface
-
-
-
-// -----------------------------------------------------------------------------
-//
-// notifIdGenerate -
-//
-static char* notifIdGenerate(void)
-{
-  static int   counter = 0;
-  static char  buf[128];
-
-  snprintf(buf, sizeof(buf), "urn:ngsi-ld:Notification:%lx:%04x", (long) time(NULL), ++counter & 0xFFFF);
-
-  return buf;
-}
 
 
 
@@ -785,7 +770,7 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   isoNow(isoTimeBuf, sizeof(isoTimeBuf));
 
   CorNode* notification = corTreeObject(corRest.kallocP, NULL);
-  corTreeChildAdd(notification, corTreeString(corRest.kallocP, "id",  notifIdGenerate()));
+  corTreeChildAdd(notification, corTreeString(corRest.kallocP, "id",  ldIdGenerate(corRest.kallocP, "Notification")));
   corTreeChildAdd(notification, corTreeString(corRest.kallocP, "type", "Notification"));
   corTreeChildAdd(notification, corTreeString(corRest.kallocP, "subscriptionId", itemP->subId));
   corTreeChildAdd(notification, corTreeString(corRest.kallocP, "notifiedAt", isoTimeBuf));

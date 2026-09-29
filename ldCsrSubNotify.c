@@ -59,6 +59,7 @@
 #include "corNgsild/corNgsild.h"                         // corNgsild (for tenant access via opaque)
 #include "corNgsild/ldNotifyStatsHook.h"                // ldNotifyStatsHookInvoke
 #include "corNgsild/ldRequestSubstitute.h"              // ldRequestSubstitute
+#include "corNgsild/ldIdGenerate.h"                     // ldIdGenerate
 #include "corNgsild/ldCsrSubNotify.h"                   // Own interface
 
 
@@ -240,21 +241,6 @@ static void isoNow(char* buf, int bufSize)
 
 // -----------------------------------------------------------------------------
 //
-// notifIdGenerate - one-shot URN for the notification identifier
-//
-static const char* notifIdGenerate(void)
-{
-  static int counter = 0;
-  static char buf[128];
-  snprintf(buf, sizeof(buf), "urn:ngsi-ld:Notification:%lx:%04x",
-           (long) time(NULL), ++counter & 0xFFFF);
-  return buf;
-}
-
-
-
-// -----------------------------------------------------------------------------
-//
 // csourceNotificationBuild - build the notification tree
 //
 // Runs while the matched LdRegCacheItems are guaranteed alive (the same
@@ -269,7 +255,7 @@ static CorNode* csourceNotificationBuild(LdSubCacheItem* subItemP,
   isoNow(isoTimeBuf, sizeof(isoTimeBuf));
 
   CorNode* notification = corTreeObject(corRest.kallocP, NULL);
-  corTreeChildAdd(notification, corTreeString(corRest.kallocP, "id",  (char*) notifIdGenerate()));
+  corTreeChildAdd(notification, corTreeString(corRest.kallocP, "id",  ldIdGenerate(corRest.kallocP, "Notification")));
   corTreeChildAdd(notification, corTreeString(corRest.kallocP, "type", "ContextSourceNotification"));
   corTreeChildAdd(notification, corTreeString(corRest.kallocP, "subscriptionId", subItemP->subId));
   corTreeChildAdd(notification, corTreeString(corRest.kallocP, "notifiedAt", isoTimeBuf));
