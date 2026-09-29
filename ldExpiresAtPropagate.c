@@ -19,6 +19,7 @@
 #include "corNgsild/LdVocab.h"                            // LD_VOCAB_EXPIRES_AT
 #include "corNgsild/ldCheckDateTime.h"                    // ldIsoToNanoseconds
 
+#include "corNgsild/ldTermId.h"                           // ldTermId, CorTerm*
 #include "corNgsild/ldExpiresAtPropagate.h"               // Own interface
 
 
@@ -32,13 +33,13 @@ static bool isAttributeContainer(CorNode* nodeP)
 {
   if (nodeP == NULL || nodeP->name == NULL)              return false;
   if (nodeP->name[0] == '@')                             return false;
-  if (strcmp(nodeP->name, "id")                  == 0)   return false;
-  if (strcmp(nodeP->name, "type")                == 0)   return false;
-  if (strcmp(nodeP->name, "scope")               == 0)   return false;
-  if (strcmp(nodeP->name, "createdAt")           == 0)   return false;
-  if (strcmp(nodeP->name, "modifiedAt")          == 0)   return false;
-  if (strcmp(nodeP->name, "deletedAt")           == 0)   return false;
-  if (strcmp(nodeP->name, LD_VOCAB_EXPIRES_AT)   == 0)   return false;
+  if (ldTermId(nodeP) == CorTermId)          return false;
+  if (ldTermId(nodeP) == CorTermType)        return false;
+  if (ldTermId(nodeP) == CorTermScope)       return false;
+  if (ldTermId(nodeP) == CorTermCreatedAt)   return false;
+  if (ldTermId(nodeP) == CorTermModifiedAt)  return false;
+  if (ldTermId(nodeP) == CorTermDeletedAt)   return false;
+  if (ldTermId(nodeP) == CorTermExpiresAt)   return false;
   return (nodeP->type == CorObject);
 }
 

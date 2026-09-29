@@ -54,7 +54,7 @@
 #include "corNgsild/LdRegCache.h"                       // LdRegCache, LdRegCacheItem, LdRegInfo, LdRegEntityInfo
 #include "corNgsild/ldRegCache.h"                       // ldRegCacheRdLock, ldRegCacheUnlock
 #include "corNgsild/ldEntityMatch.h"                    // ldEntityMatchQ
-#include "corNgsild/CorNgsild.h"                          // corNgsild (per-conn csrPending* cache)
+#include "corNgsild/CorNgsild.h"                        // corNgsild (per-conn csrPending* cache)
 #include "corNgsild/ldPeriodicLoop.h"                   // ldPeriodicLoopRegister
 #include "corNgsild/corNgsild.h"                         // corNgsild (for tenant access via opaque)
 #include "corNgsild/ldNotifyStatsHook.h"                // ldNotifyStatsHookInvoke

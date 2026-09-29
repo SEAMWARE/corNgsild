@@ -41,8 +41,9 @@
 #include "corNgsild/ldTypes.h"                         // ldAttrTypeFromString, ldAttrTypeToString
 #include "corNgsild/ldError.h"                         // ldError
 #include "corNgsild/LdProblem.h"                       // LD_ERROR_*
-#include "corNgsild/CorNgsild.h"                        // corNgsild (lang, observedAtNs)
+#include "corNgsild/CorNgsild.h"                       // corNgsild (lang, observedAtNs)
 #include "corNgsild/ldIsEntityKeyword.h"               // ldIsEntityKeyword
+#include "corNgsild/ldTermId.h"                        // ldTermId, CorTerm*
 #include "corNgsild/ldEntityMerge.h"                   // Own interface
 
 
@@ -257,7 +258,7 @@ static CorNode* buildInstanceFromScalar(const char* attrName,
   {
     corTreeChildAdd(inst, corTreeString(targetAllocP, "type", "Property"));
     CorNode* valueP = corTreeClone(targetAllocP, fragScalar);
-    valueP->name = (char*) "value";
+    ldNodeRename(valueP, (char*) "value");
     corTreeChildAdd(inst, valueP);
     break;
   }
@@ -272,7 +273,7 @@ static CorNode* buildInstanceFromScalar(const char* attrName,
     }
     corTreeChildAdd(inst, corTreeString(targetAllocP, "type", "Relationship"));
     CorNode* objP = corTreeClone(targetAllocP, fragScalar);
-    objP->name = (char*) "value";
+    ldNodeRename(objP, (char*) "value");
     corTreeChildAdd(inst, objP);
     break;
   }
@@ -329,7 +330,7 @@ static CorNode* buildInstanceFromScalar(const char* attrName,
       }
     }
     CorNode* langEntryP = corTreeClone(targetAllocP, fragScalar);
-    langEntryP->name = (char*) corNgsild.lang;
+    ldNodeRename(langEntryP, (char*) corNgsild.lang);
     corTreeChildAdd(languageMap, langEntryP);
     corTreeChildAdd(inst, languageMap);
     break;
@@ -369,7 +370,7 @@ static CorNode* buildInstanceFromScalar(const char* attrName,
     //
     corTreeChildAdd(inst, corTreeString(targetAllocP, "type", "JsonProperty"));
     CorNode* jsonP = corTreeClone(targetAllocP, fragScalar);
-    jsonP->name = (char*) "value";
+    ldNodeRename(jsonP, (char*) "value");
     corTreeChildAdd(inst, jsonP);
     break;
   }
@@ -404,7 +405,7 @@ static CorNode* buildInstanceFromScalar(const char* attrName,
     corTreeChildAdd(inst, corTreeString(targetAllocP, "type",
                               (char*) ((targetType == LdAttrListProperty) ? "ListProperty" : "ListRelationship")));
     CorNode* listP = corTreeClone(targetAllocP, fragScalar);
-    listP->name = (char*) "value";
+    ldNodeRename(listP, (char*) "value");
     corTreeChildAdd(inst, listP);
     break;
   }
@@ -427,7 +428,7 @@ static CorNode* buildInstanceFromScalar(const char* attrName,
     //
     corTreeChildAdd(inst, corTreeString(targetAllocP, "type", "Property"));
     CorNode* fallbackP = corTreeClone(targetAllocP, fragScalar);
-    fallbackP->name = (char*) "value";
+    ldNodeRename(fallbackP, (char*) "value");
     corTreeChildAdd(inst, fallbackP);
     break;
   }
@@ -497,7 +498,7 @@ static void reportAdd(LdMergeReport* reportP, const char* attrName, const char* 
   corTreeChildAdd(rec, corTreeString(corRest.kallocP, "reason", reason));
   if (preClone != NULL)
   {
-    preClone->name = (char*) "preValue";
+    ldNodeRename(preClone, (char*) "preValue");
     corTreeChildAdd(rec, preClone);
   }
 
@@ -527,7 +528,7 @@ void ldEntityReplaceReport(CorNode* oldEntityP, CorNode* newEntityP, LdMergeRepo
   // new vs old → attributeCreated (new-only) / attributeModified (in both)
   for (CorNode* nAttrP = newEntityP->value.head; nAttrP != NULL; nAttrP = nAttrP->next)
   {
-    if ((nAttrP->name == NULL) || ldIsEntityKeyword(nAttrP->name) || (strcmp(nAttrP->name, "_id") == 0))
+    if ((nAttrP->name == NULL) || ldIsEntityMember(nAttrP) || (strcmp(nAttrP->name, "_id") == 0))
       continue;
 
     CorNode* oAttrP = corTreeLookup(oldEntityP, nAttrP->name);
@@ -540,7 +541,7 @@ void ldEntityReplaceReport(CorNode* oldEntityP, CorNode* newEntityP, LdMergeRepo
   // old not in new → attributeDeleted
   for (CorNode* oAttrP = oldEntityP->value.head; oAttrP != NULL; oAttrP = oAttrP->next)
   {
-    if ((oAttrP->name == NULL) || ldIsEntityKeyword(oAttrP->name) || (strcmp(oAttrP->name, "_id") == 0))
+    if ((oAttrP->name == NULL) || ldIsEntityMember(oAttrP) || (strcmp(oAttrP->name, "_id") == 0))
       continue;
 
     if (corTreeLookup(newEntityP, oAttrP->name) == NULL)
@@ -576,8 +577,8 @@ static bool rfc7396Merge(CorNode* targetP, CorNode* patchP, uint64_t ts, CorAllo
     // never be overwritten on the target, and modifiedAt is handled separately
     // by bumpModifiedAt on the way back up.
     if (pChild->name != NULL &&
-        (strcmp(pChild->name, LD_VOCAB_CREATED_AT)  == 0 ||
-         strcmp(pChild->name, LD_VOCAB_MODIFIED_AT) == 0))
+        (ldTermId(pChild) == CorTermCreatedAt ||
+         ldTermId(pChild) == CorTermModifiedAt))
     {
       pChild = pNext;
       continue;
@@ -596,7 +597,7 @@ static bool rfc7396Merge(CorNode* targetP, CorNode* patchP, uint64_t ts, CorAllo
     //   - true Merge Entity (RFC 7396, § 10.2.9): the value is a normal JSON
     //     value and a merge surgically deep-merges object values (keeping
     //     unspecified siblings; null deletes), per RFC 7396.
-    bool replaceWhole = (deepValueMerge == false) && (pChild->name != NULL && strcmp(pChild->name, "value") == 0);
+    bool replaceWhole = (deepValueMerge == false) && (pChild->name != NULL && ldTermId(pChild) == CorTermValue);
 
     if (isNgsildNull(pChild))
     {
@@ -756,7 +757,7 @@ static bool scopeReplace(CorNode* target, CorNode* fragScope, CorAlloc* targetAl
   }
 
   CorNode* cloneP = corTreeClone(targetAllocP, fragScope);
-  cloneP->name   = (char*) LD_VOCAB_SCOPE;
+  ldNodeRename(cloneP, (char*) LD_VOCAB_SCOPE);
 
   if (tScope != NULL)
     corTreeChildReplace(target, tScope, cloneP);
@@ -889,7 +890,9 @@ static bool mergeApply(CorNode*       target,
     // reason ldEntityAttrsSet already uses for these two, and every driver treats a reason
     // other than "attributeDeleted" as "take this member from the merged Entity".
     //
-    if (strcmp(name, "type") == 0 || strcmp(name, "@type") == 0)
+    CorTerm term = ldTermId(fChild);   // type and @type are one term, as are scope's spellings
+
+    if (term == CorTermType)
     {
       if (typeUnion(target, fChild, targetAllocP))
       {
@@ -900,7 +903,7 @@ static bool mergeApply(CorNode*       target,
       continue;
     }
 
-    if (strcmp(name, LD_VOCAB_SCOPE) == 0)
+    if (term == CorTermScope)
     {
       if (scopeReplace(target, fChild, targetAllocP))
       {
@@ -920,7 +923,7 @@ static bool mergeApply(CorNode*       target,
     // epoch-nanosecond integer the DB model stores, or as the NGSI-LD Null string (left alone
     // there, so that the delete survives the conversion).
     //
-    if (strcmp(name, LD_VOCAB_EXPIRES_AT) == 0)
+    if (term == CorTermExpiresAt)
     {
       CorNode* tExpiresAt = corTreeLookup(target, LD_VOCAB_EXPIRES_AT);
 
@@ -937,7 +940,7 @@ static bool mergeApply(CorNode*       target,
       {
         CorNode* cloneP = corTreeClone(targetAllocP, fChild);
 
-        cloneP->name = (char*) LD_VOCAB_EXPIRES_AT;
+        ldNodeRename(cloneP, (char*) LD_VOCAB_EXPIRES_AT);
 
         if (tExpiresAt != NULL)
           corTreeChildReplace(target, tExpiresAt, cloneP);
@@ -1016,7 +1019,7 @@ static bool mergeApply(CorNode*       target,
       // Wrap the new instance as { "@none": <instance> } so the rest of the
       // merge pipeline sees a dataset-keyed fragment wrapper.
       fragWrapper = corTreeObject(targetAllocP, (char*) name);
-      newInstance->name = (char*) "@none";
+      ldNodeRename(newInstance, (char*) "@none");
       corTreeChildAdd(fragWrapper, newInstance);
 
       // Stamp createdAt/modifiedAt onto the instance so the DB-model invariant

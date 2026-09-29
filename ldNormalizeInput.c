@@ -21,18 +21,20 @@
 #include "corAlloc/CorAlloc.h"                         // CorAlloc
 #include "corAlloc/corAlloc.h"                         // corAlloc
 #include "corTree/CorNode.h"                            // CorNode
-#include "corTree/corTreeBuilder.h"                      // corTreeObject
+#include "corTree/corTreeBuilder.h"                     // corTreeObject
 #include "corTree/corTreeChildReplace.h"                // corTreeChildReplace
 #include "corTree/corTreeLookup.h"                      // corTreeLookup
 
 #include "corJsonld/corLdExpand.h"                          // KJF_CORE_TERM
+#include "corNgsild/ldAttrMember.h"                         // ldAttrMemberOf
 #include "corNgsild/ldError.h"                            // ldError
 #include "corNgsild/LdProblem.h"                          // LD_ERROR_BAD_REQUEST_DATA
 #include "corNgsild/LdVocab.h"                            // LD_VOCAB_*
 #include "corNgsild/LdAttrType.h"                         // LdAttrType
 #include "corNgsild/ldTypes.h"                             // ldAttrTypeToString, ldAttrTypeFromString
 #include "corNgsild/ldAttrTypeDetect.h"                   // ldAttrTypeDetect
-#include "corNgsild/ldIsEntityKeyword.h"                   // ldIsEntityKeyword
+#include "corNgsild/ldIsEntityKeyword.h"                  // ldIsEntityKeyword
+#include "corNgsild/ldTermId.h"                           // ldTermId, CorTerm*
 #include "corNgsild/LdNormalizeInput.h"                   // Own interface
 
 
@@ -53,7 +55,7 @@
 //
 static bool isAttrKeyword(const CorNode* nodeP)
 {
-  return ((nodeP->flags & KJF_ATTR_TERM) != 0);
+  return ldAttrMemberOf((CorNode*) nodeP) != 0;   // an Attribute's own member - not a sub-attribute
 }
 
 
@@ -66,13 +68,13 @@ static bool hasValueKey(CorNode* objP)
 {
   for (CorNode* childP = objP->value.head; childP != NULL; childP = childP->next)
   {
-    if (strcmp(childP->name, LD_VOCAB_HAS_VALUE)        == 0)  return true;
-    if (strcmp(childP->name, LD_VOCAB_HAS_OBJECT)       == 0)  return true;
-    if (strcmp(childP->name, LD_VOCAB_HAS_LANGUAGE_MAP) == 0)  return true;
-    if (strcmp(childP->name, LD_VOCAB_HAS_VOCAB)        == 0)  return true;
-    if (strcmp(childP->name, LD_VOCAB_HAS_VALUE_LIST)   == 0)  return true;
-    if (strcmp(childP->name, LD_VOCAB_HAS_OBJECT_LIST)  == 0)  return true;
-    if (strcmp(childP->name, LD_VOCAB_HAS_JSON)         == 0)  return true;
+    if (ldTermId(childP) == CorTermValue)        return true;
+    if (ldTermId(childP) == CorTermObject)       return true;
+    if (ldTermId(childP) == CorTermLanguageMap)  return true;
+    if (ldTermId(childP) == CorTermVocab)        return true;
+    if (ldTermId(childP) == CorTermValueList)    return true;
+    if (ldTermId(childP) == CorTermObjectList)   return true;
+    if (ldTermId(childP) == CorTermJson)         return true;
   }
   return false;
 }
@@ -119,9 +121,9 @@ static bool isGeoJsonObject(CorNode* objP)
 
   for (CorNode* childP = objP->value.head; childP != NULL; childP = childP->next)
   {
-    if (strcmp(childP->name, "type") == 0 && childP->type == CorString && isGeoJsonTypeName(childP->value.s))
+    if (ldTermId(childP) == CorTermType && childP->type == CorString && isGeoJsonTypeName(childP->value.s))
       hasGeoType = true;
-    else if (strcmp(childP->name, LD_VOCAB_COORDINATES) == 0)
+    else if (ldTermId(childP) == CorTermCoordinates)
       hasCoords = true;
   }
 
@@ -155,8 +157,8 @@ static bool isSimplifiedGeoProperty(CorNode* objP)
   for (CorNode* childP = objP->value.head; childP != NULL; childP = childP->next)
   {
     ++count;
-    if      (strcmp(childP->name, "type")              == 0)  typeP   = childP;
-    else if (strcmp(childP->name, LD_VOCAB_COORDINATES) == 0)  coordsP = childP;
+    if      (ldTermId(childP) == CorTermType)  typeP   = childP;
+    else if (ldTermId(childP) == CorTermCoordinates)  coordsP = childP;
   }
 
   return (count == 2 && typeP != NULL && typeP->type == CorString && coordsP != NULL);
@@ -225,7 +227,7 @@ static bool hasExplicitAttrType(CorNode* objP)
 {
   for (CorNode* childP = objP->value.head; childP != NULL; childP = childP->next)
   {
-    if (strcmp(childP->name, "type") == 0 && childP->type == CorString)
+    if (ldTermId(childP) == CorTermType && childP->type == CorString)
     {
       const char* v = childP->value.s;
 
@@ -314,7 +316,7 @@ static void wrapAsProperty(CorNode* entityP, CorNode* childP, CorAlloc* kaP)
     return;
 
   memset(valueNodeP, 0, sizeof(CorNode));
-  valueNodeP->name  = (char*) LD_VOCAB_HAS_VALUE;
+  ldNodeRename(valueNodeP, (char*) LD_VOCAB_HAS_VALUE);
   valueNodeP->type  = childP->type;
   valueNodeP->value = childP->value;
   valueNodeP->next  = NULL;
@@ -349,7 +351,7 @@ void ldWrapAsGeoProperty(CorNode* entityP, CorNode* childP, CorAlloc* kaP)
     return;
 
   memset(valueNodeP, 0, sizeof(CorNode));
-  valueNodeP->name  = (char*) LD_VOCAB_HAS_VALUE;
+  ldNodeRename(valueNodeP, (char*) LD_VOCAB_HAS_VALUE);
   valueNodeP->type  = childP->type;
   valueNodeP->value = childP->value;
   valueNodeP->next  = NULL;
@@ -539,7 +541,7 @@ static bool normalizeAttr(CorNode* containerP, CorNode* attrP, CorAlloc* kaP, bo
     CorNode* hasValueP = NULL;
     for (CorNode* childP = attrP->value.head; childP != NULL; childP = childP->next)
     {
-      if (strcmp(childP->name, LD_VOCAB_HAS_VALUE) == 0)
+      if (ldTermId(childP) == CorTermValue)
       {
         hasValueP = childP;
         break;
@@ -641,7 +643,7 @@ bool ldNormalizeInput(CorNode* entityP, CorAlloc* kaP, bool mergeMode, bool simp
   {
     CorNode* nextP = childP->next; // save before normalizeAttr may replace childP
 
-    if (ldIsEntityKeyword(childP->name) == false)
+    if (ldIsEntityMember(childP) == false)
     {
       if (normalizeAttr(entityP, childP, kaP, mergeMode, simplified) == false)
         return false;

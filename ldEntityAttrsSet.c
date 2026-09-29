@@ -19,7 +19,8 @@
 
 #include "corNgsild/LdVocab.h"                         // LD_VOCAB_*
 #include "corNgsild/ldEntityAttrsSet.h"                // Own interface
-#include "corNgsild/ldIsEntityKeyword.h"                   // ldIsNotAttributeName
+#include "corNgsild/ldIsEntityKeyword.h"               // ldIsNotAttributeName
+#include "corNgsild/ldTermId.h"                        // ldTermId, CorTerm*
 
 
 
@@ -152,7 +153,7 @@ static void addReportEntry(LdMergeReport* reportP, const char* attrName,
   if (preValue != NULL)
   {
     CorNode* clone = corTreeClone(corRest.kallocP, preValue);
-    clone->name = (char*) "preValue";
+    ldNodeRename(clone, (char*) "preValue");
     corTreeChildAdd(entry, clone);
   }
   corTreeChildAdd(reportP->changes, entry);
@@ -183,7 +184,7 @@ static void applyType(CorNode* target, CorNode* fragType, CorAlloc* allocP)
   {
     // Fragment's type becomes target's type wholesale (clone).
     CorNode* clone = corTreeClone(allocP, fragType);
-    clone->name = (char*) "type";
+    ldNodeRename(clone, (char*) "type");
     corTreeChildAdd(target, clone);
     return;
   }
@@ -269,7 +270,7 @@ static void applyExpiresAt(CorNode* target, CorNode* fragExpiresAt, CorAlloc* al
 
   CorNode* cloneP = corTreeClone(allocP, fragExpiresAt);
 
-  cloneP->name = (char*) LD_VOCAB_EXPIRES_AT;
+  ldNodeRename(cloneP, (char*) LD_VOCAB_EXPIRES_AT);
 
   if (tExpiresAt != NULL)
     removeChild(target, tExpiresAt, allocP);
@@ -309,7 +310,7 @@ static void applyScope(CorNode* target, CorNode* fragScope, bool overwrite, CorA
       removeChild(target, tScope, allocP);
 
     CorNode* clone = corTreeClone(allocP, fragScope);
-    clone->name = (char*) LD_VOCAB_SCOPE;
+    ldNodeRename(clone, (char*) LD_VOCAB_SCOPE);
     corTreeChildAdd(target, clone);
     return;
   }
@@ -380,7 +381,7 @@ void ldEntityAttrsSet(CorNode* target, CorNode* fragment,
   {
     if (fP->name == NULL)
       continue;
-    if (strcmp(fP->name, "type") == 0)
+    if (ldTermId(fP) == CorTermType)
     {
       applyType(target, fP, targetAllocP);
       anyChange = true;
@@ -390,13 +391,13 @@ void ldEntityAttrsSet(CorNode* target, CorNode* fragment,
       // hasSet, and the in-memory union wouldn't persist (ETSI 011_06_*).
       addReportEntry(reportP, "type", "entityModified", NULL);
     }
-    else if (strcmp(fP->name, LD_VOCAB_SCOPE) == 0)
+    else if (ldTermId(fP) == CorTermScope)
     {
       applyScope(target, fP, overwriteScope, targetAllocP);
       anyChange = true;
       addReportEntry(reportP, LD_VOCAB_SCOPE, "entityModified", NULL);
     }
-    else if (strcmp(fP->name, LD_VOCAB_EXPIRES_AT) == 0)
+    else if (ldTermId(fP) == CorTermExpiresAt)
     {
       //
       // An Entity member like the two above, and reported the same way - a fragment carrying
@@ -417,7 +418,7 @@ void ldEntityAttrsSet(CorNode* target, CorNode* fragment,
   for (CorNode* fAttrP = fragment->value.head; fAttrP != NULL; fAttrP = fAttrP->next)
   {
     // type, scope and expiresAt were handled in the first pass - and are Entity members anyway
-    if (ldIsNotAttributeName(fAttrP->name))
+    if (ldIsNotAttribute(fAttrP))
       continue;
 
     //

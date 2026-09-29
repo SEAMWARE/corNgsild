@@ -34,7 +34,7 @@
 #include "corNgsild/LdScopeExpr.h"                        // ldScopeExprParse
 #include "corNgsild/LdTypeExpr.h"                         // ldTypeExprParse
 #include "corNgsild/ldToAggregatedValues.h"              // ldIso8601DurationParse, LdDuration
-#include "corNgsild/CorNgsild.h"                           // Own interface
+#include "corNgsild/CorNgsild.h"                         // Own interface
 
 
 
@@ -939,8 +939,9 @@ void ldParamHook(const char* name, const char* value)
       // § 7.6.2.3 trailing path: "attr[member]" / "attr[a.b]" addresses a
       // sub-item inside the attribute's compound JSON value. Split it off the
       // attribute name here — before name expansion, whose § 4.6.2 name check
-      // would reject the '['. The bracket members are raw JSON keys (not
-      // @context-expanded), stored on the term for the sort comparator.
+      // would reject the '['. The bracket members are terms, expanded in
+      // ldExpandParams like the attribute name; stored on the term for the sort
+      // comparator.
       char**     valuePathV = NULL;
       int        valuePathN = 0;
       char*      lbr        = strchr(tok, '[');

@@ -15,7 +15,8 @@
 #include "corTree/corTreeLookup.h"                       // corTreeLookup
 #include "corTree/corTreeClone.h"                        // corTreeClone
 
-#include "corNgsild/CorNgsild.h"                           // corNgsild (geoJsonGeomForced)
+#include "corNgsild/CorNgsild.h"                         // corNgsild (geoJsonGeomForced)
+#include "corNgsild/ldTermId.h"                          // ldNodeRename
 #include "corNgsild/ldToGeoJson.h"                        // Own interface
 
 
@@ -113,7 +114,7 @@ static CorNode* entityToFeature(CorNode* entityP, const char* geoPropName, CorAl
   CorNode* geometry = extractGeometry(entityP, geoPropName, allocP);
   if (geometry != NULL)
   {
-    geometry->name = (char*) "geometry";
+    ldNodeRename(geometry, (char*) "geometry");
     corTreeChildAdd(feature, geometry);
   }
   else
@@ -123,7 +124,7 @@ static CorNode* entityToFeature(CorNode* entityP, const char* geoPropName, CorAl
 
   // "properties": clone the entity, remove "id" (already at Feature level)
   CorNode* properties = corTreeClone(allocP, entityP);
-  properties->name = (char*) "properties";
+  ldNodeRename(properties, (char*) "properties");
 
   CorNode* propsId = corTreeLookup(properties, "id");
   if (propsId != NULL)

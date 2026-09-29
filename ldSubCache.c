@@ -26,7 +26,7 @@
 
 #include "corNgsild/ldTypes.h"                          // ldFormatFromString
 #include "corRest/CorRestIn.h"                    // corAcceptParse
-#include "corNgsild/CorNgsild.h"                         // corNgsild (contextP)
+#include "corNgsild/CorNgsild.h"                  // corNgsild (contextP)
 #include "corNgsild/LdVocab.h"                          // LD_VOCAB_*
 #include "corNgsild/LdSubCache.h"                       // LdSubCache, LdSubCacheItem
 #include "corNgsild/ldThrottleDirty.h"                  // ldThrottleDirtyFree

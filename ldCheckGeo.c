@@ -18,11 +18,16 @@
 
 #include "corRest/CorRestState.h"                         // corRest
 
+#include "corJsonld/corLdInit.h"                          // corLdCoreContext
+#include "corJsonld/corLdCompact.h"                       // corLdCompact
+
+#include "corNgsild/CorNgsild.h"                          // corNgsild
 #include "corNgsild/LdProblem.h"                          // LD_ERROR_*
 #include "corNgsild/LdVocab.h"                            // LD_VOCAB_COORDINATES, LD_VOCAB_GEO_*
 #include "corNgsild/ldError.h"                            // ldError
 #include "corNgsild/ldCheckGeo.h"                         // Own interface
 #include "corNgsild/ldTraceLevels.h"                      // LdTCheckGeo
+#include "corNgsild/ldTermId.h"                           // ldTermId, CorTerm*
 
 
 
@@ -354,8 +359,8 @@ bool ldCheckGeo(CorNode* geoValueP)
   // duplicate-member check in ldParseHook, before this validation runs.
   for (CorNode* childP = geoValueP->value.head; childP != NULL; childP = childP->next)
   {
-    if      (strcmp(childP->name, "type") == 0)               typeP   = childP;
-    else if (strcmp(childP->name, LD_VOCAB_COORDINATES) == 0) coordsP = childP;
+    if      (ldTermId(childP) == CorTermType)               typeP   = childP;
+    else if (ldTermId(childP) == CorTermCoordinates)  coordsP = childP;
   }
 
   if (typeP == NULL || typeP->type != CorString)
@@ -418,7 +423,14 @@ bool ldCheckGeo(CorNode* geoValueP)
     return false;
   }
 
-  ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid GeoJSON", "Unknown GeoJSON geometry type: '%s'", geoType);
+  //
+  // A GeoProperty's value is JSON-LD, so its "type" string arrives expanded; the core
+  // geometry names are core terms and stay short, an unknown one is an IRI here -
+  // the error names what the client sent.
+  //
+  const char* sentType = corLdCompact((corNgsild.contextP != NULL) ? corNgsild.contextP : corLdCoreContext(), geoType);
+
+  ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid GeoJSON", "Unknown GeoJSON geometry type: '%s'", (sentType != NULL) ? sentType : geoType);
   return false;
 }
 
@@ -456,7 +468,7 @@ bool ldCheckGeoQuery(const char* geometry, const char* coordinates)
 
   CorNode* root = corTreeObject(&corRest.kalloc, NULL);
   corTreeChildAdd(root, corTreeString(&corRest.kalloc, "type", (char*) geometry));
-  coordsP->name = (char*) "coordinates";
+  ldNodeRename(coordsP, (char*) "coordinates");
   corTreeChildAdd(root, coordsP);
 
   return ldCheckGeo(root);

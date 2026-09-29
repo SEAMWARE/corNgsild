@@ -27,10 +27,11 @@
 #include "corNgsild/LdRegCache.h"                       // LdRegCache, LdRegCacheItem
 #include "corLog/corLog.h"                              // COR_T
 #include "corNgsild/ldTraceLevels.h"                     // LdTRegMatch
-#include "corNgsild/CorNgsild.h"                          // corNgsild (per-conn probePending cache)
+#include "corNgsild/CorNgsild.h"                         // corNgsild (per-conn probePending cache)
 #include "corNgsild/ldCheckDateTime.h"                  // ldIsoToNanoseconds
 #include "corNgsild/ldScopeMatch.h"                     // ldScopePatternMatch
 #include "corNgsild/ldProbeSourceIdentity.h"            // ldProbeSourceIdentity
+#include "corNgsild/ldTermId.h"                         // ldTermId, CorTerm*
 #include "corNgsild/ldRegCache.h"                       // Own interface
 
 
@@ -1407,9 +1408,9 @@ const char* ldRegCacheLocalWriteConflictTree(LdRegCache* cacheP,
   for (CorNode* aP = fragP->value.head; aP != NULL; aP = aP->next)
   {
     if (aP->name == NULL || aP->name[0] == '@')   continue;
-    if (strcmp(aP->name, "id")    == 0)           continue;
-    if (strcmp(aP->name, "type")  == 0)           continue;
-    if (strcmp(aP->name, "scope") == 0)           continue;
+    if (ldTermId(aP) == CorTermId)     continue;
+    if (ldTermId(aP) == CorTermType)   continue;
+    if (ldTermId(aP) == CorTermScope)  continue;
     attrN++;
   }
 
@@ -1418,9 +1419,9 @@ const char* ldRegCacheLocalWriteConflictTree(LdRegCache* cacheP,
   for (CorNode* aP = fragP->value.head; aP != NULL; aP = aP->next)
   {
     if (aP->name == NULL || aP->name[0] == '@')   continue;
-    if (strcmp(aP->name, "id")    == 0)           continue;
-    if (strcmp(aP->name, "type")  == 0)           continue;
-    if (strcmp(aP->name, "scope") == 0)           continue;
+    if (ldTermId(aP) == CorTermId)     continue;
+    if (ldTermId(aP) == CorTermType)   continue;
+    if (ldTermId(aP) == CorTermScope)  continue;
     attrIriV[aIx++] = aP->name;
   }
   attrIriV[aIx] = NULL;

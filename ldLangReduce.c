@@ -7,7 +7,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // 
 //
-// Operates on COMPACTED trees (after corLdCompactTree), so all names are
+// Operates on COMPACTED trees (after corLdCompactTree) - except for the
+// languageMap keys, compared as tags either way (ldLanguageTag) - so names are
 // short-form: "languageMap", "value", "type", "lang", "observedAt", etc.
 //
 #include <stdbool.h>                                     // bool
@@ -16,10 +17,15 @@
 
 #include "corAlloc/CorAlloc.h"                         // CorAlloc
 #include "corTree/CorNode.h"                            // CorNode
-#include "corTree/corTreeBuilder.h"                      // corTreeString
+#include "corTree/corTreeBuilder.h"                     // corTreeString
 #include "corTree/corTreeChildReplace.h"                // corTreeChildReplace
 
-#include "corNgsild/ldIsEntityKeyword.h"                   // ldIsEntityKeyword
+#include "corNgsild/ldAttrMember.h"                     // ldAttrMemberOf
+#include "corNgsild/ldTermClass.h"                      // ldTermClass, LD_TC_*
+#include "corNgsild/CorNgsild.h"                        // corNgsild
+#include "corNgsild/ldIsEntityKeyword.h"                // ldIsEntityKeyword
+#include "corNgsild/ldLanguageKey.h"                    // ldLanguageTag
+#include "corNgsild/ldTermId.h"                           // ldTermId, CorTerm*
 #include "corNgsild/ldLangReduce.h"                       // Own interface
 
 
@@ -28,22 +34,9 @@
 //
 // isAttrKeyword - (compacted names)
 //
-static bool isAttrKeyword(const char* name)
+static bool isAttrKeyword(CorNode* nodeP)
 {
-  if (strcmp(name, "type")        == 0)  return true;
-  if (strcmp(name, "value")       == 0)  return true;
-  if (strcmp(name, "object")      == 0)  return true;
-  if (strcmp(name, "languageMap") == 0)  return true;
-  if (strcmp(name, "vocab")       == 0)  return true;
-  if (strcmp(name, "valueList")   == 0)  return true;
-  if (strcmp(name, "objectList")  == 0)  return true;
-  if (strcmp(name, "json")        == 0)  return true;
-  if (strcmp(name, "observedAt")  == 0)  return true;
-  if (strcmp(name, "unitCode")    == 0)  return true;
-  if (strcmp(name, "datasetId")   == 0)  return true;
-  if (strcmp(name, "lang")        == 0)  return true;
-
-  return false;
+  return ldAttrMemberOf(nodeP) != 0;   // an Attribute's own member ("lang" included) - not a sub-attribute
 }
 
 
@@ -70,9 +63,9 @@ static void attrLangReduce(CorNode* attrP, const char* lang, CorAlloc* faP)
 
   for (CorNode* childP = attrP->value.head; childP != NULL; childP = childP->next)
   {
-    if (strcmp(childP->name, "languageMap") == 0)
+    if (ldTermId(childP) == CorTermLanguageMap)
       langMapP = childP;
-    else if (strcmp(childP->name, "type") == 0)
+    else if (ldTermId(childP) == CorTermType)
       typeP = childP;
   }
 
@@ -87,15 +80,22 @@ static void attrLangReduce(CorNode* attrP, const char* lang, CorAlloc* faP)
     CorNode* enP   = NULL;
     CorNode* firstP = langMapP->value.head;
 
+    //
+    // Keys are compared as TAGS: on a tree that has not been compacted yet they are
+    // still the broker's expanded encoding (ldLanguageKey.h); on a compacted one
+    // ldLanguageTag returns them as they are.
+    //
     for (CorNode* keyP = langMapP->value.head; keyP != NULL; keyP = keyP->next)
     {
-      if (strcmp(keyP->name, lang) == 0)
+      const char* tag = ldLanguageTag(keyP->name, corNgsild.contextP);
+
+      if (strcmp(tag, lang) == 0)
       {
         matchP = keyP;
         break;
       }
-      if      (strcmp(keyP->name, "@none") == 0)  noneP = keyP;
-      else if (strcmp(keyP->name, "en")    == 0)  enP   = keyP;
+      if      (strcmp(tag, "@none") == 0)  noneP = keyP;
+      else if (strcmp(tag, "en")    == 0)  enP   = keyP;
     }
 
     if (matchP == NULL)
@@ -103,7 +103,7 @@ static void attrLangReduce(CorNode* attrP, const char* lang, CorAlloc* faP)
 
     if (matchP != NULL)
     {
-      const char* chosenLang = matchP->name;
+      const char* chosenLang = ldLanguageTag(matchP->name, corNgsild.contextP);
 
       // Create "value" node with the matched value
       CorNode* valueP = corTreeString(corRest.kallocP, "value", matchP->value.s);
@@ -127,7 +127,7 @@ static void attrLangReduce(CorNode* attrP, const char* lang, CorAlloc* faP)
   // Recurse into sub-attributes
   for (CorNode* childP = attrP->value.head; childP != NULL; childP = childP->next)
   {
-    if (isAttrKeyword(childP->name) == false)
+    if (isAttrKeyword(childP) == false)
       attrLangReduce(childP, lang, faP);
   }
 }
@@ -149,7 +149,7 @@ void ldLangReduce(CorNode* entityP, const char* lang, CorAlloc* faP)
 
   for (CorNode* childP = entityP->value.head; childP != NULL; childP = childP->next)
   {
-    if (childP->name == NULL || ldIsEntityKeyword(childP->name))
+    if (childP->name == NULL || ldIsEntityMember(childP))
       continue;
 
     if (childP->type == CorArray)

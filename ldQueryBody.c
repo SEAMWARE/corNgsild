@@ -31,6 +31,7 @@
 #include "corNgsild/corNgsild.h"                          // ldError, LD_ERROR_*, corNgsild, ldParamHook
 #include "corNgsild/LdProblem.h"                         // LD_ERROR_BAD_REQUEST_DATA
 #include "corNgsild/ldError.h"                           // ldError
+#include "corNgsild/ldTermId.h"                          // ldTermId, CorTerm*
 #include "corNgsild/ldQueryBody.h"                       // Own interface
 
 
@@ -219,15 +220,15 @@ bool ldQueryBodyToParams(CorNode* bodyP)
   {
     if (fP->name == NULL)                       continue;
     if (fP->name[0] == '@')                     continue;
-    if (strcmp(fP->name, "type") == 0)          continue;
+    if (ldTermId(fP) == CorTermType)  continue;
 
-    if (strcmp(fP->name, "entities") == 0)
+    if (ldTermId(fP) == CorTermEntities)
     {
       collectFromEntities(fP);
       continue;
     }
 
-    if (strcmp(fP->name, "geoQ") == 0)
+    if (ldTermId(fP) == CorTermGeoQ)
     {
       collectFromGeoQ(fP);
       continue;
@@ -237,7 +238,7 @@ bool ldQueryBodyToParams(CorNode* bodyP)
     // (timerel, timeAt, endTimeAt, lastN, timeproperty, aggrMethods,
     // aggrPeriodDuration). Used by POST /temporal/entityOperations/query
     // (§ 5.7.4 / § 6.24.3.1).
-    if (strcmp(fP->name, "temporalQ") == 0 && fP->type == CorObject)
+    if (ldTermId(fP) == CorTermTemporalQ && fP->type == CorObject)
     {
       for (CorNode* tP = fP->value.head; tP != NULL; tP = tP->next)
       {
@@ -255,10 +256,10 @@ bool ldQueryBodyToParams(CorNode* bodyP)
       continue;
     }
 
-    if (strcmp(fP->name, "attrs")     == 0 ||
-        strcmp(fP->name, "pick")      == 0 ||
-        strcmp(fP->name, "omit")      == 0 ||
-        strcmp(fP->name, "datasetId") == 0)
+    if (ldTermId(fP) == CorTermAttrs ||
+        ldTermId(fP) == CorTermPick ||
+        ldTermId(fP) == CorTermOmit ||
+        ldTermId(fP) == CorTermDatasetId)
     {
       const char* joined = arrayJoin(fP);
       if (joined != NULL)

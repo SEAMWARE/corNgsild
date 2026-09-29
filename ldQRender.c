@@ -177,9 +177,10 @@ static int renderTerm(LdQTerm* term, CorLdContext* contextP, CorAlloc* allocP, c
   }
 
   //
-  // § 4.9 "[...]" — value-path members are opaque (no compaction):
-  // %-encode only, dots inside a member name become %2E, the joining
-  // dots stay raw.
+  // § 4.9 "[...]" — value-path members are terms (expanded by ldQParse), so they
+  // are compacted back like the sub-attribute segments above: IRI dots become
+  // %2E when a segment cannot be compacted, the joining dots stay raw. "*" is
+  // the wildcard, rendered as it is.
   //
   if (term->valuePathN > 0)
   {
@@ -187,7 +188,7 @@ static int renderTerm(LdQTerm* term, CorLdContext* contextP, CorAlloc* allocP, c
     const char** vsegV = (const char**) corAlloc(allocP, term->valuePathN * sizeof(char*));
     for (int i = 0; i < term->valuePathN; i++)
     {
-      vsegV[i] = urlEncode(term->valuePathV[i], allocP, qGrammarOnly);
+      vsegV[i] = (strcmp(term->valuePathV[i], "*") == 0) ? "*" : ldCompactOrEncode(term->valuePathV[i], contextP, allocP, qGrammarOnly);
       total   += strlen(vsegV[i]) + 1;
     }
 

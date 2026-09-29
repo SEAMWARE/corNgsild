@@ -16,12 +16,14 @@
 #include "corAlloc/CorAlloc.h"                         // CorAlloc
 #include "corAlloc/corAlloc.h"                         // corAlloc
 #include "corTree/CorNode.h"                            // CorNode
-#include "corTree/corTreeBuilder.h"                       // corTreeArray
+#include "corTree/corTreeBuilder.h"                     // corTreeArray
 #include "corTree/corTreeChildReplace.h"                // corTreeChildReplace
+#include "corNgsild/ldTermClass.h"                      // ldTermClass, LD_TC_*
 #include "corNgsild/LdVocab.h"                            // LD_VOCAB_DATASET_ID, LD_VOCAB_SCOPE
 #include "corNgsild/ldTypes.h"                            // ldAttrTypeFromString, ldValueKeyForType
 
-#include "corNgsild/ldIsEntityKeyword.h"                   // ldIsEntityKeyword
+#include "corNgsild/ldIsEntityKeyword.h"                  // ldIsEntityKeyword
+#include "corNgsild/ldTermId.h"                           // ldTermId, CorTerm*
 #include "corNgsild/ldEntityToApi.h"                      // Own interface
 
 
@@ -87,19 +89,9 @@ static void timestampToIso(long long nsec, char* buf, int bufSize)
 // expanded IRIs by the time they are stored, so only the structural keys are
 // still spelled short.
 //
-static bool isValueKey(const char* name)
+static bool isValueKey(CorNode* nodeP)
 {
-  if (name == NULL)                                   return false;
-
-  if (strcmp(name, LD_VOCAB_HAS_VALUE)        == 0)   return true;   // "value"
-  if (strcmp(name, LD_VOCAB_HAS_OBJECT)       == 0)   return true;   // "object"
-  if (strcmp(name, LD_VOCAB_HAS_LANGUAGE_MAP) == 0)   return true;   // "languageMap"
-  if (strcmp(name, LD_VOCAB_HAS_VOCAB)        == 0)   return true;   // "vocab"
-  if (strcmp(name, LD_VOCAB_HAS_VALUE_LIST)   == 0)   return true;   // "valueList"
-  if (strcmp(name, LD_VOCAB_HAS_OBJECT_LIST)  == 0)   return true;   // "objectList"
-  if (strcmp(name, LD_VOCAB_HAS_JSON)         == 0)   return true;   // "json"
-
-  return false;
+  return (ldTermClass[ldTermId(nodeP)] & LD_TC_VALUE_KEY) != 0;
 }
 
 
@@ -119,11 +111,11 @@ static void timestampsToIsoStrings(CorNode* objP, CorAlloc* allocP)
   for (CorNode* childP = objP->value.head; childP != NULL; childP = childP->next)
   {
     if (childP->type == CorInt &&
-        (strcmp(childP->name, LD_VOCAB_CREATED_AT)  == 0 ||
-         strcmp(childP->name, LD_VOCAB_MODIFIED_AT) == 0 ||
-         strcmp(childP->name, LD_VOCAB_DELETED_AT)  == 0 ||
-         strcmp(childP->name, LD_VOCAB_OBSERVED_AT) == 0 ||
-         strcmp(childP->name, LD_VOCAB_EXPIRES_AT)  == 0))
+        (ldTermId(childP) == CorTermCreatedAt ||
+         ldTermId(childP) == CorTermModifiedAt ||
+         ldTermId(childP) == CorTermDeletedAt ||
+         ldTermId(childP) == CorTermObservedAt ||
+         ldTermId(childP) == CorTermExpiresAt))
     {
       char  isoBuf[32];
       timestampToIso(childP->value.i, isoBuf, sizeof(isoBuf));
@@ -148,12 +140,12 @@ static void timestampsToIsoStrings(CorNode* objP, CorAlloc* allocP)
     if (childP->type != CorObject)
       continue;
 
-    if (isValueKey(childP->name))
+    if (isValueKey(childP))
       continue;
 
     for (CorNode* gcP = childP->value.head; gcP != NULL; gcP = gcP->next)
     {
-      if (gcP->name != NULL && strcmp(gcP->name, "type") == 0 && gcP->type == CorString &&
+      if (gcP->name != NULL && ldTermId(gcP) == CorTermType && gcP->type == CorString &&
           ldAttrTypeFromString(gcP->value.s) != LdAttrNone)
       {
         timestampsToIsoStrings(childP, allocP);
@@ -184,8 +176,8 @@ static void restoreValueKey(CorNode* instP, bool collapseSingletonArrays)
 
   for (CorNode* childP = instP->value.head; childP != NULL; childP = childP->next)
   {
-    if (strcmp(childP->name, "type") == 0 && childP->type == CorString) typeP  = childP;
-    if (strcmp(childP->name, "value") == 0)                             valueP = childP;
+    if (ldTermId(childP) == CorTermType && childP->type == CorString)  typeP  = childP;
+    if (ldTermId(childP) == CorTermValue)                              valueP = childP;
   }
 
   if (typeP != NULL && valueP != NULL)
@@ -194,7 +186,7 @@ static void restoreValueKey(CorNode* instP, bool collapseSingletonArrays)
     const char* correctKey = ldValueKeyForType(aType);
 
     if (correctKey != NULL)
-      valueP->name = (char*) correctKey;
+      ldNodeRename(valueP, (char*) correctKey);
 
     //
     // JSON-LD compaction: a single-element array value of a term with no
@@ -236,13 +228,13 @@ static void restoreValueKey(CorNode* instP, bool collapseSingletonArrays)
     if (childP->type != CorObject)
       continue;
 
-    if (isValueKey(childP->name))
+    if (isValueKey(childP))
       continue;
 
     // Check if this child is a sub-attribute by looking for a "type" field with a known attr type
     for (CorNode* gcP = childP->value.head; gcP != NULL; gcP = gcP->next)
     {
-      if (strcmp(gcP->name, "type") == 0 && gcP->type == CorString && ldAttrTypeFromString(gcP->value.s) != LdAttrNone)
+      if (ldTermId(gcP) == CorTermType && gcP->type == CorString && ldAttrTypeFromString(gcP->value.s) != LdAttrNone)
       {
         restoreValueKey(childP, collapseSingletonArrays);
         break;
@@ -287,6 +279,12 @@ void ldEntityToApi(CorNode* entityP, CorAlloc* faP)
   if (entityP == NULL || entityP->type != CorObject)
     return;
 
+  //
+  // A stored Entity (read from the database, cloned from the store) arrives unstamped:
+  // stamp it once, cheaply, so every ldTermId below is a load (see ldTreeStampCanonical)
+  //
+  ldTreeStampCanonical(entityP);
+
   CorNode* childP = entityP->value.head;
 
   while (childP != NULL)
@@ -294,7 +292,7 @@ void ldEntityToApi(CorNode* entityP, CorAlloc* faP)
     CorNode* nextP = childP->next;
 
     // Skip entity keywords (id, type, scope, ...).
-    if (childP->name == NULL || ldIsEntityKeyword(childP->name))
+    if (childP->name == NULL || ldIsEntityMember(childP))
     {
       childP = nextP;
       continue;
@@ -344,7 +342,7 @@ void ldEntityToApi(CorNode* entityP, CorAlloc* faP)
       }
 
       // Unwrap: replace wrapper with the instance, keeping the attribute name
-      instP->name = childP->name;
+      ldNodeRename(instP, childP->name);
       instP->next = nextP;
       corTreeChildReplace(entityP, childP, instP);
 
@@ -371,7 +369,7 @@ void ldEntityToApi(CorNode* entityP, CorAlloc* faP)
           corTreeChildAdd(instP, dsNodeP);
         }
 
-        instP->name = NULL;  // array elements have no name
+        ldNodeRename(instP, NULL);  // array elements have no name
         instP->next = NULL;
         corTreeChildAdd(arrayP, instP);
 

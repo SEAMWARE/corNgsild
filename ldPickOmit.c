@@ -12,10 +12,10 @@
 #include <string.h>                                    // strcmp
 
 #include "corTree/CorNode.h"                        // CorNode
-#include "corTree/corTreeBuilder.h"             // corTreeChildRemove
+#include "corTree/corTreeBuilder.h"                 // corTreeChildRemove
 
-#include "corNgsild/ldIsEntityKeyword.h"          // ldIsEntityKeyword
-#include "corNgsild/CorNgsild.h"                   // corNgsild (geometryPropertyExpanded)
+#include "corNgsild/ldIsEntityKeyword.h"            // ldIsEntityKeyword
+#include "corNgsild/CorNgsild.h"                    // corNgsild (geometryPropertyExpanded)
 #include "corNgsild/ldPickOmit.h"                     // Own interface
 
 
@@ -122,7 +122,7 @@ void ldAttrsFilter(CorNode* entityP, char** attrsV)
   {
     CorNode* nextP = childP->next;
 
-    if (childP->name != NULL && !ldIsEntityKeyword(childP->name))
+    if (childP->name != NULL && !ldIsEntityMember(childP))
     {
       if (!inStringV(childP->name, attrsV) && !isGeoJsonProtected(childP->name))
         corTreeChildRemove(entityP, childP);

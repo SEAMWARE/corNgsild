@@ -16,7 +16,7 @@
 
 #include "corJsonld/corLdInit.h"                          // corLdCoreContext
 
-#include "corNgsild/ldIsEntityKeyword.h"                 // ldIsEntityKeyword
+#include "corNgsild/ldIsEntityKeyword.h"                  // ldIsEntityKeyword
 #include "corNgsild/ldDistOp.h"                          // ldDistOpForwardFailureReason
 
 #include "corNgsild/ldWriteResult.h"                     // Own interface
@@ -91,7 +91,7 @@ void ldWriteResultFragUpdated(CorNode* updatedP, CorNode* fragP)
 
   for (CorNode* c = fragP->value.head; c != NULL; c = c->next)
   {
-    if (ldIsEntityKeyword(c->name))
+    if (ldIsEntityMember(c))
       continue;
     ldWriteResultUpdatedAdd(updatedP, c->name);
   }
@@ -110,7 +110,7 @@ void ldWriteResultFragNotUpdated(CorNode* notUpdatedP, CorNode* fragP, const cha
 
   for (CorNode* c = fragP->value.head; c != NULL; c = c->next)
   {
-    if (ldIsEntityKeyword(c->name))
+    if (ldIsEntityMember(c))
       continue;
     ldWriteResultNotUpdatedAdd(notUpdatedP, c->name, reason, regId, statusCode);
   }

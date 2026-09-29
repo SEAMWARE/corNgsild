@@ -25,9 +25,10 @@
 #include "corNgsild/ldError.h"                            // ldError
 #include "corNgsild/ldAttrTypeDetect.h"                   // ldAttrTypeDetect
 #include "corNgsild/ldCheckAttribute.h"                   // ldCheckAttribute
-#include "corNgsild/ldIsEntityKeyword.h"                   // ldIsEntityKeyword
+#include "corNgsild/ldIsEntityKeyword.h"                  // ldIsEntityKeyword
 #include "corNgsild/ldCheckEntity.h"                      // Own interface
 #include "corNgsild/ldTraceLevels.h"                      // LdTCheckEnt
+#include "corNgsild/ldTermId.h"                           // ldTermId, CorTerm*
 
 
 
@@ -122,7 +123,7 @@ bool ldCheckEntity(CorNode* entityP, LdOp op, CorNode* dbEntityP, CorAlloc* faP)
       return false;
     }
 
-    if (strcmp(childP->name, "id") == 0)
+    if (ldTermId(childP) == CorTermId)
     {
       DUPLICATE_FLAG_CHECK(hasId, hasAtId, "Duplicate Id", "Duplicate 'id' / '@id' in entity");
       hasId   = true;
@@ -132,10 +133,10 @@ bool ldCheckEntity(CorNode* entityP, LdOp op, CorNode* dbEntityP, CorAlloc* faP)
     {
       DUPLICATE_FLAG_CHECK(hasId, hasAtId, "Duplicate Id", "Duplicate 'id' / '@id' in entity");
       hasAtId = true;
-      childP->name = (char*) "id";    // normalize the JSON-LD keyword to the short NGSI-LD form
+      ldNodeRename(childP, (char*) "id");    // normalize the JSON-LD keyword to the short NGSI-LD form
       idNodeP = childP;
     }
-    else if (strcmp(childP->name, "type") == 0)
+    else if (ldTermId(childP) == CorTermType)
     {
       DUPLICATE_FLAG_CHECK(hasType, hasAtType, "Duplicate Type", "Duplicate 'type' / '@type' in entity");
       hasType    = true;
@@ -145,7 +146,7 @@ bool ldCheckEntity(CorNode* entityP, LdOp op, CorNode* dbEntityP, CorAlloc* faP)
     {
       DUPLICATE_FLAG_CHECK(hasType, hasAtType, "Duplicate Type", "Duplicate 'type' / '@type' in entity");
       hasAtType  = true;
-      childP->name = (char*) "type";  // normalize the JSON-LD keyword to the short NGSI-LD form
+      ldNodeRename(childP, (char*) "type");  // normalize the JSON-LD keyword to the short NGSI-LD form
       typeNodeP  = childP;
     }
   }
@@ -263,7 +264,7 @@ bool ldCheckEntity(CorNode* entityP, LdOp op, CorNode* dbEntityP, CorAlloc* faP)
   // Validate scope if present
   for (CorNode* childP = entityP->value.head; childP != NULL; childP = childP->next)
   {
-    if (strcmp(childP->name, LD_VOCAB_SCOPE) == 0)
+    if (ldTermId(childP) == CorTermScope)
     {
       if (childP->type == CorString)
       {
@@ -327,7 +328,7 @@ bool ldCheckEntity(CorNode* entityP, LdOp op, CorNode* dbEntityP, CorAlloc* faP)
   //
   for (CorNode* childP = entityP->value.head; childP != NULL; childP = childP->next)
   {
-    if (strcmp(childP->name, LD_VOCAB_EXPIRES_AT) != 0)
+    if (ldTermId(childP) != CorTermExpiresAt)
       continue;
 
     if (childP->type != CorString)
@@ -350,7 +351,7 @@ bool ldCheckEntity(CorNode* entityP, LdOp op, CorNode* dbEntityP, CorAlloc* faP)
   // Second pass: validate each attribute
   for (CorNode* childP = entityP->value.head; childP != NULL; childP = childP->next)
   {
-    if (ldIsEntityKeyword(childP->name) == true)
+    if (ldIsEntityMember(childP) == true)
       continue;
 
     // Duplicate attributes are rejected uniformly by the duplicate-member check
@@ -430,7 +431,7 @@ bool ldCheckEntity(CorNode* entityP, LdOp op, CorNode* dbEntityP, CorAlloc* faP)
       // Validate each instance.
       for (CorNode* instP = childP->value.head; instP != NULL; instP = instP->next)
       {
-        instP->name = childP->name;
+        ldNodeRename(instP, childP->name);
         if (ldCheckAttribute(instP, op, dbAttrType, faP) == false)
           return false;
       }

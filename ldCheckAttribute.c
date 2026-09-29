@@ -13,10 +13,13 @@
 
 #include "corBase/corLibLog.h"                         // COR_LIB_*
 #include "corAlloc/CorAlloc.h"                         // CorAlloc
+#include "corTree/corTreeBuilder.h"                    // corTreeChildRemove
 #include "corTree/CorNode.h"                            // CorNode
 #include "corTree/corTreeLookup.h"                      // corTreeLookup
 #include "corJsonld/corLdExpand.h"                        // corLdValueObjectIs, corLdValueObjectCheck
 
+#include "corNgsild/ldAttrMember.h"                       // ldAttrMemberOf, ldAttrKeep, ldAttrDrop
+#include "corNgsild/ldTermClass.h"                        // ldTermClass, LD_TC_*
 #include "corNgsild/LdAttrType.h"                         // LdAttrType
 #include "corNgsild/LdOp.h"                               // LdOp
 #include "corNgsild/LdCheck.h"                            // STRING_CHECK, URI_CHECK, ...
@@ -26,8 +29,11 @@
 #include "corNgsild/ldError.h"                            // ldError
 #include "corNgsild/ldInit.h"                             // ldTypedValueCheck
 #include "corNgsild/ldCheckGeo.h"                         // ldCheckGeo
+#include "corNgsild/ldLanguageKey.h"                      // ldLanguageTag
+#include "corNgsild/CorNgsild.h"                          // corNgsild
 #include "corNgsild/ldCheckAttribute.h"                   // Own interface
 #include "corNgsild/ldTraceLevels.h"                      // LdTCheckAttr
+#include "corNgsild/ldTermId.h"                           // ldTermId, CorTerm*
 
 
 
@@ -41,20 +47,9 @@
 // both the short form (raw application/json bodies) and the @vocab-expanded
 // IRI form.
 //
-static bool isWellKnownGeoName(const char* name)
+static bool isWellKnownGeoName(CorNode* nodeP)
 {
-  if (name == NULL)
-    return false;
-
-  if (strcmp(name, "location")         == 0)  return true;
-  if (strcmp(name, "observationSpace") == 0)  return true;
-  if (strcmp(name, "operationSpace")   == 0)  return true;
-
-  if (strcmp(name, "https://uri.etsi.org/ngsi-ld/location")         == 0)  return true;
-  if (strcmp(name, "https://uri.etsi.org/ngsi-ld/observationSpace") == 0)  return true;
-  if (strcmp(name, "https://uri.etsi.org/ngsi-ld/operationSpace")   == 0)  return true;
-
-  return false;
+  return (ldTermClass[ldTermId(nodeP)] & LD_TC_WELL_KNOWN_GEO) != 0;   // short or full IRI: ldTermId resolves both
 }
 
 
@@ -68,15 +63,9 @@ static bool isWellKnownGeoName(const char* name)
 // no meaning as a top-level Attribute name. Core-context terms are not expanded,
 // so they reach the validator in their short form.
 //
-static bool isSubAttrOnlyName(const char* name)
+static bool isSubAttrOnlyName(CorNode* nodeP)
 {
-  if (name == NULL)
-    return false;
-
-  if (strcmp(name, LD_VOCAB_OBSERVED_AT) == 0)  return true;
-  if (strcmp(name, LD_VOCAB_UNIT_CODE)   == 0)  return true;
-
-  return false;
+  return (ldTermClass[ldTermId(nodeP)] & LD_TC_SUBATTR_ONLY) != 0;
 }
 
 
@@ -99,34 +88,6 @@ static const char* valueKeyForType(LdAttrType attrType)
   case LdAttrJsonProperty:     return LD_VOCAB_HAS_JSON;
   default:                     return NULL;
   }
-}
-
-
-
-// -----------------------------------------------------------------------------
-//
-// ldIsCoreAttrTerm - check if a name is a known NGSI-LD core context attribute-level term
-//
-// Core-context terms are never expanded, so they reach the validator in their
-// short form — membership is detected by matching against those short names.
-//
-static bool ldIsCoreAttrTerm(const char* name)
-{
-  if (strcmp(name, "type")                    == 0)  return true;
-  if (strcmp(name, LD_VOCAB_HAS_VALUE)        == 0)  return true;
-  if (strcmp(name, LD_VOCAB_HAS_OBJECT)       == 0)  return true;
-  if (strcmp(name, LD_VOCAB_HAS_LANGUAGE_MAP) == 0)  return true;
-  if (strcmp(name, LD_VOCAB_HAS_VOCAB)        == 0)  return true;
-  if (strcmp(name, LD_VOCAB_HAS_VALUE_LIST)   == 0)  return true;
-  if (strcmp(name, LD_VOCAB_HAS_OBJECT_LIST)  == 0)  return true;
-  if (strcmp(name, LD_VOCAB_HAS_JSON)         == 0)  return true;
-  if (strcmp(name, LD_VOCAB_OBSERVED_AT)      == 0)  return true;
-  if (strcmp(name, LD_VOCAB_UNIT_CODE)        == 0)  return true;
-  if (strcmp(name, LD_VOCAB_DATASET_ID)       == 0)  return true;
-  if (strcmp(name, "valueType")               == 0)  return true;
-  if (strcmp(name, "objectType")              == 0)  return true;
-
-  return false;
 }
 
 
@@ -201,51 +162,11 @@ static bool checkPartialSubAttrs(CorNode* attrP, bool nullAllowed)
 
 // -----------------------------------------------------------------------------
 //
-// isAllowedCoreAttrTerm - check if a core context term is allowed in an attribute
-//
-static bool isAllowedCoreAttrTerm(const char* name, const char* valueKey, LdAttrType attrType)
-{
-  if (strcmp(name, "type")              == 0)  return true;
-  if (strcmp(name, valueKey)            == 0)  return true;
-  if (strcmp(name, LD_VOCAB_OBSERVED_AT) == 0)  return true;
-  if (strcmp(name, LD_VOCAB_DATASET_ID) == 0)  return true;
-
-  // valueType qualifies a value for the whole Property family (§ 5.2.6) — every
-  // attribute type except a Relationship / ListRelationship (object/objectList).
-  if (strcmp(name, "valueType") == 0)
-    return ((strcmp(valueKey, LD_VOCAB_HAS_OBJECT) != 0) && (strcmp(valueKey, LD_VOCAB_HAS_OBJECT_LIST) != 0));
-
-  // unitCode is a unit for a numeric/plain value — only Property and ListProperty
-  // (§ 5.2.6.4.7/10/5). GeoProperty shares the "value" key with Property, so the
-  // attribute type (not the value key) has to be checked to exclude it, along
-  // with LanguageProperty / VocabProperty / JsonProperty which are unitless too.
-  if (strcmp(name, LD_VOCAB_UNIT_CODE) == 0)
-    return ((attrType == LdAttrProperty) || (attrType == LdAttrListProperty));
-
-  // objectType qualifies a relationship's target — only for object / objectList.
-  if (strcmp(name, "objectType") == 0)
-    return ((strcmp(valueKey, LD_VOCAB_HAS_OBJECT) == 0) || (strcmp(valueKey, LD_VOCAB_HAS_OBJECT_LIST) == 0));
-
-  return false;
-}
-
-
-
-// -----------------------------------------------------------------------------
-//
 // isValueKey - check if a name is one of the NGSI-LD value keys
 //
-static bool isValueKey(const char* name)
+static bool isValueKey(CorNode* nodeP)
 {
-  if (strcmp(name, LD_VOCAB_HAS_VALUE)        == 0)  return true;
-  if (strcmp(name, LD_VOCAB_HAS_OBJECT)       == 0)  return true;
-  if (strcmp(name, LD_VOCAB_HAS_LANGUAGE_MAP) == 0)  return true;
-  if (strcmp(name, LD_VOCAB_HAS_VOCAB)        == 0)  return true;
-  if (strcmp(name, LD_VOCAB_HAS_VALUE_LIST)   == 0)  return true;
-  if (strcmp(name, LD_VOCAB_HAS_OBJECT_LIST)  == 0)  return true;
-  if (strcmp(name, LD_VOCAB_HAS_JSON)         == 0)  return true;
-
-  return false;
+  return (ldTermClass[ldTermId(nodeP)] & LD_TC_VALUE_KEY) != 0;
 }
 
 
@@ -317,29 +238,35 @@ static bool checkLanguageMap(CorNode* lmP)
     // § 5.2.6.4.6 — a languageMap key shall be an RFC 5646 language tag, or @none
     // (the JSON-LD default when no more specific language matches; it is also what
     // the NGSI-LD Null encoding {"@none": "urn:ngsi-ld:null"} uses).
-    if (childP->name == NULL || childP->name[0] == 0)
+    //
+    // The key arrives EXPANDED (the broker's internal encoding of a language tag -
+    // see ldLanguageKey.h): every check below, and every error, is about the TAG.
+    //
+    const char* tag = (childP->name != NULL) ? ldLanguageTag(childP->name, corNgsild.contextP) : NULL;
+
+    if ((tag == NULL) || (tag[0] == 0))
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid LanguageProperty", "'languageMap' has an empty language key");
       return false;
     }
 
-    if ((strcmp(childP->name, "@none") != 0) && (!languageTagWellFormed(childP->name)))
+    if ((strcmp(tag, "@none") != 0) && (!languageTagWellFormed(tag)))
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid LanguageProperty",
-              "'languageMap' key is not an RFC 5646 language tag: '%s'", childP->name);
+              "'languageMap' key is not an RFC 5646 language tag: '%s'", tag);
       return false;
     }
 
     if (childP->type != CorString && childP->type != CorArray)
     {
-      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid LanguageProperty", "languageMap values must be strings or arrays of strings (key '%s')", childP->name);
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid LanguageProperty", "languageMap values must be strings or arrays of strings (key '%s')", tag);
       return false;
     }
 
     // A scalar value must be a non-empty string.
     if (childP->type == CorString && childP->value.s[0] == 0)
     {
-      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid LanguageProperty", "languageMap value for '%s' is an empty string", childP->name);
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid LanguageProperty", "languageMap value for '%s' is an empty string", tag);
       return false;
     }
 
@@ -348,14 +275,14 @@ static bool checkLanguageMap(CorNode* lmP)
     {
       if (childP->value.head == NULL)
       {
-        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid LanguageProperty", "languageMap value for '%s' is an empty array", childP->name);
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid LanguageProperty", "languageMap value for '%s' is an empty array", tag);
         return false;
       }
       for (CorNode* elemP = childP->value.head; elemP != NULL; elemP = elemP->next)
       {
         if (elemP->type != CorString || elemP->value.s[0] == 0)
         {
-          ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid LanguageProperty", "languageMap value for '%s' must be a non-empty string", childP->name);
+          ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid LanguageProperty", "languageMap value for '%s' must be a non-empty string", tag);
           return false;
         }
       }
@@ -430,7 +357,7 @@ bool ldCheckAttribute(CorNode* attrP, LdOp op, LdAttrType attrTypeFromDb, CorAll
   // § 4.7 — `location`, `observationSpace`, `operationSpace` are well-known
   // GeoProperty names; an attribute carrying one of these names cannot be
   // declared as anything else. Skip when type is unknown (partial update).
-  if (attrType != LdAttrNone && attrType != LdAttrGeoProperty && isWellKnownGeoName(attrP->name))
+  if (attrType != LdAttrNone && attrType != LdAttrGeoProperty && isWellKnownGeoName(attrP))
   {
     ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Attribute",
             "Attribute '%s' is reserved by spec § 4.7 and must be of type GeoProperty (got %s)",
@@ -440,7 +367,7 @@ bool ldCheckAttribute(CorNode* attrP, LdOp op, LdAttrType attrTypeFromDb, CorAll
 
   // `observedAt` / `unitCode` are core structural sub-attributes (§ 5.2.4 /
   // § 5.2.6) — they have no meaning as a top-level Attribute name.
-  if (isSubAttrOnlyName(attrP->name))
+  if (isSubAttrOnlyName(attrP))
   {
     ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Reserved Attribute Name",
             "'%s' is a structural sub-attribute and cannot be used as an Attribute name",
@@ -485,7 +412,7 @@ bool ldCheckAttribute(CorNode* attrP, LdOp op, LdAttrType attrTypeFromDb, CorAll
       return false;
     }
 
-    if (isValueKey(childP->name) == true)
+    if (isValueKey(childP) == true)
     {
       ++valueKeyCount;
       if (strcmp(childP->name, expectedKey) == 0)
@@ -684,19 +611,44 @@ bool ldCheckAttribute(CorNode* attrP, LdOp op, LdAttrType attrTypeFromDb, CorAll
     break;
   }
 
-  // Step 5: Check sub-fields (optional fields + forbidden core terms + sub-attributes)
-  for (CorNode* childP = attrP->value.head; childP != NULL; childP = childP->next)
+  //
+  // Step 5: Check sub-fields - the Attribute's own members (ldAttrMember.h: one bit each,
+  // allowed / dropped / forbidden by what a client may send for this type), and the
+  // sub-attributes (everything that is not a member).
+  //
+  uint32_t seen = 0;
+  uint32_t keep = ldAttrKeep[LdSourceEntityRequest][attrType];
+  uint32_t drop = ldAttrDrop[LdSourceEntityRequest][attrType];
+  CorNode* nextP;
+
+  for (CorNode* childP = attrP->value.head; childP != NULL; childP = nextP)
   {
-    // Core context term -- must be in the allowlist for this attribute type
-    if (ldIsCoreAttrTerm(childP->name))
+    nextP = childP->next;
+
+    uint32_t member = ldAttrMemberOf(childP);
+
+    if (member != 0)
     {
-      if (isAllowedCoreAttrTerm(childP->name, expectedKey, attrType) == false)
+      if ((seen & member) != 0)
       {
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Duplicate Attribute Member", "Attribute '%s' has the member '%s' twice", attrP->name, childP->name);
+        return false;
+      }
+      seen |= member;
+
+      if ((member & keep) == 0)
+      {
+        if ((member & drop) != 0)
+        {
+          corTreeChildRemove(attrP, childP);   // broker-generated - the client's copy is ignored
+          continue;
+        }
+
         ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Attribute Member", "Attribute '%s' of type %s has a forbidden NGSI-LD term: '%s'", attrP->name, ldAttrTypeToString(attrType), childP->name);
         return false;
       }
 
-      if (strcmp(childP->name, LD_VOCAB_OBSERVED_AT) == 0)
+      if (ldTermId(childP) == CorTermObservedAt)
       {
         if (childP->type != CorString)
         {
@@ -715,7 +667,7 @@ bool ldCheckAttribute(CorNode* attrP, LdOp op, LdAttrType attrTypeFromDb, CorAll
           }
         }
       }
-      else if (strcmp(childP->name, LD_VOCAB_UNIT_CODE) == 0)
+      else if (ldTermId(childP) == CorTermUnitCode)
       {
         if (childP->type != CorString)
         {
@@ -723,7 +675,7 @@ bool ldCheckAttribute(CorNode* attrP, LdOp op, LdAttrType attrTypeFromDb, CorAll
           return false;
         }
       }
-      else if (strcmp(childP->name, LD_VOCAB_DATASET_ID) == 0)
+      else if (ldTermId(childP) == CorTermDatasetId)
       {
         if (childP->type != CorString)
         {
@@ -738,7 +690,7 @@ bool ldCheckAttribute(CorNode* attrP, LdOp op, LdAttrType attrTypeFromDb, CorAll
         }
         URI_CHECK(childP->value.s);
       }
-      else if (strcmp(childP->name, "valueType") == 0)
+      else if (ldTermId(childP) == CorTermValueType)
       {
         if (childP->type != CorString)
         {

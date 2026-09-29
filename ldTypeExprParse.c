@@ -16,7 +16,7 @@
 #include "corJsonld/corLdExpand.h"                           // corLdExpand
 
 #include "corNgsild/LdProblem.h"                          // LD_ERROR_BAD_REQUEST_DATA
-#include "corNgsild/CorNgsild.h"                           // corNgsild
+#include "corNgsild/CorNgsild.h"                          // corNgsild
 #include "corNgsild/ldError.h"                            // ldError
 #include "corNgsild/LdTypeExpr.h"                         // Own interface
 

@@ -42,7 +42,7 @@
 #include "corNgsild/ldTraceLevels.h"                    // LdTNotif*
 #include "corNgsild/ldTypes.h"                          // ldFormatToString
 #include "corNgsild/LdVocab.h"                          // LD_VOCAB_*
-#include "corNgsild/CorNgsild.h"                         // corNgsild
+#include "corNgsild/CorNgsild.h"                        // corNgsild
 #include "corNgsild/LdSubCache.h"                       // LdSubCache, LdSubCacheItem
 #include "corNgsild/ldSubCache.h"                       // ldSubCacheRdLock, ldSubCacheItemPin, ...
 #include "corNgsild/ldEntityToApi.h"                    // ldEntityToApi
@@ -52,7 +52,7 @@
 #include "corNgsild/ldToGeoJson.h"                     // ldToGeoJson
 #include "corNgsild/ldConformanceDowngrade.h"          // ldConformanceDowngrade
 #include "corNgsild/ldEntityMerge.h"                    // LdMergeReport
-#include "corJsonld/corLdInit.h"                          // corLdCoreContext
+#include "corJsonld/corLdInit.h"                        // corLdCoreContext
 #include "corJsonld/CorLdContext.h"                       // CorLdContext
 #include "corNgsild/ldRender.h"                          // ldToConcise, ldToSimplified
 #include "corNgsild/ldPickOmit.h"                       // ldPickOmit
@@ -63,6 +63,7 @@
 #include "corNgsild/ldMqttNotify.h"                     // ldIsMqttUri, ldMqttNotify
 #include "corNgsild/ldThrottleDirty.h"                  // ldThrottleDirtyUpsert/Drain/EntriesFree
 #include "corNgsild/ldPeriodicLoop.h"                   // ldPeriodicLoopRegister
+#include "corNgsild/ldTermId.h"                         // ldTermId, CorTerm*
 #include "corNgsild/ldSubscriptionNotify.h"             // Own interface
 
 
@@ -361,7 +362,7 @@ static CorNode* buildNotifDataEntry(LdSubCacheItem*      itemP,
       for (CorNode* attrP = entityP->value.head; attrP != NULL; attrP = attrP->next)
       {
         if (attrP->name == NULL || attrP->type != CorObject) continue;
-        if (ldIsEntityKeyword(attrP->name))                 continue;
+        if (ldIsEntityMember(attrP))                 continue;
 
         // watchedAttributes filter (already-expanded IRIs in the cache).
         if (itemP->watchedAttrsV != NULL)
@@ -460,7 +461,7 @@ static CorNode* buildNotifDataEntry(LdSubCacheItem*      itemP,
               break;
             }
             CorNode* prev = corTreeClone(corRest.kallocP, preVal);
-            prev->name = (char*) prevKey;
+            ldNodeRename(prev, (char*) prevKey);
             corTreeChildAdd(nullAttr, prev);
           }
         }
@@ -572,7 +573,7 @@ static CorNode* buildNotifDataEntry(LdSubCacheItem*      itemP,
             continue;
 
           CorNode* marker = corTreeClone(corRest.kallocP, inst);
-          marker->name   = keyP->value.s;
+          ldNodeRename(marker, keyP->value.s);
 
           if (existingAttr == NULL)
           {
@@ -586,7 +587,7 @@ static CorNode* buildNotifDataEntry(LdSubCacheItem*      itemP,
       {
         // Whole-attribute deletion reported without instance detail (batch
         // and merge paths): a single @none instance carrying the marker.
-        inst->name = (char*) "@none";
+        ldNodeRename(inst, (char*) "@none");
         CorNode* wrapper = corTreeObject(corRest.kallocP, attrP->value.s);
         corTreeChildAdd(wrapper, inst);
         corTreeChildAdd(entityClone, wrapper);
@@ -609,7 +610,7 @@ static CorNode* buildNotifDataEntry(LdSubCacheItem*      itemP,
       CorNode* nextAttr = attrP->next;
 
       if (attrP->type != CorObject || attrP->name == NULL ||
-          strcmp(attrP->name, "id") == 0 || strcmp(attrP->name, "type") == 0)
+          ldTermId(attrP) == CorTermId || ldTermId(attrP) == CorTermType)
       {
         attrP = nextAttr;
         continue;
@@ -706,7 +707,7 @@ static CorNode* buildNotifDataEntry(LdSubCacheItem*      itemP,
       if (attrOutP->type != CorObject) continue;
 
       CorNode* c = corTreeClone(corRest.kallocP, preVal);
-      c->name = (char*) prevKey;
+      ldNodeRename(c, (char*) prevKey);
       corTreeChildAdd(attrOutP, c);
     }
   }
@@ -719,9 +720,9 @@ static CorNode* buildNotifDataEntry(LdSubCacheItem*      itemP,
       CorNode* nextP = childP->next;
 
       if (childP->name != NULL &&
-          strcmp(childP->name, "id")    != 0 &&
-          strcmp(childP->name, "type")  != 0 &&
-          strcmp(childP->name, "scope") != 0)
+          ldTermId(childP) != CorTermId &&
+          ldTermId(childP) != CorTermType &&
+          ldTermId(childP) != CorTermScope)
       {
         bool keep = false;
         for (int i = 0; itemP->notifAttrsV[i] != NULL; i++)
@@ -907,7 +908,7 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
       ldToGeoJson(&newDataP, NULL /* default "location" */, corRest.kallocP);
       if (newDataP != NULL && newDataP != oldDataP)
       {
-        newDataP->name = (char*) "data";
+        ldNodeRename(newDataP, (char*) "data");
         corTreeChildReplace(notification, oldDataP, newDataP);
       }
       // § 5.2.6.11.2: ONE @context as a top-level FeatureCollection member

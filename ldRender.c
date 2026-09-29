@@ -16,12 +16,15 @@
 #include "corTree/corTreeBuilder.h"                      // corTreeChildAdd, corTreeChildRemove, corTreeObject
 #include "corTree/corTreeLookup.h"                       // corTreeLookup
 
+#include "corNgsild/ldAttrMember.h"                      // ldAttrMemberOf
+#include "corNgsild/ldTermClass.h"                       // ldTermClass, LD_TC_*
 #include "corNgsild/LdAttrType.h"                         // LdAttrType
 #include "corNgsild/LdVocab.h"                            // LD_VOCAB_*
 #include "corNgsild/ldAttrTypeDetect.h"                   // ldAttrTypeDetect
-#include "corNgsild/ldIsEntityKeyword.h"                   // ldIsEntityKeyword
+#include "corNgsild/ldIsEntityKeyword.h"                  // ldIsEntityKeyword
 #include "corNgsild/ldRender.h"                           // Own interface
 #include "corNgsild/ldTraceLevels.h"                      // LdTRender
+#include "corNgsild/ldTermId.h"                           // ldTermId, CorTerm*
 
 
 
@@ -29,21 +32,9 @@
 //
 // isAttrKeyword -
 //
-static bool isAttrKeyword(const char* name)
+static bool isAttrKeyword(CorNode* nodeP)
 {
-  if (strcmp(name, "type")                    == 0)  return true;
-  if (strcmp(name, LD_VOCAB_HAS_VALUE)        == 0)  return true;
-  if (strcmp(name, LD_VOCAB_HAS_OBJECT)       == 0)  return true;
-  if (strcmp(name, LD_VOCAB_HAS_LANGUAGE_MAP) == 0)  return true;
-  if (strcmp(name, LD_VOCAB_HAS_VOCAB)        == 0)  return true;
-  if (strcmp(name, LD_VOCAB_HAS_VALUE_LIST)   == 0)  return true;
-  if (strcmp(name, LD_VOCAB_HAS_OBJECT_LIST)  == 0)  return true;
-  if (strcmp(name, LD_VOCAB_HAS_JSON)         == 0)  return true;
-  if (strcmp(name, LD_VOCAB_OBSERVED_AT)      == 0)  return true;
-  if (strcmp(name, LD_VOCAB_UNIT_CODE)        == 0)  return true;
-  if (strcmp(name, LD_VOCAB_DATASET_ID)       == 0)  return true;
-
-  return false;
+  return ldAttrMemberOf(nodeP) != 0;   // an Attribute's own member - not a sub-attribute
 }
 
 
@@ -100,7 +91,7 @@ static void attrToConcise(CorNode* attrP)
     CorNode* prevP = NULL;
     for (CorNode* childP = attrP->value.head; childP != NULL; childP = childP->next)
     {
-      if (strcmp(childP->name, "type") == 0)
+      if (ldTermId(childP) == CorTermType)
       {
         if (prevP == NULL)
           attrP->value.head = childP->next;
@@ -119,7 +110,7 @@ static void attrToConcise(CorNode* attrP)
   // Recurse into sub-attributes
   for (CorNode* childP = attrP->value.head; childP != NULL; childP = childP->next)
   {
-    if (isAttrKeyword(childP->name) == false)
+    if (isAttrKeyword(childP) == false)
       attrToConcise(childP);
   }
 
@@ -138,9 +129,9 @@ static void attrToConcise(CorNode* attrP)
 
     for (CorNode* childP = attrP->value.head; childP != NULL; childP = childP->next)
     {
-      if (strcmp(childP->name, "type") == 0)
+      if (ldTermId(childP) == CorTermType)
         continue;
-      else if (strcmp(childP->name, LD_VOCAB_HAS_VALUE) == 0)
+      else if (ldTermId(childP) == CorTermValue)
         valueP = childP;
       else
         valueOnly = false;
@@ -167,7 +158,7 @@ bool ldToConcise(CorNode* entityP, CorAlloc* faP)
 
   for (CorNode* childP = entityP->value.head; childP != NULL; childP = childP->next)
   {
-    if (ldIsEntityKeyword(childP->name) == true)
+    if (ldIsEntityMember(childP) == true)
       continue;
 
     //
@@ -218,13 +209,13 @@ CorNode* ldAttrValueNode(CorNode* attrP)
 
   for (CorNode* childP = attrP->value.head; childP != NULL; childP = childP->next)
   {
-    if (strcmp(childP->name, LD_VOCAB_HAS_VALUE)        == 0)  return childP;
-    if (strcmp(childP->name, LD_VOCAB_HAS_OBJECT)       == 0)  return childP;
-    if (strcmp(childP->name, LD_VOCAB_HAS_LANGUAGE_MAP) == 0)  return childP;
-    if (strcmp(childP->name, LD_VOCAB_HAS_VOCAB)        == 0)  return childP;
-    if (strcmp(childP->name, LD_VOCAB_HAS_VALUE_LIST)   == 0)  return childP;
-    if (strcmp(childP->name, LD_VOCAB_HAS_OBJECT_LIST)  == 0)  return childP;
-    if (strcmp(childP->name, LD_VOCAB_HAS_JSON)         == 0)  return childP;
+    if (ldTermId(childP) == CorTermValue)        return childP;
+    if (ldTermId(childP) == CorTermObject)       return childP;
+    if (ldTermId(childP) == CorTermLanguageMap)  return childP;
+    if (ldTermId(childP) == CorTermVocab)        return childP;
+    if (ldTermId(childP) == CorTermValueList)    return childP;
+    if (ldTermId(childP) == CorTermObjectList)   return childP;
+    if (ldTermId(childP) == CorTermJson)         return childP;
   }
 
   return NULL;
@@ -265,7 +256,7 @@ bool ldToSimplified(CorNode* entityP, CorAlloc* faP)
     // "@none" (annex C.2.2.4.2). Leaving the array alone shipped the fully
     // NORMALIZED instances - type, value key and all - in a simplified response.
     //
-    if (ldIsEntityKeyword(childP->name) == false && childP->type == CorArray)
+    if (ldIsEntityMember(childP) == false && childP->type == CorArray)
     {
       CorNode* datasetMap = corTreeObject(allocP, "dataset");
 
@@ -283,9 +274,9 @@ bool ldToSimplified(CorNode* entityP, CorAlloc* faP)
 
         corTreeChildRemove(instP, valueP);
 
-        if ((strcmp(valueP->name, LD_VOCAB_HAS_LANGUAGE_MAP) == 0) ||
-            (strcmp(valueP->name, LD_VOCAB_HAS_VOCAB)        == 0) ||
-            (strcmp(valueP->name, LD_VOCAB_HAS_JSON)         == 0))
+        if ((ldTermId(valueP) == CorTermLanguageMap) ||
+            (ldTermId(valueP) == CorTermVocab) ||
+            (ldTermId(valueP) == CorTermJson))
         {
           // Same carve-out as the single-instance path below: these three keep
           // their { languageMap | vocab | json : ... } wrapper in simplified form.
@@ -295,7 +286,7 @@ bool ldToSimplified(CorNode* entityP, CorAlloc* faP)
         }
         else
         {
-          valueP->name = (char*) dsKey;
+          ldNodeRename(valueP, (char*) dsKey);
           corTreeChildAdd(datasetMap, valueP);
         }
       }
@@ -309,7 +300,7 @@ bool ldToSimplified(CorNode* entityP, CorAlloc* faP)
       continue;
     }
 
-    if (ldIsEntityKeyword(childP->name) == false && childP->type == CorObject)
+    if (ldIsEntityMember(childP) == false && childP->type == CorObject)
     {
       // § 4.5.23 + § 4.5.4: join=inline attaches the linked Entity under
       // `entity` on the Relationship instance. In simplified format with
@@ -340,9 +331,9 @@ bool ldToSimplified(CorNode* entityP, CorAlloc* faP)
 
       if (valueP != NULL)
       {
-        if ((strcmp(valueP->name, LD_VOCAB_HAS_LANGUAGE_MAP) == 0) ||
-            (strcmp(valueP->name, LD_VOCAB_HAS_VOCAB)        == 0) ||
-            (strcmp(valueP->name, LD_VOCAB_HAS_JSON)         == 0))
+        if ((ldTermId(valueP) == CorTermLanguageMap) ||
+            (ldTermId(valueP) == CorTermVocab) ||
+            (ldTermId(valueP) == CorTermJson))
         {
           // § 5.2.6.4: LanguageProperty / VocabProperty / JsonProperty keep the
           // { languageMap | vocab | json : value } wrapper in simplified form.

@@ -272,6 +272,8 @@ typedef struct CorNgsild
   // subscriber before the request's own notification of the write.
   void*                  bridgeReleaseQ;
 
+  // The parse of this request's body (ldParse.c) - NULL unless an NGSI-LD body was parsed
+  struct LdParseState* parseP;
 } CorNgsild;
 
 

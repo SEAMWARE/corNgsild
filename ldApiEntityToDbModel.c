@@ -13,7 +13,7 @@
 
 #include "corAlloc/CorAlloc.h"                         // CorAlloc
 #include "corTree/CorNode.h"                            // CorNode
-#include "corTree/corTreeBuilder.h"                      // corTreeObject
+#include "corTree/corTreeBuilder.h"                     // corTreeObject
 #include "corTree/corTreeChildReplace.h"                // corTreeChildReplace
 #include "corTree/corTreeLookup.h"                      // corTreeLookup
 #include "corRest/corRest.h"                             // corRest
@@ -22,8 +22,9 @@
 #include "corNgsild/LdVocab.h"                            // LD_VOCAB_*
 #include "corNgsild/LdAttrType.h"                         // LdAttrType, LdAttrGeoProperty
 #include "corNgsild/ldAttrTypeDetect.h"                   // ldAttrTypeDetect
-#include "corNgsild/ldIsEntityKeyword.h"                   // ldIsEntityKeyword
+#include "corNgsild/ldIsEntityKeyword.h"                  // ldIsEntityKeyword
 #include "corNgsild/ldCheckDateTime.h"                    // ldIsoToNanoseconds
+#include "corNgsild/ldTermId.h"                           // ldTermId, CorTerm*
 #include "corNgsild/ldApiEntityToDbModel.h"               // Own interface
 
 
@@ -51,10 +52,10 @@ static void ldGeoValueUnexpand(CorNode* geoValueP)
   {
     // Un-expand key names: "https://purl.org/geojson/vocab#coordinates" -> "coordinates"
     if (strncmp(childP->name, LD_VOCAB_GEOJSON_PREFIX, LD_VOCAB_GEOJSON_PREFIX_LEN) == 0)
-      childP->name = childP->name + LD_VOCAB_GEOJSON_PREFIX_LEN;
+      ldNodeRename(childP, childP->name + LD_VOCAB_GEOJSON_PREFIX_LEN);
 
     // Un-expand the "type" value: "https://purl.org/geojson/vocab#Point" -> "Point"
-    if (strcmp(childP->name, "type") == 0 && childP->type == CorString)
+    if (ldTermId(childP) == CorTermType && childP->type == CorString)
     {
       if (strncmp(childP->value.s, LD_VOCAB_GEOJSON_PREFIX, LD_VOCAB_GEOJSON_PREFIX_LEN) == 0)
         childP->value.s = childP->value.s + LD_VOCAB_GEOJSON_PREFIX_LEN;
@@ -107,8 +108,8 @@ static void temporalPropertiesToNanoseconds(CorNode* attrP)
 {
   for (CorNode* childP = attrP->value.head; childP != NULL; childP = childP->next)
   {
-    bool isTemporal = (strcmp(childP->name, LD_VOCAB_OBSERVED_AT) == 0 ||
-                       strcmp(childP->name, LD_VOCAB_EXPIRES_AT)  == 0);
+    bool isTemporal = (ldTermId(childP) == CorTermObservedAt ||
+                       ldTermId(childP) == CorTermExpiresAt);
     if (!isTemporal)
       continue;
 
@@ -152,7 +153,7 @@ static void normalizeValueKey(CorNode* attrP)
 
   for (CorNode* childP = attrP->value.head; childP != NULL; childP = childP->next)
     for (const char** vk = expandedValueKeys; *vk != NULL; vk++)
-      if (strcmp(childP->name, *vk) == 0) { childP->name = "value"; return; }
+      if (strcmp(childP->name, *vk) == 0) { ldNodeRename(childP, "value"); return; }
 }
 
 
@@ -163,8 +164,14 @@ static void normalizeValueKey(CorNode* attrP)
 //
 static void timestampSet(CorNode* objP, uint64_t createdAt, uint64_t modifiedAt, CorAlloc* faP)
 {
-  corTreeChildAdd(objP, corTreeInteger(corRest.kallocP, LD_VOCAB_CREATED_AT, (long long) createdAt));
-  corTreeChildAdd(objP, corTreeInteger(corRest.kallocP, LD_VOCAB_MODIFIED_AT, (long long) modifiedAt));
+  CorNode* createdAtP  = corTreeInteger(corRest.kallocP, LD_VOCAB_CREATED_AT,  (long long) createdAt);
+  CorNode* modifiedAtP = corTreeInteger(corRest.kallocP, LD_VOCAB_MODIFIED_AT, (long long) modifiedAt);
+
+  createdAtP->termId  = CorTermCreatedAt;    // built here, so stamped here - no lookup later
+  modifiedAtP->termId = CorTermModifiedAt;
+
+  corTreeChildAdd(objP, createdAtP);
+  corTreeChildAdd(objP, modifiedAtP);
 }
 
 
@@ -260,9 +267,11 @@ static CorNode* wrapSingleAttr(CorNode* attrP, uint64_t ts, CorAlloc* faP)
   // Create wrapper object with same name as the attribute
   CorNode* wrapperP = corTreeObject(corRest.kallocP, attrP->name);
 
+  wrapperP->termId = attrP->termId;          // the same name, so the same term
+
   // Move attrP into the wrapper as a child keyed by datasetId
   // Keep attrP->next intact — corTreeChildReplace needs it to link wrapperP to the next sibling
-  attrP->name = (char*) dsKey;
+  ldNodeRename(attrP, dsKey);                // now named by its datasetId - its term id goes too
   wrapperP->value.head = attrP;
   wrapperP->value.tail        = attrP;
 
@@ -301,6 +310,8 @@ static CorNode* wrapMultiAttr(CorNode* arrayP, uint64_t ts, CorAlloc* faP)
 
   CorNode* wrapperP = corTreeObject(corRest.kallocP, arrayP->name);
 
+  wrapperP->termId = arrayP->termId;         // the same name, so the same term
+
   // Move each array element into the wrapper, keyed by its datasetId
   CorNode* instP = arrayP->value.head;
 
@@ -312,7 +323,7 @@ static CorNode* wrapMultiAttr(CorNode* arrayP, uint64_t ts, CorAlloc* faP)
 
     attrToDbModel(instP, ts, faP);
 
-    instP->name = (char*) dsKey;
+    ldNodeRename(instP, (char*) dsKey);
     instP->next = NULL;
     corTreeChildAdd(wrapperP, instP);
 
@@ -341,7 +352,7 @@ void ldApiEntityToDbModel(CorNode* entityP, CorAlloc* faP, int64_t createdAt)
   {
     CorNode* nextP = childP->next;
 
-    if (childP->name != NULL && !ldIsEntityKeyword(childP->name))
+    if (childP->name != NULL && !ldIsEntityMember(childP))
     {
       CorNode* replacementP = NULL;
 
@@ -366,7 +377,7 @@ void ldApiEntityToDbModel(CorNode* entityP, CorAlloc* faP, int64_t createdAt)
   //   - CorObject: {"@value": "2026-...", "@type": "DateTime"} (expanded by JSON-LD)
   for (CorNode* cP = entityP->value.head; cP != NULL; cP = cP->next)
   {
-    if (strcmp(cP->name, LD_VOCAB_EXPIRES_AT) != 0)
+    if (ldTermId(cP) != CorTermExpiresAt)
       continue;
 
     if (cP->type == CorString)

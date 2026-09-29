@@ -16,7 +16,7 @@
 #include "corTree/corTreeBuilder.h"             // corTreeObject, corTreeString, corTreeChildAdd
 #include "corRest/corRest.h"                      // corRest
 
-#include "corNgsild/CorNgsild.h"                   // corNgsild (geoConflictAttr)
+#include "corNgsild/CorNgsild.h"                  // corNgsild (geoConflictAttr)
 #include "corNgsild/LdProblem.h"                  // LD_ERROR_CONFLICT
 
 #include "ldError.h"                              // Own interface

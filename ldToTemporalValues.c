@@ -17,11 +17,12 @@
 #include "corTree/corTreeLookup.h"                       // corTreeLookup
 #include "corTree/corTreeClone.h"                        // corTreeClone
 
-#include "corJsonld/corLdCompact.h"                        // corLdCompact
-#include "corJsonld/corLdInit.h"                           // corLdCoreContext
+#include "corJsonld/corLdCompact.h"                      // corLdCompact
+#include "corJsonld/corLdInit.h"                         // corLdCoreContext
 
-#include "corNgsild/CorNgsild.h"                           // corNgsild (for response @context)
-#include "corNgsild/ldIsEntityKeyword.h"                  // ldIsEntityKeyword
+#include "corNgsild/CorNgsild.h"                         // corNgsild (for response @context)
+#include "corNgsild/ldIsEntityKeyword.h"                 // ldIsEntityKeyword
+#include "corNgsild/ldTermId.h"                           // ldTermId, CorTerm*
 #include "corNgsild/ldToTemporalValues.h"                 // Own interface
 
 
@@ -169,14 +170,14 @@ static void addPair(CorNode*     valuesArray,
       // to come out compacted on the wire.
       if (strcmp(firstKey, "vocab") == 0)
         vocabCompactInPlace(clone);
-      clone->name = (char*) firstKey;
+      ldNodeRename(clone, (char*) firstKey);
       CorNode* wrapper = corTreeObject(allocP, NULL);
       corTreeChildAdd(wrapper, clone);
       corTreeChildAdd(pair, wrapper);
     }
     else
     {
-      clone->name = NULL;
+      ldNodeRename(clone, NULL);
       corTreeChildAdd(pair, clone);
     }
   }
@@ -328,7 +329,7 @@ static void transformEntity(CorNode* entityP, const char* timeProp, CorAlloc* al
     // so it gets the same pair-compression as any attr in simplified-temporal
     // mode (see TS 104-176 § A.3.4.3 for the wire example). Every other
     // entity keyword stays untouched.
-    if (ldIsEntityKeyword(childP->name) && strcmp(childP->name, "scope") != 0)
+    if (ldIsEntityMember(childP) && ldTermId(childP) != CorTermScope)
       continue;
     if (childP->type != CorArray)
       continue;

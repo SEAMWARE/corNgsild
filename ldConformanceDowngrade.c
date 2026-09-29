@@ -18,6 +18,7 @@
 #include "corTree/corTreeLookup.h"                       // corTreeLookup
 #include "corTree/corTreeChildReplace.h"                 // corTreeChildReplace
 
+#include "corNgsild/ldTermId.h"                           // ldTermId, CorTerm*
 #include "corNgsild/ldConformanceDowngrade.h"             // Own interface
 
 
@@ -102,7 +103,7 @@ static void reformatAttr(CorNode* attrP)
 
   CorNode* srcP = corTreeLookup(attrP, renameKey);
   if (srcP != NULL)
-    srcP->name = (char*) renameDest;
+    ldNodeRename(srcP, (char*) renameDest);
 
   typeP->value.s = (char*) newType;
 }
@@ -187,7 +188,7 @@ static void downgradeAttr(CorNode* entityP, CorNode* attrP, short tMajor, short 
       CorNode* firstP = attrP->value.head;
       if (firstP != NULL && firstP->type == CorObject && entityP != NULL)
       {
-        firstP->name = attrP->name;
+        ldNodeRename(firstP, attrP->name);
         firstP->next = NULL;
         corTreeChildReplace(entityP, attrP, firstP);
       }
@@ -240,12 +241,12 @@ static void downgradeEntity(CorNode* entityP, short tMajor, short tMinor)
     CorNode* nextP = attrP->next;
 
     bool skip = (attrP->name == NULL || attrP->name[0] == '@')              ||
-                (strcmp(attrP->name, "id")         == 0)                    ||
-                (strcmp(attrP->name, "type")       == 0)                    ||
-                (strcmp(attrP->name, "scope")      == 0)                    ||
-                (strcmp(attrP->name, "expiresAt")  == 0)                    ||
-                (strcmp(attrP->name, "createdAt")  == 0)                    ||
-                (strcmp(attrP->name, "modifiedAt") == 0);
+                (ldTermId(attrP) == CorTermId)                    ||
+                (ldTermId(attrP) == CorTermType)                    ||
+                (ldTermId(attrP) == CorTermScope)                    ||
+                (ldTermId(attrP) == CorTermExpiresAt)                    ||
+                (ldTermId(attrP) == CorTermCreatedAt)                    ||
+                (ldTermId(attrP) == CorTermModifiedAt);
     if (!skip)
       downgradeAttr(entityP, attrP, tMajor, tMinor);
 
