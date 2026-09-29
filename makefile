@@ -79,7 +79,7 @@ BUILD        ?= debug
 OBJDIR       := obj/$(BUILD)
 
 ifeq ($(BUILD),debug)
-CFLAGS       += -g -DDEBUG
+CFLAGS       += -g -DDEBUG -DCOR_T_ON             # traces compiled in - see corLog.h / corLibLog.h
 endif
 
 debug: all
