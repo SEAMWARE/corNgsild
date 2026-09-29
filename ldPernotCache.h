@@ -20,14 +20,31 @@
 // ldPernotCacheCreate - allocate and initialize an empty pernot cache
 extern LdPernotCache* ldPernotCacheCreate(void);
 
-// ldPernotCacheItemAdd - add a subscription to the pernot cache
+// Locking (as LdSubCache): the loop thread walks this cache while requests (and the HA
+// thread) add and remove, so:
+//   - ldPernotCacheItemAdd / ldPernotCacheItemRemove take the WRITE lock themselves
+//   - a walk of cacheP->head, or ldPernotCacheItemLookup, needs the caller's READ lock
+//   - an item used after the lock is released must be PINNED first (ldPernotCacheItemPin),
+//     and unpinned when done; ldPernotCacheItemLookupPinned does lookup + pin in one call
+//
+extern void ldPernotCacheRdLock(LdPernotCache* cacheP);
+extern void ldPernotCacheUnlock(LdPernotCache* cacheP);
+extern void ldPernotCacheItemPin(LdPernotItem* itemP);
+extern void ldPernotCacheItemUnpin(LdPernotItem* itemP);
+
+// ldPernotCacheItemLookupPinned - find by subscription ID and pin it (NULL: not there);
+// the caller unpins
+extern LdPernotItem* ldPernotCacheItemLookupPinned(LdPernotCache* cacheP, const char* subId);
+
+// ldPernotCacheItemAdd - add a subscription to the pernot cache (takes the wrlock)
 extern LdPernotItem* ldPernotCacheItemAdd(LdPernotCache* cacheP, CorNode* subTree,
                                            LdQNode* qExpr, void* tenantP);
 
-// ldPernotCacheItemLookup - find by subscription ID
+// ldPernotCacheItemLookup - find by subscription ID - caller holds the rdlock
 extern LdPernotItem* ldPernotCacheItemLookup(LdPernotCache* cacheP, const char* subId);
 
-// ldPernotCacheItemRemove - remove by subscription ID
+// ldPernotCacheItemRemove - remove by subscription ID (takes the wrlock; a pinned item is
+// freed at its last unpin's next writer)
 extern bool ldPernotCacheItemRemove(LdPernotCache* cacheP, const char* subId);
 
 // ldPernotCacheRelease - free everything

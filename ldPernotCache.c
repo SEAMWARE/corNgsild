@@ -116,10 +116,82 @@ static void entitySelectorsFree(LdSubEntitySelector* head)
 
 
 
+// -----------------------------------------------------------------------------
+//
+// itemFree - everything an item owns, and the item
+//
+static void itemFree(LdPernotItem* p)
+{
+  free(p->subId);
+  if (p->subTree)     corTreeFree(p->subTree);
+  entitySelectorsFree(p->entitySelectors);
+  if (p->notifAttrsV) free(p->notifAttrsV);
+  if (p->datasetIdV)  free(p->datasetIdV);
+  free(p);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// reapRetired - free the removed items nobody has pinned any more (caller holds the wrlock)
+//
+static void reapRetired(LdPernotCache* cacheP)
+{
+  LdPernotItem* p    = cacheP->retiredList;
+  LdPernotItem* prev = NULL;
+
+  while (p != NULL)
+  {
+    LdPernotItem* next = p->next;
+
+    if (__atomic_load_n(&p->refCount, __ATOMIC_SEQ_CST) == 0)
+    {
+      if (prev == NULL) cacheP->retiredList = next;
+      else              prev->next          = next;
+      itemFree(p);
+    }
+    else
+      prev = p;
+
+    p = next;
+  }
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// Locking and pinning - see ldPernotCache.h
+//
+void ldPernotCacheRdLock(LdPernotCache* cacheP)  { if (cacheP != NULL) pthread_rwlock_rdlock(&cacheP->lock); }
+void ldPernotCacheUnlock(LdPernotCache* cacheP)  { if (cacheP != NULL) pthread_rwlock_unlock(&cacheP->lock); }
+void ldPernotCacheItemPin(LdPernotItem* itemP)   { if (itemP != NULL) __atomic_add_fetch(&itemP->refCount, 1, __ATOMIC_SEQ_CST); }
+void ldPernotCacheItemUnpin(LdPernotItem* itemP) { if (itemP != NULL) __atomic_sub_fetch(&itemP->refCount, 1, __ATOMIC_SEQ_CST); }
+
+LdPernotItem* ldPernotCacheItemLookupPinned(LdPernotCache* cacheP, const char* subId)
+{
+  if (cacheP == NULL)
+    return NULL;
+
+  pthread_rwlock_rdlock(&cacheP->lock);
+  LdPernotItem* itemP = ldPernotCacheItemLookup(cacheP, subId);
+  if (itemP != NULL)
+    ldPernotCacheItemPin(itemP);
+  pthread_rwlock_unlock(&cacheP->lock);
+
+  return itemP;
+}
+
+
+
 // ldPernotCacheCreate
 LdPernotCache* ldPernotCacheCreate(void)
 {
   LdPernotCache* cacheP = (LdPernotCache*) calloc(1, sizeof(LdPernotCache));
+  if (cacheP == NULL)
+    return NULL;
+  pthread_rwlock_init(&cacheP->lock, NULL);
   corAllocBufferInit(&cacheP->alloc, cacheP->allocBuf, sizeof(cacheP->allocBuf), 4096, NULL, "pernot-cache");
   return cacheP;
 }
@@ -275,12 +347,17 @@ LdPernotItem* ldPernotCacheItemAdd(LdPernotCache* cacheP, CorNode* subTree,
     if (lfP != NULL) { corTreeChildRemove(notifP, lfP); corTreeFree(lfP); }
   }
 
-  // Append
+  // Append - the item was built unlocked (nothing shared is touched above); the list is not
+  pthread_rwlock_wrlock(&cacheP->lock);
+  reapRetired(cacheP);
+
   if (cacheP->tail == NULL)
     cacheP->head = itemP;
   else
     cacheP->tail->next = itemP;
   cacheP->tail = itemP;
+
+  pthread_rwlock_unlock(&cacheP->lock);
 
   return itemP;
 }
@@ -304,7 +381,12 @@ bool ldPernotCacheItemRemove(LdPernotCache* cacheP, const char* subId)
 {
   if (cacheP == NULL || subId == NULL) return false;
 
-  LdPernotItem* prev = NULL;
+  bool          removed = false;
+  LdPernotItem* prev    = NULL;
+
+  pthread_rwlock_wrlock(&cacheP->lock);
+  reapRetired(cacheP);
+
   for (LdPernotItem* p = cacheP->head; p != NULL; p = p->next)
   {
     if (p->subId != NULL && strcmp(p->subId, subId) == 0)
@@ -313,17 +395,28 @@ bool ldPernotCacheItemRemove(LdPernotCache* cacheP, const char* subId)
       else              prev->next   = p->next;
       if (cacheP->tail == p) cacheP->tail = prev;
 
-      free(p->subId);
-      if (p->subTree)     corTreeFree(p->subTree);
-      entitySelectorsFree(p->entitySelectors);
-      if (p->notifAttrsV) free(p->notifAttrsV);
-      if (p->datasetIdV)  free(p->datasetIdV);
-      free(p);
-      return true;
+      //
+      // The loop thread may be in the middle of a query or a send on it, a GET in the middle
+      // of rendering it: a pinned item is parked, and freed by a later writer once unpinned.
+      // It used to be freed here, whatever was using it.
+      //
+      if (__atomic_load_n(&p->refCount, __ATOMIC_SEQ_CST) == 0)
+        itemFree(p);
+      else
+      {
+        p->retired          = true;
+        p->next             = cacheP->retiredList;
+        cacheP->retiredList = p;
+      }
+
+      removed = true;
+      break;
     }
     prev = p;
   }
-  return false;
+
+  pthread_rwlock_unlock(&cacheP->lock);
+  return removed;
 }
 
 
@@ -336,12 +429,15 @@ void ldPernotCacheRelease(LdPernotCache* cacheP)
   while (p != NULL)
   {
     LdPernotItem* next = p->next;
-    free(p->subId);
-    if (p->subTree)     corTreeFree(p->subTree);
-    entitySelectorsFree(p->entitySelectors);
-    if (p->notifAttrsV) free(p->notifAttrsV);
-    if (p->datasetIdV)  free(p->datasetIdV);
-    free(p);
+    itemFree(p);
+    p = next;
+  }
+
+  p = cacheP->retiredList;       // shutdown: nobody is left to unpin
+  while (p != NULL)
+  {
+    LdPernotItem* next = p->next;
+    itemFree(p);
     p = next;
   }
   free(cacheP);

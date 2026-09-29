@@ -14,6 +14,7 @@
 // (which walks LdSubCache on every write) never touches pernot subs.
 // The background pernot loop thread walks only this cache.
 //
+#include <pthread.h>                                   // pthread_rwlock_t
 #include <stdbool.h>                                   // bool
 #include <stdint.h>                                    // uint64_t
 
@@ -92,6 +93,12 @@ typedef struct LdPernotItem
   // Tenant (opaque — set by the broker, used for db.entityQuery)
   void*                  tenantP;
 
+  // Pinning (as LdSubCacheItem): a reader that keeps the item past the cache lock - the loop
+  // across its query and its send, a GET across its rendering - pins it. A remove of a pinned
+  // item parks it on the cache's retiredList; only writers free, under the wrlock, at 0 pins.
+  int                    refCount;
+  bool                   retired;
+
   struct LdPernotItem*   next;
 } LdPernotItem;
 
@@ -103,6 +110,8 @@ typedef struct LdPernotItem
 //
 typedef struct LdPernotCache
 {
+  pthread_rwlock_t  lock;          // walks and lookups: rd - add / remove: wr (taken inside)
+  LdPernotItem*     retiredList;   // removed while pinned, awaiting the last unpin
   LdPernotItem*  head;
   LdPernotItem*  tail;
   CorAlloc       alloc;

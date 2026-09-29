@@ -31,6 +31,7 @@
 
 #include "corNgsild/CorNgsild.h"                         // ldDefaultCooldownNs
 #include "corNgsild/LdVocab.h"                          // LD_VOCAB_*
+#include "corNgsild/ldPernotCache.h"                   // ldPernotCacheRdLock, ldPernotCacheItemPin
 #include "corNgsild/LdPernotCache.h"                    // LdPernotCache, LdPernotItem
 #include "corNgsild/ldLinkedEntitiesHook.h"             // ldLinkedEntitiesHookInvoke
 #include "corNgsild/ldEntityToApi.h"                    // ldEntityToApi
@@ -199,62 +200,109 @@ static bool pernotSendNotification(LdPernotItem* itemP, CorNode* entityArray, Co
 // `ctx` is the LdPernotCache* passed at registration time. `kaP` is
 // scratch from the engine; reset before every consumer's tick call.
 //
+static void pernotTickOne(LdPernotItem* itemP, uint64_t now, CorAlloc* kaP);
+
 static void pernotTick(void* ctx, uint64_t now, CorAlloc* kaP)
 {
   LdPernotCache* cacheP = (LdPernotCache*) ctx;
   if (cacheP == NULL || loopQueryFn == NULL) return;
 
+  //
+  // This walked the cache with no lock at all, and kept each item across a database query and
+  // an HTTP send (up to 10 s) - while a DELETE /subscriptions, or the HA thread, freed it. Now:
+  // under the rdlock, the due items are picked and PINNED; the query and the send run unlocked;
+  // then unpin. A removed item stays alive until its last unpin.
+  //
+  int            dueN = 0;
+  int            cap  = 0;
+  LdPernotItem** dueV = NULL;
+
+  ldPernotCacheRdLock(cacheP);
   for (LdPernotItem* itemP = cacheP->head; itemP != NULL; itemP = itemP->next)
   {
-    if (itemP->state == LdPernotPaused || itemP->state == LdPernotExpired)
-      continue;
-
-    if (itemP->expiresAt > 0 && itemP->expiresAt <= now)
+    if (dueN == cap)
     {
-      itemP->state = LdPernotExpired;
-      continue;
+      int            newCap = (cap == 0) ? 16 : 2 * cap;
+      LdPernotItem** newV   = (LdPernotItem**) corAlloc(kaP, newCap * sizeof(LdPernotItem*));
+
+      if (newV == NULL)
+        break;                   // the rest next tick
+
+      for (int i = 0; i < dueN; i++) newV[i] = dueV[i];
+      dueV = newV;
+      cap  = newCap;
     }
 
-    if (itemP->state == LdPernotErroneous)
-    {
-      // § 5.2.15 endpoint.cooldown — minimum delay before retrying after
-      // a failure. Default 30s when unspecified.
-      uint64_t cool = (itemP->cooldownNs != 0) ? itemP->cooldownNs : ldDefaultCooldownNs;
-      if (itemP->lastFailure + cool > now)
-        continue;
-      itemP->state = LdPernotActive;
-    }
+    ldPernotCacheItemPin(itemP);
+    dueV[dueN++] = itemP;
+  }
+  ldPernotCacheUnlock(cacheP);
 
-    uint64_t intervalNs = (uint64_t) itemP->timeInterval * 1000000000ULL;
-    if (itemP->lastNotification + intervalNs > now)
-      continue;
+  for (int d = 0; d < dueN; d++)
+  {
+    LdPernotItem* itemP = dueV[d];
 
-    CorNode* entityArray = loopQueryFn(itemP->tenantP, itemP, kaP);
+    pernotTickOne(itemP, now, kaP);
+    ldPernotCacheItemUnpin(itemP);
+  }
+}
 
-    itemP->lastNotification = now;
-    itemP->timesSent++;
 
-    if (entityArray == NULL || entityArray->value.head == NULL)
-    {
-      itemP->noMatch++;
-      continue;
-    }
 
-    bool ok = pernotSendNotification(itemP, entityArray, kaP);
+// -----------------------------------------------------------------------------
+//
+// pernotTickOne - one (pinned) item: due? then query and notify
+//
+static void pernotTickOne(LdPernotItem* itemP, uint64_t now, CorAlloc* kaP)
+{
+  if (itemP->state == LdPernotPaused || itemP->state == LdPernotExpired)
+    return;
 
-    if (ok)
-    {
-      itemP->lastSuccess = now;
-      itemP->consecutiveErrors = 0;
-    }
-    else
-    {
-      itemP->timesFailed++;
-      itemP->lastFailure = now;
-      itemP->consecutiveErrors++;
-      if (itemP->consecutiveErrors >= 3)
-        itemP->state = LdPernotErroneous;
-    }
+  if (itemP->expiresAt > 0 && itemP->expiresAt <= now)
+  {
+    itemP->state = LdPernotExpired;
+    return;
+  }
+
+  if (itemP->state == LdPernotErroneous)
+  {
+    // § 5.2.15 endpoint.cooldown — minimum delay before retrying after
+    // a failure. Default 30s when unspecified.
+    uint64_t cool = (itemP->cooldownNs != 0) ? itemP->cooldownNs : ldDefaultCooldownNs;
+    if (itemP->lastFailure + cool > now)
+      return;
+    itemP->state = LdPernotActive;
+  }
+
+  uint64_t intervalNs = (uint64_t) itemP->timeInterval * 1000000000ULL;
+  if (itemP->lastNotification + intervalNs > now)
+    return;
+
+  CorNode* entityArray = loopQueryFn(itemP->tenantP, itemP, kaP);
+
+  itemP->lastNotification = now;
+  itemP->timesSent++;
+
+  if (entityArray == NULL || entityArray->value.head == NULL)
+  {
+    itemP->noMatch++;
+    return;
+  }
+
+  bool ok = pernotSendNotification(itemP, entityArray, kaP);
+
+  if (ok)
+  {
+    itemP->lastSuccess = now;
+    itemP->consecutiveErrors = 0;
+  }
+  else
+  {
+    itemP->timesFailed++;
+    itemP->lastFailure = now;
+    itemP->consecutiveErrors++;
+    if (itemP->consecutiveErrors >= 3)
+      itemP->state = LdPernotErroneous;
   }
 }
 

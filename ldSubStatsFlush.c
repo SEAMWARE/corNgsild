@@ -13,6 +13,7 @@
 #include "corNgsild/LdSubCache.h"                       // LdSubCache, LdSubCacheItem
 #include "corNgsild/ldSubCache.h"                       // ldSubCacheRdLock, ldSubCacheUnlock, ldSubCacheItemPin/Unpin
 #include "corNgsild/LdPernotCache.h"                    // LdPernotCache, LdPernotItem
+#include "corNgsild/ldPernotCache.h"                    // ldPernotCacheRdLock, ldPernotCacheItemPin/Unpin
 #include "corNgsild/ldSubStatsFlush.h"                  // Own interface
 
 
@@ -118,8 +119,17 @@ int ldPernotStatsFlush(void*              tenantP,
   if (flushFn == NULL)
     return 0;
 
-  int touched = 0;
+  //
+  // As ldSubStatsFlush: snapshot + pin under the rdlock, flush (storage I/O) unlocked, unpin.
+  // It walked the cache with no lock while subscriptions were deleted.
+  //
+  typedef struct { LdPernotItem* itemP; int sent; int failed; int dSent; int dFailed; uint64_t lastN; uint64_t lastS; uint64_t lastF; } Snap;
 
+  int   snapN   = 0;
+  int   snapCap = 0;
+  Snap* snapV   = NULL;
+
+  ldPernotCacheRdLock(cacheP);
   for (LdPernotItem* itemP = cacheP->head; itemP != NULL; itemP = itemP->next)
   {
     int deltaSent   = itemP->timesSent   - itemP->lastFlushedSent;
@@ -128,22 +138,44 @@ int ldPernotStatsFlush(void*              tenantP,
     if (deltaSent == 0 && deltaFailed == 0)
       continue;
 
-    int      snapSent   = itemP->timesSent;
-    int      snapFailed = itemP->timesFailed;
-    uint64_t snapLastN  = itemP->lastNotification;
-    uint64_t snapLastS  = itemP->lastSuccess;
-    uint64_t snapLastF  = itemP->lastFailure;
+    if (snapN == snapCap)
+    {
+      int   newCap = (snapCap == 0) ? 16 : 2 * snapCap;
+      Snap* newV   = (Snap*) realloc(snapV, newCap * sizeof(Snap));
 
-    int rc = flushFn(tenantP, itemP->subId,
-                     deltaSent, deltaFailed,
-                     snapLastN, snapLastS, snapLastF);
+      if (newV == NULL)
+        break;
+
+      snapV   = newV;
+      snapCap = newCap;
+    }
+
+    ldPernotCacheItemPin(itemP);
+    snapV[snapN] = (Snap) { itemP, itemP->timesSent, itemP->timesFailed, deltaSent, deltaFailed,
+                            itemP->lastNotification, itemP->lastSuccess, itemP->lastFailure };
+    snapN++;
+  }
+  ldPernotCacheUnlock(cacheP);
+
+  int touched = 0;
+
+  for (int i = 0; i < snapN; i++)
+  {
+    Snap* sP = &snapV[i];
+    int   rc = flushFn(tenantP, sP->itemP->subId,
+                       sP->dSent, sP->dFailed,
+                       sP->lastN, sP->lastS, sP->lastF);
     if (rc == 0)
     {
-      itemP->lastFlushedSent   = snapSent;
-      itemP->lastFlushedFailed = snapFailed;
+      sP->itemP->lastFlushedSent   = sP->sent;
+      sP->itemP->lastFlushedFailed = sP->failed;
       touched++;
     }
+
+    ldPernotCacheItemUnpin(sP->itemP);
   }
+
+  free(snapV);
 
   return touched;
 }
