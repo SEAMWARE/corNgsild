@@ -21,6 +21,7 @@
 
 #include "corRest/corRest.h"                               // corRest
 #include "corNgsild/LdVocab.h"                            // LD_VOCAB_*
+#include "corNgsild/CorNgsild.h"                          // corNgsild.snapshotPinned
 #include "corNgsild/LdSnapshotCache.h"                    // Own interface
 
 
@@ -34,7 +35,12 @@ LdSnapshotCache* ldSnapshotCacheCreate(void)
   // Cache items are individually malloc'd (calloc) and their snapshot trees
   // are malloc clones, so deleting a snapshot truly reclaims its memory
   // (ldSnapshotCacheItemDelete). No per-cache arena is needed.
-  return (LdSnapshotCache*) calloc(1, sizeof(LdSnapshotCache));
+  LdSnapshotCache* cacheP = (LdSnapshotCache*) calloc(1, sizeof(LdSnapshotCache));
+
+  if (cacheP != NULL)
+    pthread_rwlock_init(&cacheP->lock, NULL);
+
+  return cacheP;
 }
 
 
@@ -65,11 +71,25 @@ LdSnapshotCacheItem* ldSnapshotCacheItemAdd(LdSnapshotCache* cacheP, CorNode* sn
   CorNode* idP = corTreeLookup(snapshotTree, "id");
   if (idP == NULL || idP->type != CorString) return NULL;
 
+  //
+  // The existence check, the sequence number and the link under ONE wrlock: two POSTs with the
+  // same id could both pass the check (and the caller did the same check first, unlocked), and
+  // two at once could get the same snapSeq - the same snap-tenant database.
+  //
+  pthread_rwlock_wrlock(&cacheP->lock);
+
   if (ldSnapshotCacheItemLookup(cacheP, idP->value.s) != NULL)
+  {
+    pthread_rwlock_unlock(&cacheP->lock);
     return NULL;  // already exists
+  }
 
   LdSnapshotCacheItem* itemP = (LdSnapshotCacheItem*) calloc(1, sizeof(LdSnapshotCacheItem));
-  if (itemP == NULL) return NULL;
+  if (itemP == NULL)
+  {
+    pthread_rwlock_unlock(&cacheP->lock);
+    return NULL;
+  }
 
   // Clone the snapshot doc with the malloc allocator (NULL) so it survives the
   // request/worker that created it; freed in ldSnapshotCacheItemDelete via
@@ -100,9 +120,13 @@ LdSnapshotCacheItem* ldSnapshotCacheItemAdd(LdSnapshotCache* cacheP, CorNode* sn
   // a name that's still on disk.
   itemP->snapSeq = cacheP->nextSnapSeq++;
 
+  itemP->refCount = 2;          // the cache's reference + the caller's pin
+
   itemP->next  = cacheP->head;
   cacheP->head = itemP;
   cacheP->count++;
+
+  pthread_rwlock_unlock(&cacheP->lock);
   return itemP;
 }
 
@@ -131,7 +155,10 @@ bool ldSnapshotCacheItemDelete(LdSnapshotCache* cacheP, const char* id)
 {
   if (cacheP == NULL || id == NULL) return false;
 
-  LdSnapshotCacheItem* prev = NULL;
+  LdSnapshotCacheItem* found = NULL;
+  LdSnapshotCacheItem* prev  = NULL;
+
+  pthread_rwlock_wrlock(&cacheP->lock);
   for (LdSnapshotCacheItem* p = cacheP->head; p != NULL; p = p->next)
   {
     if (p->id != NULL && strcmp(p->id, id) == 0)
@@ -139,16 +166,88 @@ bool ldSnapshotCacheItemDelete(LdSnapshotCache* cacheP, const char* id)
       if (prev == NULL) cacheP->head = p->next;
       else              prev->next   = p->next;
       cacheP->count--;
-      // p->id points into p->tree, so corTreeFree reclaims it too. The snap-tenant
-      // (p->snapTenantP) is owned and freed by the caller (deleteSnapshot /
-      // purgeSnapshots, via snapshotTenantDestroy) — it must be captured
-      // before this call, as p is freed here.
-      if (p->tree != NULL)
-        corTreeFree(p->tree);
-      free(p);
-      return true;
+      found = p;
+      break;
     }
     prev = p;
   }
-  return false;
+  pthread_rwlock_unlock(&cacheP->lock);
+
+  //
+  // Unlinked: nobody can pin it any more. Drop the cache's reference - destroyed now if nobody
+  // has it pinned, else by the last unpin. It used to be freed here, while the capture worker
+  // or a read could be using it, and the snapshot tenant was then destroyed by the caller -
+  // twice, by two concurrent DELETEs, which both found the item.
+  //
+  if (found != NULL)
+    ldSnapshotCacheItemUnpin(found);
+
+  return (found != NULL);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// Locking and references - see LdSnapshotCache.h
+//
+static LdSnapshotItemDestroyFn destroyHook = NULL;
+
+void ldSnapshotCacheDestroyHookSet(LdSnapshotItemDestroyFn fn) { destroyHook = fn; }
+
+void ldSnapshotCacheRdLock(LdSnapshotCache* cacheP) { if (cacheP != NULL) pthread_rwlock_rdlock(&cacheP->lock); }
+void ldSnapshotCacheWrLock(LdSnapshotCache* cacheP) { if (cacheP != NULL) pthread_rwlock_wrlock(&cacheP->lock); }
+void ldSnapshotCacheUnlock(LdSnapshotCache* cacheP) { if (cacheP != NULL) pthread_rwlock_unlock(&cacheP->lock); }
+
+void ldSnapshotCacheItemPin(LdSnapshotCacheItem* itemP)
+{
+  if (itemP != NULL)
+    __atomic_add_fetch(&itemP->refCount, 1, __ATOMIC_SEQ_CST);
+}
+
+void ldSnapshotCacheItemUnpin(LdSnapshotCacheItem* itemP)
+{
+  if (itemP == NULL)
+    return;
+
+  if (__atomic_sub_fetch(&itemP->refCount, 1, __ATOMIC_SEQ_CST) != 0)
+    return;
+
+  // The last reference: the item is out of the cache (the cache holds one while it is in it)
+  if (destroyHook != NULL)
+    destroyHook(itemP);
+
+  // p->id points into p->tree, so corTreeFree reclaims it too
+  if (itemP->tree != NULL)
+    corTreeFree(itemP->tree);
+  free(itemP);
+}
+
+LdSnapshotCacheItem* ldSnapshotCacheItemLookupPinned(LdSnapshotCache* cacheP, const char* id)
+{
+  if (cacheP == NULL)
+    return NULL;
+
+  pthread_rwlock_rdlock(&cacheP->lock);
+  LdSnapshotCacheItem* itemP = ldSnapshotCacheItemLookup(cacheP, id);
+  if (itemP != NULL)
+    ldSnapshotCacheItemPin(itemP);
+  pthread_rwlock_unlock(&cacheP->lock);
+
+  return itemP;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldSnapshotRequestRelease -
+//
+void ldSnapshotRequestRelease(void)
+{
+  if (corNgsild.snapshotPinned == NULL)
+    return;
+
+  ldSnapshotCacheItemUnpin(corNgsild.snapshotPinned);
+  corNgsild.snapshotPinned = NULL;
 }

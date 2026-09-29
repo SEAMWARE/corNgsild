@@ -44,6 +44,7 @@
 #include "corNgsild/ldRender.h"                           // ldToSimplified, ldToConcise
 #include "corNgsild/LdNormalizeInput.h"                    // ldNormalizeInput
 #include "corNgsild/ldTermId.h"                           // ldTermId, CorTerm*
+#include "corNgsild/LdSnapshotCache.h"                // ldSnapshotRequestRelease
 #include "corNgsild/ldHooks.h"                            // Own interface
 
 
@@ -61,6 +62,7 @@
 //
 static void ldPreDispatchHook(void)
 {
+  ldSnapshotRequestRelease();   // normally done post-response - never leave a pin behind
   memset(&corNgsild, 0, sizeof(corNgsild));
   ldCsrSubPendingDiscard();
   corNgsild.limit = 20;
