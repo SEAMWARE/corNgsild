@@ -145,6 +145,21 @@ static void expandAttrPath(LdQTerm* termP, const char* start, int len, CorAlloc*
     if (i == len || start[i] == '.')
     {
       char* decoded  = urlDecodeSegment(start + segStart, i - segStart, kaP);
+
+      //
+      // A stored q (ldQRender without a context) writes an IRI's dots as '^' - a character no
+      // valid IRI contains and no attribute name may - so here, after the split on the real
+      // separators, they are dots again
+      //
+      if (strchr(decoded, ':') != NULL)
+      {
+        for (char* cP = decoded; *cP != 0; ++cP)
+        {
+          if (*cP == '^')
+            *cP = '.';
+        }
+      }
+
       char* expanded = expandAttr(decoded, strlen(decoded), kaP);
 
       if (segIx == 0)

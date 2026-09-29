@@ -34,6 +34,11 @@
 //
 extern char* ldQRender(LdQNode* nodeP, CorLdContext* contextP, CorAlloc* allocP, bool qGrammarOnly);
 
+// ldQRenderStored - the form a subscription's q is STORED in: attribute names expanded, an
+// IRI's dots written '^' (no IRI contains one) so the stored q reads back with no @context.
+// Same length as the expanded names in the common case. See ldQRender.c storageEncode.
+extern char* ldQRenderStored(LdQNode* nodeP, CorAlloc* allocP);
+
 
 
 // -----------------------------------------------------------------------------
@@ -45,7 +50,7 @@ extern char* ldQRender(LdQNode* nodeP, CorLdContext* contextP, CorAlloc* allocP,
 // carries, so compact against THAT context; when the IRI has no short form
 // there, %-encode it so the syntax survives. qGrammarOnly=true encodes only the
 // q-grammar chars (response body); false encodes everything but RFC 3986
-// unreserved (forward URL). NULL contextP returns the IRI untouched (storage).
+// unreserved (forward URL). NULL contextP returns the IRI untouched.
 //
 extern const char* ldCompactOrEncode(const char* iri, CorLdContext* contextP, CorAlloc* allocP, bool qGrammarOnly);
 

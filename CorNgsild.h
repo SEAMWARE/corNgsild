@@ -274,6 +274,7 @@ typedef struct CorNgsild
 
   // The parse of this request's body (ldParse.c) - NULL unless an NGSI-LD body was parsed
   struct LdParseState* parseP;
+
   // The Snapshot a read is routed to (NGSILD-Snapshot header), PINNED for the whole request -
   // its tenant is queried, its id goes out in a response header - and unpinned by
   // ldSnapshotRequestRelease (post-response hook; the pre-dispatch hook as a safety net).

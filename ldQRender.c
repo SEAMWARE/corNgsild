@@ -86,13 +86,72 @@ static char* urlEncode(const char* s, CorAlloc* allocP, bool qGrammarOnly)
 
 // -----------------------------------------------------------------------------
 //
+// storageEncode - an expanded attribute name as a STORED q carries it
+//
+// A subscription's q is stored with its attribute names EXPANDED: the short name is only an
+// alias, valid in the @context it came with, and the stored q outlives that request - the
+// caches parse it again at every restart, with no context at all. But an IRI's own dots are
+// the q-grammar's sub-attribute separator, so raw, "https://uri.etsi.org/.../speed" parses as
+// an attribute "https://uri" with a path "etsi", "org/...". (This mode used to return the IRI
+// raw - and nothing could read the result back.)
+//
+// So every dot of the IRI is written as '^', which a valid IRI never contains (RFC 3986 has no
+// raw '^') and the q grammar does not use; ldQParse turns it back into a dot. Same length as the
+// IRI - the common case, a dotted host name and nothing else. Any OTHER q-grammar character in
+// the IRI ('=', ';', ',', ...: legal in an IRI, rare in an attribute name) is %-encoded, which
+// ldQParse already decodes.
+//
+static CorLdContext storageMode;   // a marker, never a context: "render the stored form"
+
+static const char* storageEncode(const char* iri, CorAlloc* allocP)
+{
+  bool other = false;
+
+  for (const char* p = iri; *p != 0; ++p)
+  {
+    if ((*p != '.') && isQGrammarChar((unsigned char) *p))
+    {
+      other = true;
+      break;
+    }
+  }
+
+  int   len = strlen(iri);
+  char* out = (char*) corAlloc(allocP, (other == true) ? 3 * len + 1 : len + 1);
+  char* o   = out;
+
+  if (out == NULL)
+    return iri;
+
+  for (const char* p = iri; *p != 0; ++p)
+  {
+    unsigned char c = (unsigned char) *p;
+
+    if (c == '.')
+      *o++ = '^';
+    else if (isQGrammarChar(c))
+      o += sprintf(o, "%%%02X", c);
+    else
+      *o++ = c;
+  }
+
+  *o = 0;
+  return out;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldCompactOrEncode - compact an IRI against the @context, URL-encode if uncompactable
 //
 const char* ldCompactOrEncode(const char* iri, CorLdContext* contextP, CorAlloc* allocP, bool qGrammarOnly)
 {
-  // No context — internal storage mode: return the raw IRI unchanged.
-  // URL-encoding is only needed for API responses where the consumer
-  // must distinguish dots-in-IRIs from the q-filter sub-attribute separator.
+  // The STORED form of a q (ldQRenderStored, see storageEncode)
+  if (contextP == &storageMode)
+    return storageEncode(iri, allocP);
+
+  // No context: the raw IRI unchanged
   if (contextP == NULL)
     return iri;
 
@@ -349,4 +408,17 @@ char* ldQRender(LdQNode* nodeP, CorLdContext* contextP, CorAlloc* allocP, bool q
   buf[n] = 0;
 
   return buf;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldQRenderStored - a q as it is STORED: attribute names expanded, their dots as '^'
+//
+// See storageEncode. What ldQParse reads back with no @context at all.
+//
+char* ldQRenderStored(LdQNode* nodeP, CorAlloc* allocP)
+{
+  return ldQRender(nodeP, &storageMode, allocP, true);
 }
