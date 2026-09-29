@@ -612,12 +612,17 @@ void ldCsrSubInitialNotify(LdRegCache* regCacheP, LdSubCacheItem* subItemP)
     }
     matchV[n++] = regItemP;
   }
-  ldRegCacheUnlock(regCacheP);
 
   // § 12.4.7: the csource notification "shall be sent on initial
   // subscription" — unconditionally; with zero matching CSRs the
   // notification simply carries an empty data array.
+  //
+  // Still under the rdlock: the matched items are NOT pinned, and the send BUILDS the
+  // notification now - cloning each match's regTree, walking its infoV. Unlocked first, a CSR
+  // DELETE in between freed what the build was about to read. Only the POST is deferred, and
+  // it reads the built tree, not the cache.
   sendCsourceNotification(subItemP, matchV, n, "newlyMatching");
+  ldRegCacheUnlock(regCacheP);
 }
 
 
@@ -827,6 +832,24 @@ static void csrSubPeriodicTick(void* ctx, uint64_t now, CorAlloc* kaP)
   CsrSubTickCtx* tcP = (CsrSubTickCtx*) ctx;
   if (tcP == NULL || tcP->regSubCache == NULL || tcP->regCache == NULL) return;
 
+  //
+  // This runs on the periodic thread, concurrently with every request - a CSR-sub or a CSR
+  // DELETE among them. It walked both caches with no lock at all and POSTed on the items it
+  // found, so a DELETE in between freed what it was reading. Now, in two steps, and the two
+  // locks are never held together:
+  //
+  //   1. under the CSR-sub rdlock: pick the subscriptions that are due, and PIN them
+  //   2. per pinned subscription: under the reg rdlock, match and BUILD the notification
+  //      (the build clones the matched registrations); then POST unlocked, and unpin
+  //
+  int              dueCap = 16;
+  int              dueN   = 0;
+  LdSubCacheItem** dueV   = (LdSubCacheItem**) corAlloc(&corRest.kalloc, dueCap * sizeof(LdSubCacheItem*));
+
+  if (dueV == NULL)
+    return;
+
+  ldSubCacheRdLock(tcP->regSubCache);
   for (LdSubCacheItem* subItemP = tcP->regSubCache->itemList;
        subItemP != NULL;
        subItemP = subItemP->next)
@@ -856,17 +879,42 @@ static void csrSubPeriodicTick(void* ctx, uint64_t now, CorAlloc* kaP)
         continue;
     }
 
-    // Collect currently-matching CSRs.
-    int cap = 16;
+    if (dueN == dueCap)
+    {
+      int              newCap = dueCap * 2;
+      LdSubCacheItem** nv     = (LdSubCacheItem**) corAlloc(&corRest.kalloc, newCap * sizeof(LdSubCacheItem*));
+
+      if (nv == NULL)
+        break;              // the rest are due next tick
+
+      for (int i = 0; i < dueN; i++) nv[i] = dueV[i];
+      dueV   = nv;
+      dueCap = newCap;
+    }
+
+    ldSubCacheItemPin(subItemP);
+    dueV[dueN++] = subItemP;
+  }
+  ldSubCacheUnlock(tcP->regSubCache);
+
+  for (int d = 0; d < dueN; d++)
+  {
+    LdSubCacheItem* subItemP = dueV[d];
+
+    // Collect currently-matching CSRs - and build from them while they cannot be freed
+    int              cap    = 16;
     LdRegCacheItem** matchV = (LdRegCacheItem**) corAlloc(&corRest.kalloc, cap * sizeof(LdRegCacheItem*));
-    int n = 0;
-    for (LdRegCacheItem* regItemP = tcP->regCache->itemList; regItemP != NULL; regItemP = regItemP->next)
+    int              n      = 0;
+
+    ldRegCacheRdLock(tcP->regCache);
+    for (LdRegCacheItem* regItemP = tcP->regCache->itemList; (matchV != NULL) && (regItemP != NULL); regItemP = regItemP->next)
     {
       if (!subMatchesReg(subItemP, regItemP)) continue;
       if (n == cap)
       {
         int newCap = cap * 2;
         LdRegCacheItem** nv = (LdRegCacheItem**) corAlloc(&corRest.kalloc, newCap * sizeof(LdRegCacheItem*));
+        if (nv == NULL) break;
         for (int i = 0; i < n; i++) nv[i] = matchV[i];
         matchV = nv;
         cap    = newCap;
@@ -878,7 +926,11 @@ static void csrSubPeriodicTick(void* ctx, uint64_t now, CorAlloc* kaP)
     // elapsed "regardless of any changes to the set of Context Source
     // Registrations" — zero matches → empty data array. Direct send:
     // this thread has no post-response hook to flush a deferral.
-    csourceNotificationPost(subItemP, csourceNotificationBuild(subItemP, matchV, n, "updated"));
+    CorNode* notification = csourceNotificationBuild(subItemP, matchV, n, "updated");
+    ldRegCacheUnlock(tcP->regCache);
+
+    csourceNotificationPost(subItemP, notification);
+    ldSubCacheItemUnpin(subItemP);
   }
 }
 

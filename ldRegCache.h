@@ -262,13 +262,16 @@ static inline bool ldRegOpSupported(const LdRegCacheItem* itemP, LdOp opBit)
 //
 // ldRegCacheLocalWriteConflict - § 9.3.3 guard for ?local=true writes.
 // Returns the regId of the first exclusive/redirect registration whose
-// claim overlaps the written (entityId, entityTypeV, attrIriV), or NULL.
+// claim overlaps the written (entityId, entityTypeV, attrIriV), or NULL -
+// a COPY in kaP: the registration may be deleted the moment the cache lock
+// is released.
 //
 extern const char* ldRegCacheLocalWriteConflict(LdRegCache* cacheP,
                                                 const char* entityId,
                                                 char**      entityTypeV,
                                                 char**      entityScopeV,
-                                                char**      attrIriV);
+                                                char**      attrIriV,
+                                                CorAlloc*   kaP);
 
 // Tree convenience: extracts type/scope/attr IRIs from an expanded API
 // entity/fragment tree and runs the same § 9.3.3 local-write guard.
