@@ -117,11 +117,10 @@ static bool checkNotifierInfo(CorNode* niP)
 //   - Content-Length / Date / Transfer-Encoding / Host        → 400 (always)
 //   - Content-Type that isn't a notif media type, or conflicts
 //     with endpoint.accept                                     → 400
-//   - an @context Link when the body already carries @context
-//     (effective media type application/ld+json)               → 400
-// A Content-Type (when endpoint.accept is absent) and an @context Link (json
-// case) are otherwise accepted and absorbed by ldSubCache into endpointAccept /
-// contextUrl, so exactly one Content-Type and one Link reach the receiver.
+// A Content-Type (when endpoint.accept is absent) and an @context Link are otherwise
+// accepted and absorbed into endpointAccept / the notification @context (jsonldContext,
+// when present, takes precedence over the Link), so exactly one Content-Type, and one
+// @context - a Link header, or in the body - reach the receiver.
 // Rules key off the header NAME, so the urn:ngsi-ld:request substitution
 // sentinel cannot smuggle a reserved header through; the sentinel is rejected
 // for the two framing headers we absorb (Content-Type, Link).
@@ -211,22 +210,15 @@ static bool checkReceiverInfo(CorNode* riP, CorNode* acceptP)
       }
     }
 
-    // Link — an @context Link supplies the notification @context (json case);
-    // it contradicts an in-body @context (application/ld+json).
-    if (strcasecmp(key, "Link") == 0)
+    // Link — an @context Link chooses the notification's @context (the way to, from before the
+    // jsonldContext member existed; jsonldContext, when present, takes precedence). It is USED,
+    // whatever the media type: the Link header of a json notification, the in-body @context of an
+    // ld+json (or geo+json) one. Never passed on as a second, different Link.
+    if ((strcasecmp(key, "Link") == 0) && sentinel)
     {
-      if (sentinel)
-      {
-        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
-                "'notification.endpoint.receiverInfo' Link cannot use 'urn:ngsi-ld:request'");
-        return false;
-      }
-      if ((strstr(val, "json-ld#context") != NULL) && (effectiveType == CorMimeLdJson))
-      {
-        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
-                "'notification.endpoint.receiverInfo' @context Link conflicts with application/ld+json (the @context is carried in the body)");
-        return false;
-      }
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
+              "'notification.endpoint.receiverInfo' Link cannot use 'urn:ngsi-ld:request'");
+      return false;
     }
 
     // Prefer — § 6.5.2 uses it ONLY to steer the geo+json @context placement
