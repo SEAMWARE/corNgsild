@@ -20,6 +20,7 @@
 #include "corTree/corTreeLookup.h"                     // corTreeLookup
 
 #include "corAlloc/CorAlloc.h"                          // CorAlloc
+#include "corAlloc/corAllocStrdup.h"                    // corAllocStrdup
 #include "corJsonld/corLdExpand.h"                       // corLdExpand, corLdAlreadyExpanded
 #include "corJsonld/corLdDownload.h"                     // corLdContextFromUrl
 #include "corJsonld/corLdInit.h"                         // corLdCoreContext
@@ -1188,6 +1189,20 @@ int ldRegCacheMatchForQuery(LdRegCache*       cacheP,
 
 // -----------------------------------------------------------------------------
 //
+// regIdCopy - the registration's id, copied into kaP (for use after the cache lock is released)
+//
+static const char* regIdCopy(LdRegCacheItem* itemP, CorAlloc* kaP)
+{
+  const char* regId = (itemP->regId != NULL) ? itemP->regId : "<no id>";
+  char*       copyP = (kaP != NULL) ? corAllocStrdup(kaP, regId) : NULL;
+
+  return (copyP != NULL) ? copyP : "<registration>";   // never the item's own string
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldRegCacheLocalWriteConflict - § 9.3.3 guard for ?local=true writes
 //
 // A local write must not create data that an exclusive or redirect
@@ -1213,7 +1228,8 @@ const char* ldRegCacheLocalWriteConflict(LdRegCache* cacheP,
                                          const char* entityId,
                                          char**      entityTypeV,
                                          char**      entityScopeV,
-                                         char**      attrIriV)
+                                         char**      attrIriV,
+                                         CorAlloc*   kaP)
 {
   if (cacheP == NULL || entityId == NULL)
     return NULL;
@@ -1223,9 +1239,10 @@ const char* ldRegCacheLocalWriteConflict(LdRegCache* cacheP,
   uint64_t nowNs = (uint64_t) ts.tv_sec * 1000000000ULL + (uint64_t) ts.tv_nsec;
 
   // rdlock the walk so a concurrent CSR write can't mutate the list under us.
-  // The returned regId is borrowed (used synchronously for the § 9.3.3 409
-  // detail, no forward), so we don't pin — the post-return window is a few
-  // instructions with no I/O.
+  // The regId returned is a COPY, made before the unlock. It used to be the
+  // item's own string, borrowed on the reasoning that the caller only puts it
+  // in the § 9.3.3 409 detail - but a registration DELETE between the unlock
+  // and that ldError freed it: a small window, and a use-after-free all the same.
   ldRegCacheRdLock(cacheP);
 
   for (LdRegCacheItem* itemP = cacheP->itemList; itemP != NULL; itemP = itemP->next)
@@ -1252,7 +1269,7 @@ const char* ldRegCacheLocalWriteConflict(LdRegCache* cacheP,
 
       // Whole-entity claim — every write to the entity conflicts
       if (riP->attributeNamesV == NULL)
-      { ldRegCacheUnlock(cacheP); return itemP->regId; }
+      { const char* regId = regIdCopy(itemP, kaP); ldRegCacheUnlock(cacheP); return regId; }
 
       if (attrIriV == NULL)
         continue;
@@ -1262,7 +1279,7 @@ const char* ldRegCacheLocalWriteConflict(LdRegCache* cacheP,
         for (int ax = 0; riP->attributeNamesV[ax] != NULL; ax++)
         {
           if (strcmp(attrIriV[ix], riP->attributeNamesV[ax]) == 0)
-          { ldRegCacheUnlock(cacheP); return itemP->regId; }
+          { const char* regId = regIdCopy(itemP, kaP); ldRegCacheUnlock(cacheP); return regId; }
         }
       }
     }
@@ -1426,7 +1443,7 @@ const char* ldRegCacheLocalWriteConflictTree(LdRegCache* cacheP,
   }
   attrIriV[aIx] = NULL;
 
-  return ldRegCacheLocalWriteConflict(cacheP, entityId, typeV, scopeV, attrIriV);
+  return ldRegCacheLocalWriteConflict(cacheP, entityId, typeV, scopeV, attrIriV, kaP);
 }
 
 

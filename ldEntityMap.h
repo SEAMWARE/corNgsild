@@ -18,6 +18,21 @@
 extern LdEntityMapStore* ldEntityMapStoreCreate(void);
 
 // ldEntityMapCreate - create a new entity map with a generated ID and expiry
+// Locking (see LdEntityMap): ldEntityMapCreate / Remove / PurgeExpired lock inside; a walk of
+// storeP->head or ldEntityMapLookup needs the caller's rdlock; a map used after the lock is
+// released must be pinned (ldEntityMapLookupPinned) and unpinned when done.
+extern void ldEntityMapStoreRdLock(LdEntityMapStore* storeP);
+extern void ldEntityMapStoreUnlock(LdEntityMapStore* storeP);
+extern void ldEntityMapPin(LdEntityMap* mapP);
+extern void ldEntityMapUnpin(LdEntityMap* mapP);             // the last reference frees the map
+extern LdEntityMap* ldEntityMapLookupPinned(LdEntityMapStore* storeP, const char* mapId);
+
+// ldEntityMapRequestPin - hold mapP pinned until the request ends (corNgsild.entityMapPinned;
+// ldEntityMapRequestRelease, from the post-response hook, unpins). Takes over a pin the caller has.
+extern void ldEntityMapRequestPin(LdEntityMap* mapP);
+extern void ldEntityMapRequestRelease(void);
+
+// Returns the new map PINNED (the caller unpins, or hands the pin to ldEntityMapRequestPin)
 extern LdEntityMap* ldEntityMapCreate(LdEntityMapStore* storeP, uint64_t lifetimeNs, void* tenantP);
 
 // ldEntityMapSetFilters - record the query's filter URL params (§ 9 same-parameters

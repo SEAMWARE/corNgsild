@@ -84,6 +84,7 @@ endif
 
 debug: all
 LIB_SOURCES   = corNgsild.c \
+                ldIdGenerate.c \
                 ldCoreTermIds.c \
                 ldLanguageKey.c \
                 ldTermId.c \
@@ -169,6 +170,7 @@ LIB_SOURCES   = corNgsild.c \
                 ldMqttNotify.c \
                 ldSnapshotCache.c \
                 ldSnapshotNotify.c \
+                ldTenantHeader.c \
                 ldIso8601Duration.c \
                 ldRequestSubstitute.c \
                 ldLinkedEntitiesHook.c \

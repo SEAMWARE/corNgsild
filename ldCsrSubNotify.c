@@ -57,8 +57,10 @@
 #include "corNgsild/CorNgsild.h"                        // corNgsild (per-conn csrPending* cache)
 #include "corNgsild/ldPeriodicLoop.h"                   // ldPeriodicLoopRegister
 #include "corNgsild/corNgsild.h"                         // corNgsild (for tenant access via opaque)
+#include "corNgsild/ldTenantHeader.h"                    // ldTenantHeaderAdd
 #include "corNgsild/ldNotifyStatsHook.h"                // ldNotifyStatsHookInvoke
 #include "corNgsild/ldRequestSubstitute.h"              // ldRequestSubstitute
+#include "corNgsild/ldIdGenerate.h"                     // ldIdGenerate
 #include "corNgsild/ldCsrSubNotify.h"                   // Own interface
 
 
@@ -240,21 +242,6 @@ static void isoNow(char* buf, int bufSize)
 
 // -----------------------------------------------------------------------------
 //
-// notifIdGenerate - one-shot URN for the notification identifier
-//
-static const char* notifIdGenerate(void)
-{
-  static int counter = 0;
-  static char buf[128];
-  snprintf(buf, sizeof(buf), "urn:ngsi-ld:Notification:%lx:%04x",
-           (long) time(NULL), ++counter & 0xFFFF);
-  return buf;
-}
-
-
-
-// -----------------------------------------------------------------------------
-//
 // csourceNotificationBuild - build the notification tree
 //
 // Runs while the matched LdRegCacheItems are guaranteed alive (the same
@@ -269,7 +256,7 @@ static CorNode* csourceNotificationBuild(LdSubCacheItem* subItemP,
   isoNow(isoTimeBuf, sizeof(isoTimeBuf));
 
   CorNode* notification = corTreeObject(corRest.kallocP, NULL);
-  corTreeChildAdd(notification, corTreeString(corRest.kallocP, "id",  (char*) notifIdGenerate()));
+  corTreeChildAdd(notification, corTreeString(corRest.kallocP, "id",  ldIdGenerate(corRest.kallocP, "Notification")));
   corTreeChildAdd(notification, corTreeString(corRest.kallocP, "type", "ContextSourceNotification"));
   corTreeChildAdd(notification, corTreeString(corRest.kallocP, "subscriptionId", subItemP->subId));
   corTreeChildAdd(notification, corTreeString(corRest.kallocP, "notifiedAt", isoTimeBuf));
@@ -375,6 +362,7 @@ static void csourceNotificationPost(LdSubCacheItem* subItemP, CorNode* notificat
 
   corRestClientRequestInit(&req, CorVerbPost, subItemP->endpointUri, NULL);
   corRestClientRequestHeader(&req, "Content-Type", acceptLdJson ? "application/ld+json" : "application/json");
+  ldTenantHeaderAdd(&req, corNgsild.tenantName);   // the CSR-subscription's tenant (request's, or the tick's)
 
   if (!acceptLdJson)
   {
@@ -612,12 +600,17 @@ void ldCsrSubInitialNotify(LdRegCache* regCacheP, LdSubCacheItem* subItemP)
     }
     matchV[n++] = regItemP;
   }
-  ldRegCacheUnlock(regCacheP);
 
   // § 12.4.7: the csource notification "shall be sent on initial
   // subscription" — unconditionally; with zero matching CSRs the
   // notification simply carries an empty data array.
+  //
+  // Still under the rdlock: the matched items are NOT pinned, and the send BUILDS the
+  // notification now - cloning each match's regTree, walking its infoV. Unlocked first, a CSR
+  // DELETE in between freed what the build was about to read. Only the POST is deferred, and
+  // it reads the built tree, not the cache.
   sendCsourceNotification(subItemP, matchV, n, "newlyMatching");
+  ldRegCacheUnlock(regCacheP);
 }
 
 
@@ -802,13 +795,9 @@ void ldCsrSubOnRegUpdate(LdSubCache* regSubCacheP,
 // has elapsed, collects the currently-matching CSRs and POSTs a single
 // CsourceNotification with triggerReason="updated".
 //
-// `ctx` is the LdSubCache* (regSubCacheP) passed at registration time;
-// the regCacheP is read out of the same tenant via the cached `tenantP`
-// field of the cache wrapper. We pass it through cacheP->regCacheP which
-// the registration site sets for us (see ldCsrSubPeriodicLoopRegister).
-//
-// `kaP` is per-tick scratch from the engine (already reset before this
-// callback fires).
+// Every tenant, each tick: the broker's LdTenantCachesFn (given to
+// ldCsrSubPeriodicLoopRegister) hands over each tenant's CSR-subscription and
+// registration caches, and csrSubTickTenant runs on the pair.
 //
 typedef struct
 {
@@ -817,16 +806,34 @@ typedef struct
 } CsrSubTickCtx;
 
 
-static CsrSubTickCtx tickCtxStorage;
+static LdTenantCachesFn csrSubCachesFn = NULL;
 
 
-static void csrSubPeriodicTick(void* ctx, uint64_t now, CorAlloc* kaP)
+//
+// csrSubTickTenant - one tenant's CSR-subscriptions (tcP: its CSR-sub and registration caches)
+//
+static void csrSubTickTenant(CsrSubTickCtx* tcP, uint64_t now)
 {
-  (void) kaP;  // sendCsourceNotification reaches into corRest.kalloc directly
-
-  CsrSubTickCtx* tcP = (CsrSubTickCtx*) ctx;
   if (tcP == NULL || tcP->regSubCache == NULL || tcP->regCache == NULL) return;
 
+  //
+  // This runs on the periodic thread, concurrently with every request - a CSR-sub or a CSR
+  // DELETE among them. It walked both caches with no lock at all and POSTed on the items it
+  // found, so a DELETE in between freed what it was reading. Now, in two steps, and the two
+  // locks are never held together:
+  //
+  //   1. under the CSR-sub rdlock: pick the subscriptions that are due, and PIN them
+  //   2. per pinned subscription: under the reg rdlock, match and BUILD the notification
+  //      (the build clones the matched registrations); then POST unlocked, and unpin
+  //
+  int              dueCap = 16;
+  int              dueN   = 0;
+  LdSubCacheItem** dueV   = (LdSubCacheItem**) corAlloc(&corRest.kalloc, dueCap * sizeof(LdSubCacheItem*));
+
+  if (dueV == NULL)
+    return;
+
+  ldSubCacheRdLock(tcP->regSubCache);
   for (LdSubCacheItem* subItemP = tcP->regSubCache->itemList;
        subItemP != NULL;
        subItemP = subItemP->next)
@@ -856,17 +863,42 @@ static void csrSubPeriodicTick(void* ctx, uint64_t now, CorAlloc* kaP)
         continue;
     }
 
-    // Collect currently-matching CSRs.
-    int cap = 16;
+    if (dueN == dueCap)
+    {
+      int              newCap = dueCap * 2;
+      LdSubCacheItem** nv     = (LdSubCacheItem**) corAlloc(&corRest.kalloc, newCap * sizeof(LdSubCacheItem*));
+
+      if (nv == NULL)
+        break;              // the rest are due next tick
+
+      for (int i = 0; i < dueN; i++) nv[i] = dueV[i];
+      dueV   = nv;
+      dueCap = newCap;
+    }
+
+    ldSubCacheItemPin(subItemP);
+    dueV[dueN++] = subItemP;
+  }
+  ldSubCacheUnlock(tcP->regSubCache);
+
+  for (int d = 0; d < dueN; d++)
+  {
+    LdSubCacheItem* subItemP = dueV[d];
+
+    // Collect currently-matching CSRs - and build from them while they cannot be freed
+    int              cap    = 16;
     LdRegCacheItem** matchV = (LdRegCacheItem**) corAlloc(&corRest.kalloc, cap * sizeof(LdRegCacheItem*));
-    int n = 0;
-    for (LdRegCacheItem* regItemP = tcP->regCache->itemList; regItemP != NULL; regItemP = regItemP->next)
+    int              n      = 0;
+
+    ldRegCacheRdLock(tcP->regCache);
+    for (LdRegCacheItem* regItemP = tcP->regCache->itemList; (matchV != NULL) && (regItemP != NULL); regItemP = regItemP->next)
     {
       if (!subMatchesReg(subItemP, regItemP)) continue;
       if (n == cap)
       {
         int newCap = cap * 2;
         LdRegCacheItem** nv = (LdRegCacheItem**) corAlloc(&corRest.kalloc, newCap * sizeof(LdRegCacheItem*));
+        if (nv == NULL) break;
         for (int i = 0; i < n; i++) nv[i] = matchV[i];
         matchV = nv;
         cap    = newCap;
@@ -878,18 +910,43 @@ static void csrSubPeriodicTick(void* ctx, uint64_t now, CorAlloc* kaP)
     // elapsed "regardless of any changes to the set of Context Source
     // Registrations" — zero matches → empty data array. Direct send:
     // this thread has no post-response hook to flush a deferral.
-    csourceNotificationPost(subItemP, csourceNotificationBuild(subItemP, matchV, n, "updated"));
+    CorNode* notification = csourceNotificationBuild(subItemP, matchV, n, "updated");
+    ldRegCacheUnlock(tcP->regCache);
+
+    csourceNotificationPost(subItemP, notification);
+    ldSubCacheItemUnpin(subItemP);
   }
 }
 
 
 
-void ldCsrSubPeriodicLoopRegister(LdSubCache* regSubCacheP, LdRegCache* regCacheP)
+typedef struct { uint64_t now; } CsrSubTickArg;
+
+static void csrSubVisit(LdTenantCaches* tcP, void* arg)
 {
-  // Single-tenant for now (broker-wide tenant0). Multi-tenant requires
-  // either one registration per tenant or a shared lookup keyed on
-  // subItem->tenantP — defer until multi-tenant CSR-subs are exercised.
-  tickCtxStorage.regSubCache = regSubCacheP;
-  tickCtxStorage.regCache    = regCacheP;
-  ldPeriodicLoopRegister(csrSubPeriodicTick, &tickCtxStorage);
+  CsrSubTickCtx ctx = { tcP->regSubCacheP, tcP->regCacheP };
+  csrSubTickTenant(&ctx, ((CsrSubTickArg*) arg)->now);
+}
+
+//
+// csrSubPeriodicTick - registered with the periodic-dispatch engine: every tenant
+//
+static void csrSubPeriodicTick(void* ctx, uint64_t now, CorAlloc* kaP)
+{
+  (void) ctx;
+  (void) kaP;  // sendCsourceNotification reaches into corRest.kalloc directly
+
+  if (csrSubCachesFn == NULL)
+    return;
+
+  CsrSubTickArg arg = { now };
+  csrSubCachesFn(csrSubVisit, &arg);
+}
+
+
+
+void ldCsrSubPeriodicLoopRegister(LdTenantCachesFn cachesFn)
+{
+  csrSubCachesFn = cachesFn;
+  ldPeriodicLoopRegister(csrSubPeriodicTick, NULL);
 }

@@ -21,6 +21,7 @@
 //
 // One cache per tenant, hung off Tenant::snapshotCacheP.
 //
+#include <pthread.h>                                   // pthread_rwlock_t
 #include <stdbool.h>                                     // bool
 #include <stdint.h>                                      // uint64_t
 
@@ -59,6 +60,17 @@ typedef struct LdSnapshotCacheItem
   uint64_t                      expiresAt;      // ns since epoch
   uint64_t                      lastUsedAt;     // ns since epoch — touched on each read
   int                           priority;       // 1..10, default 5
+
+  //
+  // References: one held by the cache while the item is in it, one per PIN. A reader that uses
+  // the item past the cache lock - the capture worker across its DB work, a read routed to the
+  // snapshot's tenant, a clone - pins it. DELETE unlinks the item under the wrlock and then
+  // drops the cache's reference; whoever takes the count to 0 destroys the item: the destroy
+  // hook (the snapshot's tenant and databases), then the tree and the item. Two DELETEs can't
+  // both find it linked, so it is destroyed once.
+  //
+  int                           refCount;
+
   struct LdSnapshotCacheItem*   next;
 } LdSnapshotCacheItem;
 
@@ -70,6 +82,7 @@ typedef struct LdSnapshotCacheItem
 //
 typedef struct LdSnapshotCache
 {
+  pthread_rwlock_t      lock;            // walks, lookups, tree CLONES: rd - add, unlink, tree MUTATION: wr
   LdSnapshotCacheItem*  head;
   int                   count;
   int                   nextSnapSeq;     // assigned to itemP->snapSeq on add; bumped at boot reload to max+1
@@ -83,12 +96,38 @@ typedef struct LdSnapshotCache
 //
 extern LdSnapshotCache*      ldSnapshotCacheCreate(void);
 
+//
+// Locking: ldSnapshotCacheItemAdd and ldSnapshotCacheItemDelete lock inside. A walk of head,
+// ldSnapshotCacheItemLookup and a CLONE of an item's tree need the caller's rdlock; a MUTATION
+// of an item's tree (or status) the caller's wrlock. An item used after the lock is released
+// must be pinned - ldSnapshotCacheItemLookupPinned - and unpinned when done.
+//
+extern void                  ldSnapshotCacheRdLock(LdSnapshotCache* cacheP);
+extern void                  ldSnapshotCacheWrLock(LdSnapshotCache* cacheP);
+extern void                  ldSnapshotCacheUnlock(LdSnapshotCache* cacheP);
+extern void                  ldSnapshotCacheItemPin(LdSnapshotCacheItem* itemP);
+extern void                  ldSnapshotCacheItemUnpin(LdSnapshotCacheItem* itemP);   // may destroy it
+
+// The broker's part of destroying an item (its snapshot tenant: TRoE drop, DB drop, free) -
+// called once, by whoever releases the last reference, with no cache lock held. Set at startup.
+typedef void (*LdSnapshotItemDestroyFn)(LdSnapshotCacheItem* itemP);
+extern void                  ldSnapshotCacheDestroyHookSet(LdSnapshotItemDestroyFn fn);
+
+// Returns the new item PINNED (the caller unpins), NULL if the id is taken - checked and added
+// under one wrlock
 extern LdSnapshotCacheItem*  ldSnapshotCacheItemAdd(LdSnapshotCache*  cacheP,
                                                     CorNode*          snapshotTree);
 
 extern LdSnapshotCacheItem*  ldSnapshotCacheItemLookup(LdSnapshotCache* cacheP,
                                                        const char*      id);
 
+extern LdSnapshotCacheItem*  ldSnapshotCacheItemLookupPinned(LdSnapshotCache* cacheP,
+                                                             const char*      id);
+
+// ldSnapshotRequestRelease - unpin the request's corNgsild.snapshotPinned, if any
+extern void                  ldSnapshotRequestRelease(void);
+
+// Unlinks the item and drops the cache's reference: destroyed now, or at its last unpin
 extern bool                  ldSnapshotCacheItemDelete(LdSnapshotCache* cacheP,
                                                        const char*      id);
 

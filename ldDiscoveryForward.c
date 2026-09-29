@@ -22,6 +22,7 @@
 //
 
 #include <stdio.h>                                    // snprintf
+#include <stdlib.h>                                   // realloc
 #include <string.h>                                   // strcmp, strchr
 
 #include "corTree/CorNode.h"                          // CorNode
@@ -35,7 +36,7 @@
 #include "corJsonld/corLdInit.h"                        // corLdCoreContext
 
 #include "corNgsild/LdRegCache.h"                      // LdRegCache, LdRegCacheItem
-#include "corNgsild/ldRegCache.h"                      // ldRegOpSupported
+#include "corNgsild/ldRegCache.h"                      // ldRegOpSupported, ldRegCacheRdLock, ldRegCacheItemPin, ldRegCacheMatchRelease
 #include "corNgsild/ldDistOp.h"                        // ldDistOpSendReceive, ldDistOpCsrWouldLoop
 #include "corNgsild/CorNgsild.h"                       // corNgsild (hops)
 #include "corNgsild/ldStripAtContext.h"                // ldStripAtContext
@@ -370,6 +371,51 @@ static void mergeAttributeInfo(CorNode* agg, CorNode* respP)
 
 // -----------------------------------------------------------------------------
 //
+// regsPinned - every registration with an endpoint, PINNED, in a malloc'd array
+//
+// The forwarders below send a GET to each registration's endpoint - network I/O, seconds of it
+// with a slow source - and they walked the cache with no lock while doing it, so a registration
+// DELETE meanwhile freed the item mid-forward. Now the walk is under the rdlock and only
+// collects; the forwarding runs unlocked on pinned items, and ldRegCacheMatchRelease unpins
+// them and frees the array. NULL (and *nP 0) when there is nothing to forward to.
+//
+static LdRegCacheItem** regsPinned(LdRegCache* cacheP, int* nP)
+{
+  int              n   = 0;
+  int              cap = 0;
+  LdRegCacheItem** v   = NULL;
+
+  ldRegCacheRdLock(cacheP);
+  for (LdRegCacheItem* it = cacheP->itemList; it != NULL; it = it->next)
+  {
+    if (it->endpoint == NULL)
+      continue;
+
+    if (n == cap)
+    {
+      int              newCap = (cap == 0) ? 8 : 2 * cap;
+      LdRegCacheItem** newV   = (LdRegCacheItem**) realloc(v, newCap * sizeof(LdRegCacheItem*));
+
+      if (newV == NULL)
+        break;                  // forward to the ones collected so far
+
+      v   = newV;
+      cap = newCap;
+    }
+
+    ldRegCacheItemPin(it);
+    v[n++] = it;
+  }
+  ldRegCacheUnlock(cacheP);
+
+  *nP = n;
+  return v;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldDiscoveryForwardTypes -
 //
 void ldDiscoveryForwardTypes(CorNode* agg, LdRegCache* cacheP, bool details, const char* ownAlias)
@@ -379,8 +425,13 @@ void ldDiscoveryForwardTypes(CorNode* agg, LdRegCache* cacheP, bool details, con
 
   int hops = remainingHops();
 
-  for (LdRegCacheItem* it = cacheP->itemList; it != NULL; it = it->next)
+  int              regN = 0;
+  LdRegCacheItem** regV = regsPinned(cacheP, &regN);
+
+  for (int r = 0; r < regN; r++)
   {
+    LdRegCacheItem* it = regV[r];
+
     if (it->endpoint == NULL)                           continue;
     if (ldDistOpCsrWouldLoop(it, ownAlias))             continue;
 
@@ -393,6 +444,8 @@ void ldDiscoveryForwardTypes(CorNode* agg, LdRegCache* cacheP, bool details, con
     CorNode* respP = forwardGet(it, "/ngsi-ld/v1/types", true, hops, ownAlias);
     mergeEntityTypeArray(agg, respP, details);
   }
+
+  ldRegCacheMatchRelease(regV, regN);
 }
 
 
@@ -413,8 +466,13 @@ void ldDiscoveryForwardType(CorNode* agg, LdRegCache* cacheP, const char* typeIr
   snprintf(path, sizeof(path), "/ngsi-ld/v1/types/%s",
            (typeShort != NULL) ? typeShort : typeIri);
 
-  for (LdRegCacheItem* it = cacheP->itemList; it != NULL; it = it->next)
+  int              regN = 0;
+  LdRegCacheItem** regV = regsPinned(cacheP, &regN);
+
+  for (int r = 0; r < regN; r++)
   {
+    LdRegCacheItem* it = regV[r];
+
     if (it->endpoint == NULL)                         continue;
     if (ldDistOpCsrWouldLoop(it, ownAlias))           continue;
     if (!ldRegOpSupported(it, LdOpRetrieveEntityTypeInfo)) continue;
@@ -422,6 +480,8 @@ void ldDiscoveryForwardType(CorNode* agg, LdRegCache* cacheP, const char* typeIr
     CorNode* respP = forwardGet(it, path, false, hops, ownAlias);
     mergeEntityTypeInfo(agg, respP);
   }
+
+  ldRegCacheMatchRelease(regV, regN);
 }
 
 
@@ -437,8 +497,13 @@ void ldDiscoveryForwardAttrs(CorNode* agg, LdRegCache* cacheP, bool details, con
 
   int hops = remainingHops();
 
-  for (LdRegCacheItem* it = cacheP->itemList; it != NULL; it = it->next)
+  int              regN = 0;
+  LdRegCacheItem** regV = regsPinned(cacheP, &regN);
+
+  for (int r = 0; r < regN; r++)
   {
+    LdRegCacheItem* it = regV[r];
+
     if (it->endpoint == NULL)                           continue;
     if (ldDistOpCsrWouldLoop(it, ownAlias))             continue;
     if (!ldRegOpSupported(it, LdOpRetrieveAttrTypeDetails)) continue;
@@ -446,6 +511,8 @@ void ldDiscoveryForwardAttrs(CorNode* agg, LdRegCache* cacheP, bool details, con
     CorNode* respP = forwardGet(it, "/ngsi-ld/v1/attributes", true, hops, ownAlias);
     mergeAttributeArray(agg, respP, details);
   }
+
+  ldRegCacheMatchRelease(regV, regN);
 }
 
 
@@ -466,8 +533,13 @@ void ldDiscoveryForwardAttr(CorNode* agg, LdRegCache* cacheP, const char* attrIr
   snprintf(path, sizeof(path), "/ngsi-ld/v1/attributes/%s",
            (attrShort != NULL) ? attrShort : attrIri);
 
-  for (LdRegCacheItem* it = cacheP->itemList; it != NULL; it = it->next)
+  int              regN = 0;
+  LdRegCacheItem** regV = regsPinned(cacheP, &regN);
+
+  for (int r = 0; r < regN; r++)
   {
+    LdRegCacheItem* it = regV[r];
+
     if (it->endpoint == NULL)                         continue;
     if (ldDistOpCsrWouldLoop(it, ownAlias))           continue;
     if (!ldRegOpSupported(it, LdOpRetrieveAttrTypeInfo)) continue;
@@ -475,4 +547,6 @@ void ldDiscoveryForwardAttr(CorNode* agg, LdRegCache* cacheP, const char* attrIr
     CorNode* respP = forwardGet(it, path, false, hops, ownAlias);
     mergeAttributeInfo(agg, respP);
   }
+
+  ldRegCacheMatchRelease(regV, regN);
 }

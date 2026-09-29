@@ -14,6 +14,7 @@
 // (which walks LdSubCache on every write) never touches pernot subs.
 // The background pernot loop thread walks only this cache.
 //
+#include <pthread.h>                                   // pthread_rwlock_t
 #include <stdbool.h>                                   // bool
 #include <stdint.h>                                    // uint64_t
 
@@ -89,8 +90,22 @@ typedef struct LdPernotItem
   int                    noMatch;         // queries that returned 0 entities
   int                    consecutiveErrors;
 
-  // Tenant (opaque — set by the broker, used for db.entityQuery)
+  // Tenant - the one the subscription was created in: queried (opaque, for db.entityQuery) and
+  // named on its notifications (NGSILD-Tenant; "" = the default tenant)
   void*                  tenantP;
+  char                   tenantName[64];
+
+  // Pinning (as LdSubCacheItem): a reader that keeps the item past the cache lock - the loop
+  // across its query and its send, a GET across its rendering - pins it. A remove of a pinned
+  // item parks it on the cache's retiredList; only writers free, under the wrlock, at 0 pins.
+  int                    refCount;
+  bool                   retired;
+
+  // The item's own arena, for what is parsed out of subTree (q, scopeQ, geoQ): freed WITH the
+  // item. They were parsed into the cache's arena (or the subscription cache's!), which is never
+  // freed - so every create/delete of a periodic subscription leaked its parsed filters.
+  CorAlloc               alloc;
+  char                   allocBuf[512];
 
   struct LdPernotItem*   next;
 } LdPernotItem;
@@ -103,6 +118,8 @@ typedef struct LdPernotItem
 //
 typedef struct LdPernotCache
 {
+  pthread_rwlock_t  lock;          // walks and lookups: rd - add / remove: wr (taken inside)
+  LdPernotItem*     retiredList;   // removed while pinned, awaiting the last unpin
   LdPernotItem*  head;
   LdPernotItem*  tail;
   CorAlloc       alloc;

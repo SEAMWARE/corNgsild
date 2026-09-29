@@ -121,6 +121,28 @@ static char* urlDecodeSegment(const char* s, int len, CorAlloc* kaP)
 
 // -----------------------------------------------------------------------------
 //
+// storedDotsRestore - an IRI segment of a STORED q has its dots written as '^'; make them dots again
+//
+// A stored q (ldQRender without a context) writes an IRI's dots as '^' - a character no valid IRI
+// contains and no attribute name may - so that the dots left are the path separators. Called on
+// each segment after the split on the real separators: attribute path and value path alike.
+//
+static void storedDotsRestore(char* segment)
+{
+  if (strchr(segment, ':') == NULL)
+    return;
+
+  for (char* cP = segment; *cP != 0; ++cP)
+  {
+    if (*cP == '^')
+      *cP = '.';
+  }
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // expandAttrPath - split a § 4.9 attrPath on raw dots, decode + expand each segment
 //
 // First segment → term.attr, the rest → term.subPathV. All segments are
@@ -145,6 +167,9 @@ static void expandAttrPath(LdQTerm* termP, const char* start, int len, CorAlloc*
     if (i == len || start[i] == '.')
     {
       char* decoded  = urlDecodeSegment(start + segStart, i - segStart, kaP);
+
+      storedDotsRestore(decoded);
+
       char* expanded = expandAttr(decoded, strlen(decoded), kaP);
 
       if (segIx == 0)
@@ -570,6 +595,9 @@ static LdQNode* parseTerm(const char** pp, CorAlloc* kaP)
       if (i == vpLen || vpStart[i] == '.')
       {
         char* segP = urlDecodeSegment(vpStart + segStart, i - segStart, kaP);
+
+        if (segP != NULL)
+          storedDotsRestore(segP);   // a value's member names are stored expanded too (they are JSON-LD)
 
         if ((segP != NULL) && (strcmp(segP, "*") != 0) && (corLdAlreadyExpanded(segP) == false))
         {

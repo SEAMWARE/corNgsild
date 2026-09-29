@@ -17,6 +17,7 @@
 // the sub's endpoint as a single CsourceNotification with the
 // given triggerReason.
 //
+#include "corNgsild/ldTenantCaches.h"                   // LdTenantCachesFn
 #include <stdbool.h>                                    // bool
 
 #include "corAlloc/CorAlloc.h"                          // CorAlloc
@@ -141,10 +142,10 @@ extern void ldCsrSubOnRegUpdate(LdSubCache* regSubCacheP,
 // CSRs from regCacheP and POSTs a CsourceNotification (triggerReason
 // "updated").
 //
-// Single-tenant (broker-wide tenant0). Multi-tenant would either
-// register once per tenant or look the right caches up via subItem
-// tenantP — defer.
+// Every tenant: cachesFn walks each tenant's caches (ldTenantCaches.h). It was
+// registered with tenant0's caches alone - a periodic CSR-subscription on any
+// other tenant never fired.
 //
-extern void ldCsrSubPeriodicLoopRegister(LdSubCache* regSubCacheP, LdRegCache* regCacheP);
+extern void ldCsrSubPeriodicLoopRegister(LdTenantCachesFn cachesFn);
 
 #endif  // CORNGSILD_LDCSRSUBNOTIFY_H_

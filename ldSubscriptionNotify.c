@@ -43,6 +43,7 @@
 #include "corNgsild/ldTypes.h"                          // ldFormatToString
 #include "corNgsild/LdVocab.h"                          // LD_VOCAB_*
 #include "corNgsild/CorNgsild.h"                        // corNgsild
+#include "corNgsild/ldTenantHeader.h"                   // ldTenantHeaderAdd
 #include "corNgsild/LdSubCache.h"                       // LdSubCache, LdSubCacheItem
 #include "corNgsild/ldSubCache.h"                       // ldSubCacheRdLock, ldSubCacheItemPin, ...
 #include "corNgsild/ldEntityToApi.h"                    // ldEntityToApi
@@ -64,23 +65,8 @@
 #include "corNgsild/ldThrottleDirty.h"                  // ldThrottleDirtyUpsert/Drain/EntriesFree
 #include "corNgsild/ldPeriodicLoop.h"                   // ldPeriodicLoopRegister
 #include "corNgsild/ldTermId.h"                         // ldTermId, CorTerm*
+#include "corNgsild/ldIdGenerate.h"                     // ldIdGenerate
 #include "corNgsild/ldSubscriptionNotify.h"             // Own interface
-
-
-
-// -----------------------------------------------------------------------------
-//
-// notifIdGenerate -
-//
-static char* notifIdGenerate(void)
-{
-  static int   counter = 0;
-  static char  buf[128];
-
-  snprintf(buf, sizeof(buf), "urn:ngsi-ld:Notification:%lx:%04x", (long) time(NULL), ++counter & 0xFFFF);
-
-  return buf;
-}
 
 
 
@@ -785,7 +771,7 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   isoNow(isoTimeBuf, sizeof(isoTimeBuf));
 
   CorNode* notification = corTreeObject(corRest.kallocP, NULL);
-  corTreeChildAdd(notification, corTreeString(corRest.kallocP, "id",  notifIdGenerate()));
+  corTreeChildAdd(notification, corTreeString(corRest.kallocP, "id",  ldIdGenerate(corRest.kallocP, "Notification")));
   corTreeChildAdd(notification, corTreeString(corRest.kallocP, "type", "Notification"));
   corTreeChildAdd(notification, corTreeString(corRest.kallocP, "subscriptionId", itemP->subId));
   corTreeChildAdd(notification, corTreeString(corRest.kallocP, "notifiedAt", isoTimeBuf));
@@ -992,20 +978,9 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   corRestClientRequestInit(&req, CorVerbPost, itemP->endpointUri, NULL);
   corRestClientRequestHeader(&req, "Content-Type", contentType);
 
-  // § 6.4.8 — a notification resulting from a subscription matched under a
-  // non-default tenant carries the NGSILD-Tenant header (the same tenant the
-  // consumer addressed); without it the entity ids in the body are ambiguous.
-  // Taken from the triggering request (the change happened in the sub's tenant).
-  for (int i = 0; i < corRest.in.httpHeaderCount; i++)
-  {
-    if ((corRest.in.httpHeaderV[i].key != NULL) &&
-        (strcasecmp(corRest.in.httpHeaderV[i].key, "NGSILD-Tenant") == 0) &&
-        (corRest.in.httpHeaderV[i].value != NULL) && (corRest.in.httpHeaderV[i].value[0] != 0))
-    {
-      corRestClientRequestHeader(&req, "NGSILD-Tenant", corRest.in.httpHeaderV[i].value);
-      break;
-    }
-  }
+  // § 6.4.8 — the subscription's tenant: the request's for a change-driven notification, the
+  // visited tenant's for a throttle flush (set by the tick). See ldTenantHeaderAdd.
+  ldTenantHeaderAdd(&req, corNgsild.tenantName);
 
   // Ngsild-Attribute-Format — non-default representation format of the
   // notification data, as the lowercase NGSI-LD format value (concise /
@@ -1243,17 +1218,16 @@ void ldSubscriptionNotifyBatch(LdSubCache*           cacheP,
 // the buffer stays O(1)/update); a buffered DELETE carries the state captured at
 // delete time (a gone entity can't be re-queried).
 //
-static LdThrottleRetrieveFunc throttleRetrieveFn = NULL;
+static LdThrottleRetrieveFunc throttleRetrieveFn  = NULL;
+static LdTenantCachesFn       throttleCachesFn    = NULL;
 
 
 
 //
-// throttleFlushTick - registered with the periodic-dispatch engine (1 Hz).
+// throttleFlushCache - one tenant's subscription cache
 //
-static void throttleFlushTick(void* ctx, uint64_t now, CorAlloc* kaP)
+static void throttleFlushCache(LdSubCache* cacheP, void* tenantP, uint64_t now)
 {
-  (void) kaP;
-  LdSubCache* cacheP = (LdSubCache*) ctx;
   if (cacheP == NULL)
     return;
 
@@ -1322,7 +1296,7 @@ static void throttleFlushTick(void* ctx, uint64_t now, CorAlloc* kaP)
       }
       else
       {
-        state = (throttleRetrieveFn != NULL) ? throttleRetrieveFn(e->entityId, &corRest.kalloc) : NULL;
+        state = (throttleRetrieveFn != NULL) ? throttleRetrieveFn(tenantP, e->entityId, &corRest.kalloc) : NULL;
         if (state == NULL)             // vanished without a delete record — skip
           continue;
       }
@@ -1350,14 +1324,39 @@ static void throttleFlushTick(void* ctx, uint64_t now, CorAlloc* kaP)
 
 
 
+typedef struct { uint64_t now; } ThrottleTickArg;
+
+static void throttleVisit(LdTenantCaches* tcP, void* arg)
+{
+  throttleFlushCache(tcP->subCacheP, tcP->tenantP, ((ThrottleTickArg*) arg)->now);
+}
+
+//
+// throttleFlushTick - registered with the periodic-dispatch engine (1 Hz): every tenant
+//
+static void throttleFlushTick(void* ctx, uint64_t now, CorAlloc* kaP)
+{
+  (void) ctx;
+  (void) kaP;
+
+  if (throttleCachesFn == NULL)
+    return;
+
+  ThrottleTickArg arg = { now };
+  throttleCachesFn(throttleVisit, &arg);
+}
+
+
+
 //
 // ldThrottleFlushStart - register the coalesce-to-latest flush with the
 // periodic loop. retrieveFn is the broker's "retrieve one entity by id" hook
-// (the lib has no DB access). Single-tenant (tenant0) for now, like the other
-// periodic ticks.
+// (the lib has no DB access). It was registered with tenant0's cache alone:
+// on any other tenant the coalesced notification never came.
 //
-void ldThrottleFlushStart(LdSubCache* cacheP, LdThrottleRetrieveFunc retrieveFn)
+void ldThrottleFlushStart(LdTenantCachesFn cachesFn, LdThrottleRetrieveFunc retrieveFn)
 {
+  throttleCachesFn   = cachesFn;
   throttleRetrieveFn = retrieveFn;
-  ldPeriodicLoopRegister(throttleFlushTick, cacheP);
+  ldPeriodicLoopRegister(throttleFlushTick, NULL);
 }

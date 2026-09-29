@@ -27,6 +27,7 @@
 #include "corRest/CorRestState.h"                         // corRest
 
 #include "corNgsild/LdRegCache.h"                        // LdRegCache, LdRegCacheItem, LdRegInfo, LdRegEntityInfo, LdRegMode
+#include "corNgsild/ldRegCache.h"                        // ldRegCacheRdLock, ldRegCacheUnlock
 #include "corNgsild/ldDiscovery.h"                       // Own interface
 
 
@@ -127,6 +128,12 @@ void ldDiscoveryRegAugmentTypes(CorNode* agg, LdRegCache* cacheP, bool details)
 {
   if (agg == NULL || cacheP == NULL) return;
 
+  //
+  // Under the rdlock: GET /types walked the list with none, while POST/PATCH/DELETE of a
+  // registration changed it - a DELETE frees items (drd caught it). Everything taken from an
+  // item is COPIED into agg (corTreeString), so nothing outlives the lock.
+  //
+  ldRegCacheRdLock(cacheP);
   for (LdRegCacheItem* it = cacheP->itemList; it != NULL; it = it->next)
   {
     // Auxiliary CSRs advertise "possibly available" content like any other —
@@ -159,6 +166,7 @@ void ldDiscoveryRegAugmentTypes(CorNode* agg, LdRegCache* cacheP, bool details)
       }
     }
   }
+  ldRegCacheUnlock(cacheP);
 }
 
 
@@ -171,6 +179,8 @@ void ldDiscoveryRegAugmentAttrs(CorNode* agg, LdRegCache* cacheP, bool details)
 {
   if (agg == NULL || cacheP == NULL) return;
 
+  // Under the rdlock - see ldDiscoveryRegAugmentTypes
+  ldRegCacheRdLock(cacheP);
   for (LdRegCacheItem* it = cacheP->itemList; it != NULL; it = it->next)
   {
     for (LdRegInfo* ri = it->infoV; ri != NULL; ri = ri->next)
@@ -210,4 +220,5 @@ void ldDiscoveryRegAugmentAttrs(CorNode* agg, LdRegCache* cacheP, bool details)
       }
     }
   }
+  ldRegCacheUnlock(cacheP);
 }

@@ -236,8 +236,10 @@ typedef struct CorNgsild
   bool    rawResponse;  // true => renderHook skips ldEntityToApi (used for subscription responses)
   bool    entityMapOnly; // true => GET|POST /entityMaps: query + return the EntityMap (not entities)
 
-  // Tenant (resolved in preServiceHook, opaque to corNgsild)
-  void*  tenantP;
+  // Tenant (resolved in preServiceHook, opaque to corNgsild) - and its name ("" = the default
+  // tenant), for what goes out tagged with it: the NGSILD-Tenant of a notification
+  void*        tenantP;
+  const char*  tenantName;
 
   // Inc6c — per-connection deferred caches (were static __thread in their .c
   // files). Drained by the post-response hook; the realloc'd buffers are freed
@@ -274,6 +276,16 @@ typedef struct CorNgsild
 
   // The parse of this request's body (ldParse.c) - NULL unless an NGSI-LD body was parsed
   struct LdParseState* parseP;
+
+  // The Snapshot a read is routed to (NGSILD-Snapshot header), PINNED for the whole request -
+  // its tenant is queried, its id goes out in a response header - and unpinned by
+  // ldSnapshotRequestRelease (post-response hook; the pre-dispatch hook as a safety net).
+  struct LdSnapshotCacheItem*  snapshotPinned;
+
+  // The EntityMap a request creates or pages, PINNED for the request (the query parameters may
+  // point at its bound strings) - released by ldEntityMapRequestRelease, like snapshotPinned.
+  struct LdEntityMap*          entityMapPinned;
+
 } CorNgsild;
 
 

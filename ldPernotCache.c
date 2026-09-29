@@ -7,11 +7,17 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 #include <regex.h>                                     // regex_t, regcomp, regfree
+#include <stdio.h>                                     // snprintf
 #include <stdlib.h>                                    // calloc, malloc, free
 #include <string.h>                                    // strcmp, strdup
 
 #include "corAlloc/CorAlloc.h"                         // CorAlloc, corAlloc
 #include "corAlloc/corAllocBufferInit.h"               // corAllocBufferInit
+#include "corAlloc/corAllocBufferReset.h"              // corAllocBufferReset
+#include "corAlloc/corAlloc.h"                         // corAlloc
+#include "corJson/corJsonRender.h"                     // corJsonFastRender
+#include "corJson/corJsonRenderSize.h"                 // corJsonFastRenderSize
+#include "corJsonld/corLdExpand.h"                       // corLdExpand, corLdAlreadyExpanded
 #include "corTree/CorNode.h"                           // CorNode
 #include "corTree/corTreeLookup.h"                     // corTreeLookup
 #include "corTree/corTreeClone.h"                      // corTreeClone
@@ -22,6 +28,9 @@
 #include "corNgsild/LdPernotCache.h"                    // LdPernotCache, LdPernotItem
 #include "corNgsild/ldPernotCache.h"                    // Own interface
 #include "corNgsild/ldCheckDateTime.h"                  // ldIsoToNanoseconds
+#include "corNgsild/ldQParse.h"                         // ldQParse
+#include "corNgsild/LdScopeExpr.h"                      // ldScopeExprParse
+#include "corNgsild/LdGeoRel.h"                         // ldGeoRelParse
 
 
 
@@ -116,10 +125,83 @@ static void entitySelectorsFree(LdSubEntitySelector* head)
 
 
 
+// -----------------------------------------------------------------------------
+//
+// itemFree - everything an item owns, and the item
+//
+static void itemFree(LdPernotItem* p)
+{
+  corAllocBufferReset(&p->alloc, false);   // q, scopeQ, geoQ
+  free(p->subId);
+  if (p->subTree)     corTreeFree(p->subTree);
+  entitySelectorsFree(p->entitySelectors);
+  if (p->notifAttrsV) free(p->notifAttrsV);
+  if (p->datasetIdV)  free(p->datasetIdV);
+  free(p);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// reapRetired - free the removed items nobody has pinned any more (caller holds the wrlock)
+//
+static void reapRetired(LdPernotCache* cacheP)
+{
+  LdPernotItem* p    = cacheP->retiredList;
+  LdPernotItem* prev = NULL;
+
+  while (p != NULL)
+  {
+    LdPernotItem* next = p->next;
+
+    if (__atomic_load_n(&p->refCount, __ATOMIC_SEQ_CST) == 0)
+    {
+      if (prev == NULL) cacheP->retiredList = next;
+      else              prev->next          = next;
+      itemFree(p);
+    }
+    else
+      prev = p;
+
+    p = next;
+  }
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// Locking and pinning - see ldPernotCache.h
+//
+void ldPernotCacheRdLock(LdPernotCache* cacheP)  { if (cacheP != NULL) pthread_rwlock_rdlock(&cacheP->lock); }
+void ldPernotCacheUnlock(LdPernotCache* cacheP)  { if (cacheP != NULL) pthread_rwlock_unlock(&cacheP->lock); }
+void ldPernotCacheItemPin(LdPernotItem* itemP)   { if (itemP != NULL) __atomic_add_fetch(&itemP->refCount, 1, __ATOMIC_SEQ_CST); }
+void ldPernotCacheItemUnpin(LdPernotItem* itemP) { if (itemP != NULL) __atomic_sub_fetch(&itemP->refCount, 1, __ATOMIC_SEQ_CST); }
+
+LdPernotItem* ldPernotCacheItemLookupPinned(LdPernotCache* cacheP, const char* subId)
+{
+  if (cacheP == NULL)
+    return NULL;
+
+  pthread_rwlock_rdlock(&cacheP->lock);
+  LdPernotItem* itemP = ldPernotCacheItemLookup(cacheP, subId);
+  if (itemP != NULL)
+    ldPernotCacheItemPin(itemP);
+  pthread_rwlock_unlock(&cacheP->lock);
+
+  return itemP;
+}
+
+
+
 // ldPernotCacheCreate
 LdPernotCache* ldPernotCacheCreate(void)
 {
   LdPernotCache* cacheP = (LdPernotCache*) calloc(1, sizeof(LdPernotCache));
+  if (cacheP == NULL)
+    return NULL;
+  pthread_rwlock_init(&cacheP->lock, NULL);
   corAllocBufferInit(&cacheP->alloc, cacheP->allocBuf, sizeof(cacheP->allocBuf), 4096, NULL, "pernot-cache");
   return cacheP;
 }
@@ -127,13 +209,13 @@ LdPernotCache* ldPernotCacheCreate(void)
 
 
 // ldPernotCacheItemAdd
-LdPernotItem* ldPernotCacheItemAdd(LdPernotCache* cacheP, CorNode* subTree,
-                                    LdQNode* qExpr, void* tenantP)
+static LdPernotItem* itemBuild(CorNode* subTree, void* tenantP, const char* tenantName)
 {
-  if (cacheP == NULL || subTree == NULL)
+  LdPernotItem* itemP = (LdPernotItem*) calloc(1, sizeof(LdPernotItem));
+  if (itemP == NULL)
     return NULL;
 
-  LdPernotItem* itemP = (LdPernotItem*) calloc(1, sizeof(LdPernotItem));
+  corAllocBufferInit(&itemP->alloc, itemP->allocBuf, sizeof(itemP->allocBuf), 4096, NULL, "pernot-item");
 
   CorNode* idP = corTreeLookup(subTree, "id");
   itemP->subId   = (idP != NULL && idP->type == CorString) ? strdup(idP->value.s) : NULL;
@@ -156,19 +238,61 @@ LdPernotItem* ldPernotCacheItemAdd(LdPernotCache* cacheP, CorNode* subTree,
   CorNode* datasetIdP = corTreeLookup(itemP->subTree, LD_VOCAB_DATASET_ID);
   itemP->datasetIdV  = stringArrayExtract(datasetIdP);
 
-  // q
-  itemP->qExpr = qExpr;
+  //
+  // q, scopeQ, geoQ - parsed HERE, from the stored tree, as the subscription cache does. q was
+  // taken from the caller instead, and no caller had one to give (the create path's lookup never
+  // found it, the startup and HA loads passed NULL); scopeQ and geoQ were TODOs. All three were
+  // ignored: a periodic subscription notified every entity of its types.
+  //
+  CorNode* qP = corTreeLookup(itemP->subTree, "q");
+  if (qP != NULL && qP->type == CorString)
+    itemP->qExpr = ldQParse(qP->value.s, &itemP->alloc);
 
-  // scopeQ
   CorNode* scopeQP = corTreeLookup(itemP->subTree, "scopeQ");
-  // For now, store raw — scopeQ parsing from cache is same as ldSubCache
-  (void) scopeQP;
+  if (scopeQP != NULL && scopeQP->type == CorString)
+    itemP->scopeExpr = ldScopeExprParse(scopeQP->value.s, &itemP->alloc);
 
-  // geoQ
   CorNode* geoQP = corTreeLookup(itemP->subTree, "geoQ");
-  if (geoQP != NULL)
+  if (geoQP != NULL && geoQP->type == CorObject)
   {
-    // TODO: parse geoQ fields into geoRel/geoGeometry/geoCoordinates/geoProperty
+    CorNode* georelP  = corTreeLookup(geoQP, "georel");
+    CorNode* geomP    = corTreeLookup(geoQP, "geometry");
+    CorNode* coordsP  = corTreeLookup(geoQP, "coordinates");
+    CorNode* geopropP = corTreeLookup(geoQP, "geoproperty");
+
+    if (georelP != NULL && georelP->type == CorString)
+      itemP->geoRel = ldGeoRelParse(georelP->value.s, &itemP->alloc);
+
+    if (geomP != NULL && geomP->type == CorString)
+      itemP->geoGeometry = geomP->value.s;                  // in subTree - lives with the item
+
+    if (coordsP != NULL && coordsP->type == CorString)
+      itemP->geoCoordinates = coordsP->value.s;
+    else if (coordsP != NULL && coordsP->type == CorArray)
+    {
+      // GeoJSON form ([[[lon,lat],...]]) - the query wants the JSON-array string
+      int   len = corJsonFastRenderSize(coordsP) + 1;
+      char* buf = (char*) corAlloc(&itemP->alloc, len);
+      if (buf != NULL)
+      {
+        corJsonFastRender(coordsP, buf);
+        itemP->geoCoordinates = buf;
+      }
+    }
+
+    if (geopropP != NULL && geopropP->type == CorString)
+      itemP->geoProperty = corLdAlreadyExpanded(geopropP->value.s)
+                           ? geopropP->value.s
+                           : corLdExpand(NULL, geopropP->value.s, &itemP->alloc, NULL, NULL);
+    else
+    {
+      //
+      // The default, spelled the way the store spells it: as GET /entities computes it - through
+      // the core context, which rewrites its own terms to their short names. The literal IRI this
+      // used to be matches no stored attribute, so a geoQ without geoproperty matched nothing.
+      //
+      itemP->geoProperty = corLdExpand(NULL, "location", &itemP->alloc, NULL, NULL);
+    }
   }
 
   // Notification endpoint
@@ -231,6 +355,8 @@ LdPernotItem* ldPernotCacheItemAdd(LdPernotCache* cacheP, CorNode* subTree,
     itemP->expiresAt = ldIsoToNanoseconds(expiresP->value.s);
 
   itemP->tenantP = tenantP;
+  if (tenantName != NULL)
+    snprintf(itemP->tenantName, sizeof(itemP->tenantName), "%s", tenantName);
 
   //
   // Stats fields — present when this item came from a mongo-load (a prior
@@ -275,12 +401,35 @@ LdPernotItem* ldPernotCacheItemAdd(LdPernotCache* cacheP, CorNode* subTree,
     if (lfP != NULL) { corTreeChildRemove(notifP, lfP); corTreeFree(lfP); }
   }
 
-  // Append
+  return itemP;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldPernotCacheItemAdd
+//
+LdPernotItem* ldPernotCacheItemAdd(LdPernotCache* cacheP, CorNode* subTree, void* tenantP, const char* tenantName)
+{
+  if (cacheP == NULL || subTree == NULL)
+    return NULL;
+
+  LdPernotItem* itemP = itemBuild(subTree, tenantP, tenantName);
+  if (itemP == NULL)
+    return NULL;
+
+  // Append - the item was built unlocked (nothing shared is touched above); the list is not
+  pthread_rwlock_wrlock(&cacheP->lock);
+  reapRetired(cacheP);
+
   if (cacheP->tail == NULL)
     cacheP->head = itemP;
   else
     cacheP->tail->next = itemP;
   cacheP->tail = itemP;
+
+  pthread_rwlock_unlock(&cacheP->lock);
 
   return itemP;
 }
@@ -304,7 +453,12 @@ bool ldPernotCacheItemRemove(LdPernotCache* cacheP, const char* subId)
 {
   if (cacheP == NULL || subId == NULL) return false;
 
-  LdPernotItem* prev = NULL;
+  bool          removed = false;
+  LdPernotItem* prev    = NULL;
+
+  pthread_rwlock_wrlock(&cacheP->lock);
+  reapRetired(cacheP);
+
   for (LdPernotItem* p = cacheP->head; p != NULL; p = p->next)
   {
     if (p->subId != NULL && strcmp(p->subId, subId) == 0)
@@ -313,17 +467,101 @@ bool ldPernotCacheItemRemove(LdPernotCache* cacheP, const char* subId)
       else              prev->next   = p->next;
       if (cacheP->tail == p) cacheP->tail = prev;
 
-      free(p->subId);
-      if (p->subTree)     corTreeFree(p->subTree);
-      entitySelectorsFree(p->entitySelectors);
-      if (p->notifAttrsV) free(p->notifAttrsV);
-      if (p->datasetIdV)  free(p->datasetIdV);
-      free(p);
-      return true;
+      //
+      // The loop thread may be in the middle of a query or a send on it, a GET in the middle
+      // of rendering it: a pinned item is parked, and freed by a later writer once unpinned.
+      // It used to be freed here, whatever was using it.
+      //
+      if (__atomic_load_n(&p->refCount, __ATOMIC_SEQ_CST) == 0)
+        itemFree(p);
+      else
+      {
+        p->retired          = true;
+        p->next             = cacheP->retiredList;
+        cacheP->retiredList = p;
+      }
+
+      removed = true;
+      break;
     }
     prev = p;
   }
-  return false;
+
+  pthread_rwlock_unlock(&cacheP->lock);
+  return removed;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldPernotCacheItemReplace -
+//
+// PATCH of a periodic subscription rebuilt it into the CHANGE-DRIVEN cache and left this one
+// alone: its notifications went on with the old interval, endpoint and filters, and the copy in
+// the other cache made it fire on entity changes as well. This is the periodic cache's own
+// replace: the old item's history carries over, so a PATCH neither resets the counters nor makes
+// the next notification due at once.
+//
+bool ldPernotCacheItemReplace(LdPernotCache* cacheP, CorNode* subTree, void* tenantP, const char* tenantName)
+{
+  if (cacheP == NULL || subTree == NULL)
+    return false;
+
+  LdPernotItem* newP = itemBuild(subTree, tenantP, tenantName);
+  if (newP == NULL || newP->subId == NULL)
+  {
+    if (newP != NULL)
+      itemFree(newP);
+    return false;
+  }
+
+  bool          replaced = false;
+  LdPernotItem* prev     = NULL;
+
+  pthread_rwlock_wrlock(&cacheP->lock);
+  reapRetired(cacheP);
+
+  for (LdPernotItem* p = cacheP->head; p != NULL; p = p->next)
+  {
+    if (p->subId != NULL && strcmp(p->subId, newP->subId) == 0)
+    {
+      newP->lastNotification  = p->lastNotification;
+      newP->lastSuccess       = p->lastSuccess;
+      newP->lastFailure       = p->lastFailure;
+      newP->timesSent         = p->timesSent;
+      newP->timesFailed       = p->timesFailed;
+      newP->lastFlushedSent   = p->lastFlushedSent;
+      newP->lastFlushedFailed = p->lastFlushedFailed;
+      newP->noMatch           = p->noMatch;
+
+      // In the old one's place
+      newP->next = p->next;
+      if (prev == NULL) cacheP->head = newP;
+      else              prev->next   = newP;
+      if (cacheP->tail == p) cacheP->tail = newP;
+
+      if (__atomic_load_n(&p->refCount, __ATOMIC_SEQ_CST) == 0)
+        itemFree(p);
+      else
+      {
+        p->retired          = true;
+        p->next             = cacheP->retiredList;
+        cacheP->retiredList = p;
+      }
+
+      replaced = true;
+      break;
+    }
+    prev = p;
+  }
+
+  pthread_rwlock_unlock(&cacheP->lock);
+
+  if (replaced == false)
+    itemFree(newP);
+
+  return replaced;
 }
 
 
@@ -336,12 +574,15 @@ void ldPernotCacheRelease(LdPernotCache* cacheP)
   while (p != NULL)
   {
     LdPernotItem* next = p->next;
-    free(p->subId);
-    if (p->subTree)     corTreeFree(p->subTree);
-    entitySelectorsFree(p->entitySelectors);
-    if (p->notifAttrsV) free(p->notifAttrsV);
-    if (p->datasetIdV)  free(p->datasetIdV);
-    free(p);
+    itemFree(p);
+    p = next;
+  }
+
+  p = cacheP->retiredList;       // shutdown: nobody is left to unpin
+  while (p != NULL)
+  {
+    LdPernotItem* next = p->next;
+    itemFree(p);
     p = next;
   }
   free(cacheP);

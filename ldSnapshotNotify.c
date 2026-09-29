@@ -27,6 +27,9 @@
 #include "corRest/CorRestVerb.h"                           // CorVerbPost
 
 #include "corNgsild/LdSnapshotCache.h"                    // LdSnapshotCacheItem
+#include "corNgsild/ldIdGenerate.h"                       // ldIdGenerate
+#include "corNgsild/CorNgsild.h"                          // corNgsild
+#include "corNgsild/ldTenantHeader.h"                     // ldTenantHeaderAdd
 #include "corNgsild/ldSnapshotNotify.h"                   // Own interface
 #include "corNgsild/ldRequestSubstitute.h"                // ldRequestSubstitute (§ 6.3.18)
 
@@ -50,20 +53,6 @@ static char* nsToIso(uint64_t ns)
 
 
 
-//
-// generateNotificationId - urn:ngsi-ld:Notification:<hex>:<hex>.
-//
-static char* generateNotificationId(void)
-{
-  static int counter = 0;
-  char* buf = (char*) corAlloc(&corRest.kalloc, 64);
-  snprintf(buf, 64, "urn:ngsi-ld:Notification:%lx:%04x",
-           (long) (corRest.requestStartTime / 1000000000ULL), ++counter & 0xFFFF);
-  return buf;
-}
-
-
-
 void ldSnapshotNotify(LdSnapshotCacheItem* itemP, bool deleted)
 {
   if (itemP == NULL || itemP->tree == NULL) return;
@@ -79,7 +68,7 @@ void ldSnapshotNotify(LdSnapshotCacheItem* itemP, bool deleted)
   uint64_t expNs  = deleted ? (now > 1000000000ULL ? now - 1000000000ULL : 0)  // 1s in the past
                             : itemP->expiresAt;
 
-  corTreeChildAdd(notifP, corTreeString (corRest.kallocP, "id", generateNotificationId()));
+  corTreeChildAdd(notifP, corTreeString (corRest.kallocP, "id", ldIdGenerate(corRest.kallocP, "Notification")));
   corTreeChildAdd(notifP, corTreeString (corRest.kallocP, "type", "SnapshotNotification"));
   corTreeChildAdd(notifP, corTreeString (corRest.kallocP, "notifiedAt", nsToIso(now)));
   corTreeChildAdd(notifP, corTreeString (corRest.kallocP, "expiresAt", nsToIso(expNs)));
@@ -108,6 +97,7 @@ void ldSnapshotNotify(LdSnapshotCacheItem* itemP, bool deleted)
 
   corRestClientRequestInit(&req, CorVerbPost, endpointP->value.s, NULL);
   corRestClientRequestHeader(&req, "Content-Type", "application/json");
+  ldTenantHeaderAdd(&req, corNgsild.tenantName);   // the snapshot's tenant (set with tenantP by the capture)
 
   // § 5.16.6 / § 5.2.15 receiverInfo → HTTP headers.
   CorNode* riP = corTreeLookup(itemP->tree, "receiverInfo");
