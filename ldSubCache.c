@@ -441,7 +441,7 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, CorNode* subTree, LdQNode*
   {
     CorNode* qNodeP = corTreeLookup(itemP->subTree, "q");
     if (qNodeP != NULL && qNodeP->type == CorString)
-      itemP->qExpr = ldQParse(qNodeP->value.s, &cacheP->alloc);
+      itemP->qExpr = ldQParseStored(qNodeP->value.s, &cacheP->alloc);   // stored resolved - nothing expanded again
   }
 
   // csf — the Context Source Filter. Only a Context Source Registration

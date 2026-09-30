@@ -321,6 +321,7 @@ bool pCheckQuery(void)
     { "createEntityMap",   PC_BOOL, 0,            NULL },
     { "datasetId",         PC_ARR,  0,            NULL },
     { "expandValues",      PC_STR,  0,            NULL },
+    { "langProperties",    PC_STR,  0,            NULL },   // not NGSI-LD - spec-doubts #134
     { "entityMapLifetime", PC_STR,  0,            NULL },
     { "jsonKeys",          PC_STR,  0,            NULL },
     { "join",              PC_STR,  0,            NULL },

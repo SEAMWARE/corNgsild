@@ -41,7 +41,21 @@
 //
 // Forward declarations
 //
-static LdQNode* parseOr(const char** pp, CorAlloc* kaP);
+// -----------------------------------------------------------------------------
+//
+// QParseMode - which q this is (ldQParse, ldQParseStored)
+//
+//   QParseStrict     every value a Value of the grammar; names expanded with the request's @context
+//   QParseStored     a q as STORED (ldQRenderStored): already resolved - names are IRIs, a [..] segment
+//                    is an IRI or a raw language tag (langProperties) - so nothing is expanded again
+//
+typedef enum QParseMode
+{
+  QParseStrict,
+  QParseStored
+} QParseMode;
+
+static LdQNode* parseOr(const char** pp, CorAlloc* kaP, QParseMode mode);
 
 
 
@@ -193,6 +207,17 @@ static bool looksLikeDateTime(const char* s);   // fwd decl (defined below)
 
 // -----------------------------------------------------------------------------
 //
+// twoDigits - the value of two digits the caller has already seen are digits
+//
+static int twoDigits(const char* s)
+{
+  return (s[0] - '0') * 10 + (s[1] - '0');
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // looksLikeTime - HH:MM[:SS[.frac]][Z|(+|-)HH:MM], the ABNF's `time` production
 //
 // A bare Time has no date in front of it, so looksLikeDateTime cannot see it and
@@ -213,7 +238,47 @@ static bool looksLikeTime(const char* s)
       return false;
   }
 
+  // The shape alone lets 25:61 through - a time that is none, and qValueError then says so
+  if (twoDigits(&s[0]) > 23 || twoDigits(&s[3]) > 59)
+    return false;
+
+  if ((len >= 8) && (s[5] == ':') && isdigit(s[6]) && isdigit(s[7]) && (twoDigits(&s[6]) > 60))  // 60: a leap second
+    return false;
+
   return true;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// qValueError - a q value that is none of the grammar's Values: say what it most likely tried to be
+//
+// A Value is a Number, a quoted string, true/false, a date-time/date/time or a URI (§ 7.2.3.2) - an
+// unquoted word is NOT one: § 7.2.3.2 Example 13 (gender==Male) contradicts the ABNF, and until ETSI
+// settles it (KZ's proposal) a string must be quoted. The token has already failed every Value; its
+// first characters only pick the message - an error path, so cost does not matter, clarity does.
+//
+static void qValueError(const char* tok, bool listItem)
+{
+  const char* what      = listItem ? "value list item " : "";
+  bool        digitLike = (isdigit((unsigned char) tok[0]) != 0) || (tok[0] == '+') || (tok[0] == '-');
+
+  if (digitLike && (strlen(tok) >= 5) && isdigit((unsigned char) tok[0]) && isdigit((unsigned char) tok[1]) &&
+      isdigit((unsigned char) tok[2]) && isdigit((unsigned char) tok[3]) && (tok[4] == '-'))
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid q parameter", "%s'%s' is not a valid date-time", what, tok);
+  else if (digitLike && (strlen(tok) >= 3) && (tok[2] == ':'))
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid q parameter", "%s'%s' is not a valid time", what, tok);
+  else if (digitLike)
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid q parameter", "%s'%s' is not a valid number", what, tok);
+  else if (strncmp(tok, "%22", 3) == 0)  // a URL's %22 is decoded before q is parsed - this one came in a JSON body
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid q parameter",
+            "%s'%s' is not a valid value - a q in a JSON body is not URL-encoded: a quote is \\\"", what, tok);
+  else if (strchr(tok, ':') != NULL)
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid q parameter", "%s'%s' is not a valid URI", what, tok);
+  else
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid q parameter",
+            "%s'%s' is not a valid value - a string must be quoted: \"%s\"", what, tok, tok);
 }
 
 
@@ -287,7 +352,30 @@ static bool looksLikeDateTime(const char* s)
   if (strlen(s) < 10)
     return false;
 
-  return isdigit(s[0]) && isdigit(s[1]) && isdigit(s[2]) && isdigit(s[3]) && s[4] == '-' && isdigit(s[5]) && isdigit(s[6]) && s[7] == '-' && isdigit(s[8]) && isdigit(s[9]);
+  if (!(isdigit(s[0]) && isdigit(s[1]) && isdigit(s[2]) && isdigit(s[3]) && s[4] == '-' && isdigit(s[5]) && isdigit(s[6]) && s[7] == '-' && isdigit(s[8]) && isdigit(s[9])))
+    return false;
+
+  // The shape alone lets 2021-13-45 through - a date that is none, and qValueError then says so
+  static const int daysInMonth[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+  int year  = twoDigits(&s[0]) * 100 + twoDigits(&s[2]);
+  int month = twoDigits(&s[5]);
+  int day   = twoDigits(&s[8]);
+
+  if ((month < 1) || (month > 12))
+    return false;
+
+  int maxDay = daysInMonth[month - 1];
+  if ((month == 2) && (((year % 4 == 0) && (year % 100 != 0)) || (year % 400 == 0)))
+    maxDay = 29;
+
+  if ((day < 1) || (day > maxDay))
+    return false;
+
+  // The time after the 'T' is checked as a bare time is
+  if ((s[10] == 'T') && !looksLikeTime(&s[11]))
+    return false;
+
+  return true;
 }
 
 
@@ -317,7 +405,7 @@ static int scanValueLen(const char* p)
 //
 // Items can be quoted strings, numbers, or booleans (all same type expected).
 //
-static bool parseValueList(const char* raw, int rawLen, LdQTerm* term, CorAlloc* kaP)
+static bool parseValueList(const char* raw, int rawLen, LdQTerm* term, CorAlloc* kaP, QParseMode mode)
 {
   // Count commas to determine size
   int count = 1;
@@ -389,9 +477,7 @@ static bool parseValueList(const char* raw, int rawLen, LdQTerm* term, CorAlloc*
 
       if (itemTypeV[ix] == LdQNoValue)
       {
-        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid q parameter",
-                "value list item '%s' is not a valid value: a string must be quoted, "
-                "and a number must not carry anything after it", probe);
+        qValueError(probe, true);
         return false;
       }
     }
@@ -483,7 +569,7 @@ static bool parseRange(const char* raw, int rawLen, const char* dotdot, LdQTerm*
 //
 // parseTerm - parse: attrName [operator value]
 //
-static LdQNode* parseTerm(const char** pp, CorAlloc* kaP)
+static LdQNode* parseTerm(const char** pp, CorAlloc* kaP, QParseMode mode)
 {
   const char* p = *pp;
 
@@ -531,7 +617,7 @@ static LdQNode* parseTerm(const char** pp, CorAlloc* kaP)
   {
     p++;  // consume '{'
 
-    LdQNode* subQ = parseOr(&p, kaP);
+    LdQNode* subQ = parseOr(&p, kaP, mode);
     if (subQ == NULL)
       return NULL;
 
@@ -568,8 +654,9 @@ static LdQNode* parseTerm(const char** pp, CorAlloc* kaP)
   // attribute path, trailing path included, is "a composition of short hand
   // names"). "*" stays the wildcard.
   //
-  nodeP->term.valuePathV = NULL;
-  nodeP->term.valuePathN = 0;
+  nodeP->term.valuePathV    = NULL;
+  nodeP->term.valuePathRawV = NULL;
+  nodeP->term.valuePathN    = 0;
   if (*p == '[')
   {
     p++;  // consume '['
@@ -587,7 +674,8 @@ static LdQNode* parseTerm(const char** pp, CorAlloc* kaP)
     int segN = 1;
     for (int i = 0; i < vpLen; i++)
       if (vpStart[i] == '.') segN++;
-    nodeP->term.valuePathV = (char**) corAlloc(kaP, segN * sizeof(char*));
+    nodeP->term.valuePathV    = (char**) corAlloc(kaP, segN * sizeof(char*));
+    nodeP->term.valuePathRawV = (char**) corAlloc(kaP, segN * sizeof(char*));
 
     int segStart = 0;
     for (int i = 0; i <= vpLen; i++)
@@ -599,7 +687,9 @@ static LdQNode* parseTerm(const char** pp, CorAlloc* kaP)
         if (segP != NULL)
           storedDotsRestore(segP);   // a value's member names are stored expanded too (they are JSON-LD)
 
-        if ((segP != NULL) && (strcmp(segP, "*") != 0) && (corLdAlreadyExpanded(segP) == false))
+        char* rawP = segP;                                  // as sent: a language tag stays this (langProperties)
+
+        if ((segP != NULL) && (mode != QParseStored) && (strcmp(segP, "*") != 0) && (corLdAlreadyExpanded(segP) == false))
         {
           //
           // Expanded exactly as the value's own member names were (corLdExpandValueKey:
@@ -613,7 +703,8 @@ static LdQNode* parseTerm(const char** pp, CorAlloc* kaP)
             segP = corAllocStrdup(kaP, expandedP);
         }
 
-        nodeP->term.valuePathV[nodeP->term.valuePathN++] = segP;
+        nodeP->term.valuePathRawV[nodeP->term.valuePathN] = rawP;
+        nodeP->term.valuePathV[nodeP->term.valuePathN++]    = segP;
         segStart = i + 1;
       }
     }
@@ -724,39 +815,14 @@ static LdQNode* parseTerm(const char** pp, CorAlloc* kaP)
       // Reparse from original position as a value list
       const char* listStart = sStart - 1;  // back to opening quote
       int listLen = scanValueLen(listStart);
-      parseValueList(listStart, listLen, &nodeP->term, kaP);
+      parseValueList(listStart, listLen, &nodeP->term, kaP, mode);
       *pp = listStart + listLen;
       return nodeP;
     }
 
-    // § 4.9 — q is URL-encoded; spaces and other reserved chars come
-    // through as %xx. Decode in-place so the match value is the raw
-    // string (046_05_01: `name=="Eiffel%20Tower"` vs entity name
-    // "Eiffel Tower").
-    {
-      char* r = s;
-      char* w = s;
-      while (*r != 0)
-      {
-        if (r[0] == '%' && r[1] != 0 && r[2] != 0)
-        {
-          int hi = (r[1] >= '0' && r[1] <= '9') ? r[1] - '0' :
-                   (r[1] >= 'A' && r[1] <= 'F') ? r[1] - 'A' + 10 :
-                   (r[1] >= 'a' && r[1] <= 'f') ? r[1] - 'a' + 10 : -1;
-          int lo = (r[2] >= '0' && r[2] <= '9') ? r[2] - '0' :
-                   (r[2] >= 'A' && r[2] <= 'F') ? r[2] - 'A' + 10 :
-                   (r[2] >= 'a' && r[2] <= 'f') ? r[2] - 'a' + 10 : -1;
-          if (hi >= 0 && lo >= 0)
-          {
-            *w++ = (char) ((hi << 4) | lo);
-            r += 3;
-            continue;
-          }
-        }
-        *w++ = *r++;
-      }
-      *w = 0;
-    }
+    // No %-decoding here: a URL's q was decoded ONCE by the HTTP layer, and a q in a JSON body (POST
+    // Query, Subscription) is a JSON string - its only escaping is JSON's (\"). Decoding again made a
+    // literal "50%25 off" unfindable, and a stored q changed on every re-read.
 
     nodeP->term.valueType = LdQString;
     nodeP->term.value.s   = s;
@@ -816,7 +882,7 @@ static LdQNode* parseTerm(const char** pp, CorAlloc* kaP)
     else if (strchr(vStart, ',') != NULL && (int)(strchr(vStart, ',') - vStart) < vLen && (nodeP->term.op == LdQEqual || nodeP->term.op == LdQUnequal))
     {
       // Value list (comma-separated)
-      if (parseValueList(vStart, vLen, &nodeP->term, kaP) == false)
+      if (parseValueList(vStart, vLen, &nodeP->term, kaP, mode) == false)
         return NULL;   // parseValueList raised the ProblemDetails
     }
     else if (looksLikeDateTime(vStart))
@@ -846,9 +912,7 @@ static LdQNode* parseTerm(const char** pp, CorAlloc* kaP)
 
       if (type == LdQNoValue)
       {
-        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid q parameter",
-                "'%s' is not a valid value: a string must be quoted, and a number "
-                "must not carry anything after it", tok);
+        qValueError(tok, false);
         return NULL;
       }
 
@@ -907,14 +971,14 @@ static LdQNode* parseTerm(const char** pp, CorAlloc* kaP)
 //
 // parseAtom - parse: '(' expr ')' | term
 //
-static LdQNode* parseAtom(const char** pp, CorAlloc* kaP)
+static LdQNode* parseAtom(const char** pp, CorAlloc* kaP, QParseMode mode)
 {
   skipWs(pp);
 
   if (**pp == '(')
   {
     (*pp)++;  // skip '('
-    LdQNode* inner = parseOr(pp, kaP);
+    LdQNode* inner = parseOr(pp, kaP, mode);
 
     if (inner == NULL)
       return NULL;
@@ -931,7 +995,7 @@ static LdQNode* parseAtom(const char** pp, CorAlloc* kaP)
     return inner;
   }
 
-  return parseTerm(pp, kaP);
+  return parseTerm(pp, kaP, mode);
 }
 
 
@@ -963,9 +1027,9 @@ static void groupAdd(LdQNode* groupP, LdQNode* childP, CorAlloc* kaP)
 //
 // parseAnd - parse: atom *(';' atom)
 //
-static LdQNode* parseAnd(const char** pp, CorAlloc* kaP)
+static LdQNode* parseAnd(const char** pp, CorAlloc* kaP, QParseMode mode)
 {
-  LdQNode* left = parseAtom(pp, kaP);
+  LdQNode* left = parseAtom(pp, kaP, mode);
 
   if (left == NULL)
     return NULL;
@@ -987,7 +1051,7 @@ static LdQNode* parseAnd(const char** pp, CorAlloc* kaP)
   while (**pp == ';')
   {
     (*pp)++;  // skip ';'
-    LdQNode* right = parseAtom(pp, kaP);
+    LdQNode* right = parseAtom(pp, kaP, mode);
 
     if (right == NULL)
       return NULL;
@@ -1005,9 +1069,9 @@ static LdQNode* parseAnd(const char** pp, CorAlloc* kaP)
 //
 // parseOr - parse: andExpr *('|' andExpr)
 //
-static LdQNode* parseOr(const char** pp, CorAlloc* kaP)
+static LdQNode* parseOr(const char** pp, CorAlloc* kaP, QParseMode mode)
 {
-  LdQNode* left = parseAnd(pp, kaP);
+  LdQNode* left = parseAnd(pp, kaP, mode);
 
   if (left == NULL)
     return NULL;
@@ -1029,7 +1093,7 @@ static LdQNode* parseOr(const char** pp, CorAlloc* kaP)
   while (**pp == '|')
   {
     (*pp)++;  // skip '|'
-    LdQNode* right = parseAnd(pp, kaP);
+    LdQNode* right = parseAnd(pp, kaP, mode);
 
     if (right == NULL)
       return NULL;
@@ -1073,14 +1137,14 @@ static int linkedDepth(LdQNode* nodeP)
 
 // ldQParse - parse a ?q= expression into an expression tree
 //
-LdQNode* ldQParse(const char* q, CorAlloc* kaP)
+static LdQNode* qParse(const char* q, CorAlloc* kaP, QParseMode mode)
 {
   if (q == NULL || q[0] == 0)
     return NULL;
 
   const char* p = q;
 
-  LdQNode* root = parseOr(&p, kaP);
+  LdQNode* root = parseOr(&p, kaP, mode);
 
   if (root == NULL)
     return NULL;
@@ -1098,6 +1162,28 @@ LdQNode* ldQParse(const char* q, CorAlloc* kaP)
   root->linkedDepth = linkedDepth(root);
 
   return root;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldQParse - strict: every value must be a Value of the grammar
+//
+LdQNode* ldQParse(const char* q, CorAlloc* kaP)
+{
+  return qParse(q, kaP, QParseStrict);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldQParseStored - a q read back from where it was stored: resolved already, nothing expanded again
+//
+LdQNode* ldQParseStored(const char* q, CorAlloc* kaP)
+{
+  return qParse(q, kaP, QParseStored);
 }
 
 

@@ -54,4 +54,11 @@ extern char* ldQRenderStored(LdQNode* nodeP, CorAlloc* allocP);
 //
 extern const char* ldCompactOrEncode(const char* iri, CorLdContext* contextP, CorAlloc* allocP, bool qGrammarOnly);
 
+// -----------------------------------------------------------------------------
+//
+// ldQRenderCompactValues - ldQRender, and the string values of the attributes cvV names (expanded
+// names - expandValues of a stored Subscription) compacted with contextP, as the client sent them
+//
+extern char* ldQRenderCompactValues(LdQNode* nodeP, CorLdContext* contextP, CorAlloc* allocP, bool qGrammarOnly, char** cvV);
+
 #endif  // CORNGSILD_LDQRENDER_H_

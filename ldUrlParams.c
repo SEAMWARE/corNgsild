@@ -484,6 +484,11 @@ void ldParamHook(const char* name, const char* value)
     }
     corNgsild.omitV    = ldProjectionTopLevelNames(corNgsild.omitTree, faP, false);
   }
+  else if (strcmp(name, "langProperties") == 0)
+  {
+    corNgsild.langProperties  = (char*) value;
+    corNgsild.langPropertiesV = ldParamSplit((char*) value, faP);   // expanded in ldExpandParams
+  }
   else if (strcmp(name, "expandValues") == 0)
   {
     corNgsild.expandValues  = (char*) value;

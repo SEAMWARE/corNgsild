@@ -250,6 +250,7 @@ const char* ldCoreTermNameV[CorTermLast] =
   [CorTermGoalRequest]                    = "goalRequest",
   [CorTermGoalFeedback]                   = "goalFeedback",
   [CorTermGoalResult]                     = "goalResult",
+  [CorTermLangProperties]                 = "langProperties",
 };
 
 

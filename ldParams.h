@@ -75,6 +75,7 @@
 #define LD_PARAM_ORDER_FROM            (1ULL << 52)  // § 7.6.2.2 — sort-by-distance reference coordinates
 #define LD_PARAM_ORDER_GEOMETRY        (1ULL << 53)  // § 7.6.2.2 — sort-by-distance reference geometry type
 #define LD_PARAM_GOAL                  (1ULL << 54)  // not NGSI-LD - a DDS goal's id: ?goal=X is ?datasetId=urn:goal:X
+#define LD_PARAM_LANG_PROPERTIES       (1ULL << 55)  // not NGSI-LD - attributes that are LanguageProperties: a q [..] under them is a language tag, not a term (spec-doubts #134)
 
 
 
@@ -109,6 +110,7 @@
   | LD_PARAM_DATASETID      \
   | LD_PARAM_GOAL           \
   | LD_PARAM_EXPAND_VALUES  \
+  | LD_PARAM_LANG_PROPERTIES \
   | LD_PARAM_JSON_KEYS           \
   | LD_PARAM_GEOMETRY_PROPERTY   \
   | LD_PARAM_ORDER_BY            \
@@ -133,6 +135,7 @@
   | LD_PARAM_DATASETID      \
   | LD_PARAM_GOAL           \
   | LD_PARAM_EXPAND_VALUES  \
+  | LD_PARAM_LANG_PROPERTIES \
   | LD_PARAM_JSON_KEYS           \
   | LD_PARAM_GEOMETRY_PROPERTY   \
   | LD_PARAM_LOCAL               \
@@ -177,6 +180,7 @@
   | LD_PARAM_FORMAT              \
   | LD_PARAM_SYSATTRS            \
   | LD_PARAM_EXPAND_VALUES       \
+  | LD_PARAM_LANG_PROPERTIES \
   | LD_PARAM_JSON_KEYS           \
   | LD_PARAM_ORDER_BY            \
   | LD_PARAM_COLLATION           \
@@ -219,6 +223,7 @@
   | LD_PARAM_FORMAT               \
   | LD_PARAM_SYSATTRS             \
   | LD_PARAM_EXPAND_VALUES        \
+  | LD_PARAM_LANG_PROPERTIES \
   | LD_PARAM_JSON_KEYS            \
   | LD_PARAM_LOCAL                \
   | LD_PARAM_AGGR_METHODS         \

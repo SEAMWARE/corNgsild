@@ -196,7 +196,7 @@ static const char* opToString(LdQOperator op)
 
 
 // Forward declaration
-static int renderNode(LdQNode* nodeP, CorLdContext* contextP, CorAlloc* allocP, char* buf, int bufSize, bool qGrammarOnly);
+static int renderNode(LdQNode* nodeP, CorLdContext* contextP, CorAlloc* allocP, char* buf, int bufSize, bool qGrammarOnly, char** cvV);
 
 
 
@@ -204,7 +204,7 @@ static int renderNode(LdQNode* nodeP, CorLdContext* contextP, CorAlloc* allocP, 
 //
 // renderTerm - render a single term
 //
-static int renderTerm(LdQTerm* term, CorLdContext* contextP, CorAlloc* allocP, char* buf, int bufSize, bool qGrammarOnly)
+static int renderTerm(LdQTerm* term, CorLdContext* contextP, CorAlloc* allocP, char* buf, int bufSize, bool qGrammarOnly, char** cvV)
 {
   const char* attr = ldCompactOrEncode(term->attr, contextP, allocP, qGrammarOnly);
   const char* op   = opToString(term->op);
@@ -275,6 +275,20 @@ static int renderTerm(LdQTerm* term, CorLdContext* contextP, CorAlloc* allocP, c
     return n;
   }
 
+  //
+  // cvV: the (expanded) attributes whose string values were EXPANDED because expandValues named them
+  // - a stored Subscription's q. The client sent them compact and gets them back compact.
+  //
+  bool compactValues = false;
+  for (int ix = 0; (cvV != NULL) && (cvV[ix] != NULL); ix++)
+  {
+    if (strcmp(cvV[ix], term->attr) == 0)
+    {
+      compactValues = true;
+      break;
+    }
+  }
+
   switch (term->valueType)
   {
   case LdQNumber:
@@ -282,7 +296,7 @@ static int renderTerm(LdQTerm* term, CorLdContext* contextP, CorAlloc* allocP, c
     break;
 
   case LdQString:
-    n = snprintf(buf, bufSize, "%s%s\"%s\"", attr, op, term->value.s);
+    n = snprintf(buf, bufSize, "%s%s\"%s\"", attr, op, (compactValues == true) ? corLdCompact(contextP, term->value.s) : term->value.s);
     break;
 
   case LdQBool:
@@ -301,7 +315,7 @@ static int renderTerm(LdQTerm* term, CorLdContext* contextP, CorAlloc* allocP, c
 
       if (i > 0) n += snprintf(buf + n, bufSize - n, ",");
       if (itemType == LdQString)
-        n += snprintf(buf + n, bufSize - n, "\"%s\"", term->value.list.values[i]);
+        n += snprintf(buf + n, bufSize - n, "\"%s\"", (compactValues == true) ? corLdCompact(contextP, term->value.list.values[i]) : term->value.list.values[i]);
       else
         n += snprintf(buf + n, bufSize - n, "%s", term->value.list.values[i]);
     }
@@ -331,13 +345,13 @@ static int renderTerm(LdQTerm* term, CorLdContext* contextP, CorAlloc* allocP, c
 //
 // renderNode - recursively render a node
 //
-static int renderNode(LdQNode* nodeP, CorLdContext* contextP, CorAlloc* allocP, char* buf, int bufSize, bool qGrammarOnly)
+static int renderNode(LdQNode* nodeP, CorLdContext* contextP, CorAlloc* allocP, char* buf, int bufSize, bool qGrammarOnly, char** cvV)
 {
   if (nodeP == NULL)
     return 0;
 
   if (nodeP->type == LdQTermNode)
-    return renderTerm(&nodeP->term, contextP, allocP, buf, bufSize, qGrammarOnly);
+    return renderTerm(&nodeP->term, contextP, allocP, buf, bufSize, qGrammarOnly, cvV);
 
   if (nodeP->type == LdQLinkedNode)
   {
@@ -352,7 +366,7 @@ static int renderNode(LdQNode* nodeP, CorLdContext* contextP, CorAlloc* allocP, 
     if (n >= bufSize) return n;
     buf[n++] = '{';
 
-    n += renderNode(nodeP->linked.subQ, contextP, allocP, buf + n, bufSize - n, qGrammarOnly);
+    n += renderNode(nodeP->linked.subQ, contextP, allocP, buf + n, bufSize - n, qGrammarOnly, cvV);
 
     if (n >= bufSize) return n;
     buf[n++] = '}';
@@ -377,7 +391,7 @@ static int renderNode(LdQNode* nodeP, CorLdContext* contextP, CorAlloc* allocP, 
     if (needParens && n < bufSize)
       buf[n++] = '(';
 
-    n += renderNode(nodeP->group.childV[i], contextP, allocP, buf + n, bufSize - n, qGrammarOnly);
+    n += renderNode(nodeP->group.childV[i], contextP, allocP, buf + n, bufSize - n, qGrammarOnly, cvV);
 
     if (needParens && n < bufSize)
       buf[n++] = ')';
@@ -404,7 +418,27 @@ char* ldQRender(LdQNode* nodeP, CorLdContext* contextP, CorAlloc* allocP, bool q
   int   bufSize = 4096;
   char* buf     = (char*) corAlloc(allocP, bufSize);
 
-  int n = renderNode(nodeP, contextP, allocP, buf, bufSize, qGrammarOnly);
+  int n = renderNode(nodeP, contextP, allocP, buf, bufSize, qGrammarOnly, NULL);
+  buf[n] = 0;
+
+  return buf;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldQRenderCompactValues - ldQRender, plus the string values of the attributes cvV names compacted
+//
+char* ldQRenderCompactValues(LdQNode* nodeP, CorLdContext* contextP, CorAlloc* allocP, bool qGrammarOnly, char** cvV)
+{
+  if (nodeP == NULL)
+    return NULL;
+
+  int   bufSize = 4096;
+  char* buf     = (char*) corAlloc(allocP, bufSize);
+
+  int n = renderNode(nodeP, contextP, allocP, buf, bufSize, qGrammarOnly, cvV);
   buf[n] = 0;
 
   return buf;

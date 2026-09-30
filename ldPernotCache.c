@@ -246,7 +246,7 @@ static LdPernotItem* itemBuild(CorNode* subTree, void* tenantP, const char* tena
   //
   CorNode* qP = corTreeLookup(itemP->subTree, "q");
   if (qP != NULL && qP->type == CorString)
-    itemP->qExpr = ldQParse(qP->value.s, &itemP->alloc);
+    itemP->qExpr = ldQParseStored(qP->value.s, &itemP->alloc);   // stored resolved - nothing expanded again
 
   CorNode* scopeQP = corTreeLookup(itemP->subTree, "scopeQ");
   if (scopeQP != NULL && scopeQP->type == CorString)
