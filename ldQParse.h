@@ -27,21 +27,6 @@ extern LdQNode* ldQParse(const char* q, CorAlloc* kaP);
 
 // -----------------------------------------------------------------------------
 //
-// ldQParseBareWords - ldQParse for an entity QUERY's q, which expandValues may accompany
-//
-// A bare word (q=category==monument) is not a Value of the grammar, but a query term whose attribute
-// is named by expandValues is one to expand with the @context (§ 7.2.3.2 Example 13:
-// gender==Male&expandValues=gender) - and the URL parameters arrive in any order, so whether
-// expandValues names it is not known here. Such a word is kept as LdQBareWord (== and != only);
-// ldExpandParams then expands it, or rejects it with the 400 ldQParse gives. Everything else - a
-// subscription's q, csf, ... - uses ldQParse, where a bare word is a 400 at once.
-//
-extern LdQNode* ldQParseBareWords(const char* q, CorAlloc* kaP);
-
-
-
-// -----------------------------------------------------------------------------
-//
 // ldQParseStored - ldQParse for a q read back from storage (a subscription, from the DB or a cache)
 //
 // ldQRenderStored wrote it fully resolved: attribute names as IRIs, the values expandValues named

@@ -23,19 +23,14 @@
 //
 // A Query (§ 5.2.6.5.1) and a Subscription (§ 5.2.6.5.2) both carry expandValues: "Values of the
 // identified attributes should be expanded against the supplied @context". So, for each term whose
-// attribute expandValues names (and whose operator is not a pattern):
+// attribute expandValues names (and whose operator is not a pattern), a quoted string - or a string
+// item of a value list - is expanded with contextP. Both sides of the comparison end up expanded:
+// term.attr already is (the parser expands it).
 //
-//   - a quoted string, or a string item of a value list, is expanded with contextP;
-//   - a bare word (LdQBareWord - see ldQParseBareWords) is expanded the same way, and becomes a
-//     string: from here on it is one.
+// A string must be QUOTED (the § 7.2.3.2 ABNF; Example 13's unquoted gender==Male contradicts it -
+// KZ is taking it to ETSI): ldQParse rejects an unquoted word before this ever runs.
 //
-// A bare word whose attribute expandValues does NOT name has no meaning - it is not a Value of the
-// grammar - and is rejected: 400 BadRequestData, the words ldQParse uses, and false. With no
-// expandValues at all (evV NULL) that is every bare word.
-//
-// Both sides of the comparison end up expanded: term.attr already is (the parser expands it).
-//
-extern bool ldQExpandValues(LdQNode* qExpr, char** evV, CorLdContext* contextP, CorAlloc* kaP);
+extern void ldQExpandValues(LdQNode* qExpr, char** evV, CorLdContext* contextP, CorAlloc* kaP);
 
 
 

@@ -1224,18 +1224,7 @@ bool ldCheckSubscription(CorNode* subP, LdOp op, bool merged, LdFormat* notifFor
   {
     STRING_CHECK(qP, "Invalid Subscription", "'q' must be a string");
 
-    //
-    // A bare word is kept, and must then be one expandValues gives a meaning to (§ 7.2.3.2
-    // Example 13): rejected here, at create or PATCH, not left for the notification.
-    //
-    LdQNode* qExpr = ldQParseBareWords(qP->value.s, kaP);
-
-    if (qExpr == NULL)
-      return false;
-
-    char** evV = (expandValuesP != NULL) ? ldAttrListExpand(expandValuesP->value.s, corNgsild.contextP, kaP) : NULL;
-
-    if (ldQExpandValues(qExpr, evV, corNgsild.contextP, kaP) == false)
+    if (ldQParse(qP->value.s, kaP) == NULL)
       return false;
   }
 

@@ -43,17 +43,15 @@
 //
 // -----------------------------------------------------------------------------
 //
-// QParseMode - which q this is (ldQParse, ldQParseBareWords, ldQParseStored)
+// QParseMode - which q this is (ldQParse, ldQParseStored)
 //
 //   QParseStrict     every value a Value of the grammar; names expanded with the request's @context
-//   QParseBareWords  a query's q: a bare word is kept (LdQBareWord), for expandValues to resolve
 //   QParseStored     a q as STORED (ldQRenderStored): already resolved - names are IRIs, a [..] segment
 //                    is an IRI or a raw language tag (langProperties) - so nothing is expanded again
 //
 typedef enum QParseMode
 {
   QParseStrict,
-  QParseBareWords,
   QParseStored
 } QParseMode;
 
@@ -209,6 +207,17 @@ static bool looksLikeDateTime(const char* s);   // fwd decl (defined below)
 
 // -----------------------------------------------------------------------------
 //
+// twoDigits - the value of two digits the caller has already seen are digits
+//
+static int twoDigits(const char* s)
+{
+  return (s[0] - '0') * 10 + (s[1] - '0');
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // looksLikeTime - HH:MM[:SS[.frac]][Z|(+|-)HH:MM], the ABNF's `time` production
 //
 // A bare Time has no date in front of it, so looksLikeDateTime cannot see it and
@@ -229,7 +238,44 @@ static bool looksLikeTime(const char* s)
       return false;
   }
 
+  // The shape alone lets 25:61 through - a time that is none, and qValueError then says so
+  if (twoDigits(&s[0]) > 23 || twoDigits(&s[3]) > 59)
+    return false;
+
+  if ((len >= 8) && (s[5] == ':') && isdigit(s[6]) && isdigit(s[7]) && (twoDigits(&s[6]) > 60))  // 60: a leap second
+    return false;
+
   return true;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// qValueError - a q value that is none of the grammar's Values: say what it most likely tried to be
+//
+// A Value is a Number, a quoted string, true/false, a date-time/date/time or a URI (§ 7.2.3.2) - an
+// unquoted word is NOT one: § 7.2.3.2 Example 13 (gender==Male) contradicts the ABNF, and until ETSI
+// settles it (KZ's proposal) a string must be quoted. The token has already failed every Value; its
+// first characters only pick the message - an error path, so cost does not matter, clarity does.
+//
+static void qValueError(const char* tok, bool listItem)
+{
+  const char* what      = listItem ? "value list item " : "";
+  bool        digitLike = (isdigit((unsigned char) tok[0]) != 0) || (tok[0] == '+') || (tok[0] == '-');
+
+  if (digitLike && (strlen(tok) >= 5) && isdigit((unsigned char) tok[0]) && isdigit((unsigned char) tok[1]) &&
+      isdigit((unsigned char) tok[2]) && isdigit((unsigned char) tok[3]) && (tok[4] == '-'))
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid q parameter", "%s'%s' is not a valid date-time", what, tok);
+  else if (digitLike && (strlen(tok) >= 3) && (tok[2] == ':'))
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid q parameter", "%s'%s' is not a valid time", what, tok);
+  else if (digitLike)
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid q parameter", "%s'%s' is not a valid number", what, tok);
+  else if (strchr(tok, ':') != NULL)
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid q parameter", "%s'%s' is not a valid URI", what, tok);
+  else
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid q parameter",
+            "%s'%s' is not a valid value - a string must be quoted: \"%s\"", what, tok, tok);
 }
 
 
@@ -303,7 +349,30 @@ static bool looksLikeDateTime(const char* s)
   if (strlen(s) < 10)
     return false;
 
-  return isdigit(s[0]) && isdigit(s[1]) && isdigit(s[2]) && isdigit(s[3]) && s[4] == '-' && isdigit(s[5]) && isdigit(s[6]) && s[7] == '-' && isdigit(s[8]) && isdigit(s[9]);
+  if (!(isdigit(s[0]) && isdigit(s[1]) && isdigit(s[2]) && isdigit(s[3]) && s[4] == '-' && isdigit(s[5]) && isdigit(s[6]) && s[7] == '-' && isdigit(s[8]) && isdigit(s[9])))
+    return false;
+
+  // The shape alone lets 2021-13-45 through - a date that is none, and qValueError then says so
+  static const int daysInMonth[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+  int year  = twoDigits(&s[0]) * 100 + twoDigits(&s[2]);
+  int month = twoDigits(&s[5]);
+  int day   = twoDigits(&s[8]);
+
+  if ((month < 1) || (month > 12))
+    return false;
+
+  int maxDay = daysInMonth[month - 1];
+  if ((month == 2) && (((year % 4 == 0) && (year % 100 != 0)) || (year % 400 == 0)))
+    maxDay = 29;
+
+  if ((day < 1) || (day > maxDay))
+    return false;
+
+  // The time after the 'T' is checked as a bare time is
+  if ((s[10] == 'T') && !looksLikeTime(&s[11]))
+    return false;
+
+  return true;
 }
 
 
@@ -403,19 +472,9 @@ static bool parseValueList(const char* raw, int rawLen, LdQTerm* term, CorAlloc*
 
       itemTypeV[ix] = qValueClassify(probe, NULL);
 
-      //
-      // Not a Value - but in a query that can carry expandValues, a bare word is
-      // a term waiting for it (§ 7.2.3.2 Example 13: gender==Male&expandValues=gender).
-      // Kept as LdQBareWord; ldExpandParams expands it or rejects it with this 400.
-      //
-      if ((itemTypeV[ix] == LdQNoValue) && (mode == QParseBareWords))
-        itemTypeV[ix] = LdQBareWord;
-
       if (itemTypeV[ix] == LdQNoValue)
       {
-        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid q parameter",
-                "value list item '%s' is not a valid value: a string must be quoted, "
-                "and a number must not carry anything after it", probe);
+        qValueError(probe, true);
         return false;
       }
     }
@@ -873,20 +932,9 @@ static LdQNode* parseTerm(const char** pp, CorAlloc* kaP, QParseMode mode)
       double       num  = 0;
       LdQValueType type = qValueClassify(tok, &num);
 
-      //
-      // Not a Value - but a bare word, where expandValues can still give it a meaning: kept, for
-      // ldExpandParams to expand or reject. Only for == and != - an ordering operator or a
-      // pattern has no use for a term (§ 7.2.3.2 Example 13: gender==Male&expandValues=gender).
-      //
-      if ((type == LdQNoValue) && (mode == QParseBareWords) &&
-          ((nodeP->term.op == LdQEqual) || (nodeP->term.op == LdQUnequal)))
-        type = LdQBareWord;
-
       if (type == LdQNoValue)
       {
-        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid q parameter",
-                "'%s' is not a valid value: a string must be quoted, and a number "
-                "must not carry anything after it", tok);
+        qValueError(tok, false);
         return NULL;
       }
 
@@ -1147,17 +1195,6 @@ static LdQNode* qParse(const char* q, CorAlloc* kaP, QParseMode mode)
 LdQNode* ldQParse(const char* q, CorAlloc* kaP)
 {
   return qParse(q, kaP, QParseStrict);
-}
-
-
-
-// -----------------------------------------------------------------------------
-//
-// ldQParseBareWords - a query's q, which expandValues may accompany: a bare word is kept (LdQBareWord)
-//
-LdQNode* ldQParseBareWords(const char* q, CorAlloc* kaP)
-{
-  return qParse(q, kaP, QParseBareWords);
 }
 
 

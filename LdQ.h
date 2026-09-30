@@ -50,10 +50,7 @@ typedef enum LdQValueType
   LdQDateTime,    // ISO 8601 date-time
   LdQRange,       // lo..hi  (numeric)
   LdQDateRange,   // lo..hi  (date-time strings)
-  LdQValueList,   // v1,v2,...  (only with == or !=)
-  LdQBareWord     // unquoted word, not a Value - a term only expandValues can give meaning to
-                  // (ldQParseBareWords). Resolved in ldExpandParams: expanded -> LdQString, else 400.
-                  // Never reaches a matcher.
+  LdQValueList    // v1,v2,...  (only with == or !=)
 } LdQValueType;
 
 

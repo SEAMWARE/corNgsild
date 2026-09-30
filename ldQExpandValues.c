@@ -12,7 +12,7 @@
 
 #include "corAlloc/CorAlloc.h"                           // CorAlloc
 #include "corJsonld/corLdExpand.h"                       // corLdExpand
-#include "corNgsild/LdQ.h"                               // LdQNode, LdQBareWord, ...
+#include "corNgsild/LdQ.h"                               // LdQNode
 #include "corNgsild/LdProblem.h"                         // LD_ERROR_BAD_REQUEST_DATA
 #include "corNgsild/ldError.h"                           // ldError
 #include "corNgsild/ldQueryParams.h"                     // ldParamSplit
@@ -42,7 +42,7 @@ static bool named(const char* attr, char** evV)
 
 // -----------------------------------------------------------------------------
 //
-// expandWalk - expand the string and bare-word values of every term expandValues names
+// expandWalk - expand the string values of every term expandValues names
 //
 static void expandWalk(LdQNode* nodeP, char** evV, CorLdContext* contextP, CorAlloc* kaP)
 {
@@ -54,19 +54,18 @@ static void expandWalk(LdQNode* nodeP, char** evV, CorLdContext* contextP, CorAl
     if ((named(nodeP->term.attr, evV) == false) || (nodeP->term.op == LdQPattern) || (nodeP->term.op == LdQNotPattern))
       return;
 
-    if ((nodeP->term.valueType == LdQString) || (nodeP->term.valueType == LdQBareWord))
+    if (nodeP->term.valueType == LdQString)
     {
       char* expanded = corLdExpand(contextP, nodeP->term.value.s, kaP, NULL, NULL);
 
       if (expanded != NULL)
         nodeP->term.value.s = expanded;
 
-      nodeP->term.valueType = LdQString;             // a bare word expanded IS a string from here on
     }
     else if (nodeP->term.valueType == LdQValueList)
     {
       //
-      // Every STRING (or bare-word) item, not the list as a whole: § 7.2.3.4 puts no requirement on
+      // Every STRING item, not the list as a whole: § 7.2.3.4 puts no requirement on
       // a list sharing a type (`a==1,"two"` is legal), and expanding a number or a bool would be
       // meaningless. Handling only LdQString once meant `q=category=="barn"` matched a VocabProperty
       // while `q=category=="barn","farm_auxiliary"` returned nothing.
@@ -75,7 +74,7 @@ static void expandWalk(LdQNode* nodeP, char** evV, CorLdContext* contextP, CorAl
       {
         LdQValueType itemType = (nodeP->term.value.list.itemTypeV != NULL) ? nodeP->term.value.list.itemTypeV[i] : LdQString;
 
-        if ((itemType != LdQString) && (itemType != LdQBareWord))
+        if (itemType != LdQString)
           continue;
 
         char* expanded = corLdExpand(contextP, nodeP->term.value.list.values[i], kaP, NULL, NULL);
@@ -83,8 +82,6 @@ static void expandWalk(LdQNode* nodeP, char** evV, CorLdContext* contextP, CorAl
         if (expanded != NULL)
           nodeP->term.value.list.values[i] = expanded;
 
-        if (nodeP->term.value.list.itemTypeV != NULL)
-          nodeP->term.value.list.itemTypeV[i] = LdQString;
       }
     }
   }
@@ -95,52 +92,6 @@ static void expandWalk(LdQNode* nodeP, char** evV, CorLdContext* contextP, CorAl
   }
   else if (nodeP->type == LdQLinkedNode)
     expandWalk(nodeP->linked.subQ, evV, contextP, kaP);
-}
-
-
-
-// -----------------------------------------------------------------------------
-//
-// bareWordLeft - the first bare word expandValues did not claim, or NULL
-//
-static const char* bareWordLeft(LdQNode* nodeP)
-{
-  if (nodeP == NULL)
-    return NULL;
-
-  if (nodeP->type == LdQTermNode)
-  {
-    if (nodeP->term.valueType == LdQBareWord)
-      return nodeP->term.value.s;
-
-    if ((nodeP->term.valueType == LdQValueList) && (nodeP->term.value.list.itemTypeV != NULL))
-    {
-      for (int i = 0; i < nodeP->term.value.list.count; i++)
-      {
-        if (nodeP->term.value.list.itemTypeV[i] == LdQBareWord)
-          return nodeP->term.value.list.values[i];
-      }
-    }
-
-    return NULL;
-  }
-
-  if ((nodeP->type == LdQAndNode) || (nodeP->type == LdQOrNode))
-  {
-    for (int i = 0; i < nodeP->group.count; i++)
-    {
-      const char* w = bareWordLeft(nodeP->group.childV[i]);
-
-      if (w != NULL)
-        return w;
-    }
-    return NULL;
-  }
-
-  if (nodeP->type == LdQLinkedNode)
-    return bareWordLeft(nodeP->linked.subQ);
-
-  return NULL;
 }
 
 
@@ -201,23 +152,8 @@ void ldQLangProperties(LdQNode* nodeP, char** lpV)
 //
 // ldQExpandValues -
 //
-bool ldQExpandValues(LdQNode* qExpr, char** evV, CorLdContext* contextP, CorAlloc* kaP)
+void ldQExpandValues(LdQNode* qExpr, char** evV, CorLdContext* contextP, CorAlloc* kaP)
 {
-  if (qExpr == NULL)
-    return true;
-
-  if (evV != NULL)
+  if ((qExpr != NULL) && (evV != NULL))
     expandWalk(qExpr, evV, contextP, kaP);
-
-  const char* word = bareWordLeft(qExpr);
-
-  if (word != NULL)
-  {
-    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid q parameter",
-            "'%s' is not a valid value: a string must be quoted, and a number must not carry "
-            "anything after it - unless expandValues names its attribute", word);
-    return false;
-  }
-
-  return true;
 }

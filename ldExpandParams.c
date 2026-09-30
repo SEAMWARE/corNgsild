@@ -82,8 +82,7 @@ static void expandArray(char** v, CorAlloc* kaP)
 // ldExpandParamsQ - what goes WITH q: expandValues and langProperties, applied to the parsed q
 //
 // q was parsed when its param arrived - before expandValues / langProperties were known, as params
-// come in any order. So, once all of them are in: the values expandValues names are expanded, a bare
-// word it does not name is rejected (ALWAYS - without expandValues every bare word is a 400), and a
+// come in any order. So, once all of them are in: the values expandValues names are expanded, and a
 // q [..] under an attribute langProperties names goes back to the language tag as sent
 // (spec-doubts #134).
 //
@@ -96,8 +95,7 @@ bool ldExpandParamsQ(CorAlloc* kaP)
   expandArray(corNgsild.expandValuesV,   kaP);
   expandArray(corNgsild.langPropertiesV, kaP);
 
-  if (ldQExpandValues(corNgsild.qExpr, corNgsild.expandValuesV, corNgsild.contextP, kaP) == false)
-    return false;
+  ldQExpandValues(corNgsild.qExpr, corNgsild.expandValuesV, corNgsild.contextP, kaP);
 
   ldQLangProperties(corNgsild.qExpr, corNgsild.langPropertiesV);
   return true;

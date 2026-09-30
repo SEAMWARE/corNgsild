@@ -361,7 +361,7 @@ bool pCheckQuery(void)
   // its own ProblemDetails; add a fallback in case it returns NULL silently).
   if (qP != NULL)
   {
-    if (ldQParseBareWords(qP->value.s, &corRest.kalloc) == NULL)   // expandValues may give a bare word meaning
+    if (ldQParse(qP->value.s, &corRest.kalloc) == NULL)
     {
       if (corRest.out.problemType == NULL)
         ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Parse Error in q-expression", "%s", qP->value.s);

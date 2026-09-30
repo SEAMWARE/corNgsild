@@ -559,7 +559,7 @@ void ldParamHook(const char* name, const char* value)
   else if (strcmp(name, "q") == 0)
   {
     corNgsild.q     = (char*) value;
-    corNgsild.qExpr = ldQParseBareWords(value, faP);   // expandValues may give a bare word meaning - resolved in ldExpandParams
+    corNgsild.qExpr = ldQParse(value, faP);
   }
   else if (strcmp(name, "csf") == 0)
   {
