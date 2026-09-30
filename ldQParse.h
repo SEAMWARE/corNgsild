@@ -42,6 +42,20 @@ extern LdQNode* ldQParseBareWords(const char* q, CorAlloc* kaP);
 
 // -----------------------------------------------------------------------------
 //
+// ldQParseStored - ldQParse for a q read back from storage (a subscription, from the DB or a cache)
+//
+// ldQRenderStored wrote it fully resolved: attribute names as IRIs, the values expandValues named
+// expanded and quoted, and each [..] segment either an IRI (a member of a compound value, expanded)
+// or a raw language tag (under an attribute langProperties named). Parsed again with no context -
+// after a restart, on another broker - nothing may be expanded: a raw `es` would become
+// https://.../default-context/es and match nothing.
+//
+extern LdQNode* ldQParseStored(const char* q, CorAlloc* kaP);
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldQStripLinked - the DB-evaluable "layer 0" of a q expression
 //
 // Returns a pruned copy of the tree with the § 4.9 linked sub-queries removed

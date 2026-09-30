@@ -54,4 +54,14 @@ extern bool ldQExpandValues(LdQNode* qExpr, char** evV, CorLdContext* contextP, 
 //
 extern void ldQLangProperties(LdQNode* qExpr, char** lpV);
 
+
+
+// -----------------------------------------------------------------------------
+//
+// ldAttrListExpand - "a,b,c" (expandValues, langProperties) as a NULL-terminated list of EXPANDED
+// attribute names, for ldQExpandValues / ldQLangProperties. csv itself is not touched (a copy is
+// split). NULL for NULL or empty.
+//
+extern char** ldAttrListExpand(const char* csv, CorLdContext* contextP, CorAlloc* kaP);
+
 #endif  // CORNGSILD_LDQEXPANDVALUES_H_

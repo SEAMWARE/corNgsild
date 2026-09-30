@@ -15,6 +15,7 @@
 #include "corNgsild/LdQ.h"                               // LdQNode, LdQBareWord, ...
 #include "corNgsild/LdProblem.h"                         // LD_ERROR_BAD_REQUEST_DATA
 #include "corNgsild/ldError.h"                           // ldError
+#include "corNgsild/ldQueryParams.h"                     // ldParamSplit
 #include "corNgsild/ldQExpandValues.h"                   // Own interface
 
 
@@ -140,6 +141,30 @@ static const char* bareWordLeft(LdQNode* nodeP)
     return bareWordLeft(nodeP->linked.subQ);
 
   return NULL;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldAttrListExpand -
+//
+char** ldAttrListExpand(const char* csv, CorLdContext* contextP, CorAlloc* kaP)
+{
+  if ((csv == NULL) || (csv[0] == 0))
+    return NULL;
+
+  char** nameV = ldParamSplit(corAllocStrdup(kaP, csv), kaP);   // splits in place - a copy
+
+  for (int ix = 0; (nameV != NULL) && (nameV[ix] != NULL); ix++)
+  {
+    char* expanded = corLdExpand(contextP, nameV[ix], kaP, NULL, NULL);
+
+    if (expanded != NULL)
+      nameV[ix] = expanded;
+  }
+
+  return nameV;
 }
 
 

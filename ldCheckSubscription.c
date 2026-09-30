@@ -35,6 +35,7 @@
 #include "corNgsild/LdScopeExpr.h"                         // ldScopeExprParse
 #include "corNgsild/ldSubscriptionNotify.h"               // ldTriggerFromString
 #include "corNgsild/ldQParse.h"                           // ldQParse
+#include "corNgsild/ldQExpandValues.h"                   // ldQExpandValues, ldAttrListExpand
 #include "corNgsild/ldCheckGeo.h"                          // ldCheckGeoQuery
 #include "corNgsild/ldTypes.h"                            // ldOpToString
 #include "corNgsild/ldError.h"                            // ldError
@@ -838,6 +839,8 @@ bool ldCheckSubscription(CorNode* subP, LdOp op, bool merged, LdFormat* notifFor
   CorNode* isActiveP      = NULL;
   CorNode* notifTriggerP  = NULL;
   CorNode* qP             = NULL;
+  CorNode* expandValuesP   = NULL;
+  CorNode* langPropsP      = NULL;
   CorNode* geoQP          = NULL;
   CorNode* scopeQP        = NULL;
   CorNode* nameP          = NULL;
@@ -933,6 +936,10 @@ bool ldCheckSubscription(CorNode* subP, LdOp op, bool merged, LdFormat* notifFor
     }
     else if (term == CorTermQ)
       DUPLICATE_CHECK(qP, "q", childP);
+    else if (term == CorTermExpandValues)
+      DUPLICATE_CHECK(expandValuesP, "expandValues", childP);
+    else if (term == CorTermLangProperties)
+      DUPLICATE_CHECK(langPropsP, "langProperties", childP);   // not NGSI-LD - spec-doubts #134
     else if (term == CorTermGeoQ)
       DUPLICATE_CHECK(geoQP, "geoQ", childP);
     else if (term == CorTermScopeQ)
@@ -1204,10 +1211,31 @@ bool ldCheckSubscription(CorNode* subP, LdOp op, bool merged, LdFormat* notifFor
   // itself on a syntax error; the parse tree is thrown away — the matcher
   // compiles its own at notification time.
   //
+  //
+  // "expandValues" (§ 5.2.6.5.2) and "langProperties" (not NGSI-LD, spec-doubts #134): strings, the
+  // comma-separated attribute names that go WITH q - as for a query.
+  //
+  if (expandValuesP != NULL)
+    STRING_CHECK(expandValuesP, "Invalid Subscription", "'expandValues' must be a string");
+  if (langPropsP != NULL)
+    STRING_CHECK(langPropsP, "Invalid Subscription", "'langProperties' must be a string");
+
   if (qP != NULL)
   {
     STRING_CHECK(qP, "Invalid Subscription", "'q' must be a string");
-    if (ldQParse(qP->value.s, kaP) == NULL)
+
+    //
+    // A bare word is kept, and must then be one expandValues gives a meaning to (§ 7.2.3.2
+    // Example 13): rejected here, at create or PATCH, not left for the notification.
+    //
+    LdQNode* qExpr = ldQParseBareWords(qP->value.s, kaP);
+
+    if (qExpr == NULL)
+      return false;
+
+    char** evV = (expandValuesP != NULL) ? ldAttrListExpand(expandValuesP->value.s, corNgsild.contextP, kaP) : NULL;
+
+    if (ldQExpandValues(qExpr, evV, corNgsild.contextP, kaP) == false)
       return false;
   }
 

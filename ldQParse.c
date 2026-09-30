@@ -41,7 +41,23 @@
 //
 // Forward declarations
 //
-static LdQNode* parseOr(const char** pp, CorAlloc* kaP, bool bareWords);
+// -----------------------------------------------------------------------------
+//
+// QParseMode - which q this is (ldQParse, ldQParseBareWords, ldQParseStored)
+//
+//   QParseStrict     every value a Value of the grammar; names expanded with the request's @context
+//   QParseBareWords  a query's q: a bare word is kept (LdQBareWord), for expandValues to resolve
+//   QParseStored     a q as STORED (ldQRenderStored): already resolved - names are IRIs, a [..] segment
+//                    is an IRI or a raw language tag (langProperties) - so nothing is expanded again
+//
+typedef enum QParseMode
+{
+  QParseStrict,
+  QParseBareWords,
+  QParseStored
+} QParseMode;
+
+static LdQNode* parseOr(const char** pp, CorAlloc* kaP, QParseMode mode);
 
 
 
@@ -317,7 +333,7 @@ static int scanValueLen(const char* p)
 //
 // Items can be quoted strings, numbers, or booleans (all same type expected).
 //
-static bool parseValueList(const char* raw, int rawLen, LdQTerm* term, CorAlloc* kaP, bool bareWords)
+static bool parseValueList(const char* raw, int rawLen, LdQTerm* term, CorAlloc* kaP, QParseMode mode)
 {
   // Count commas to determine size
   int count = 1;
@@ -392,7 +408,7 @@ static bool parseValueList(const char* raw, int rawLen, LdQTerm* term, CorAlloc*
       // a term waiting for it (§ 7.2.3.2 Example 13: gender==Male&expandValues=gender).
       // Kept as LdQBareWord; ldExpandParams expands it or rejects it with this 400.
       //
-      if ((itemTypeV[ix] == LdQNoValue) && (bareWords == true))
+      if ((itemTypeV[ix] == LdQNoValue) && (mode == QParseBareWords))
         itemTypeV[ix] = LdQBareWord;
 
       if (itemTypeV[ix] == LdQNoValue)
@@ -491,7 +507,7 @@ static bool parseRange(const char* raw, int rawLen, const char* dotdot, LdQTerm*
 //
 // parseTerm - parse: attrName [operator value]
 //
-static LdQNode* parseTerm(const char** pp, CorAlloc* kaP, bool bareWords)
+static LdQNode* parseTerm(const char** pp, CorAlloc* kaP, QParseMode mode)
 {
   const char* p = *pp;
 
@@ -539,7 +555,7 @@ static LdQNode* parseTerm(const char** pp, CorAlloc* kaP, bool bareWords)
   {
     p++;  // consume '{'
 
-    LdQNode* subQ = parseOr(&p, kaP, bareWords);
+    LdQNode* subQ = parseOr(&p, kaP, mode);
     if (subQ == NULL)
       return NULL;
 
@@ -611,7 +627,7 @@ static LdQNode* parseTerm(const char** pp, CorAlloc* kaP, bool bareWords)
 
         char* rawP = segP;                                  // as sent: a language tag stays this (langProperties)
 
-        if ((segP != NULL) && (strcmp(segP, "*") != 0) && (corLdAlreadyExpanded(segP) == false))
+        if ((segP != NULL) && (mode != QParseStored) && (strcmp(segP, "*") != 0) && (corLdAlreadyExpanded(segP) == false))
         {
           //
           // Expanded exactly as the value's own member names were (corLdExpandValueKey:
@@ -737,7 +753,7 @@ static LdQNode* parseTerm(const char** pp, CorAlloc* kaP, bool bareWords)
       // Reparse from original position as a value list
       const char* listStart = sStart - 1;  // back to opening quote
       int listLen = scanValueLen(listStart);
-      parseValueList(listStart, listLen, &nodeP->term, kaP, bareWords);
+      parseValueList(listStart, listLen, &nodeP->term, kaP, mode);
       *pp = listStart + listLen;
       return nodeP;
     }
@@ -829,7 +845,7 @@ static LdQNode* parseTerm(const char** pp, CorAlloc* kaP, bool bareWords)
     else if (strchr(vStart, ',') != NULL && (int)(strchr(vStart, ',') - vStart) < vLen && (nodeP->term.op == LdQEqual || nodeP->term.op == LdQUnequal))
     {
       // Value list (comma-separated)
-      if (parseValueList(vStart, vLen, &nodeP->term, kaP, bareWords) == false)
+      if (parseValueList(vStart, vLen, &nodeP->term, kaP, mode) == false)
         return NULL;   // parseValueList raised the ProblemDetails
     }
     else if (looksLikeDateTime(vStart))
@@ -862,7 +878,7 @@ static LdQNode* parseTerm(const char** pp, CorAlloc* kaP, bool bareWords)
       // ldExpandParams to expand or reject. Only for == and != - an ordering operator or a
       // pattern has no use for a term (§ 7.2.3.2 Example 13: gender==Male&expandValues=gender).
       //
-      if ((type == LdQNoValue) && (bareWords == true) &&
+      if ((type == LdQNoValue) && (mode == QParseBareWords) &&
           ((nodeP->term.op == LdQEqual) || (nodeP->term.op == LdQUnequal)))
         type = LdQBareWord;
 
@@ -929,14 +945,14 @@ static LdQNode* parseTerm(const char** pp, CorAlloc* kaP, bool bareWords)
 //
 // parseAtom - parse: '(' expr ')' | term
 //
-static LdQNode* parseAtom(const char** pp, CorAlloc* kaP, bool bareWords)
+static LdQNode* parseAtom(const char** pp, CorAlloc* kaP, QParseMode mode)
 {
   skipWs(pp);
 
   if (**pp == '(')
   {
     (*pp)++;  // skip '('
-    LdQNode* inner = parseOr(pp, kaP, bareWords);
+    LdQNode* inner = parseOr(pp, kaP, mode);
 
     if (inner == NULL)
       return NULL;
@@ -953,7 +969,7 @@ static LdQNode* parseAtom(const char** pp, CorAlloc* kaP, bool bareWords)
     return inner;
   }
 
-  return parseTerm(pp, kaP, bareWords);
+  return parseTerm(pp, kaP, mode);
 }
 
 
@@ -985,9 +1001,9 @@ static void groupAdd(LdQNode* groupP, LdQNode* childP, CorAlloc* kaP)
 //
 // parseAnd - parse: atom *(';' atom)
 //
-static LdQNode* parseAnd(const char** pp, CorAlloc* kaP, bool bareWords)
+static LdQNode* parseAnd(const char** pp, CorAlloc* kaP, QParseMode mode)
 {
-  LdQNode* left = parseAtom(pp, kaP, bareWords);
+  LdQNode* left = parseAtom(pp, kaP, mode);
 
   if (left == NULL)
     return NULL;
@@ -1009,7 +1025,7 @@ static LdQNode* parseAnd(const char** pp, CorAlloc* kaP, bool bareWords)
   while (**pp == ';')
   {
     (*pp)++;  // skip ';'
-    LdQNode* right = parseAtom(pp, kaP, bareWords);
+    LdQNode* right = parseAtom(pp, kaP, mode);
 
     if (right == NULL)
       return NULL;
@@ -1027,9 +1043,9 @@ static LdQNode* parseAnd(const char** pp, CorAlloc* kaP, bool bareWords)
 //
 // parseOr - parse: andExpr *('|' andExpr)
 //
-static LdQNode* parseOr(const char** pp, CorAlloc* kaP, bool bareWords)
+static LdQNode* parseOr(const char** pp, CorAlloc* kaP, QParseMode mode)
 {
-  LdQNode* left = parseAnd(pp, kaP, bareWords);
+  LdQNode* left = parseAnd(pp, kaP, mode);
 
   if (left == NULL)
     return NULL;
@@ -1051,7 +1067,7 @@ static LdQNode* parseOr(const char** pp, CorAlloc* kaP, bool bareWords)
   while (**pp == '|')
   {
     (*pp)++;  // skip '|'
-    LdQNode* right = parseAnd(pp, kaP, bareWords);
+    LdQNode* right = parseAnd(pp, kaP, mode);
 
     if (right == NULL)
       return NULL;
@@ -1095,14 +1111,14 @@ static int linkedDepth(LdQNode* nodeP)
 
 // ldQParse - parse a ?q= expression into an expression tree
 //
-static LdQNode* qParse(const char* q, CorAlloc* kaP, bool bareWords)
+static LdQNode* qParse(const char* q, CorAlloc* kaP, QParseMode mode)
 {
   if (q == NULL || q[0] == 0)
     return NULL;
 
   const char* p = q;
 
-  LdQNode* root = parseOr(&p, kaP, bareWords);
+  LdQNode* root = parseOr(&p, kaP, mode);
 
   if (root == NULL)
     return NULL;
@@ -1130,7 +1146,7 @@ static LdQNode* qParse(const char* q, CorAlloc* kaP, bool bareWords)
 //
 LdQNode* ldQParse(const char* q, CorAlloc* kaP)
 {
-  return qParse(q, kaP, false);
+  return qParse(q, kaP, QParseStrict);
 }
 
 
@@ -1141,7 +1157,18 @@ LdQNode* ldQParse(const char* q, CorAlloc* kaP)
 //
 LdQNode* ldQParseBareWords(const char* q, CorAlloc* kaP)
 {
-  return qParse(q, kaP, true);
+  return qParse(q, kaP, QParseBareWords);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldQParseStored - a q read back from where it was stored: resolved already, nothing expanded again
+//
+LdQNode* ldQParseStored(const char* q, CorAlloc* kaP)
+{
+  return qParse(q, kaP, QParseStored);
 }
 
 
