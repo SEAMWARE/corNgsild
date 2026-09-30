@@ -271,6 +271,9 @@ static void qValueError(const char* tok, bool listItem)
     ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid q parameter", "%s'%s' is not a valid time", what, tok);
   else if (digitLike)
     ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid q parameter", "%s'%s' is not a valid number", what, tok);
+  else if (strncmp(tok, "%22", 3) == 0)  // a URL's %22 is decoded before q is parsed - this one came in a JSON body
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid q parameter",
+            "%s'%s' is not a valid value - a q in a JSON body is not URL-encoded: a quote is \\\"", what, tok);
   else if (strchr(tok, ':') != NULL)
     ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid q parameter", "%s'%s' is not a valid URI", what, tok);
   else
@@ -817,34 +820,9 @@ static LdQNode* parseTerm(const char** pp, CorAlloc* kaP, QParseMode mode)
       return nodeP;
     }
 
-    // § 4.9 — q is URL-encoded; spaces and other reserved chars come
-    // through as %xx. Decode in-place so the match value is the raw
-    // string (046_05_01: `name=="Eiffel%20Tower"` vs entity name
-    // "Eiffel Tower").
-    {
-      char* r = s;
-      char* w = s;
-      while (*r != 0)
-      {
-        if (r[0] == '%' && r[1] != 0 && r[2] != 0)
-        {
-          int hi = (r[1] >= '0' && r[1] <= '9') ? r[1] - '0' :
-                   (r[1] >= 'A' && r[1] <= 'F') ? r[1] - 'A' + 10 :
-                   (r[1] >= 'a' && r[1] <= 'f') ? r[1] - 'a' + 10 : -1;
-          int lo = (r[2] >= '0' && r[2] <= '9') ? r[2] - '0' :
-                   (r[2] >= 'A' && r[2] <= 'F') ? r[2] - 'A' + 10 :
-                   (r[2] >= 'a' && r[2] <= 'f') ? r[2] - 'a' + 10 : -1;
-          if (hi >= 0 && lo >= 0)
-          {
-            *w++ = (char) ((hi << 4) | lo);
-            r += 3;
-            continue;
-          }
-        }
-        *w++ = *r++;
-      }
-      *w = 0;
-    }
+    // No %-decoding here: a URL's q was decoded ONCE by the HTTP layer, and a q in a JSON body (POST
+    // Query, Subscription) is a JSON string - its only escaping is JSON's (\"). Decoding again made a
+    // literal "50%25 off" unfindable, and a stored q changed on every re-read.
 
     nodeP->term.valueType = LdQString;
     nodeP->term.value.s   = s;
