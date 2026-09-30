@@ -156,6 +156,8 @@ LIB_SOURCES   = corNgsild.c \
                 ldProbeSourceIdentity.c \
                 ldForwarding.c \
                 ldExpandParams.c \
+                ldQExpandValues.c \
+                ldExtensionTerms.c \
                 ldCsourceAlias.c \
                 ldQRender.c \
                 ldQAttrs.c \

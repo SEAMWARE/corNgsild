@@ -265,6 +265,10 @@ typedef enum CorTerm
   CorTermGoalFeedback,                     // goalFeedback
   CorTermGoalResult,                       // goalResult
 
+  // coraine NGSI-LD extensions - not in the core context either: corLdCoreTermsAdd makes them core
+  // terms at startup (ldExtensionTermsAdd), so they stay short names in a Query body or a Subscription.
+  CorTermLangProperties,                   // langProperties - spec-doubts #134
+
   CorTermLast                              // the number of ids - not a term
 } CorTerm;
 

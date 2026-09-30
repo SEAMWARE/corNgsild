@@ -321,6 +321,7 @@ bool pCheckQuery(void)
     { "createEntityMap",   PC_BOOL, 0,            NULL },
     { "datasetId",         PC_ARR,  0,            NULL },
     { "expandValues",      PC_STR,  0,            NULL },
+    { "langProperties",    PC_STR,  0,            NULL },   // not NGSI-LD - spec-doubts #134
     { "entityMapLifetime", PC_STR,  0,            NULL },
     { "jsonKeys",          PC_STR,  0,            NULL },
     { "join",              PC_STR,  0,            NULL },
@@ -360,7 +361,7 @@ bool pCheckQuery(void)
   // its own ProblemDetails; add a fallback in case it returns NULL silently).
   if (qP != NULL)
   {
-    if (ldQParse(qP->value.s, &corRest.kalloc) == NULL)
+    if (ldQParseBareWords(qP->value.s, &corRest.kalloc) == NULL)   // expandValues may give a bare word meaning
     {
       if (corRest.out.problemType == NULL)
         ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Parse Error in q-expression", "%s", qP->value.s);

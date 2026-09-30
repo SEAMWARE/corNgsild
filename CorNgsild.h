@@ -103,6 +103,8 @@ typedef struct CorNgsild
 
   char*   expandValues;
   char**  expandValuesV; // split + JSON-LD expanded — attribute names whose values to expand in q
+  char*   langProperties;  // not NGSI-LD (spec-doubts #134): attributes that are LanguageProperties
+  char**  langPropertiesV; // split + JSON-LD expanded - a q [..] under one of them is a language tag, kept raw
 
   char*   jsonKeys;
   char**  jsonKeysV;     // split + JSON-LD expanded — attribute names whose values are opaque (no expansion)

@@ -23,4 +23,11 @@
 // ldExpandParams - expand vocab-bearing URL params in corNgsild
 extern void ldExpandParams(CorAlloc* kaP);
 
+// -----------------------------------------------------------------------------
+//
+// ldExpandParamsQ - apply expandValues and langProperties to the parsed q (ldExpandParams runs it;
+// ldQueryBodyToParams runs it again for a POST Query's body). false: 400 already set.
+//
+extern bool ldExpandParamsQ(CorAlloc* kaP);
+
 #endif  // CORNGSILD_LDEXPANDPARAMS_H_

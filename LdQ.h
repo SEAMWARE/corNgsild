@@ -50,7 +50,10 @@ typedef enum LdQValueType
   LdQDateTime,    // ISO 8601 date-time
   LdQRange,       // lo..hi  (numeric)
   LdQDateRange,   // lo..hi  (date-time strings)
-  LdQValueList    // v1,v2,...  (only with == or !=)
+  LdQValueList,   // v1,v2,...  (only with == or !=)
+  LdQBareWord     // unquoted word, not a Value - a term only expandValues can give meaning to
+                  // (ldQParseBareWords). Resolved in ldExpandParams: expanded -> LdQString, else 400.
+                  // Never reaches a matcher.
 } LdQValueType;
 
 
@@ -100,6 +103,8 @@ typedef struct LdQTerm
                              // compaction), dot-separated inside the
                              // brackets, %XX round-trip-safe.
   int           valuePathN;
+  char**        valuePathRawV;  // the same segments as SENT (url-decoded, not expanded) - a language
+                                // tag under a LanguageProperty (langProperties, ldQLangProperties)
   LdQOperator   op;
   LdQValueType  valueType;
   LdQValue      value;

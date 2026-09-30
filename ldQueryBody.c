@@ -32,6 +32,7 @@
 #include "corNgsild/LdProblem.h"                         // LD_ERROR_BAD_REQUEST_DATA
 #include "corNgsild/ldError.h"                           // ldError
 #include "corNgsild/ldTermId.h"                          // ldTermId, CorTerm*
+#include "corNgsild/ldExpandParams.h"                  // ldExpandParamsQ
 #include "corNgsild/ldQueryBody.h"                       // Own interface
 
 
@@ -291,5 +292,9 @@ bool ldQueryBodyToParams(CorNode* bodyP)
     // wired through URL-param-style handling; silently skipped.
   }
 
-  return true;
+  //
+  // The request hook ran ldExpandParams before this body became params: what goes WITH q -
+  // expandValues, langProperties - is applied now, or a Query body's would never be.
+  //
+  return ldExpandParamsQ(&corRest.kalloc);
 }

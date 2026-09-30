@@ -484,6 +484,11 @@ void ldParamHook(const char* name, const char* value)
     }
     corNgsild.omitV    = ldProjectionTopLevelNames(corNgsild.omitTree, faP, false);
   }
+  else if (strcmp(name, "langProperties") == 0)
+  {
+    corNgsild.langProperties  = (char*) value;
+    corNgsild.langPropertiesV = ldParamSplit((char*) value, faP);   // expanded in ldExpandParams
+  }
   else if (strcmp(name, "expandValues") == 0)
   {
     corNgsild.expandValues  = (char*) value;
@@ -554,7 +559,7 @@ void ldParamHook(const char* name, const char* value)
   else if (strcmp(name, "q") == 0)
   {
     corNgsild.q     = (char*) value;
-    corNgsild.qExpr = ldQParse(value, faP);
+    corNgsild.qExpr = ldQParseBareWords(value, faP);   // expandValues may give a bare word meaning - resolved in ldExpandParams
   }
   else if (strcmp(name, "csf") == 0)
   {

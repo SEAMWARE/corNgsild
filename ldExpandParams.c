@@ -18,6 +18,7 @@
 #include "corNgsild/LdProj.h"                           // LdProjItem
 #include "corNgsild/LdQ.h"                              // LdQNode
 
+#include "corNgsild/ldQExpandValues.h"                 // ldQExpandValues
 #include "corNgsild/ldExpandParams.h"                   // Own interface
 
 
@@ -78,76 +79,28 @@ static void expandArray(char** v, CorAlloc* kaP)
 
 // -----------------------------------------------------------------------------
 //
-// qExpandValuesWalk - apply expandValues to LdQString leaves whose attr matches
+// ldExpandParamsQ - what goes WITH q: expandValues and langProperties, applied to the parsed q
 //
-// q is parsed when the URL param is encountered, before expandValuesV is set
-// (param order is not guaranteed). Once expandValuesV is finalized, walk the
-// tree and expand string RHS values for matching attributes.
+// q was parsed when its param arrived - before expandValues / langProperties were known, as params
+// come in any order. So, once all of them are in: the values expandValues names are expanded, a bare
+// word it does not name is rejected (ALWAYS - without expandValues every bare word is a 400), and a
+// q [..] under an attribute langProperties names goes back to the language tag as sent
+// (spec-doubts #134).
 //
-static void qExpandValuesWalk(LdQNode* nodeP, char** evV, CorAlloc* kaP)
+// Run by ldExpandParams for the URL params, and AGAIN by ldQueryBodyToParams: a POST Query's body is
+// turned into params by its service routine, after the hook has run - so expandValues in a Query
+// body was never applied at all. Every step is idempotent (expanding an IRI leaves it as it is).
+//
+bool ldExpandParamsQ(CorAlloc* kaP)
 {
-  if (nodeP == NULL || evV == NULL)
-    return;
+  expandArray(corNgsild.expandValuesV,   kaP);
+  expandArray(corNgsild.langPropertiesV, kaP);
 
-  if (nodeP->type == LdQTermNode)
-  {
-    //
-    // Does expandValues name this term's attribute at all?
-    //
-    bool wanted = false;
-    for (int ix = 0; evV[ix] != NULL; ix++)
-    {
-      if (strcmp(nodeP->term.attr, evV[ix]) == 0)
-      {
-        wanted = true;
-        break;
-      }
-    }
+  if (ldQExpandValues(corNgsild.qExpr, corNgsild.expandValuesV, corNgsild.contextP, kaP) == false)
+    return false;
 
-    if (wanted && nodeP->term.op != LdQPattern && nodeP->term.op != LdQNotPattern)
-    {
-      if (nodeP->term.valueType == LdQString)
-      {
-        char* expanded = corLdExpand(corNgsild.contextP, nodeP->term.value.s, kaP, NULL, NULL);
-        if (expanded != NULL)
-          nodeP->term.value.s = expanded;
-      }
-      else if (nodeP->term.valueType == LdQValueList)
-      {
-        //
-        // A value LIST needs every STRING item expanded, not the list as a
-        // whole. Handling only LdQString meant `q=category=="barn"` matched a
-        // VocabProperty while `q=category=="barn","farm_auxiliary"` returned
-        // nothing - and so did a list of two IDENTICAL values, which is what
-        // gave it away: the list path never expanded anything at all.
-        //
-        // itemTypeV carries one type per item (§ 7.2.3.4 puts no requirement on
-        // a list sharing a type, so `a==1,"two"` is legal), and only a string
-        // item is a term that could expand - expanding a number or a bool would
-        // be meaningless.
-        //
-        for (int i = 0; i < nodeP->term.value.list.count; i++)
-        {
-          if (nodeP->term.value.list.itemTypeV != NULL &&
-              nodeP->term.value.list.itemTypeV[i] != LdQString)
-            continue;
-
-          char* expanded = corLdExpand(corNgsild.contextP, nodeP->term.value.list.values[i], kaP, NULL, NULL);
-          if (expanded != NULL)
-            nodeP->term.value.list.values[i] = expanded;
-        }
-      }
-    }
-  }
-  else if (nodeP->type == LdQAndNode || nodeP->type == LdQOrNode)
-  {
-    for (int i = 0; i < nodeP->group.count; i++)
-      qExpandValuesWalk(nodeP->group.childV[i], evV, kaP);
-  }
-  else if (nodeP->type == LdQLinkedNode)
-  {
-    qExpandValuesWalk(nodeP->linked.subQ, evV, kaP);
-  }
+  ldQLangProperties(corNgsild.qExpr, corNgsild.langPropertiesV);
+  return true;
 }
 
 
@@ -175,7 +128,6 @@ void ldExpandParams(CorAlloc* kaP)
   expandArray(corNgsild.attrsV,            kaP);
   expandArray(corNgsild.omitV,             kaP);
   expandArray(corNgsild.jsonKeysV,         kaP);
-  expandArray(corNgsild.expandValuesV,     kaP);
 
   // Expand the projection trees recursively so the linked-entity walker can
   // match against expanded IRIs inside nested entities.
@@ -209,10 +161,8 @@ void ldExpandParams(CorAlloc* kaP)
   corNgsild.geoproperty      = expandString(corNgsild.geoproperty, kaP);
   corNgsild.geometryProperty = expandString(corNgsild.geometryProperty, kaP);
 
-  // q-tree was parsed before expandValuesV was finalized (URL param order is
-  // not guaranteed). Apply value expansion to matching string leaves now.
-  if (corNgsild.qExpr != NULL && corNgsild.expandValuesV != NULL)
-    qExpandValuesWalk(corNgsild.qExpr, corNgsild.expandValuesV, kaP);
+  if (ldExpandParamsQ(kaP) == false)
+    return;
 
   // orderBy: expand each dot-separated segment of each term's attrName.
   // Store the expanded segments as a separate array (pathSegV) — the joined
