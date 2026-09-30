@@ -294,7 +294,7 @@ bool ldQueryBodyToParams(CorNode* bodyP)
 
   //
   // The request hook ran ldExpandParams before this body became params: what goes WITH q -
-  // expandValues, langProperties - is applied now, or a Query body's would never be.
+  // expandValues, jsonKeys, langProperties - is applied now, or a Query body's would never be.
   //
   return ldExpandParamsQ(&corRest.kalloc);
 }

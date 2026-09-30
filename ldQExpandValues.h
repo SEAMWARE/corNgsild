@@ -36,25 +36,26 @@ extern void ldQExpandValues(LdQNode* qExpr, char** evV, CorLdContext* contextP, 
 
 // -----------------------------------------------------------------------------
 //
-// ldQLangProperties - a q [..] under a LanguageProperty is a LANGUAGE TAG, not a term
+// ldQRawValuePaths - a q [..] under the attributes attrV names is walked as SENT, not expanded
 //
-// Not NGSI-LD (spec-doubts #134). § 7.2.3.2 makes every segment of a q path a short name to expand -
-// right for a Property's compound value, whose member names are JSON-LD - while § 7.2.3.4 uses the
-// same bracket for the language of a LanguageProperty, whose languageMap keys are RFC 5646 tags,
-// stored as tags. Only the attribute's TYPE tells the two apart, and q does not carry it: the
-// query does, in langProperties (a URL param, a Query body member, a Subscription member), the way
-// expandValues says which values are vocabulary. So for every term whose attribute lpV names, the
-// value path goes back to the segments as sent (valuePathRawV). No guessing from the segment - `es`
-// may as well be a member of a compound value.
+// § 7.2.3.2 makes every segment of a q path a short name to expand - right for a Property's compound
+// value, whose member names are JSON-LD and stored expanded. Two kinds of attribute hold member names
+// that are NOT JSON-LD, and are stored as sent: a JsonProperty's json (§ 7.2.3.4 item 8 - an
+// ECMA-262 MemberExpression) and a LanguageProperty's languageMap (RFC 5646 tags). Only the
+// attribute's TYPE tells them apart, and q does not carry it: the query does - jsonKeys (NGSI-LD,
+// § 7.2.3.1, Example 12) and langProperties (NOT NGSI-LD - its counterpart for LanguageProperty,
+// spec-doubts #134), each a URL param, a Query body member and a Subscription member. So for every
+// term whose attribute attrV names, the value path goes back to the segments as sent
+// (valuePathRawV). No guessing from the data - `es` may as well be a member of a compound value.
 //
-extern void ldQLangProperties(LdQNode* qExpr, char** lpV);
+extern void ldQRawValuePaths(LdQNode* qExpr, char** attrV);
 
 
 
 // -----------------------------------------------------------------------------
 //
 // ldAttrListExpand - "a,b,c" (expandValues, langProperties) as a NULL-terminated list of EXPANDED
-// attribute names, for ldQExpandValues / ldQLangProperties. csv itself is not touched (a copy is
+// attribute names, for ldQExpandValues / ldQRawValuePaths. csv itself is not touched (a copy is
 // split). NULL for NULL or empty.
 //
 extern char** ldAttrListExpand(const char* csv, CorLdContext* contextP, CorAlloc* kaP);

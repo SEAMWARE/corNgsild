@@ -79,12 +79,12 @@ static void expandArray(char** v, CorAlloc* kaP)
 
 // -----------------------------------------------------------------------------
 //
-// ldExpandParamsQ - what goes WITH q: expandValues and langProperties, applied to the parsed q
+// ldExpandParamsQ - what goes WITH q: expandValues, jsonKeys and langProperties, applied to the parsed q
 //
-// q was parsed when its param arrived - before expandValues / langProperties were known, as params
-// come in any order. So, once all of them are in: the values expandValues names are expanded, and a
-// q [..] under an attribute langProperties names goes back to the language tag as sent
-// (spec-doubts #134).
+// q was parsed when its param arrived - before expandValues / jsonKeys / langProperties were known, as
+// params come in any order. So, once all of them are in: the values expandValues names are expanded,
+// and a q [..] under an attribute jsonKeys or langProperties names goes back to the segments as sent
+// (ldQRawValuePaths).
 //
 // Run by ldExpandParams for the URL params, and AGAIN by ldQueryBodyToParams: a POST Query's body is
 // turned into params by its service routine, after the hook has run - so expandValues in a Query
@@ -94,10 +94,12 @@ bool ldExpandParamsQ(CorAlloc* kaP)
 {
   expandArray(corNgsild.expandValuesV,   kaP);
   expandArray(corNgsild.langPropertiesV, kaP);
+  expandArray(corNgsild.jsonKeysV,       kaP);
 
   ldQExpandValues(corNgsild.qExpr, corNgsild.expandValuesV, corNgsild.contextP, kaP);
 
-  ldQLangProperties(corNgsild.qExpr, corNgsild.langPropertiesV);
+  ldQRawValuePaths(corNgsild.qExpr, corNgsild.langPropertiesV);
+  ldQRawValuePaths(corNgsild.qExpr, corNgsild.jsonKeysV);
   return true;
 }
 

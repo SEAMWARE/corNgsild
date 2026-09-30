@@ -122,16 +122,16 @@ char** ldAttrListExpand(const char* csv, CorLdContext* contextP, CorAlloc* kaP)
 
 // -----------------------------------------------------------------------------
 //
-// ldQLangProperties -
+// ldQRawValuePaths -
 //
-void ldQLangProperties(LdQNode* nodeP, char** lpV)
+void ldQRawValuePaths(LdQNode* nodeP, char** attrV)
 {
-  if ((nodeP == NULL) || (lpV == NULL))
+  if ((nodeP == NULL) || (attrV == NULL))
     return;
 
   if (nodeP->type == LdQTermNode)
   {
-    if ((nodeP->term.valuePathN > 0) && (nodeP->term.valuePathRawV != NULL) && (named(nodeP->term.attr, lpV) == true))
+    if ((nodeP->term.valuePathN > 0) && (nodeP->term.valuePathRawV != NULL) && (named(nodeP->term.attr, attrV) == true))
     {
       for (int i = 0; i < nodeP->term.valuePathN; i++)
         nodeP->term.valuePathV[i] = nodeP->term.valuePathRawV[i];
@@ -140,10 +140,10 @@ void ldQLangProperties(LdQNode* nodeP, char** lpV)
   else if ((nodeP->type == LdQAndNode) || (nodeP->type == LdQOrNode))
   {
     for (int i = 0; i < nodeP->group.count; i++)
-      ldQLangProperties(nodeP->group.childV[i], lpV);
+      ldQRawValuePaths(nodeP->group.childV[i], attrV);
   }
   else if (nodeP->type == LdQLinkedNode)
-    ldQLangProperties(nodeP->linked.subQ, lpV);
+    ldQRawValuePaths(nodeP->linked.subQ, attrV);
 }
 
 

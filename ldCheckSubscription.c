@@ -841,6 +841,7 @@ bool ldCheckSubscription(CorNode* subP, LdOp op, bool merged, LdFormat* notifFor
   CorNode* qP             = NULL;
   CorNode* expandValuesP   = NULL;
   CorNode* langPropsP      = NULL;
+  CorNode* jsonKeysP       = NULL;
   CorNode* geoQP          = NULL;
   CorNode* scopeQP        = NULL;
   CorNode* nameP          = NULL;
@@ -940,6 +941,8 @@ bool ldCheckSubscription(CorNode* subP, LdOp op, bool merged, LdFormat* notifFor
       DUPLICATE_CHECK(expandValuesP, "expandValues", childP);
     else if (term == CorTermLangProperties)
       DUPLICATE_CHECK(langPropsP, "langProperties", childP);   // not NGSI-LD - spec-doubts #134
+    else if (term == CorTermJsonKeys)
+      DUPLICATE_CHECK(jsonKeysP, "jsonKeys", childP);
     else if (term == CorTermGeoQ)
       DUPLICATE_CHECK(geoQP, "geoQ", childP);
     else if (term == CorTermScopeQ)
@@ -1212,11 +1215,13 @@ bool ldCheckSubscription(CorNode* subP, LdOp op, bool merged, LdFormat* notifFor
   // compiles its own at notification time.
   //
   //
-  // "expandValues" (§ 5.2.6.5.2) and "langProperties" (not NGSI-LD, spec-doubts #134): strings, the
-  // comma-separated attribute names that go WITH q - as for a query.
+  // "expandValues", "jsonKeys" (§ 5.2.6.5.2) and "langProperties" (not NGSI-LD, spec-doubts #134):
+  // strings, the comma-separated attribute names that go WITH q - as for a query.
   //
   if (expandValuesP != NULL)
     STRING_CHECK(expandValuesP, "Invalid Subscription", "'expandValues' must be a string");
+  if (jsonKeysP != NULL)
+    STRING_CHECK(jsonKeysP, "Invalid Subscription", "'jsonKeys' must be a string");
   if (langPropsP != NULL)
     STRING_CHECK(langPropsP, "Invalid Subscription", "'langProperties' must be a string");
 

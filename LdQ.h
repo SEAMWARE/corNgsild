@@ -100,8 +100,8 @@ typedef struct LdQTerm
                              // compaction), dot-separated inside the
                              // brackets, %XX round-trip-safe.
   int           valuePathN;
-  char**        valuePathRawV;  // the same segments as SENT (url-decoded, not expanded) - a language
-                                // tag under a LanguageProperty (langProperties, ldQLangProperties)
+  char**        valuePathRawV;  // the same segments as SENT (url-decoded, not expanded) - a json member
+                                // or a language tag (jsonKeys / langProperties, ldQRawValuePaths)
   LdQOperator   op;
   LdQValueType  valueType;
   LdQValue      value;
