@@ -22,6 +22,7 @@
 #include <string.h>                                    // strcmp, strlen, strcpy, strcat
 #include <time.h>                                      // time
 
+#include "corBase/corTimeIso.h"                          // corTimeIso
 #include "corAlloc/corAlloc.h"                         // corAlloc
 #include "corAlloc/CorAlloc.h"                         // CorAlloc
 #include "corLog/corLog.h"                             // COR_T
@@ -79,19 +80,8 @@ static void isoNow(char* buf, int bufSize)
   struct timespec ts;
   clock_gettime(CLOCK_REALTIME, &ts);
 
-  struct tm tm;
-  gmtime_r(&ts.tv_sec, &tm);
-
-  int n = strftime(buf, bufSize, "%Y-%m-%dT%H:%M:%S", &tm);
-  if (ts.tv_nsec == 0)
-  {
-    buf[n++] = 'Z';
-    buf[n]   = 0;
-  }
-  else
-  {
-    snprintf(buf + n, bufSize - n, ".%03ldZ", ts.tv_nsec / 1000000);
-  }
+  (void) bufSize;                        // corTimeIso writes at most 31 bytes
+  corTimeIso((int64_t) ts.tv_sec * 1000000000 + ts.tv_nsec, 3, false, buf);   // milliseconds, left out when zero
 }
 
 
@@ -259,19 +249,8 @@ static bool watchedAttrsMatch(LdSubCacheItem* itemP, CorNode* entityP, LdNotifyO
 //
 static void nsToIsoLocal(uint64_t epochNs, char* buf, int bufSize)
 {
-  time_t    secs = (time_t) (epochNs / 1000000000ULL);
-  long      ms   = (long) ((epochNs % 1000000000ULL) / 1000000);
-  struct tm tm;
-
-  gmtime_r(&secs, &tm);
-  int n = strftime(buf, bufSize, "%Y-%m-%dT%H:%M:%S", &tm);
-  if (ms > 0)
-    snprintf(buf + n, bufSize - n, ".%03ldZ", ms);
-  else
-  {
-    buf[n++] = 'Z';
-    buf[n]   = 0;
-  }
+  (void) bufSize;                        // corTimeIso writes at most 31 bytes
+  corTimeIso((int64_t) epochNs, 3, false, buf);   // milliseconds, left out when zero
 }
 
 

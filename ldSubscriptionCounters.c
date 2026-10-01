@@ -15,6 +15,7 @@
 #include <stdio.h>                                     // snprintf
 #include <time.h>                                      // gmtime_r, strftime
 
+#include "corBase/corTimeIso.h"                          // corTimeIso
 #include "corTree/CorNode.h"                           // CorNode
 #include "corTree/corTreeLookup.h"                     // corTreeLookup
 #include "corTree/corTreeBuilder.h"                    // corTreeInteger, corTreeString, corTreeChildAdd, corTreeChildRemove
@@ -55,20 +56,8 @@ static void stripStoredStats(CorNode* notifP)
 //
 static void nsToIso(uint64_t epochNs, char* buf, int bufSize)
 {
-  time_t      secs = (time_t) (epochNs / 1000000000ULL);
-  long        ms   = (long) ((epochNs % 1000000000ULL) / 1000000);
-  struct tm   tm;
-
-  gmtime_r(&secs, &tm);
-  int n = strftime(buf, bufSize, "%Y-%m-%dT%H:%M:%S", &tm);
-
-  if (ms > 0)
-    snprintf(buf + n, bufSize - n, ".%03ldZ", ms);
-  else
-  {
-    buf[n++] = 'Z';
-    buf[n]   = 0;
-  }
+  (void) bufSize;                        // corTimeIso writes at most 31 bytes
+  corTimeIso((int64_t) epochNs, 3, false, buf);   // milliseconds, left out when zero
 }
 
 

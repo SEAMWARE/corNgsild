@@ -11,6 +11,7 @@
 #include <string.h>                                      // strcmp, strcpy, strlen
 #include <time.h>                                        // gmtime_r, strftime
 
+#include "corBase/corTimeIso.h"                          // corTimeIso
 #include "corRest/corRest.h"                            // corRest
 #include "corAlloc/CorAlloc.h"                         // CorAlloc
 #include "corAlloc/corAlloc.h"                         // corAlloc
@@ -34,32 +35,8 @@ void ldSysTimestampToIso(long long nsec, char* buf, int bufSize)
 {
   extern bool ldTimestampHighPrecision;  // §5.2.2.4: 6 fractional digits by default, 9 with -hp
 
-  time_t     sec  = (time_t)(nsec / 1000000000LL);
-  int        frac = (int)(nsec % 1000000000LL);
-  struct tm  tm;
-
-  gmtime_r(&sec, &tm);
-  int n = strftime(buf, bufSize, "%Y-%m-%dT%H:%M:%S", &tm);
-
-  // NGSI-LD (§ 5.2.2.4) caps DateTime at 6 fractional digits (microseconds). Drop the
-  // sub-microsecond part so the trailing-zero trim below yields at most 6 digits; -hp keeps all 9.
-  if (!ldTimestampHighPrecision)
-    frac = (frac / 1000) * 1000;
-
-  if (frac == 0)
-  {
-    buf[n++] = 'Z';
-    buf[n]   = 0;
-  }
-  else
-  {
-    snprintf(buf + n, bufSize - n, ".%09d", frac);
-    int end = strlen(buf) - 1;
-    while (end > n && buf[end] == '0')
-      end--;
-    buf[end + 1] = 'Z';
-    buf[end + 2] = 0;
-  }
+  (void) bufSize;                        // corTimeIso writes at most 31 bytes
+  corTimeIso(nsec, ldTimestampHighPrecision ? 9 : 6, true, buf);
 }
 
 
