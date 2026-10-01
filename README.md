@@ -79,7 +79,7 @@ and context-source aliasing / loop detection (`ldCsourceAlias`).
 
 ### Notifications
 
-`ldSubscriptionNotify`, `ldMqttNotify`, `ldNotifyDefer` (post-response delivery),
+`ldSubscriptionNotify`, `ldNotifyTransport` (non-HTTP schemes, through an application hook), `ldNotifyDefer` (post-response delivery),
 subscription counters and stats flushing (`ldSubStatsFlush`, `ldStatsFlushLoop`).
 
 ### Lifecycle

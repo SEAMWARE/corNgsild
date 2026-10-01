@@ -21,7 +21,6 @@
 #include "corNgsild/ldCheckUri.h"                         // ldCheckUri
 #include "corNgsild/LdProblem.h"                          // LD_ERROR_BAD_REQUEST_DATA
 #include "corNgsild/ldHooks.h"                            // ldHooksRegister
-#include "corNgsild/ldMqttNotify.h"                       // ldMqttInit
 #include "corNgsild/ldInit.h"                             // Own interface
 
 
@@ -344,10 +343,6 @@ int ldInit(void)
   corLdSetValueCheck(ldValueCheck);
   corLdSetKeywordCheck(ldKeywordCheck);
   corLdSetVocabValueSuffix(ldWatchedDatasetSuffix);
-
-  // libmosquitto global init for MQTT notifications (§ 7).
-  if (ldMqttInit() != 0)
-    return -1;
 
   ldInitialized = true;
   return 0;

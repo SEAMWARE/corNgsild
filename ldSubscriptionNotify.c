@@ -61,7 +61,7 @@
 #include "corNgsild/ldNotifyStatsHook.h"                // ldNotifyStatsHookInvoke
 #include "corNgsild/ldRequestSubstitute.h"              // ldRequestSubstitute
 #include "corNgsild/ldLinkedEntitiesHook.h"             // ldLinkedEntitiesHookInvoke
-#include "corNgsild/ldMqttNotify.h"                     // ldIsMqttUri, ldMqttNotify
+#include "corNgsild/ldNotifyTransport.h"                // ldNotifyIsHttp, ldNotifyTransportSend
 #include "corNgsild/ldThrottleDirty.h"                  // ldThrottleDirtyUpsert/Drain/EntriesFree
 #include "corNgsild/ldPeriodicLoop.h"                   // ldPeriodicLoopRegister
 #include "corNgsild/ldTermId.h"                         // ldTermId, CorTerm*
@@ -946,11 +946,12 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   const char* contentType = corMimeString(itemP->endpointAccept);
 
   //
-  // MQTT delivery path (§ 7) — when endpoint.uri is mqtt[s]://...
+  // Anything but HTTP (§ 7 - mqtt[s]://...) - delivered by the transport the application installed for
+  // the scheme. The Subscription was refused at creation if there was none.
   //
-  if (ldIsMqttUri(itemP->endpointUri))
+  if (ldNotifyIsHttp(itemP->endpointUri) == false)
   {
-    bool ok = ldMqttNotify(itemP->endpointUri, body,
+    bool ok = ldNotifyTransportSend(itemP->endpointUri, body,
                            contentType,
                            (linkBuf[0] != 0) ? linkBuf : NULL,
                            itemP->receiverInfo,
