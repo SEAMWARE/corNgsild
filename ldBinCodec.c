@@ -21,6 +21,7 @@
 #include "corNgsild/CorTerm.h"                           // CorTerm, CorTermType, CorTermLast
 #include "corNgsild/LdAttrType.h"                        // LdAttrType
 #include "corNgsild/ldCoreTermIds.h"                     // ldCoreTermNameV
+#include "corNgsild/ldTermId.h"                          // LD_TERM_NOT_CORE
 #include "corNgsild/ldBinCodec.h"                        // Own interface
 
 
@@ -85,6 +86,19 @@ static uint16_t termLookup(const char* s)
 //
 static uint16_t nameTermId(CorNode* nodeP)
 {
+  //
+  // A node corNgsild has already classified carries the answer: "not a core term", or an id - which
+  // is used only if the name IS that term's name, exactly (an expanded core IRI could carry the same
+  // id, and must travel as the string it is). One strcmp instead of a hash and a probe.
+  //
+  uint16_t id = nodeP->termId;
+
+  if (id == LD_TERM_NOT_CORE)
+    return 0;
+
+  if ((id != 0) && (id < CorTermLast))
+    return (strcmp(nodeP->name, ldCoreTermNameV[id]) == 0) ? id : 0;
+
   return termLookup(nodeP->name);
 }
 
