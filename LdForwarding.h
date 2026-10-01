@@ -24,6 +24,7 @@
 #include <stdbool.h>                                   // bool
 
 #include "corAlloc/CorAlloc.h"                         // CorAlloc
+#include "corTree/CorNode.h"                           // CorNode
 #include "corRest/CorRestVerb.h"                         // CorRestVerb
 #include "corRest/CorRestKeyValue.h"                     // CorRestKeyValue
 
@@ -62,6 +63,7 @@ typedef struct LdForwardResponse
   int              headerCount;
   char*            body;              // borrowed into allocP
   int              bodyLen;
+  CorNode*         bodyTree;          // a transport that carries trees (cor://) answers with this instead of body - in allocP
   CorAlloc*        allocP;            // arena that headers + body live in
   int              error;             // 0 = transport ok (statusCode is meaningful); nonzero = transport-level failure
   char             errorDetail[256];  // human-readable transport error
