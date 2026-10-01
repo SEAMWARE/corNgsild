@@ -67,4 +67,15 @@ extern CorNode* ldEntityMapToTree(LdEntityMap* mapP);
 // ldEntityMapPurgeExpired - remove all expired maps from the store
 extern void ldEntityMapPurgeExpired(LdEntityMapStore* storeP);
 
+// -----------------------------------------------------------------------------
+//
+// ldEntityMapSetStoredQ - the bound q, resolved as a subscription stores it (ldQRenderStored)
+//
+// What a later page that omits q re-applies (ldQParseStored): independent of that page's @context, and
+// with the expandValues / jsonKeys / langProperties of the query that created the map.
+//
+extern void ldEntityMapSetStoredQ(LdEntityMap* mapP, const char* storedQ);
+
+
+
 #endif  // CORNGSILD_LDENTITYMAP_OPS_H_
