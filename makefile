@@ -170,6 +170,7 @@ LIB_SOURCES   = corNgsild.c \
                 ldNameContentCheck.c \
                 ldUrlWildcardCheck.c \
                 ldNotifyTransport.c \
+                ldBinCodec.c \
                 ldSnapshotCache.c \
                 ldSnapshotNotify.c \
                 ldTenantHeader.c \
