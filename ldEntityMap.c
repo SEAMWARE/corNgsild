@@ -36,6 +36,23 @@ static uint64_t nowNanos(void)
 
 // -----------------------------------------------------------------------------
 //
+// ldEntityMapSetStoredQ - the bound q in its resolved (stored) form - see LdEntityMap.boundQStored
+//
+void ldEntityMapSetStoredQ(LdEntityMap* mapP, const char* storedQ)
+{
+  if ((mapP == NULL) || (storedQ == NULL))
+    return;
+
+  if (mapP->boundQStored != NULL)
+    free(mapP->boundQStored);
+
+  mapP->boundQStored = strdup(storedQ);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // isoFromNanos -
 //
 static void isoFromNanos(uint64_t ns, char* buf, int bufLen)
@@ -251,6 +268,7 @@ static void mapFree(LdEntityMap* mapP)
   }
   if (mapP->boundType        != NULL) free(mapP->boundType);
   if (mapP->boundQ           != NULL) free(mapP->boundQ);
+  if (mapP->boundQStored     != NULL) free(mapP->boundQStored);
   if (mapP->boundScopeQ      != NULL) free(mapP->boundScopeQ);
   if (mapP->boundGeorel      != NULL) free(mapP->boundGeorel);
   if (mapP->boundGeometry    != NULL) free(mapP->boundGeometry);

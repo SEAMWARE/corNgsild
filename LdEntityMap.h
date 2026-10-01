@@ -81,6 +81,15 @@ typedef struct LdEntityMap
   char*                boundCoordinates;
   char*                boundGeoproperty;
 
+  //
+  // The bound q as a subscription stores its own (ldQRenderStored): attribute names expanded, the
+  // values expandValues named expanded, a [..] under jsonKeys / langProperties as sent. A page that
+  // omits q re-applies THIS one (ldQParseStored), not boundQ re-parsed: the raw string would be
+  // expanded with that page's @context, without the expandValues, jsonKeys and langProperties of the
+  // query that created the map. boundQ stays for the "same parameters" comparison.
+  //
+  char*                boundQStored;
+
   // References (as the snapshot cache): one held by the store while the map is in it, one per
   // pin. A request that uses the map - pages it, renders it, has its query parameters pointing
   // at the map's bound strings - pins it for the request. Remove and the expiry purge unlink it
