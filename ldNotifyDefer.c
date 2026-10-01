@@ -6,6 +6,7 @@
 // Copyright 2026 Seamware
 // SPDX-License-Identifier: Apache-2.0
 //
+#include <stdbool.h>                             // bool
 #include <stddef.h>                              // NULL
 #include <stdlib.h>                              // realloc, free
 #include <string.h>                              // strcmp
@@ -15,6 +16,8 @@
 
 #include "corNgsild/ldSubscriptionNotify.h"       // ldSubscriptionNotifyBatch, LdNotifyPendingEntry
 #include "corNgsild/CorNgsild.h"                  // corNgsild (per-conn pending* cache)
+#include "corNgsild/LdSubCache.h"                 // LdSubCache
+#include "corNgsild/ldSubCache.h"                 // ldSubCacheRdLock, ldSubCacheUnlock
 #include "corNgsild/ldNotifyDefer.h"              // Own interface
 
 
@@ -158,11 +161,35 @@ static bool reportHasValueChange(CorNode* entityP, LdMergeReport* reportP)
 
 // -----------------------------------------------------------------------------
 //
+// noSubscriptions - does this cache hold no subscription at all?
+//
+// Then the matching at the end of the request cannot find one, and queuing the write for it is work
+// for nothing - and, worse, it is what tells the HTTP layer that the request still has something to do
+// after the response (the built-in server's post-response phase goes to a worker thread for it).
+// Under the cache's read lock, as the matching itself is: a subscription created while the write is in
+// flight is matched or not exactly as it would have been by the matching.
+//
+static bool noSubscriptions(LdSubCache* cacheP)
+{
+  ldSubCacheRdLock(cacheP);
+  bool empty = (cacheP->itemList == NULL);
+  ldSubCacheUnlock(cacheP);
+
+  return empty;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldNotifyDefer -
 //
 void ldNotifyDefer(LdSubCache* cacheP, CorNode* entityP, LdNotifyOp op, LdMergeReport* reportP)
 {
   if (cacheP == NULL || entityP == NULL)
+    return;
+
+  if (noSubscriptions(cacheP) == true)
     return;
 
   // --notifyValueChangeOnly: suppress an update whose attribute value(s) did not
@@ -215,6 +242,9 @@ void ldNotifyDefer(LdSubCache* cacheP, CorNode* entityP, LdNotifyOp op, LdMergeR
 void ldNotifyDeferDelete(LdSubCache* cacheP, CorNode* entityP, uint64_t deletedAtNs)
 {
   if (cacheP == NULL || entityP == NULL)
+    return;
+
+  if (noSubscriptions(cacheP) == true)
     return;
 
   corNgsild.pendingCache = cacheP;
