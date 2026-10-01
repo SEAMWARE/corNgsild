@@ -44,6 +44,7 @@
 #include "corNgsild/ldConformanceDowngrade.h"             // ldConformanceParse
 #include "corNgsild/ldTraceLevels.h"                      // LdTCheckSub
 #include "corNgsild/ldTermId.h"                           // ldTermId, CorTerm*
+#include "corNgsild/ldNotifyTransport.h"                // ldNotifyIsHttp, ldNotifyTransportHas
 
 
 
@@ -262,6 +263,18 @@ static bool checkEndpoint(CorNode* endpointP, bool complete)
         return false;
       }
       URI_CHECK(childP->value.s);
+
+      //
+      // A scheme nothing here can deliver to is refused NOW - accepted, it would only fail on every
+      // notification, quietly. HTTP is built in; any other scheme is delivered by a transport the
+      // application loaded (in coraine: the bridge plugin claiming it, e.g. --bridges mqtt).
+      //
+      if ((ldNotifyIsHttp(childP->value.s) == false) && (ldNotifyTransportHas(childP->value.s) == false))
+      {
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
+                "'notification.endpoint.uri': no notification transport for this scheme is loaded");
+        return false;
+      }
     }
     else if (ldTermId(childP) == CorTermAccept)   // both spellings - the expanded IRI is the same term
     {

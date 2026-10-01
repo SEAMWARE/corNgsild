@@ -169,7 +169,7 @@ LIB_SOURCES   = corNgsild.c \
                 ldDistMerge.c \
                 ldNameContentCheck.c \
                 ldUrlWildcardCheck.c \
-                ldMqttNotify.c \
+                ldNotifyTransport.c \
                 ldSnapshotCache.c \
                 ldSnapshotNotify.c \
                 ldTenantHeader.c \
@@ -261,14 +261,20 @@ $(LIB): $(OBJDIR)/$(LIB)
 $(LIB_SO): $(OBJDIR)/$(LIB_SO)
 					@cp -f $< $@
 
+#
+# Rebuilt from scratch, never updated in place: `ar r` adds and replaces members but never removes one,
+# so a source file deleted from LIB_OBJS stayed in the archive - and its symbols with it (ldMqttNotify.o,
+# still asking for libmosquitto, after the file was gone).
+#
 $(OBJDIR)/$(LIB):	$(LIB_OBJS)
+					rm -f $@
 					ar r $@ $(LIB_OBJS)
 					ranlib $@
 
 $(OBJDIR)/$(LIB_SO):	$(LIB_OBJS)
 					$(CC) -shared $(LIB_OBJS) -o $@ \
 						-L../corRest -L../corJsonld -L../corAlloc -L../corJson -L../corTree -L../corBase -L../corLog -L../corHash \
-						-lcorRest -lcorJsonld -lcorAlloc -lcorJson -lcorTree -lcorBase -lcorLog -lcorHash -lmicrohttpd -lssl -lcrypto -lpthread -lmosquitto $(ICU_LIBS) \
+						-lcorRest -lcorJsonld -lcorAlloc -lcorJson -lcorTree -lcorBase -lcorLog -lcorHash -lmicrohttpd -lssl -lcrypto -lpthread $(ICU_LIBS) \
 						-Wl,-rpath,'$$ORIGIN/../corRest:$$ORIGIN/../corJsonld:$$ORIGIN/../corAlloc:$$ORIGIN/../corJson:$$ORIGIN/../corTree:$$ORIGIN/../corBase:$$ORIGIN/../corLog:$$ORIGIN/../corHash'
 
 $(OBJDIR)/%.o: %.c $(FLAGSTAMP)
