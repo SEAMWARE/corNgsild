@@ -19,6 +19,8 @@
 #include "corTree/corTreeLookup.h"                     // corTreeLookup
 #include "corTree/corTreeClone.h"                      // corTreeClone
 #include "corJson/corJsonParse.h"                      // corJsonParse
+#include "corJson/corJsonRender.h"                     // corJsonFastRender
+#include "corJson/corJsonRenderSize.h"                 // corJsonFastRenderSize
 
 #include "corAlloc/corAlloc.h"                         // corAlloc
 #include "corLog/corLog.h"                             // COR_T, COR_W
@@ -686,6 +688,7 @@ int ldDistOpSendReceiveEx(LdRegCacheItem*  csr,
   resp.headerCount     = 0;
   resp.body            = NULL;
   resp.bodyLen         = 0;
+  resp.bodyTree        = NULL;
   resp.allocP          = &corRest.kalloc;
   resp.error           = 0;
   resp.errorDetail[0]  = 0;
@@ -714,6 +717,20 @@ int ldDistOpSendReceiveEx(LdRegCacheItem*  csr,
   }
   else
     rc = plugin->send(&req, &resp);
+
+  //
+  // A transport that answers with a tree (cor://): this path's callers take text, so it is rendered
+  // here, once. The fan-out path (ldDistOpSendMulti) takes the tree as it is.
+  //
+  if ((rc == 0) && (resp.bodyTree != NULL) && (resp.body == NULL))
+  {
+    resp.body = (char*) corAlloc(&corRest.kalloc, corJsonFastRenderSize(resp.bodyTree) + 1);
+    if (resp.body != NULL)
+    {
+      corJsonFastRender(resp.bodyTree, resp.body);
+      resp.bodyLen = strlen(resp.body);
+    }
+  }
 
   distOpTraceResponse(resp.statusCode, resp.headerV, resp.headerCount);
 
@@ -938,6 +955,80 @@ char* ldDistOpWarnings(LdDistOpBatchItem* itemV, LdDistOpBatchResult* resultV, i
 
 // -----------------------------------------------------------------------------
 //
+// distOpPluginItem - one fan-out item over a forwarding plugin (a scheme that is not HTTP)
+//
+// A plugin that answers with a tree (cor://) hands it straight to the result: no render on the
+// far side, no parse here.
+//
+static void distOpPluginItem(LdDistOpBatchItem* itemP, CorRestVerb verb, CorRestKeyValue* hv, int hc, LdDistOpBatchResult* rP, uint64_t nowNs)
+{
+  LdRegCacheItem*           csr    = itemP->csr;
+  const LdForwardingPlugin* plugin = ldForwardingForEndpoint(csr->endpoint);
+
+  csr->timesSent++;
+
+  if (plugin == NULL)
+  {
+    csr->timesFailed++;
+    csr->lastFailure = nowNs;
+    rP->statusCode   = 0;
+    rP->errorDetail  = "no forwarding plugin available for endpoint";
+    return;
+  }
+
+  LdForwardRequest  req;
+  LdForwardResponse resp;
+
+  memset(&req,  0, sizeof(req));
+  memset(&resp, 0, sizeof(resp));
+
+  req.endpoint         = itemP->url;
+  req.verb             = verb;
+  req.headerV          = hv;
+  req.headerCount      = hc;
+  req.body             = itemP->body;
+  req.bodyLen          = (itemP->body != NULL) ? itemP->bodyLen : 0;
+  req.requestTimeoutMs = csr->timeoutMs;
+  resp.allocP          = &corRest.kalloc;
+
+  if ((plugin->send(&req, &resp) != 0) || (resp.error != 0))
+  {
+    csr->timesFailed++;
+    csr->lastFailure = nowNs;
+    rP->statusCode   = 0;
+    rP->errorDetail  = (resp.errorDetail[0] != 0) ? corAllocStrdup(&corRest.kalloc, resp.errorDetail) : "transport failure";
+
+    COR_W("dist-op %s %s: CSR %s forward failed (%s)", corRestVerbToString(verb), itemP->url, (csr->regId != NULL) ? csr->regId : "?", rP->errorDetail);
+    return;
+  }
+
+  rP->statusCode = resp.statusCode;
+  distOpTraceResponse(resp.statusCode, resp.headerV, resp.headerCount);
+
+  if (resp.bodyTree != NULL)
+    rP->responseTree = resp.bodyTree;
+  else
+  {
+    rP->responseBody    = resp.body;
+    rP->responseBodyLen = resp.bodyLen;
+    distOpBodyParse(rP);
+  }
+
+  rP->responseContextUrl = responseContextLink(resp.headerV, resp.headerCount);
+
+  if ((resp.statusCode >= 200) && (resp.statusCode < 300))
+    csr->lastSuccess = nowNs;
+  else
+  {
+    csr->timesFailed++;
+    csr->lastFailure = nowNs;
+  }
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldDistOpSendMulti -
 //
 // Fan out N CSR forwards concurrently over corRestClientMulti. The per-CSR
@@ -1016,6 +1107,18 @@ int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
       continue;
     }
 
+    //
+    // Not HTTP (cor://): the forwarding plugin that claims the scheme, after the HTTP batch - one
+    // at a time in this first version
+    //
+    if ((strncmp(csr->endpoint, "http://", 7) != 0) && (strncmp(csr->endpoint, "https://", 8) != 0))
+    {
+      selfHv[i]   = hv;
+      selfHc[i]   = hc;
+      addIndex[i] = -3;
+      continue;
+    }
+
     int idx = corRestClientMultiAdd(multi,
                                    itemVerb,
                                    itemV[i].url,
@@ -1084,6 +1187,12 @@ int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
         csr->timesFailed++;
         csr->lastFailure = nowNs;
       }
+      continue;
+    }
+
+    if (idx == -3)
+    {
+      distOpPluginItem(&itemV[i], itemV[i].hasVerb ? itemV[i].verb : verb, selfHv[i], selfHc[i], &resultV[i], nowNs);
       continue;
     }
 
