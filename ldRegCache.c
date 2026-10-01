@@ -8,6 +8,7 @@
 //
 // Context Source Registration cache operations (NGSI-LD § 5.9 / § 5.10).
 //
+#include <stdatomic.h>                                  // _Atomic, atomic_fetch_add_explicit
 #include <regex.h>                                     // regcomp, regfree
 #include <stdlib.h>                                    // calloc, free, strdup
 #include <string.h>                                    // strcmp
@@ -515,6 +516,27 @@ static void cacheItemRetireOrFree(LdRegCache* cacheP, LdRegCacheItem* itemP)
 
 // -----------------------------------------------------------------------------
 //
+// itemsTotal - registrations in ALL the caches (every tenant's), linked into an itemList
+//
+// Kept where an item is linked in and unlinked, so "is there a registration anywhere?" is one read.
+//
+static _Atomic int itemsTotal = 0;
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldRegCacheItemsTotal -
+//
+int ldRegCacheItemsTotal(void)
+{
+  return atomic_load_explicit(&itemsTotal, memory_order_relaxed);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldRegCacheItemAdd -
 //
 LdRegCacheItem* ldRegCacheItemAdd(LdRegCache* cacheP, CorNode* regTree, CorAlloc* kaP)
@@ -717,6 +739,7 @@ LdRegCacheItem* ldRegCacheItemAdd(LdRegCache* cacheP, CorNode* regTree, CorAlloc
   else
     cacheP->last->next = itemP;
   cacheP->last = itemP;
+  atomic_fetch_add_explicit(&itemsTotal, 1, memory_order_relaxed);
 
   return itemP;
 }
@@ -800,6 +823,7 @@ bool ldRegCacheItemRemove(LdRegCache* cacheP, const char* regId)
       if (itemP == cacheP->last)
         cacheP->last = prevP;
 
+      atomic_fetch_sub_explicit(&itemsTotal, 1, memory_order_relaxed);
       cacheItemRetireOrFree(cacheP, itemP);
       return true;
     }
@@ -1664,6 +1688,7 @@ void ldRegCacheRelease(LdRegCache* cacheP)
   while (itemP != NULL)
   {
     LdRegCacheItem* nextP = itemP->next;
+    atomic_fetch_sub_explicit(&itemsTotal, 1, memory_order_relaxed);
     cacheItemFree(itemP);
     itemP = nextP;
   }

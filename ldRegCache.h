@@ -86,6 +86,17 @@ extern LdRegCacheItem* ldRegCacheItemAdd(LdRegCache* cacheP, CorNode* regTree, C
 
 // -----------------------------------------------------------------------------
 //
+// ldRegCacheItemsTotal - how many registrations all the caches (every tenant's) hold together
+//
+// 0 means no request can become a distributed operation or be forwarded - the question a broker
+// asks per request before running it on its I/O thread (see corRest's CorRestInlineHook).
+//
+extern int ldRegCacheItemsTotal(void);
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldRegCacheItemLookup - find a cached registration by ID
 //
 extern LdRegCacheItem* ldRegCacheItemLookup(LdRegCache* cacheP, const char* regId);
