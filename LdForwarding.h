@@ -84,6 +84,20 @@ typedef int (*LdForwardSendFunc)(LdForwardRequest* req, LdForwardResponse* resp)
 
 // -----------------------------------------------------------------------------
 //
+// LdForwardStartFunc / LdForwardWaitFunc - a request sent now, its response collected later
+//
+// For a fan-out: every request started before any is waited for, so they are in flight at the same
+// time. start returns a handle, or NULL with errorDetail filled; wait fills resp as send does (and
+// returns as send does) and frees the handle - every handle must be waited for, once. kaP is the
+// caller's: the request is built in it; resp->allocP is where the response goes.
+//
+typedef void* (*LdForwardStartFunc)(LdForwardRequest* req, CorAlloc* kaP, char* errorDetail, int errorDetailSize);
+typedef int   (*LdForwardWaitFunc)(void* handle, LdForwardResponse* resp);
+
+
+
+// -----------------------------------------------------------------------------
+//
 // LdForwardingPlugin - one registered transport
 //
 // schemes[] is a NULL-terminated string array of URL schemes the plugin
@@ -95,6 +109,8 @@ typedef struct LdForwardingPlugin
   const char*         alias;        // short name, "http" / "corBin" — for diagnostics
   const char* const*  schemes;      // NULL-terminated list of URL schemes
   LdForwardSendFunc   send;
+  LdForwardStartFunc  start;        // optional, with wait: a fan-out starts every request before it waits for any
+  LdForwardWaitFunc   wait;
 } LdForwardingPlugin;
 
 #endif  // CORNGSILD_LDFORWARDING_H_
