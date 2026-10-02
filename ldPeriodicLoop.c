@@ -11,7 +11,7 @@
 #include <stdint.h>                                    // uint64_t
 #include <stddef.h>                                    // NULL
 #include <string.h>                                    // memset
-#include <time.h>                                      // clock_gettime, nanosleep
+#include <time.h>                                      // clock_gettime
 
 #include "corAlloc/CorAlloc.h"                         // CorAlloc
 #include "corAlloc/corAllocBufferInit.h"               // corAllocBufferInit
@@ -42,6 +42,24 @@ static volatile bool      loopRunning = false;
 static pthread_t          loopThread;
 static bool               threadStarted = false;
 
+//
+// The tick's wait: on a condition, not nanosleep - ldPeriodicLoopStop wakes it at once instead of
+// waiting out the second (every broker stop paid ~0.5 s for it, every functest at least one stop)
+//
+static pthread_mutex_t    tickMutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t     tickCond;
+static pthread_once_t     tickOnce  = PTHREAD_ONCE_INIT;
+
+static void tickCondInit(void)
+{
+  pthread_condattr_t attr;
+
+  pthread_condattr_init(&attr);
+  pthread_condattr_setclock(&attr, CLOCK_MONOTONIC);
+  pthread_cond_init(&tickCond, &attr);
+  pthread_condattr_destroy(&attr);
+}
+
 
 
 //
@@ -65,7 +83,6 @@ static void* dispatchThread(void* unused)
 
   char            allocBuffer[8192];
   CorAlloc        ka;
-  struct timespec sleepTime = { 1, 0 };  // 1 second
 
   // Per-tick scratch allocator — reset before each callback so each
   // consumer starts clean.
@@ -93,7 +110,18 @@ static void* dispatchThread(void* unused)
       sources[i].fn(sources[i].ctx, now, &ka);
     }
 
-    nanosleep(&sleepTime, NULL);
+    //
+    // One second, or until ldPeriodicLoopStop
+    //
+    struct timespec until;
+
+    clock_gettime(CLOCK_MONOTONIC, &until);
+    until.tv_sec += 1;
+
+    pthread_mutex_lock(&tickMutex);
+    while ((loopRunning == true) && (pthread_cond_timedwait(&tickCond, &tickMutex, &until) == 0))
+      ;
+    pthread_mutex_unlock(&tickMutex);
   }
 
   corAllocBufferReset(&ka, true);
@@ -118,6 +146,7 @@ void ldPeriodicLoopRegister(LdPeriodicTickFn fn, void* ctx)
 int ldPeriodicLoopStart(void)
 {
   if (threadStarted) return 0;
+  pthread_once(&tickOnce, tickCondInit);
   loopRunning   = true;
   threadStarted = (pthread_create(&loopThread, NULL, dispatchThread, NULL) == 0);
   if (!threadStarted)
@@ -133,7 +162,12 @@ int ldPeriodicLoopStart(void)
 void ldPeriodicLoopStop(void)
 {
   if (!threadStarted) return;
+
+  pthread_mutex_lock(&tickMutex);
   loopRunning = false;
+  pthread_cond_signal(&tickCond);
+  pthread_mutex_unlock(&tickMutex);
+
   pthread_join(loopThread, NULL);
   threadStarted = false;
 }
