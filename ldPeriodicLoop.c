@@ -6,6 +6,8 @@
 // Copyright 2026 Seamware
 // SPDX-License-Identifier: Apache-2.0
 //
+#define _GNU_SOURCE                                      // pthread_setname_np
+
 #include <pthread.h>                                   // pthread_*
 #include <stdbool.h>                                   // bool
 #include <stdint.h>                                    // uint64_t
@@ -149,6 +151,13 @@ int ldPeriodicLoopStart(void)
   pthread_once(&tickOnce, tickCondInit);
   loopRunning   = true;
   threadStarted = (pthread_create(&loopThread, NULL, dispatchThread, NULL) == 0);
+
+  //
+  // Named: it waits on a futex and wakes every second, and a tool that looks for "the coraine thread
+  // that is waiting for something" (crash_report_request.test, gdb, top -H) must tell it apart
+  //
+  if (threadStarted)
+    pthread_setname_np(loopThread, "corPeriodic");
   if (!threadStarted)
   {
     loopRunning = false;
