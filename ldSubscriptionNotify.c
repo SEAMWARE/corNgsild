@@ -269,8 +269,8 @@ static CorNode* buildNotifDataEntry(LdSubCacheItem*      itemP,
   // When the subscription matched via attributeDeleted (because deleting
   // an entity also deletes its attributes — see triggerMatches comment),
   // additionally include each watched attribute as the extended null-marker
-  // form { type, value/object/languageMap: "urn:ngsi-ld:null" }, matching
-  // ETSI 046_22_12/13. Subscriptions watching all attributes (no
+  // form { type, value/object: "urn:ngsi-ld:null" } - languageMap: {"@none": "urn:ngsi-ld:null"}
+  // for a LanguageProperty (TS 104-175 clause 10.5.7) - matching ETSI 046_22_12/13. Subscriptions watching all attributes (no
   // watchedAttributes filter) get every attribute the pre-delete entity
   // carried.
   //
@@ -352,11 +352,10 @@ static CorNode* buildNotifDataEntry(LdSubCacheItem*      itemP,
 
         CorNode* nullAttr = corTreeObject(corRest.kallocP, attrP->name);
         corTreeChildAdd(nullAttr, corTreeString(corRest.kallocP, "type", typeStr));
-        // Entity-delete fixtures (ETSI 046_37) want the bare null marker
-        // even for LanguageProperty (`"languageMap": "urn:ngsi-ld:null"`),
-        // matching § 5.8.6's bare form. The attribute-delete branch above
-        // uses the {@none: null} form because 046_34_04 demands it — see
-        // the SPEC NOTE there. testsuite-doubts.md tracks the divergence.
+        // A LanguageProperty's languageMap is {"@none": "urn:ngsi-ld:null"}, not the bare marker -
+        // TS 104-175 clause 10.5.7, for every deleted attribute, an entity deletion's included.
+        // (This branch used to send the bare string, to match ETSI 046_37's fixture - which
+        // contradicts both the clause and 046_34_04; the fixture is wrong.)
         //
         // Type names disambiguate on first char except 'L' (Language vs
         // List(Property|Relationship)) — typeStr[1]/[4] settle that.
@@ -372,7 +371,14 @@ static CorNode* buildNotifDataEntry(LdSubCacheItem*      itemP,
           else if (typeStr[4] == 'R') primaryKey = "objectList";   // ListRelationship
           break;
         }
-        corTreeChildAdd(nullAttr, corTreeString(corRest.kallocP, primaryKey, LD_VOCAB_NGSILD_NULL));
+        if (strcmp(primaryKey, "languageMap") == 0)
+        {
+          CorNode* lmapP = corTreeObject(corRest.kallocP, "languageMap");
+          corTreeChildAdd(lmapP, corTreeString(corRest.kallocP, "@none", LD_VOCAB_NGSILD_NULL));
+          corTreeChildAdd(nullAttr, lmapP);
+        }
+        else
+          corTreeChildAdd(nullAttr, corTreeString(corRest.kallocP, primaryKey, LD_VOCAB_NGSILD_NULL));
 
         if (itemP->sysAttrs && anyInstP != NULL && anyInstP->type == CorObject)
         {
