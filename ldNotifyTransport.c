@@ -12,6 +12,7 @@
 #include <string.h>                                      // strncmp, strlen
 
 #include "corBase/corLibLog.h"                           // COR_LIB_W
+#include "corBase/corCoLoop.h"                           // corCoBlocking
 #include "corAlloc/corAlloc.h"                           // corAlloc
 #include "corTree/CorNode.h"                             // CorNode
 #include "corTree/corTreeBuilder.h"                      // corTreeObject, corTreeString, corTreeChildAdd
@@ -133,6 +134,27 @@ static char* envelope(const char* notifBodyJson, const char* contentType, const 
 
 // -----------------------------------------------------------------------------
 //
+// TransportCall - one transportSend, as corCoBlocking hands it to another thread
+//
+typedef struct TransportCall
+{
+  const char* uri;
+  const char* payload;
+  const char* infoJson;
+  bool        ok;
+} TransportCall;
+
+static void transportCall(void* arg)
+{
+  TransportCall* cP = (TransportCall*) arg;
+
+  cP->ok = transportSend(cP->uri, cP->payload, cP->infoJson);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldNotifyTransportSend -
 //
 bool ldNotifyTransportSend(const char* uri,
@@ -166,5 +188,16 @@ bool ldNotifyTransportSend(const char* uri,
     corJsonFastRender(&infoArray, infoJson);
   }
 
-  return transportSend(uri, payload, infoJson);
+  //
+  // The transport is the application's (a bridge plugin's MQTT client, say): it blocks in a library
+  // that knows nothing of the loop. In a coroutine of a loop it runs on a thread of its own and the
+  // coroutine waits - the post-response phase it belongs to may be one
+  //
+  TransportCall call = { uri, payload, infoJson, false };
+  CorRestState* savedP = corRestP;
+
+  corCoBlocking(transportCall, &call);
+  corRestP = savedP;
+
+  return call.ok;
 }
