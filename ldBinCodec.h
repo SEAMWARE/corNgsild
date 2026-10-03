@@ -10,7 +10,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 // What the cor format needs to know about NGSI-LD - corTree's codec knows nothing about it.
-// See coraine's doc/cor-protocol.md § 4.1-4.4.
+// See coraine's doc/cor-protocol-details.md § 4.1-4.4.
 //
 #include "corTree/corTreeBin.h"                       // CorBinCodec
 
