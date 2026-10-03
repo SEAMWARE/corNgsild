@@ -955,10 +955,73 @@ char* ldDistOpWarnings(LdDistOpBatchItem* itemV, LdDistOpBatchResult* resultV, i
 
 // -----------------------------------------------------------------------------
 //
-// distOpPluginItem - one fan-out item over a forwarding plugin (a scheme that is not HTTP)
+// distOpPluginRequest - a fan-out item as a forwarding plugin's request (a scheme that is not HTTP)
 //
 // A plugin that answers with a tree (cor://) hands it straight to the result: no render on the
 // far side, no parse here.
+//
+static void distOpPluginRequest(LdDistOpBatchItem* itemP, CorRestVerb verb, CorRestKeyValue* hv, int hc, LdForwardRequest* reqP)
+{
+  memset(reqP, 0, sizeof(LdForwardRequest));
+
+  reqP->endpoint         = itemP->url;
+  reqP->verb             = verb;
+  reqP->headerV          = hv;
+  reqP->headerCount      = hc;
+  reqP->body             = itemP->body;
+  reqP->bodyLen          = (itemP->body != NULL) ? itemP->bodyLen : 0;
+  reqP->requestTimeoutMs = itemP->csr->timeoutMs;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// distOpPluginResult - what a plugin answered (sendRet: its send's or wait's return), into the result
+//
+static void distOpPluginResult(LdDistOpBatchItem* itemP, CorRestVerb verb, int sendRet, LdForwardResponse* respP, LdDistOpBatchResult* rP, uint64_t nowNs)
+{
+  LdRegCacheItem* csr = itemP->csr;
+
+  if ((sendRet != 0) || (respP->error != 0))
+  {
+    csr->timesFailed++;
+    csr->lastFailure = nowNs;
+    rP->statusCode   = 0;
+    rP->errorDetail  = (respP->errorDetail[0] != 0) ? corAllocStrdup(&corRest.kalloc, respP->errorDetail) : "transport failure";
+
+    COR_W("dist-op %s %s: CSR %s forward failed (%s)", corRestVerbToString(verb), itemP->url, (csr->regId != NULL) ? csr->regId : "?", rP->errorDetail);
+    return;
+  }
+
+  rP->statusCode = respP->statusCode;
+  distOpTraceResponse(respP->statusCode, respP->headerV, respP->headerCount);
+
+  if (respP->bodyTree != NULL)
+    rP->responseTree = respP->bodyTree;
+  else
+  {
+    rP->responseBody    = respP->body;
+    rP->responseBodyLen = respP->bodyLen;
+    distOpBodyParse(rP);
+  }
+
+  rP->responseContextUrl = responseContextLink(respP->headerV, respP->headerCount);
+
+  if ((respP->statusCode >= 200) && (respP->statusCode < 300))
+    csr->lastSuccess = nowNs;
+  else
+  {
+    csr->timesFailed++;
+    csr->lastFailure = nowNs;
+  }
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// distOpPluginItem - one fan-out item over a forwarding plugin, sent and waited for here
 //
 static void distOpPluginItem(LdDistOpBatchItem* itemP, CorRestVerb verb, CorRestKeyValue* hv, int hc, LdDistOpBatchResult* rP, uint64_t nowNs)
 {
@@ -979,50 +1042,13 @@ static void distOpPluginItem(LdDistOpBatchItem* itemP, CorRestVerb verb, CorRest
   LdForwardRequest  req;
   LdForwardResponse resp;
 
-  memset(&req,  0, sizeof(req));
+  distOpPluginRequest(itemP, verb, hv, hc, &req);
   memset(&resp, 0, sizeof(resp));
+  resp.allocP = &corRest.kalloc;
 
-  req.endpoint         = itemP->url;
-  req.verb             = verb;
-  req.headerV          = hv;
-  req.headerCount      = hc;
-  req.body             = itemP->body;
-  req.bodyLen          = (itemP->body != NULL) ? itemP->bodyLen : 0;
-  req.requestTimeoutMs = csr->timeoutMs;
-  resp.allocP          = &corRest.kalloc;
+  int ret = plugin->send(&req, &resp);
 
-  if ((plugin->send(&req, &resp) != 0) || (resp.error != 0))
-  {
-    csr->timesFailed++;
-    csr->lastFailure = nowNs;
-    rP->statusCode   = 0;
-    rP->errorDetail  = (resp.errorDetail[0] != 0) ? corAllocStrdup(&corRest.kalloc, resp.errorDetail) : "transport failure";
-
-    COR_W("dist-op %s %s: CSR %s forward failed (%s)", corRestVerbToString(verb), itemP->url, (csr->regId != NULL) ? csr->regId : "?", rP->errorDetail);
-    return;
-  }
-
-  rP->statusCode = resp.statusCode;
-  distOpTraceResponse(resp.statusCode, resp.headerV, resp.headerCount);
-
-  if (resp.bodyTree != NULL)
-    rP->responseTree = resp.bodyTree;
-  else
-  {
-    rP->responseBody    = resp.body;
-    rP->responseBodyLen = resp.bodyLen;
-    distOpBodyParse(rP);
-  }
-
-  rP->responseContextUrl = responseContextLink(resp.headerV, resp.headerCount);
-
-  if ((resp.statusCode >= 200) && (resp.statusCode < 300))
-    csr->lastSuccess = nowNs;
-  else
-  {
-    csr->timesFailed++;
-    csr->lastFailure = nowNs;
-  }
+  distOpPluginResult(itemP, verb, ret, &resp, rP, nowNs);
 }
 
 
@@ -1031,12 +1057,13 @@ static void distOpPluginItem(LdDistOpBatchItem* itemP, CorRestVerb verb, CorRest
 //
 // ldDistOpSendMulti -
 //
-// Fan out N CSR forwards concurrently over corRestClientMulti. The per-CSR
-// timeout (§ 5.2.34) caps each request individually inside the multi engine;
-// the engine itself runs with the max of all CSR timeouts so no single CSR
-// stalls peers. Bypasses the LdForwardingPlugin abstraction — HTTP is the
-// only transport that exists. A future non-HTTP plugin (corBin, MQTT) would
-// need its own batched fan-out.
+// Fan out N CSR forwards concurrently. HTTP ones over corRestClientMulti: the
+// per-CSR timeout (§ 5.2.34) caps each request individually inside the multi
+// engine; the engine itself runs with the max of all CSR timeouts so no single
+// CSR stalls peers. Any other scheme over the forwarding plugin that claims it:
+// one with start/wait (cor://) is started before the HTTP batch is performed,
+// so every forward is in flight at the same time; one without is sent after
+// the batch, one at a time.
 //
 int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
                       int                    itemCount,
@@ -1079,6 +1106,7 @@ int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
   for (int i = 0; i < itemCount; i++) addIndex[i] = -1;
   memset(resultV, 0, itemCount * sizeof(LdDistOpBatchResult));
   CorRestKeyValue** selfHv = (CorRestKeyValue**) corAlloc(&corRest.kalloc, itemCount * sizeof(CorRestKeyValue*));
+  void**           handleV = (void**) corAlloc(&corRest.kalloc, itemCount * sizeof(void*));   // started plugin requests (-4)
   int*             selfHc = (int*) corAlloc(&corRest.kalloc, itemCount * sizeof(int));
 
   for (int i = 0; i < itemCount; i++)
@@ -1108,14 +1136,30 @@ int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
     }
 
     //
-    // Not HTTP (cor://): the forwarding plugin that claims the scheme, after the HTTP batch - one
-    // at a time in this first version
+    // Not HTTP (cor://): the forwarding plugin that claims the scheme. One that can start a request
+    // now and be waited for later is started right here, before the HTTP batch is performed - the
+    // forwards over it and over HTTP all in flight together (-4). Any other: sent and waited for after
+    // the HTTP batch, one at a time (-3).
     //
     if ((strncmp(csr->endpoint, "http://", 7) != 0) && (strncmp(csr->endpoint, "https://", 8) != 0))
     {
+      const LdForwardingPlugin* plugin = ldForwardingForEndpoint(csr->endpoint);
+
       selfHv[i]   = hv;
       selfHc[i]   = hc;
       addIndex[i] = -3;
+
+      if ((plugin != NULL) && (plugin->start != NULL) && (plugin->wait != NULL))
+      {
+        LdForwardRequest req;
+        char             errorDetail[256] = "";
+
+        distOpPluginRequest(&itemV[i], itemVerb, hv, hc, &req);
+        handleV[i] = plugin->start(&req, &corRest.kalloc, errorDetail, sizeof(errorDetail));
+
+        if (handleV[i] != NULL)
+          addIndex[i] = -4;
+      }
       continue;
     }
 
@@ -1193,6 +1237,21 @@ int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
     if (idx == -3)
     {
       distOpPluginItem(&itemV[i], itemV[i].hasVerb ? itemV[i].verb : verb, selfHv[i], selfHc[i], &resultV[i], nowNs);
+      continue;
+    }
+
+    if (idx == -4)
+    {
+      const LdForwardingPlugin* plugin = ldForwardingForEndpoint(csr->endpoint);
+      LdForwardResponse         resp;
+
+      memset(&resp, 0, sizeof(resp));
+      resp.allocP = &corRest.kalloc;
+      csr->timesSent++;
+
+      int ret = plugin->wait(handleV[i], &resp);
+
+      distOpPluginResult(&itemV[i], itemV[i].hasVerb ? itemV[i].verb : verb, ret, &resp, &resultV[i], nowNs);
       continue;
     }
 
