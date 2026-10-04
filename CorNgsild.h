@@ -269,6 +269,11 @@ typedef struct CorNgsild
   void*                  troeQTail;
   int                    troeQCount;
 
+  // This write's history is the ENTITY's - its created event - and not its attribute instances: what
+  // it writes into them is no value anybody supplied (a bridge's placeholders, channelPrePopulate.c).
+  // Set around the write by whoever makes it; a store that keeps history itself (--troe corDB) reads it.
+  bool                   troeEntityOnly;
+
   // What the request sent to a bridge before its write, and holds until its
   // notifications have gone out (the broker's bridgeServiceSync.c). Opaque, a
   // broker list in the request arena - released by the post-response hook, AFTER
