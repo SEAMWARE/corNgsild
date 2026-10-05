@@ -277,6 +277,7 @@ const char* ldCoreTermNameV[CorTermLast] =
   [CorTermExecutionStartedAt]             = "executionStartedAt",
   [CorTermExecutionEndedAt]               = "executionEndedAt",
   [CorTermExecutionTimeout]               = "executionTimeout",
+  [CorTermServiceTemplateId]              = "serviceTemplateId",
 };
 
 
