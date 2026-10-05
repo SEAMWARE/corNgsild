@@ -163,6 +163,7 @@ const char* ldOpToString(LdOp op)
   case LdOpUpdateSnapshot:                  return "UpdateSnapshot";
   case LdOpDeleteSnapshot:                  return "DeleteSnapshot";
   case LdOpPurgeSnapshots:                  return "PurgeSnapshots";
+  case LdOpInvokeService:                   return "InvokeService";
   }
 
   return "Unknown";

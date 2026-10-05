@@ -101,7 +101,11 @@ typedef enum LdOp
   LdOpRetrieveSnapshot               = 1ULL << 50,   // § 5.16.3
   LdOpUpdateSnapshot                 = 1ULL << 51,   // § 5.16.4
   LdOpDeleteSnapshot                 = 1ULL << 52,   // § 5.16.5
-  LdOpPurgeSnapshots                 = 1ULL << 53    // § 5.16.7
+  LdOpPurgeSnapshots                 = 1ULL << 53,   // § 5.16.7
+
+  // Service Execution (coraine, GR CIM-055) - Invoke Entity Service: POST /entities/{id}/services/{name}.
+  // Its body is the service's input, the executor's JSON - never expanded (ldParseHook).
+  LdOpInvokeService                  = 1ULL << 54
 } LdOp;
 
 

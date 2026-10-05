@@ -439,6 +439,14 @@ static void ldParseHook(void)
     return;
   }
 
+  //
+  // Invoke Entity Service (coraine's Service Execution): the body is the service's input - the
+  // executor's own JSON, validated against the service's JSON Schema, not an NGSI-LD payload. Its
+  // keys and values must reach the executor as the client wrote them.
+  //
+  if ((corRest.serviceP != NULL) && ((corRest.serviceP->ldOp & LdOpInvokeService) != 0))
+    return;
+
   CorNode* atCtx   = corTreeLookup(corRest.in.requestTree, "@context");
   char*   ct       = corRest.in.contentType;
   bool    isLdJson = (ct != NULL && strncasecmp(ct, "application/ld+json", 19) == 0);

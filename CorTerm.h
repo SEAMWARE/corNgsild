@@ -269,6 +269,35 @@ typedef enum CorTerm
   // terms at startup (ldExtensionTermsAdd), so they stay short names in a Query body or a Subscription.
   CorTermLangProperties,                   // langProperties - spec-doubts #134
 
+  // coraine Service Execution (GR CIM-055, to enter the API spec) - not in the core context yet:
+  // corLdCoreTermsAdd makes them core terms at startup (coraine's seCoreTerms.c, COR_FEATURE_SERVICE_EXECUTION).
+  CorTermServiceDescription,               // ServiceDescription
+  CorTermServiceRegistration,              // ServiceRegistration
+  CorTermServiceExecution,                 // ServiceExecution
+  CorTermGroupedServiceExecution,          // GroupedServiceExecution
+  CorTermCombinedServiceExecution,         // CombinedServiceExecution
+  CorTermCombinedServiceTemplate,          // CombinedServiceTemplate
+  CorTermAttributeSelectorType,            // AttributeSelector
+  CorTermAttributeSelector,                // attributeSelector
+  CorTermServiceName,                      // serviceName
+  CorTermServiceInformation,               // serviceInformation
+  CorTermServiceDescriptionInEntity,       // serviceDescriptionInEntity
+  CorTermExecutionStatus,                  // executionStatus
+  CorTermCombinationMethod,                // combinationMethod
+  CorTermServiceExecutions,                // serviceExecutions
+  CorTermServices,                         // services
+  CorTermTemplateName,                     // templateName
+  CorTermEntityTypeMember,                 // entityType
+  CorTermInputSchema,                      // inputSchema
+  CorTermOutputSchema,                     // outputSchema
+  CorTermExecutionInput,                   // executionInput
+  CorTermExecutionOutput,                  // executionOutput
+  CorTermExecutionError,                   // executionError
+  CorTermExecutionProgress,                // executionProgress
+  CorTermExecutionStartedAt,               // executionStartedAt
+  CorTermExecutionEndedAt,                 // executionEndedAt
+  CorTermExecutionTimeout,                 // executionTimeout
+
   CorTermLast                              // the number of ids - not a term
 } CorTerm;
 
