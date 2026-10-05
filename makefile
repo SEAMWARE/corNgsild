@@ -95,6 +95,7 @@ LIB_SOURCES   = corNgsild.c \
                 ldError.c \
                 ldParams.c \
                 ldTypes.c \
+                ldServiceDescription.c \
                 ldAttrTypeDetect.c \
                 ldCheckUri.c \
                 ldCheckDateTime.c \
