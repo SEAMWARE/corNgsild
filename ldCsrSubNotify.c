@@ -47,6 +47,7 @@
 #include "corJsonld/corLdInit.h"                         // corLdCoreContext
 #include "corJsonld/CorLdContext.h"                      // CorLdContext
 
+#include "corNgsild/ldNotifyTransport.h"                // ldNotifyIsHttp, ldNotifyTransportSend
 #include "corNgsild/ldTraceLevels.h"                    // LdTCsrNotify
 #include "corNgsild/LdSubCache.h"                       // LdSubCacheItem, LdSubEntitySelector
 #include "corNgsild/ldSubCache.h"                       // ldSubCacheRdLock, ldSubCacheUnlock, ldSubCacheItemPin
@@ -357,12 +358,8 @@ static void csourceNotificationPost(LdSubCacheItem* subItemP, CorNode* notificat
   char* body     = (char*) corAlloc(&corRest.kalloc, bodySize);
   corJsonFastRender(notification, body);
 
-  CorRestClientRequest  req;
-  CorRestClientResponse resp;
-
-  corRestClientRequestInit(&req, CorVerbPost, subItemP->endpointUri, NULL);
-  corRestClientRequestHeader(&req, "Content-Type", acceptLdJson ? "application/ld+json" : "application/json");
-  ldTenantHeaderAdd(&req, corNgsild.tenantName);   // the CSR-subscription's tenant (request's, or the tick's)
+  const char* contentType = acceptLdJson ? "application/ld+json" : "application/json";
+  char        linkBuf[512] = "";
 
   if (!acceptLdJson)
   {
@@ -373,14 +370,52 @@ static void csourceNotificationPost(LdSubCacheItem* subItemP, CorNode* notificat
       if (coreP != NULL) ctxUrl = coreP->url;
     }
     if (ctxUrl != NULL)
-    {
-      char linkBuf[512];
       snprintf(linkBuf, sizeof(linkBuf),
                "<%s>; rel=\"http://www.w3.org/ns/json-ld#context\"; type=\"application/ld+json\"",
                ctxUrl);
-      corRestClientRequestHeader(&req, "Link", linkBuf);
-    }
   }
+
+  //
+  // Anything but HTTP (§ 7 - mqtt[s]://, a transport's connection) - delivered by the transport the
+  // application installed for the scheme, as for an entity Subscription (ldSubscriptionNotify)
+  //
+  if (ldNotifyIsHttp(subItemP->endpointUri) == false)
+  {
+    bool ok = ldNotifyTransportSend(subItemP->endpointUri, body, contentType,
+                                    (linkBuf[0] != 0) ? linkBuf : NULL,
+                                    subItemP->receiverInfo,
+                                    subItemP->notifierInfo);
+
+    subItemP->timesSent++;
+    subItemP->lastNotification = corRest.requestStartTime;
+    if (ok)
+    {
+      subItemP->lastSuccess = corRest.requestStartTime;
+      if (subItemP->status == LdSubStatusFailed)
+        subItemP->status = LdSubStatusActive;
+    }
+    else
+    {
+      COR_W("CSR-sub '%s': notification to %s FAILED - timesFailed now %d, status -> failed",
+            subItemP->subId, subItemP->endpointUri, subItemP->timesFailed + 1);
+      subItemP->timesFailed++;
+      subItemP->lastFailure = corRest.requestStartTime;
+      subItemP->status      = LdSubStatusFailed;
+    }
+
+    ldNotifyStatsHookInvoke(true /*csrSub*/, ok);
+    return;
+  }
+
+  CorRestClientRequest  req;
+  CorRestClientResponse resp;
+
+  corRestClientRequestInit(&req, CorVerbPost, subItemP->endpointUri, NULL);
+  corRestClientRequestHeader(&req, "Content-Type", contentType);
+  ldTenantHeaderAdd(&req, corNgsild.tenantName);   // the CSR-subscription's tenant (request's, or the tick's)
+
+  if (linkBuf[0] != 0)
+    corRestClientRequestHeader(&req, "Link", linkBuf);
 
   // § 5.2.15 endpoint.receiverInfo — emit each {key,value} as a request header
   if (subItemP->receiverInfo != NULL && subItemP->receiverInfo->type == CorArray)
