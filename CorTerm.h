@@ -297,6 +297,7 @@ typedef enum CorTerm
   CorTermExecutionStartedAt,               // executionStartedAt
   CorTermExecutionEndedAt,                 // executionEndedAt
   CorTermExecutionTimeout,                 // executionTimeout
+  CorTermServiceTemplateId,                // serviceTemplateId
 
   CorTermLast                              // the number of ids - not a term
 } CorTerm;

@@ -18,6 +18,7 @@
 #include "corTree/corTreeLookup.h"                      // corTreeLookup
 #include "corJsonld/corLdExpand.h"                        // corLdValueObjectIs, corLdValueObjectCheck
 
+#include "corNgsild/ldServiceDescription.h"           // ldServiceDescriptionIs, ldServiceDescriptionCheck
 #include "corNgsild/ldAttrMember.h"                       // ldAttrMemberOf, ldAttrKeep, ldAttrDrop
 #include "corNgsild/ldTermClass.h"                        // ldTermClass, LD_TC_*
 #include "corNgsild/LdAttrType.h"                         // LdAttrType
@@ -348,6 +349,10 @@ bool ldCheckAttribute(CorNode* attrP, LdOp op, LdAttrType attrTypeFromDb, CorAll
   // If it's not an object, it's simplified format - nothing more to validate
   if (attrP->type != CorObject)
     return true;
+
+  // A Service Description stored in the entity (ldServiceDescription.h) - its own members, no value
+  if (ldServiceDescriptionIs(attrP))
+    return ldServiceDescriptionCheck(attrP);
 
   // Step 1: Detect attribute type
   LdAttrType attrType = ldAttrTypeDetect(attrP);

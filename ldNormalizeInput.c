@@ -26,6 +26,7 @@
 #include "corTree/corTreeLookup.h"                      // corTreeLookup
 
 #include "corJsonld/corLdExpand.h"                          // KJF_CORE_TERM
+#include "corNgsild/ldServiceDescription.h"           // ldServiceDescriptionIs, ldServiceDescriptionCheck
 #include "corNgsild/ldAttrMember.h"                         // ldAttrMemberOf
 #include "corNgsild/ldError.h"                            // ldError
 #include "corNgsild/LdProblem.h"                          // LD_ERROR_BAD_REQUEST_DATA
@@ -457,6 +458,13 @@ static bool normalizeAttr(CorNode* containerP, CorNode* attrP, CorAlloc* kaP, bo
 
   // ---  Object children  ---
   if (attrP->type != CorObject)
+    return true;
+
+  //
+  // A Service Description stored in the entity (ldServiceDescription.h): not a Property - opaque here,
+  // checked by ldCheckAttribute
+  //
+  if (ldServiceDescriptionIs(attrP))
     return true;
 
   // A JSON literal {"@type":"@json","@value":X} is a single opaque value (clause 5),
