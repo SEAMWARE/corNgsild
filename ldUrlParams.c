@@ -17,6 +17,7 @@
 #include "corAlloc/CorAlloc.h"                         // corAlloc
 #include "corAlloc/corAlloc.h"                         // corAlloc
 #include "corAlloc/corAllocStrdup.h"                   // corAllocStrdup
+#include "corNgsild/ldRegexValid.h"                   // ldRegexValid
 #include "corNgsild/LdProj.h"                              // LdProjItem, ldProjectionParse, ldProjectionTopLevelNames
 #include "corRest/corRest.h"                             // corRest
 #include "corLog/corLog.h"                              // COR_W
@@ -356,17 +357,13 @@ void ldParamHook(const char* name, const char* value)
     // § 4.1 / § 5.7.2.4 — idPattern is a POSIX regex. Compile-test
     // it now so a syntax error surfaces as 400 BadRequestData here,
     // not as a 500 from the DB layer when it tries to use it.
-    regex_t re;
-    int rc = regcomp(&re, value, REG_EXTENDED | REG_NOSUB);
-    if (rc != 0)
+    char errBuf[160];
+    if (ldRegexValid(value, errBuf, sizeof(errBuf)) == false)
     {
-      char errBuf[128];
-      regerror(rc, &re, errBuf, sizeof(errBuf));
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid idPattern",
               "'idPattern' is not a valid regex: %s", errBuf);
       return;
     }
-    regfree(&re);
     corNgsild.idPattern = (char*) value;
   }
   else if (strcmp(name, "type") == 0)

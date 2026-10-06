@@ -25,6 +25,7 @@
 #include "corJson/corJsonRender.h"                     // corJsonFastRender
 #include "corJson/corJsonRenderSize.h"                 // corJsonFastRenderSize
 
+#include "corNgsild/ldRegexValid.h"                   // ldRegexValid
 #include "corNgsild/LdOp.h"                               // LdOp
 #include "corNgsild/CorNgsild.h"                          // corNgsild
 #include "corNgsild/LdTypeExpr.h"                         // ldTypeExprParse, ldTypeExprFree
@@ -630,14 +631,13 @@ static bool checkEntitiesArray(CorNode* entitiesP)
         // uncompilable pattern is malformed input and must be rejected here —
         // otherwise regcomp fails silently at cache time, leaving the selector
         // with no id constraint (it then matches every entity).
-        regex_t re;
-        if (regcomp(&re, fieldP->value.s, REG_EXTENDED) != 0)
+        char errBuf[160];
+        if (ldRegexValid(fieldP->value.s, errBuf, sizeof(errBuf)) == false)
         {
           ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
-                  "'entities[].idPattern' is not a valid regular expression");
+                  "'entities[].idPattern' is not a valid regular expression: %s", errBuf);
           return false;
         }
-        regfree(&re);
       }
     }
 
