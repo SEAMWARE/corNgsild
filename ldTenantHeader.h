@@ -25,4 +25,17 @@
 //
 extern void ldTenantHeaderAdd(CorRestClientRequest* reqP, const char* tenantName);
 
+
+
+// -----------------------------------------------------------------------------
+//
+// ldSnapshotHeaderAdd - NGSILD-Snapshot on an outgoing notification of a subscription on a Snapshot
+//
+// TS 104-176 § 6.4.9: a notification sent as a result of a subscription made with NGSILD-Snapshot
+// carries it too. The snapshot is the subscription's, found where the tenant is: corNgsild.snapshotId,
+// set by the broker for the request routed to the snapshot and for the tick that visits it. NULL = no
+// snapshot: no header.
+//
+extern void ldSnapshotHeaderAdd(CorRestClientRequest* reqP, const char* snapshotId);
+
 #endif  // CORNGSILD_LDTENANTHEADER_H_

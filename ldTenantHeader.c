@@ -21,3 +21,15 @@ void ldTenantHeaderAdd(CorRestClientRequest* reqP, const char* tenantName)
   if ((tenantName != NULL) && (tenantName[0] != 0))
     corRestClientRequestHeader(reqP, "NGSILD-Tenant", tenantName);
 }
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldSnapshotHeaderAdd -
+//
+void ldSnapshotHeaderAdd(CorRestClientRequest* reqP, const char* snapshotId)
+{
+  if ((snapshotId != NULL) && (snapshotId[0] != 0))
+    corRestClientRequestHeader(reqP, "NGSILD-Snapshot", snapshotId);
+}
