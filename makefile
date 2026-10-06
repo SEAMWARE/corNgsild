@@ -119,6 +119,7 @@ LIB_SOURCES   = corNgsild.c \
                 ldQParse.c \
                 ldGeoRelParse.c \
                 ldUrlParams.c \
+                ldRegexValid.c \
                 ldProj.c \
                 ldOrderSort.c \
                 ldLangReduce.c \

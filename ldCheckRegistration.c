@@ -26,6 +26,7 @@
 
 #include "corRest/CorRestState.h"                          // corRest (requestStartTime)
 
+#include "corNgsild/ldRegexValid.h"                   // ldRegexValid
 #include "corNgsild/LdOp.h"                               // LdOp
 #include "corNgsild/LdCheck.h"                            // OBJECT_CHECK, ARRAY_CHECK, ...
 #include "corNgsild/LdVocab.h"                            // LD_VOCAB_*
@@ -111,14 +112,13 @@ static bool checkEntityInfo(CorNode* entP)
 
     // § 5.2.8 — idPattern is a "Regular expression as per IEEE 1003.2". Reject a
     // pattern that won't compile rather than store one that can never match.
-    regex_t re;
-    if (regcomp(&re, idPatP->value.s, REG_EXTENDED | REG_NOSUB) != 0)
+    char errBuf[160];
+    if (ldRegexValid(idPatP->value.s, errBuf, sizeof(errBuf)) == false)
     {
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Registration",
-              "'entities[].idPattern' is not a valid regular expression");
+              "'entities[].idPattern' is not a valid regular expression: %s", errBuf);
       return false;
     }
-    regfree(&re);
   }
 
   return true;
