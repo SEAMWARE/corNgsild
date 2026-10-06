@@ -274,6 +274,11 @@ typedef struct CorNgsild
   // Set around the write by whoever makes it; a store that keeps history itself (--troe corDB) reads it.
   bool                   troeEntityOnly;
 
+  // This write records no history at all: it copies information whose history is copied on its own, or
+  // not asked for - a Snapshot's capture and clone (the history comes with snapshotTemporalQueries).
+  // Set around the write by whoever makes it; a store that keeps history itself (--troe corDB) reads it.
+  bool                   troeSkip;
+
   // What the request sent to a bridge before its write, and holds until its
   // notifications have gone out (the broker's bridgeServiceSync.c). Opaque, a
   // broker list in the request arena - released by the post-response hook, AFTER
