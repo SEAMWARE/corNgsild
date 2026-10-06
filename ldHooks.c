@@ -926,15 +926,25 @@ static void ldParseHook(void)
   // and becomes the new effective context (returned and chained back
   // into corNgsild.contextP).
   //
-  // A body of ENTITY data (an entity, a batch of them, an attribute fragment, a temporal instance) is
+  // A body of ENTITY data (an entity, a batch of them, an attribute fragment) is
   // expanded with JSON-LD array reduction (corLdExpandEntityTree); an API object's body (Subscription,
   // Registration, a query, ...) is not - the specification types its arrays as arrays, and the core
   // context does not mark them @set.
   //
+  // Not the temporal API's bodies: an array's length is what the aggregations of an array value count
+  // (TS 104 175 table 4.5.19.1-1) - ["a"] is an array of one there, not "a" (spec-doubts #138).
+  //
   uint64_t entityDataOps = LdOpCreateEntity | LdOpMergeEntity | LdOpReplaceEntity | LdOpAppendAttrs | LdOpUpdateAttrs | LdOpUpdateEntity |
-                           LdOpReplaceAttr  | LdOpBatchCreate | LdOpBatchUpdate   | LdOpBatchUpsert | LdOpBatchMerge  |
-                           LdOpUpsertTemporal | LdOpAppendAttrsTemporal | LdOpUpdateAttrInstanceTemporal;
+                           LdOpReplaceAttr  | LdOpBatchCreate | LdOpBatchUpdate   | LdOpBatchUpsert | LdOpBatchMerge;
   bool     entityData    = (corRest.serviceP != NULL) && ((corRest.serviceP->ldOp & entityDataOps) != 0);
+
+  //
+  // Not a body DECLARED simplified (?format=simplified, ?options=keyValues): its bare values are read as the
+  // stored Attribute's own simplified form (ldEntityMerge) - an array for a ListProperty / ListRelationship,
+  // a scalar for the rest. Reduced, a one-element list could not be told from a scalar.
+  //
+  if (simplifiedBodyDeclared() == true)            // corNgsild.format is not set yet at this point
+    entityData = false;
 
   if (entityData == true)
     corNgsild.contextP = corLdExpandEntityTree(corRest.in.requestTree, corNgsild.contextP, &corRest.kalloc);
