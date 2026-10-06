@@ -289,17 +289,7 @@ static bool checkLanguageMap(CorNode* lmP)
       }
     }
 
-    // § 5.2.6.4.6 — an array of ONE string collapses to a scalar on storage,
-    // so it round-trips as a String in every format and under lang reduction.
-    if ((childP->type == CorArray) &&
-        (childP->value.head != NULL) &&
-        (childP->value.head->next == NULL) &&
-        (childP->value.head->type == CorString))
-    {
-      CorNode* onlyP = childP->value.head;
-      childP->type    = CorString;
-      childP->value.s = onlyP->value.s;
-    }
+    // § 5.2.6.4.6 - an array of ONE string is a string: reduced at the input boundary (corLdExpandEntityTree)
   }
 
   return true;
@@ -556,16 +546,7 @@ bool ldCheckAttribute(CorNode* attrP, LdOp op, LdAttrType attrTypeFromDb, CorAll
       return false;
     }
 
-    // Array of one - collapse to scalar so it round-trips as a String.
-    if ((valueNodeP->type == CorArray) &&
-        (valueNodeP->value.head != NULL) &&
-        (valueNodeP->value.head->next == NULL) &&
-        (valueNodeP->value.head->type == CorString))
-    {
-      CorNode* onlyP      = valueNodeP->value.head;
-      valueNodeP->type    = CorString;
-      valueNodeP->value.s = onlyP->value.s;
-    }
+    // An array of one is its string: reduced at the input boundary (corLdExpandEntityTree)
     break;
 
   case LdAttrListProperty:

@@ -20,7 +20,7 @@
 #include "corRest/corRest.h"                             // corRest
 #include "corRest/CorRestService.h"                      // CorRestService.ldOp
 #include "corJsonld/corLdInit.h"                         // corLdCoreContext
-#include "corJsonld/corLdExpandTree.h"                       // corLdExpandTree
+#include "corJsonld/corLdExpandTree.h"                       // corLdExpandTree, corLdExpandEntityTree
 #include "corJsonld/corLdCompactTree.h"                      // corLdCompactTree, corLdCompactTreeWith
 #include "corJsonld/corLdDownload.h"                         // corLdContextFromUrl
 
@@ -925,7 +925,21 @@ static void ldParseHook(void)
   // base context; an in-body @context overrides it for the body subtree
   // and becomes the new effective context (returned and chained back
   // into corNgsild.contextP).
-  corNgsild.contextP = corLdExpandTree(corRest.in.requestTree, corNgsild.contextP, &corRest.kalloc);
+  //
+  // A body of ENTITY data (an entity, a batch of them, an attribute fragment, a temporal instance) is
+  // expanded with JSON-LD array reduction (corLdExpandEntityTree); an API object's body (Subscription,
+  // Registration, a query, ...) is not - the specification types its arrays as arrays, and the core
+  // context does not mark them @set.
+  //
+  uint64_t entityDataOps = LdOpCreateEntity | LdOpMergeEntity | LdOpReplaceEntity | LdOpAppendAttrs | LdOpUpdateAttrs | LdOpUpdateEntity |
+                           LdOpReplaceAttr  | LdOpBatchCreate | LdOpBatchUpdate   | LdOpBatchUpsert | LdOpBatchMerge  |
+                           LdOpUpsertTemporal | LdOpAppendAttrsTemporal | LdOpUpdateAttrInstanceTemporal;
+  bool     entityData    = (corRest.serviceP != NULL) && ((corRest.serviceP->ldOp & entityDataOps) != 0);
+
+  if (entityData == true)
+    corNgsild.contextP = corLdExpandEntityTree(corRest.in.requestTree, corNgsild.contextP, &corRest.kalloc);
+  else
+    corNgsild.contextP = corLdExpandTree(corRest.in.requestTree, corNgsild.contextP, &corRest.kalloc);
 
   // Reattach the decoupled type-selection expressions at their
   // original positions inside each selector object.
