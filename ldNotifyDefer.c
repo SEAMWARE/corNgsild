@@ -161,27 +161,6 @@ static bool reportHasValueChange(CorNode* entityP, LdMergeReport* reportP)
 
 // -----------------------------------------------------------------------------
 //
-// noSubscriptions - does this cache hold no subscription at all?
-//
-// Then the matching at the end of the request cannot find one, and queuing the write for it is work
-// for nothing - and, worse, it is what tells the HTTP layer that the request still has something to do
-// after the response (the built-in server's post-response phase goes to a worker thread for it).
-// Under the cache's read lock, as the matching itself is: a subscription created while the write is in
-// flight is matched or not exactly as it would have been by the matching.
-//
-static bool noSubscriptions(LdSubCache* cacheP)
-{
-  ldSubCacheRdLock(cacheP);
-  bool empty = (cacheP->itemList == NULL);
-  ldSubCacheUnlock(cacheP);
-
-  return empty;
-}
-
-
-
-// -----------------------------------------------------------------------------
-//
 // ldNotifyDefer -
 //
 void ldNotifyDefer(LdSubCache* cacheP, CorNode* entityP, LdNotifyOp op, LdMergeReport* reportP)
@@ -189,7 +168,7 @@ void ldNotifyDefer(LdSubCache* cacheP, CorNode* entityP, LdNotifyOp op, LdMergeR
   if (cacheP == NULL || entityP == NULL)
     return;
 
-  if (noSubscriptions(cacheP) == true)
+  if (ldSubCacheEmpty(cacheP) == true)
     return;
 
   // --notifyValueChangeOnly: suppress an update whose attribute value(s) did not
@@ -244,7 +223,7 @@ void ldNotifyDeferDelete(LdSubCache* cacheP, CorNode* entityP, uint64_t deletedA
   if (cacheP == NULL || entityP == NULL)
     return;
 
-  if (noSubscriptions(cacheP) == true)
+  if (ldSubCacheEmpty(cacheP) == true)
     return;
 
   corNgsild.pendingCache = cacheP;
