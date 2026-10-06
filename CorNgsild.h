@@ -243,6 +243,11 @@ typedef struct CorNgsild
   void*        tenantP;
   const char*  tenantName;
 
+  // The Snapshot the request is applied to, or the tick visits (§ 7.9.2) - its id, for what goes
+  // out tagged with it: the NGSILD-Snapshot of a notification (TS 104-176 § 6.4.9). NULL: none.
+  // Set by the broker, with tenantP, which is then the snapshot's own tenant.
+  const char*  snapshotId;
+
   // Inc6c — per-connection deferred caches (were static __thread in their .c
   // files). Drained by the post-response hook; the realloc'd buffers are freed
   // in corNgsildStateFree when the connection's state is released.

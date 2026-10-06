@@ -9,6 +9,7 @@
 #include <stdbool.h>                                   // bool
 #include <stdint.h>                                    // uint64_t
 #include <string.h>                                    // strcmp, strlen, strcpy
+#include <strings.h>                                   // strcasecmp
 #include <stdio.h>                                     // snprintf
 #include <time.h>                                      // clock_gettime
 #include <stdlib.h>                                    // malloc, free
@@ -23,14 +24,14 @@
 
 #include "corRest/CorRestState.h"                        // corRest (for thread-local init)
 #include "corRest/corRestClient.h"                       // CorRestClientRequest, corRestClientSend
-#include "corNgsild/ldTenantHeader.h"                    // ldTenantHeaderAdd
+#include "corNgsild/ldTenantHeader.h"                    // ldTenantHeaderAdd, ldSnapshotHeaderAdd
 
 #include "corJsonld/corLdCompactTree.h"                  // corLdCompactTree, corLdCompactTreeWith
 #include "corJsonld/corLdDownload.h"                     // corLdContextFromUrl
 #include "corJsonld/corLdInit.h"                         // corLdCoreContext, CorLdContext
 #include "corJsonld/CorLdContext.h"                      // CorLdContext
 
-#include "corNgsild/CorNgsild.h"                         // ldDefaultCooldownNs
+#include "corNgsild/CorNgsild.h"                         // ldDefaultCooldownNs, corNgsild
 #include "corNgsild/LdVocab.h"                          // LD_VOCAB_*
 #include "corNgsild/ldPernotCache.h"                   // ldPernotCacheRdLock, ldPernotCacheItemPin
 #include "corNgsild/LdPernotCache.h"                    // LdPernotCache, LdPernotItem
@@ -151,6 +152,7 @@ static bool pernotSendNotification(LdPernotItem* itemP, CorNode* entityArray, Co
   corRestClientRequestInit(&req, CorVerbPost, itemP->endpointUri, kaP);
   corRestClientRequestHeader(&req, "Content-Type", "application/json");
   ldTenantHeaderAdd(&req, itemP->tenantName);
+  ldSnapshotHeaderAdd(&req, corNgsild.snapshotId);   // the visited cache's Snapshot - set by the broker's visitor
 
   // Link header with @context
   CorLdContext* ctxP = corLdCoreContext();
@@ -175,6 +177,9 @@ static bool pernotSendNotification(LdPernotItem* itemP, CorNode* entityArray, Co
       CorNode* vP = corTreeLookup(kvP, "value");
       if (kP == NULL || kP->type != CorString || vP == NULL || vP->type != CorString) continue;
       if (strcmp(vP->value.s, "urn:ngsi-ld:request") == 0) continue;
+      // Broker-managed (§ 6.4.8 / § 6.4.9 / § 6.5.2: "cannot be overridden") - emitted above
+      if (strcasecmp(kP->value.s, "NGSILD-Tenant") == 0)   continue;
+      if (strcasecmp(kP->value.s, "NGSILD-Snapshot") == 0) continue;
       corRestClientRequestHeader(&req, kP->value.s, vP->value.s);
     }
   }

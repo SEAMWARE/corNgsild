@@ -44,7 +44,7 @@
 #include "corNgsild/ldTypes.h"                          // ldFormatToString
 #include "corNgsild/LdVocab.h"                          // LD_VOCAB_*
 #include "corNgsild/CorNgsild.h"                        // corNgsild
-#include "corNgsild/ldTenantHeader.h"                   // ldTenantHeaderAdd
+#include "corNgsild/ldTenantHeader.h"                   // ldTenantHeaderAdd, ldSnapshotHeaderAdd
 #include "corNgsild/LdSubCache.h"                       // LdSubCache, LdSubCacheItem
 #include "corNgsild/ldSubCache.h"                       // ldSubCacheRdLock, ldSubCacheItemPin, ...
 #include "corNgsild/ldEntityToApi.h"                    // ldEntityToApi
@@ -967,6 +967,7 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   // § 6.4.8 — the subscription's tenant: the request's for a change-driven notification, the
   // visited tenant's for a throttle flush (set by the tick). See ldTenantHeaderAdd.
   ldTenantHeaderAdd(&req, corNgsild.tenantName);
+  ldSnapshotHeaderAdd(&req, corNgsild.snapshotId);   // TS 104-176 § 6.4.9 - a subscription on a Snapshot
 
   // Ngsild-Attribute-Format — non-default representation format of the
   // notification data, as the lowercase NGSI-LD format value (concise /
@@ -1000,11 +1001,12 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
         // exactly one Content-Type / Link and no stray Prefer (the rest, e.g.
         // Authorization, pass through). (Prefer-in-receiverInfo per § 6.5.2 — but
         // we do not leak it to the receiver; see spec-doubt #101.)
-        // NGSILD-Tenant is broker-managed (§ 6.4.8 / § 6.5.2: "cannot be
-        // overridden") — the broker emits it above from the triggering request.
+        // NGSILD-Tenant and NGSILD-Snapshot are broker-managed (§ 6.4.8 / § 6.4.9 /
+        // § 6.5.2: "cannot be overridden") — the broker emits them above.
         if ((strcasecmp(kP->value.s, "Content-Type") == 0) ||
             (strcasecmp(kP->value.s, "Prefer") == 0) ||
             (strcasecmp(kP->value.s, "NGSILD-Tenant") == 0) ||
+            (strcasecmp(kP->value.s, "NGSILD-Snapshot") == 0) ||
             ((strcasecmp(kP->value.s, "Link") == 0) && (strstr(vP->value.s, "json-ld#context") != NULL)))
           continue;
 
