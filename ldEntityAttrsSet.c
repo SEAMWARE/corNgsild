@@ -43,6 +43,54 @@ static void removeChild(CorNode* container, CorNode* node, CorAlloc* allocP)
 
 // -----------------------------------------------------------------------------
 //
+// Inherited system timestamps - a store may keep an object's createdAt / modifiedAt only where it differs
+// from the entity's createdAt, and mark an object whose time it left out: CorNode flag 0x04 (createdAt
+// inherited) / 0x08 (modifiedAt inherited) - corDB's corDbSysTimes.h. A store that keeps every time never
+// sets them.
+//
+// withInheritedTimes - a copy (the report's preValue) with every inherited time in place, unmarked
+//
+static void withInheritedTimes(CorNode* nodeP, long long entityCreatedAt)
+{
+  if ((nodeP->type != CorObject) && (nodeP->type != CorArray))
+    return;
+
+  for (CorNode* mP = nodeP->value.head; mP != NULL; mP = mP->next)
+    withInheritedTimes(mP, entityCreatedAt);
+
+  if ((nodeP->flags & 0x04) != 0)
+    corTreeChildAdd(nodeP, corTreeInteger(corRest.kallocP, LD_VOCAB_CREATED_AT, entityCreatedAt));
+  if ((nodeP->flags & 0x08) != 0)
+    corTreeChildAdd(nodeP, corTreeInteger(corRest.kallocP, LD_VOCAB_MODIFIED_AT, entityCreatedAt));
+
+  nodeP->flags &= ~0x0C;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// preValueOf - the report's copy of an Attribute before the write - every time in place
+//
+static CorNode* preValueOf(CorNode* target, CorNode* tAttrP)
+{
+  CorNode* preP = corTreeClone(corRest.kallocP, tAttrP);
+
+  if (preP != NULL)
+  {
+    CorNode*  cP              = corTreeLookup(target, LD_VOCAB_CREATED_AT);
+    long long entityCreatedAt = ((cP != NULL) && (cP->type == CorInt)) ? cP->value.i : 0;
+
+    withInheritedTimes(preP, entityCreatedAt);
+  }
+
+  return preP;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // isNgsildNull - true if node is the "urn:ngsi-ld:null" delete-marker string
 //
 static inline bool isNgsildNull(const CorNode* nodeP)
@@ -431,7 +479,7 @@ void ldEntityAttrsSet(CorNode* target, CorNode* fragment,
       CorNode* tAttrP = corTreeLookup(target, fAttrP->name);
       if (tAttrP != NULL)
       {
-        CorNode* preClone = (reportP != NULL) ? corTreeClone(corRest.kallocP, tAttrP) : NULL;
+        CorNode* preClone = (reportP != NULL) ? preValueOf(target, tAttrP) : NULL;
         removeChild(target, tAttrP, targetAllocP);
         addReportEntry(reportP, fAttrP->name, "attributeDeleted", preClone);
         anyChange = true;
@@ -469,7 +517,7 @@ void ldEntityAttrsSet(CorNode* target, CorNode* fragment,
     //
     CorNode* preClone = NULL;
     if (reportP != NULL)
-      preClone = corTreeClone(corRest.kallocP, tAttrP);
+      preClone = preValueOf(target, tAttrP);
 
     CorNode* fInstP = fAttrP->value.head;
     while (fInstP != NULL)
@@ -514,8 +562,9 @@ void ldEntityAttrsSet(CorNode* target, CorNode* fragment,
       }
       else
       {
-        // Replace instance preserving createdAt
+        // Replace instance preserving createdAt - an inherited one stays inherited (0x04, see above)
         CorNode* oldCreatedAt = corTreeLookup(tInstP, LD_VOCAB_CREATED_AT);
+        bool      inherited   = (oldCreatedAt == NULL) && ((tInstP->flags & 0x04) != 0);
         long long createdAtNs = (oldCreatedAt != NULL && oldCreatedAt->type == CorInt)
                                 ? oldCreatedAt->value.i
                                 : (long long) ts;
@@ -523,7 +572,13 @@ void ldEntityAttrsSet(CorNode* target, CorNode* fragment,
         CorNode* newInst = corTreeClone(targetAllocP, fInstP);
         // Make sure newInst has createdAt (from old) and modifiedAt=ts
         CorNode* nCreated = corTreeLookup(newInst, LD_VOCAB_CREATED_AT);
-        if (nCreated != NULL)
+        if (inherited == true)
+        {
+          if (nCreated != NULL)
+            removeChild(newInst, nCreated, targetAllocP);
+          newInst->flags |= 0x04;
+        }
+        else if (nCreated != NULL)
         {
           nCreated->type    = CorInt;
           nCreated->value.i = createdAtNs;
