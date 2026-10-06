@@ -930,6 +930,24 @@ bool ldSubCacheItemRemove(LdSubCache* cacheP, const char* subId)
 
 // -----------------------------------------------------------------------------
 //
+// ldSubCacheEmpty -
+//
+bool ldSubCacheEmpty(LdSubCache* cacheP)
+{
+  if (cacheP == NULL)
+    return true;
+
+  ldSubCacheRdLock(cacheP);
+  bool empty = (cacheP->itemList == NULL);
+  ldSubCacheUnlock(cacheP);
+
+  return empty;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldSubCacheRelease -
 //
 void ldSubCacheRelease(LdSubCache* cacheP)

@@ -74,6 +74,21 @@ extern bool ldSubCacheItemRemove(LdSubCache* cacheP, const char* subId);
 
 // -----------------------------------------------------------------------------
 //
+// ldSubCacheEmpty - does the cache hold no subscription at all?
+//
+// Then the matching at the end of the request cannot find one: queuing a write for it (ldNotifyDefer) is
+// work for nothing - and it is what tells the HTTP layer that the request still has something to do
+// after the response (the built-in server's post-response phase goes to a worker thread for it) - and so
+// is reading the entity back after a write only to queue it. Under the cache's read lock, as the matching
+// itself is: a subscription created while the write is in flight is matched or not exactly as it would
+// have been by the matching.
+//
+extern bool ldSubCacheEmpty(LdSubCache* cacheP);
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldSubCacheRelease - free the entire cache and all items
 //
 extern void ldSubCacheRelease(LdSubCache* cacheP);
