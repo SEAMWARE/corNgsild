@@ -146,6 +146,10 @@ static uint8_t objectKind(CorNode* objectP, CorNode** foldedP)
 
   *foldedP = NULL;
 
+  // Already in the node (CorNode.kind - a store keeps it there): nothing to fold
+  if ((objectP->kind >= LdAttrProperty) && (objectP->kind <= LdAttrJsonProperty))
+    return objectP->kind;
+
   if ((firstP == NULL) || (firstP->type != CorString) || (strcmp(firstP->name, "type") != 0))
     return 0;
 

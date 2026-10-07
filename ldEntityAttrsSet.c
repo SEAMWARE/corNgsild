@@ -15,12 +15,15 @@
 #include "corTree/corTreeLookup.h"                    // corTreeLookup
 #include "corTree/corTreeClone.h"                     // corTreeClone
 #include "corTree/corTreeFree.h"                      // corTreeFree
+#include "corTree/corTreeChildPrepend.h"               // corTreeChildPrepend
 #include "corRest/corRest.h"                            // corRest (request-scoped allocator for the report)
 
 #include "corNgsild/LdVocab.h"                         // LD_VOCAB_*
 #include "corNgsild/ldEntityAttrsSet.h"                // Own interface
 #include "corNgsild/ldIsEntityKeyword.h"               // ldIsNotAttributeName
 #include "corNgsild/ldTermId.h"                        // ldTermId, CorTerm*
+#include "corNgsild/ldTypes.h"                         // ldAttrTypeToString
+#include "corNgsild/LdAttrType.h"                      // LdAttrType
 
 
 
@@ -48,7 +51,11 @@ static void removeChild(CorNode* container, CorNode* node, CorAlloc* allocP)
 // inherited) / 0x08 (modifiedAt inherited) - corDB's corDbSysTimes.h. A store that keeps every time never
 // sets them.
 //
-// withInheritedTimes - a copy (the report's preValue) with every inherited time in place, unmarked
+// The same store may keep an attribute's type in the node instead of a "type" member (CorNode.kind, an
+// LdAttrType - corDB in RAM).
+//
+// withInheritedTimes - a copy (the report's preValue) with every inherited time and every attribute type in
+// place, unmarked
 //
 static void withInheritedTimes(CorNode* nodeP, long long entityCreatedAt)
 {
@@ -57,6 +64,15 @@ static void withInheritedTimes(CorNode* nodeP, long long entityCreatedAt)
 
   for (CorNode* mP = nodeP->value.head; mP != NULL; mP = mP->next)
     withInheritedTimes(mP, entityCreatedAt);
+
+  if ((nodeP->kind >= LdAttrProperty) && (nodeP->kind <= LdAttrJsonProperty))
+  {
+    CorNode* typeP = corTreeString(corRest.kallocP, "type", ldAttrTypeToString((LdAttrType) nodeP->kind));
+
+    typeP->termId = CorTermType;
+    corTreeChildPrepend(nodeP, typeP);               // first, where it was
+    nodeP->kind = 0;
+  }
 
   if ((nodeP->flags & 0x04) != 0)
     corTreeChildAdd(nodeP, corTreeInteger(corRest.kallocP, LD_VOCAB_CREATED_AT, entityCreatedAt));
