@@ -48,6 +48,13 @@ LdAttrType ldAttrTypeDetect(CorNode* attrP)
   if (attrP->type != CorObject)
     return LdAttrNone;
 
+  //
+  // A store that keeps the type in the node (CorNode.kind - corDB, in RAM) has no "type" member: the
+  // kind is the type. A detector that looked only at members took a GeoProperty for a Property.
+  //
+  if ((attrP->kind >= LdAttrProperty) && (attrP->kind <= LdAttrJsonProperty))
+    return (LdAttrType) attrP->kind;
+
   // Walk the children looking for "type" or value keys
   LdAttrType detected = LdAttrNone;
 

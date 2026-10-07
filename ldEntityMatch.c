@@ -16,6 +16,7 @@
 #include "corTree/CorNode.h"                          // CorNode
 #include "corTree/corTreeLookup.h"                    // corTreeLookup
 
+#include "corNgsild/ldAttrTypeDetect.h"                 // ldAttrTypeDetect
 #include "corNgsild/LdQ.h"                              // LdQNode, LdQTerm
 #include "corNgsild/LdVocab.h"                         // LD_VOCAB_*
 #include "corNgsild/LdScopeExpr.h"                     // LdScopeExpr
@@ -295,13 +296,9 @@ static bool attrIsRelationshipAt(CorNode* containerP, const char* attrName, int 
   if ((instP == NULL) || (instP->type != CorObject))
     return false;
 
-  CorNode* typeP = corTreeLookup(instP, "type");
+  LdAttrType attrType = ldAttrTypeDetect(instP);   // the member, or the node's kind (a store's own tree)
 
-  if ((typeP == NULL) || (typeP->type != CorString))
-    return false;
-
-  return (strcmp(typeP->value.s, "Relationship") == 0) ||
-         (strcmp(typeP->value.s, "ListRelationship") == 0);
+  return (attrType == LdAttrRelationship) || (attrType == LdAttrListRelationship);
 }
 
 
@@ -852,10 +849,7 @@ static const char* findRelationshipTargetId(CorNode* entityP, const char* relNam
       if (instP->type != CorObject)
         continue;
 
-      CorNode* typeP = corTreeLookup(instP, "type");
-      if (typeP == NULL || typeP->type != CorString)
-        continue;
-      if (strcmp(typeP->value.s, "Relationship") != 0)
+      if (ldAttrTypeDetect(instP) != LdAttrRelationship)   // the member, or the node's kind
         continue;
 
       CorNode* valP = corTreeLookup(instP, "value");
