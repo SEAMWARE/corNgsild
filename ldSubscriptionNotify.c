@@ -133,14 +133,19 @@ static bool triggerMatches(LdSubCacheItem* itemP, LdNotifyOp op, int reasonsMask
 //
 static bool selectorMatches(LdSubEntitySelector* selP, const char* entityId, CorNode* entityTypeP)
 {
+  // id first: a strcmp rejects all but one of the subscriptions to single entities - the type
+  // expression is evaluated for that one only. Both must hold, so the order changes nothing else.
+  if ((selP->id != NULL) && ((entityId == NULL) || (strcmp(entityId, selP->id) != 0)))
+    return false;
+
   // Type check — use the parsed § 4.17 expression so (A|B), A&B and
   // !A operators match correctly. typeExpr is set whenever type is.
   if (selP->typeExpr != NULL && !ldEntityMatchType(entityTypeP, selP->typeExpr))
     return false;
 
-  // id check (takes precedence over idPattern)
+  // id check (takes precedence over idPattern) - matched above
   if (selP->id != NULL)
-    return (entityId != NULL && strcmp(entityId, selP->id) == 0);
+    return true;
 
   // idPattern check (pre-compiled regex)
   if (selP->idPatternList != NULL && entityId != NULL)
@@ -182,6 +187,9 @@ static bool entitiesMatch(LdSubCacheItem* itemP, const char* entityId, CorNode* 
 //
 // watchedAttrsMatch - check if any changed attribute is watched
 //
+// entityP NULL (an update only): matched on the report alone, a watched instance ("attr@datasetId")
+// counting as a match.
+//
 // An entry of watchedDsV names ONE instance ("attr@datasetId"): the change must
 // then have written that instance, not just the Attribute.
 //
@@ -221,6 +229,10 @@ static bool watchedAttrsMatch(LdSubCacheItem* itemP, CorNode* entityP, LdNotifyO
           continue;
 
         if ((dsV == NULL) || (dsV[i] == NULL))
+          return true;
+
+        // Without the entity (ldSubscriptionUpdateMayMatch) the instance cannot be told: it may match
+        if (entityP == NULL)
           return true;
 
         //
@@ -1061,6 +1073,49 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
 
   corRestClientResponseCleanup(&resp);
   ldNotifyStatsHookInvoke(false /*csrSub*/, ok);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldSubscriptionUpdateMayMatch -
+//
+bool ldSubscriptionUpdateMayMatch(LdSubCache* cacheP, const char* entityId, CorNode* entityTypeP, LdMergeReport* reportP)
+{
+  if (cacheP == NULL)
+    return false;
+
+  int reasonsMask = 0;
+
+  if ((reportP != NULL) && (reportP->changes != NULL))
+  {
+    for (CorNode* chP = reportP->changes->value.head; chP != NULL; chP = chP->next)
+    {
+      CorNode* reasonP = corTreeLookup(chP, "reason");
+
+      if ((reasonP != NULL) && (reasonP->type == CorString))
+        reasonsMask |= ldTriggerFromReport(reasonP->value.s);
+    }
+  }
+
+  bool mayMatch = false;
+
+  ldSubCacheRdLock(cacheP);
+
+  for (LdSubCacheItem* itemP = cacheP->itemList; (itemP != NULL) && (mayMatch == false); itemP = itemP->next)
+  {
+    if ((itemP->status == LdSubStatusPaused) || (itemP->status == LdSubStatusExpired))
+      continue;
+
+    mayMatch = triggerMatches(itemP, LdNotifyEntityUpdate, reasonsMask) &&
+               entitiesMatch(itemP, entityId, entityTypeP) &&
+               watchedAttrsMatch(itemP, NULL, LdNotifyEntityUpdate, reportP);
+  }
+
+  ldSubCacheUnlock(cacheP);
+
+  return mayMatch;
 }
 
 

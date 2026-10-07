@@ -136,6 +136,22 @@ extern void ldSubscriptionNotifyBatch(LdSubCache*           cacheP,
 
 // -----------------------------------------------------------------------------
 //
+// ldSubscriptionUpdateMayMatch - could an update of the entity notify any subscription
+//
+// What a PATCH knows before it reads the entity back: its id, its type and the change report. The
+// checks of ldSubscriptionNotifyBatch that need nothing more - status, trigger, entities, watched
+// attributes - and nothing else: a subscription with a scopeQ, a q or a geoQ that passes them may
+// match (those need the entity, and are checked on it by the batch). false: no subscription can be
+// notified, the entity need not be read for one.
+//
+// entityTypeP: the entity's "type" as the store holds it (expanded, string or array).
+//
+extern bool ldSubscriptionUpdateMayMatch(LdSubCache* cacheP, const char* entityId, CorNode* entityTypeP, LdMergeReport* reportP);
+
+
+
+// -----------------------------------------------------------------------------
+//
 // LdThrottleRetrieveFunc - broker hook: retrieve one entity (storage shape) by
 // id for the throttle flush, from the subscription's tenant. The lib has no DB
 // access; the broker supplies this. allocP is the flush scratch allocator.
