@@ -19,6 +19,7 @@
 #include "corRest/corRest.h"                             // corRest
 
 #include "corJsonld/corLdExpand.h"                          // KJF_ATTR_TERM
+#include "corNgsild/ldServiceDescription.h"            // ldServiceDescriptionIs
 #include "corNgsild/LdVocab.h"                            // LD_VOCAB_*
 #include "corNgsild/LdAttrType.h"                         // LdAttrType, LdAttrGeoProperty
 #include "corNgsild/ldAttrTypeDetect.h"                   // ldAttrTypeDetect
@@ -223,6 +224,18 @@ static void attrToDbModel(CorNode* attrP, uint64_t ts, CorAlloc* faP)
 {
   if (attrP->type != CorObject)
     return;
+
+  //
+  // A ServiceDescription (ldServiceDescription.h) is an attribute, and its members are no sub-attributes:
+  // its inputSchema / outputSchema are JSON Schemas, the user's - its own two timestamps, nothing inside
+  // it touched (ldNormalizeInput leaves it opaque the same way). Each object in a schema got a createdAt
+  // and a modifiedAt, and a GET with sysAttrs showed them.
+  //
+  if (ldServiceDescriptionIs(attrP))
+  {
+    timestampSet(attrP, ts, ts, faP);
+    return;
+  }
 
   // Recurse into sub-attributes (non-core-context object children)
   for (CorNode* childP = attrP->value.head; childP != NULL; childP = childP->next)
