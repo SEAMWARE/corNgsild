@@ -10,6 +10,8 @@
 #include <stdlib.h>                                      // malloc, free, calloc
 #include <string.h>                                      // strlen, strchr, strdup
 
+#include "corAlloc/corAllocBufferInit.h"                // corAllocBufferInit
+#include "corAlloc/corAllocBufferReset.h"               // corAllocBufferReset
 #include "corAlloc/CorAlloc.h"                         // corAlloc
 #include "corAlloc/corAlloc.h"                         // corAlloc
 #include "corAlloc/corAllocStrdup.h"                    // corAllocStrdup
@@ -51,17 +53,28 @@ static char* memStrdup(CorAlloc* kaP, const char* s)
 //
 static char* expandType(const char* name, CorAlloc* kaP)
 {
-  char* expanded = corLdExpand(corNgsild.contextP, name, kaP, NULL, NULL);
-
-  if (expanded != NULL)
+  if (kaP != NULL)
   {
-    // corLdExpand uses kaP; if we're in malloc-mode (kaP == NULL) the
-    // returned pointer wouldn't survive a request boundary. Re-strdup
-    // it on the heap so the tree is fully malloc-owned.
-    return (kaP != NULL) ? expanded : strdup(expanded);
+    char* expanded = corLdExpand(corNgsild.contextP, name, kaP, NULL, NULL);
+    return (expanded != NULL) ? expanded : memStrdup(kaP, name);
   }
 
-  return memStrdup(kaP, name);
+  //
+  // malloc-mode (a subscription's expression, kept across requests): corLdExpand needs an allocator -
+  // given none it expands nothing, and the leaf stayed short ("A", never the entity's expanded type).
+  // So a scratch one, and the result copied to the heap.
+  //
+  CorAlloc scratch;
+  char     scratchBuf[1024];
+
+  corAllocBufferInit(&scratch, scratchBuf, sizeof(scratchBuf), 1024, NULL, "typeExpr");
+
+  char* expanded = corLdExpand(corNgsild.contextP, name, &scratch, NULL, NULL);
+  char* leaf     = strdup((expanded != NULL) ? expanded : name);
+
+  corAllocBufferReset(&scratch, false);    // teardown: frees what overflowed the stack buffer
+
+  return leaf;
 }
 
 

@@ -11,6 +11,8 @@
 //
 // Subscription cache operations.
 //
+#include "corAlloc/CorAlloc.h"                          // CorAlloc
+#include "corTree/CorNode.h"                            // CorNode
 #include "corNgsild/LdSubCache.h"                      // LdSubCache, LdSubCacheItem
 
 
@@ -84,6 +86,20 @@ extern bool ldSubCacheItemRemove(LdSubCache* cacheP, const char* subId);
 // have been by the matching.
 //
 extern bool ldSubCacheEmpty(LdSubCache* cacheP);
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldSubCacheCandidates - the subscriptions that can match an entity, by its id and its types
+//
+// Every subscription the full match (trigger, entities, watched attributes, q, ...) could accept is
+// among them - those under the entity's id, under one of its types, and those always a candidate - in
+// the list's order (of addition), each once. *vPP in kaP. The caller holds the (read) lock.
+//
+// typeP: the entity's "type" as the store holds it (expanded, string or array). entityId NULL: all.
+//
+extern int ldSubCacheCandidates(LdSubCache* cacheP, const char* entityId, CorNode* typeP, CorAlloc* kaP, LdSubCacheItem*** vPP);
 
 
 

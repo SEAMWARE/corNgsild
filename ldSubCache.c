@@ -72,11 +72,23 @@ static LdSubEntitySelector* entitySelectorsExtract(CorNode* entitiesP)
     if (typeP != NULL && typeP->type == CorString)
     {
       esP->type = typeP->value.s;
-      if (corNgsild.subEntityTypeExprsV != NULL && selIx < corNgsild.subEntityTypeExprsN)
+
+      //
+      // The expression is parsed HERE, with the @context in force as the subscription enters the
+      // cache - the request's, or on a reload the subscription's own (as watchedAttributes, below).
+      // The one parsed at validation (ldCheckSubscription, the side channel) only validated: its
+      // leaves were left short ("A|B" -> A, B, never the entity's expanded type), and a reload has
+      // none at all - without an expression, the selector's type was not checked.
+      // "*" - any type - has none.
+      //
+      if (corNgsild.subEntityTypeExprsV != NULL && selIx < corNgsild.subEntityTypeExprsN && corNgsild.subEntityTypeExprsV[selIx] != NULL)
       {
-        esP->typeExpr = corNgsild.subEntityTypeExprsV[selIx];
+        ldTypeExprFree(corNgsild.subEntityTypeExprsV[selIx]);
         corNgsild.subEntityTypeExprsV[selIx] = NULL;
       }
+
+      if (strcmp(esP->type, "*") != 0)
+        esP->typeExpr = ldTypeExprParse(esP->type, NULL);
     }
 
     // id (borrowed pointer)
@@ -288,6 +300,8 @@ void ldSubCacheUnlock(LdSubCache* cacheP) { if (cacheP != NULL) pthread_rwlock_u
 // (unpin, lock-free after the send).
 //
 static void cacheItemFree(LdSubCacheItem* itemP);   // fwd decl (defined below)
+static void indexAdd(LdSubCache* cacheP, LdSubCacheItem* itemP);       // fwd decl (defined below)
+static void indexRemove(LdSubCache* cacheP, LdSubCacheItem* itemP);    // fwd decl (defined below)
 
 void ldSubCacheItemPin(LdSubCacheItem* itemP)
 {
@@ -813,7 +827,7 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, CorNode* subTree, LdQNode*
   }
 
   //
-  // Append to cache linked list
+  // Append to cache linked list, and into the candidate index
   //
   if (cacheP->last == NULL)
     cacheP->itemList = itemP;
@@ -821,7 +835,294 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, CorNode* subTree, LdQNode*
     cacheP->last->next = itemP;
   cacheP->last = itemP;
 
+  itemP->seq = cacheP->nextSeq++;
+  indexAdd(cacheP, itemP);
+  cacheP->itemCount++;
+
   return itemP;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// indexHash - FNV-1a of a key, into the index's buckets
+//
+static unsigned int indexHash(const char* key)
+{
+  uint32_t h = 2166136261u;
+
+  for (const unsigned char* p = (const unsigned char*) key; *p != 0; p++)
+    h = (h ^ *p) * 16777619u;
+
+  return h % LD_SUB_INDEX_BUCKETS;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// indexKey - "i:<entity id>" or "t:<type>" - the two kinds of key never meet
+//
+static char* indexKey(char kind, const char* name)
+{
+  size_t len = strlen(name);
+  char*  key = (char*) malloc(len + 3);
+
+  key[0] = kind;
+  key[1] = ':';
+  memcpy(&key[2], name, len + 1);
+
+  return key;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// indexEntryAdd - the item under a key (NULL: always a candidate)
+//
+static void indexEntryAdd(LdSubCache* cacheP, char* key, LdSubCacheItem* itemP)
+{
+  LdSubIndexEntry* entryP = (LdSubIndexEntry*) malloc(sizeof(LdSubIndexEntry));
+
+  entryP->key   = key;
+  entryP->itemP = itemP;
+
+  if (key == NULL)
+  {
+    entryP->next   = cacheP->always;
+    cacheP->always = entryP;
+  }
+  else
+  {
+    unsigned int b = indexHash(key);
+
+    entryP->next     = cacheP->indexV[b];
+    cacheP->indexV[b] = entryP;
+  }
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// selectorIndexable - can the selector be found by a key: an id, or a parsed type expression (an
+// entity matching it has the first type of one of its OR groups)
+//
+static bool selectorIndexable(LdSubEntitySelector* selP)
+{
+  if (selP->id != NULL)
+    return true;
+
+  if (selP->typeExpr == NULL)                         // an idPattern alone, or a type never parsed
+    return false;
+
+  for (int g = 0; g < selP->typeExpr->groupCount; g++)
+  {
+    if ((selP->typeExpr->groupV[g].count < 1) || (selP->typeExpr->groupV[g].typeV[0] == NULL))
+      return false;
+  }
+
+  return true;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// indexAdd - the item into the candidate index: under each of its selectors' keys, or always
+//
+static void indexAdd(LdSubCache* cacheP, LdSubCacheItem* itemP)
+{
+  bool indexable = (itemP->entitySelectors != NULL);
+
+  for (LdSubEntitySelector* selP = itemP->entitySelectors; (selP != NULL) && indexable; selP = selP->next)
+    indexable = selectorIndexable(selP);
+
+  if (indexable == false)
+  {
+    indexEntryAdd(cacheP, NULL, itemP);
+    return;
+  }
+
+  for (LdSubEntitySelector* selP = itemP->entitySelectors; selP != NULL; selP = selP->next)
+  {
+    if (selP->id != NULL)
+      indexEntryAdd(cacheP, indexKey('i', selP->id), itemP);
+    else
+    {
+      for (int g = 0; g < selP->typeExpr->groupCount; g++)
+        indexEntryAdd(cacheP, indexKey('t', selP->typeExpr->groupV[g].typeV[0]), itemP);
+    }
+  }
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// indexListRemove - every entry of the item off one list
+//
+static void indexListRemove(LdSubIndexEntry** headP, LdSubCacheItem* itemP)
+{
+  while (*headP != NULL)
+  {
+    if ((*headP)->itemP == itemP)
+    {
+      LdSubIndexEntry* goneP = *headP;
+
+      *headP = goneP->next;
+      free(goneP->key);
+      free(goneP);
+    }
+    else
+      headP = &(*headP)->next;
+  }
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// indexRemove - the item out of the candidate index
+//
+static void indexRemove(LdSubCache* cacheP, LdSubCacheItem* itemP)
+{
+  indexListRemove(&cacheP->always, itemP);
+
+  for (LdSubEntitySelector* selP = itemP->entitySelectors; selP != NULL; selP = selP->next)
+  {
+    if (selP->id != NULL)
+    {
+      char* key = indexKey('i', selP->id);
+      indexListRemove(&cacheP->indexV[indexHash(key)], itemP);
+      free(key);
+    }
+    else if (selP->typeExpr != NULL)
+    {
+      for (int g = 0; g < selP->typeExpr->groupCount; g++)
+      {
+        if ((selP->typeExpr->groupV[g].count < 1) || (selP->typeExpr->groupV[g].typeV[0] == NULL))
+          continue;
+
+        char* key = indexKey('t', selP->typeExpr->groupV[g].typeV[0]);
+        indexListRemove(&cacheP->indexV[indexHash(key)], itemP);
+        free(key);
+      }
+    }
+  }
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// seqCompare - candidates in the order of addition, the list's
+//
+static int seqCompare(const void* a, const void* b)
+{
+  uint64_t sa = (*(LdSubCacheItem* const*) a)->seq;
+  uint64_t sb = (*(LdSubCacheItem* const*) b)->seq;
+
+  return (sa < sb) ? -1 : ((sa > sb) ? 1 : 0);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// candidatesFromList - the items of one index list under the key (NULL: all of them), appended
+//
+static int candidatesFromList(LdSubIndexEntry* listP, const char* key, LdSubCacheItem** vP, int n)
+{
+  for (LdSubIndexEntry* entryP = listP; entryP != NULL; entryP = entryP->next)
+  {
+    if ((key == NULL) || (strcmp(entryP->key, key) == 0))
+      vP[n++] = entryP->itemP;
+  }
+
+  return n;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldSubCacheCandidates -
+//
+int ldSubCacheCandidates(LdSubCache* cacheP, const char* entityId, CorNode* typeP, CorAlloc* kaP, LdSubCacheItem*** vPP)
+{
+  *vPP = NULL;
+
+  if ((cacheP == NULL) || (cacheP->itemCount == 0))
+    return 0;
+
+  //
+  // An entity without an id: every subscription (the index has nothing to look up)
+  //
+  if (entityId == NULL)
+  {
+    LdSubCacheItem** vP = (LdSubCacheItem**) corAlloc(kaP, cacheP->itemCount * sizeof(LdSubCacheItem*));
+    int              n  = 0;
+
+    for (LdSubCacheItem* itemP = cacheP->itemList; itemP != NULL; itemP = itemP->next)
+      vP[n++] = itemP;
+
+    *vPP = vP;
+    return n;
+  }
+
+  //
+  // The always-list, the entity's id, each of its types - an item may be under several of them
+  // (selectors on two of the entity's types): sorted by seq, the duplicates are neighbours
+  //
+  int typeN = 0;
+
+  if ((typeP != NULL) && (typeP->type == CorString))
+    typeN = 1;
+  else if ((typeP != NULL) && (typeP->type == CorArray))
+  {
+    for (CorNode* tP = typeP->value.head; tP != NULL; tP = tP->next)
+      typeN++;
+  }
+
+  int              max = cacheP->itemCount * (2 + typeN);    // an item at most once per key (one per selector kind)
+  LdSubCacheItem** vP  = (LdSubCacheItem**) corAlloc(kaP, max * sizeof(LdSubCacheItem*));
+  int              n   = candidatesFromList(cacheP->always, NULL, vP, 0);
+  char*            key = indexKey('i', entityId);
+
+  n = candidatesFromList(cacheP->indexV[indexHash(key)], key, vP, n);
+  free(key);
+
+  CorNode* oneP = ((typeP != NULL) && (typeP->type == CorString)) ? typeP : NULL;
+  CorNode* tP   = (oneP != NULL) ? oneP : (((typeP != NULL) && (typeP->type == CorArray)) ? typeP->value.head : NULL);
+
+  for (; tP != NULL; tP = (oneP != NULL) ? NULL : tP->next)
+  {
+    if (tP->type != CorString)
+      continue;
+
+    key = indexKey('t', tP->value.s);
+    n   = candidatesFromList(cacheP->indexV[indexHash(key)], key, vP, n);
+    free(key);
+  }
+
+  if (n > 1)
+  {
+    qsort(vP, n, sizeof(LdSubCacheItem*), seqCompare);
+
+    int u = 1;
+    for (int i = 1; i < n; i++)
+    {
+      if (vP[i] != vP[u - 1])
+        vP[u++] = vP[i];
+    }
+    n = u;
+  }
+
+  *vPP = vP;
+  return n;
 }
 
 
@@ -915,6 +1216,9 @@ bool ldSubCacheItemRemove(LdSubCache* cacheP, const char* subId)
       if (itemP == cacheP->last)
         cacheP->last = prevP;
 
+      indexRemove(cacheP, itemP);
+      cacheP->itemCount--;
+
       cacheItemRetireOrFree(cacheP, itemP);
       return true;
     }
@@ -970,6 +1274,20 @@ void ldSubCacheRelease(LdSubCache* cacheP)
     LdSubCacheItem* nextP = itemP->next;
     cacheItemFree(itemP);
     itemP = nextP;
+  }
+
+  for (int b = -1; b < LD_SUB_INDEX_BUCKETS; b++)       // -1: the always-list
+  {
+    LdSubIndexEntry** headP = (b < 0) ? &cacheP->always : &cacheP->indexV[b];
+
+    while (*headP != NULL)
+    {
+      LdSubIndexEntry* goneP = *headP;
+
+      *headP = goneP->next;
+      free(goneP->key);
+      free(goneP);
+    }
   }
 
   pthread_rwlock_destroy(&cacheP->lock);

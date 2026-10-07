@@ -19,6 +19,7 @@
 //
 #include <regex.h>                                     // regexec
 #include <stdio.h>                                     // snprintf
+#include <stdlib.h>                                    // qsort
 #include <string.h>                                    // strcmp, strlen, strcpy, strcat
 #include <time.h>                                      // time
 
@@ -1079,6 +1080,20 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
 
 // -----------------------------------------------------------------------------
 //
+// candidateSeqCompare - subscriptions in the order of addition, the cache list's
+//
+static int candidateSeqCompare(const void* a, const void* b)
+{
+  uint64_t sa = (*(LdSubCacheItem* const*) a)->seq;
+  uint64_t sb = (*(LdSubCacheItem* const*) b)->seq;
+
+  return (sa < sb) ? -1 : ((sa > sb) ? 1 : 0);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldSubscriptionUpdateMayMatch -
 //
 bool ldSubscriptionUpdateMayMatch(LdSubCache* cacheP, const char* entityId, CorNode* entityTypeP, LdMergeReport* reportP)
@@ -1103,8 +1118,13 @@ bool ldSubscriptionUpdateMayMatch(LdSubCache* cacheP, const char* entityId, CorN
 
   ldSubCacheRdLock(cacheP);
 
-  for (LdSubCacheItem* itemP = cacheP->itemList; (itemP != NULL) && (mayMatch == false); itemP = itemP->next)
+  LdSubCacheItem** candV;
+  int              candN = ldSubCacheCandidates(cacheP, entityId, entityTypeP, &corRest.kalloc, &candV);
+
+  for (int c = 0; (c < candN) && (mayMatch == false); c++)
   {
+    LdSubCacheItem* itemP = candV[c];
+
     if ((itemP->status == LdSubStatusPaused) || (itemP->status == LdSubStatusExpired))
       continue;
 
@@ -1145,14 +1165,60 @@ void ldSubscriptionNotifyBatch(LdSubCache*           cacheP,
 
   ldSubCacheRdLock(cacheP);
 
-  int subCount = 0;
-  for (LdSubCacheItem* c = cacheP->itemList; c != NULL; c = c->next)
-    subCount++;
+  //
+  // Only the subscriptions that can match one of the pending entities - by its id and its types
+  // (ldSubCacheCandidates) - each once, in the list's order
+  //
+  LdSubCacheItem** candV = NULL;
+  int              candN = 0;
+
+  for (int i = 0; i < pendingN; i++)
+  {
+    CorNode*         idP  = (pendingV[i].entityP != NULL) ? corTreeLookup(pendingV[i].entityP, "id") : NULL;
+    const char*      id   = ((idP != NULL) && (idP->type == CorString)) ? idP->value.s : NULL;
+    CorNode*         typP = (pendingV[i].entityP != NULL) ? corTreeLookup(pendingV[i].entityP, "type") : NULL;
+    LdSubCacheItem** vP;
+    int              n    = ldSubCacheCandidates(cacheP, id, typP, &corRest.kalloc, &vP);
+
+    if (n == 0)
+      continue;
+
+    if (candN == 0)
+    {
+      candV = vP;
+      candN = n;
+      continue;
+    }
+
+    LdSubCacheItem** newV = (LdSubCacheItem**) corAlloc(&corRest.kalloc, (candN + n) * sizeof(LdSubCacheItem*));
+
+    memcpy(newV, candV, candN * sizeof(LdSubCacheItem*));
+    memcpy(&newV[candN], vP, n * sizeof(LdSubCacheItem*));
+    candV  = newV;
+    candN += n;
+  }
+
+  if ((pendingN > 1) && (candN > 1))                  // in the list's order, each once
+  {
+    qsort(candV, candN, sizeof(LdSubCacheItem*), candidateSeqCompare);
+
+    int u = 1;
+    for (int i = 1; i < candN; i++)
+    {
+      if (candV[i] != candV[u - 1])
+        candV[u++] = candV[i];
+    }
+    candN = u;
+  }
+
+  int subCount = candN;
   SendEntry* sendV = (subCount > 0) ? (SendEntry*) corAlloc(&corRest.kalloc, subCount * sizeof(SendEntry)) : NULL;
   int        sendN = 0;
 
-  for (LdSubCacheItem* itemP = cacheP->itemList; itemP != NULL; itemP = itemP->next)
+  for (int c = 0; c < candN; c++)
   {
+    LdSubCacheItem* itemP = candV[c];
+
     //
     // Per-sub static checks (done once, regardless of pending count)
     //

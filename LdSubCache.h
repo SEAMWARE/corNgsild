@@ -195,6 +195,7 @@ typedef struct LdSubCacheItem
   // matched at create time.
   LdSubSubordinate*         subordinateP;
   int                       subordinateRunNo;  // monotonic counter for derived-sub naming
+  uint64_t                  seq;            // order of addition - candidates (ldSubCacheCandidates) in list order
 
   // Concurrency refcount — see LdRegCacheItem for the model. A reader (the
   // post-response notify drain, the CSR-sub matchers) pins matched items under
@@ -225,6 +226,22 @@ typedef bool (*LdGeoMatchFunc)(CorNode* entityP, LdGeoRel* geoRel, const char* g
 //
 // LdSubCache - per-tenant subscription cache
 //
+// -----------------------------------------------------------------------------
+//
+// LdSubIndexEntry - one subscription under one key of the candidate index (an entity id or a type),
+// or on the list of those always a candidate (key NULL)
+//
+typedef struct LdSubIndexEntry
+{
+  char*                   key;
+  LdSubCacheItem*         itemP;
+  struct LdSubIndexEntry* next;
+} LdSubIndexEntry;
+
+#define LD_SUB_INDEX_BUCKETS 4096
+
+
+
 typedef struct LdSubCache
 {
   LdSubCacheItem*     itemList;     // linked list head
@@ -240,6 +257,17 @@ typedef struct LdSubCache
   // send. LOCK ORDER: reg-cache lock BEFORE sub-cache lock — sub writers must
   // pin + release the sub-lock before touching the reg cache, never sub→reg.
   pthread_rwlock_t    lock;
+
+  //
+  // The candidate index (ldSubCacheCandidates): which subscriptions can match an entity, by its id and
+  // its types - a subscription whose every selector names an id or a type expression is under each of
+  // those ids and each OR group's first type; any other (no selector, an idPattern alone, a type
+  // without its parsed expression) is always a candidate. Guarded by `lock`, as the list.
+  //
+  LdSubIndexEntry*    indexV[LD_SUB_INDEX_BUCKETS];
+  LdSubIndexEntry*    always;
+  int                 itemCount;
+  uint64_t            nextSeq;
 } LdSubCache;
 
 #endif  // CORNGSILD_LDSUBCACHE_H_
