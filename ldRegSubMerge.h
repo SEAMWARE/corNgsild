@@ -16,7 +16,8 @@
 // -----------------------------------------------------------------------------
 //
 // ldRegSubMerge - apply a Registration/Subscription update fragment to the full
-//                 stored document (shallow JSON Merge Patch, RFC 7396 first level)
+//                 stored document - TS 104-175 § 8.4.2, first level only (an object
+//                 member is replaced whole, not merged)
 //
 // For each first-level member of `fragment`:
 //   - CorNull           → delete the same-named member from `target` (the

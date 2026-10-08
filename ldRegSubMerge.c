@@ -23,37 +23,8 @@
 
 // -----------------------------------------------------------------------------
 //
-// isOpaqueValueObject - a JSON-LD value object whose contents are NOT NGSI-LD
-// structure and must therefore not be deep-merged or delete-marker-interpreted:
-// an "@value" box or an "@type":"@json" wrapper. This is the only opaque JSON a
-// registration can carry (subscriptions carry none). The recursive merge stops
-// here and replaces the member wholesale, leaving any "urn:ngsi-ld:null" inside
-// it as the literal data it is.
-//
-static bool isOpaqueValueObject(CorNode* nodeP)
-{
-  if (nodeP == NULL || nodeP->type != CorObject)
-    return false;
-
-  for (CorNode* c = nodeP->value.head; c != NULL; c = c->next)
-  {
-    if (c->name == NULL)
-      continue;
-    if (strcmp(c->name, "@value") == 0)
-      return true;
-    if (strcmp(c->name, "@type") == 0 && c->type == CorString && strcmp(c->value.s, "@json") == 0)
-      return true;
-  }
-  return false;
-}
-
-
-
-// -----------------------------------------------------------------------------
-//
-// isDeleteMarker - the delete signal at any depth: the internal CorNull the
-// top-level validator produces from a "urn:ngsi-ld:null" sentinel, or — for a
-// NESTED member the validator never visited — the raw "urn:ngsi-ld:null" string.
+// isDeleteMarker - the delete signal: the internal CorNull the validator produces from a
+// "urn:ngsi-ld:null" sentinel, or the raw "urn:ngsi-ld:null" string
 //
 static bool isDeleteMarker(CorNode* fP)
 {
@@ -68,15 +39,13 @@ static bool isDeleteMarker(CorNode* fP)
 
 // -----------------------------------------------------------------------------
 //
-// ldRegSubMerge - JSON Merge Patch (RFC 7396), recursive.
+// ldRegSubMerge - the partial update of a Registration or a Subscription (TS 104-175 § 8.4.2)
 //
-// A delete-marker member removes its target. Two NGSI-LD-structural objects are
-// deep-merged so a fragment may touch a nested member (e.g. notification.format)
-// without discarding its siblings, and so a nested "urn:ngsi-ld:null" deletes
-// exactly its own field. Arrays and opaque JSON-LD value objects are replaced
-// wholesale (RFC 7396 does not merge arrays; @json content is opaque). Whether
-// the merged result is still valid — e.g. a mandatory member was deleted — is
-// the caller's post-merge re-validation, not this mechanical merge.
+// First level only: a member of the fragment the target lacks is added, one it has REPLACES it - the
+// whole value, an object included (a fragment's "notification": {"format": ...} is the whole new
+// notification) - and a delete marker removes it. § 8.4.3's merge "up to an arbitrary depth" is the
+// Merge Entity's, not this. Whether the result is still valid - a mandatory member replaced away - is
+// the caller's re-validation of the complete document.
 //
 void ldRegSubMerge(CorNode* target, CorNode* fragment, CorAlloc* allocP)
 {
@@ -102,17 +71,7 @@ void ldRegSubMerge(CorNode* target, CorNode* fragment, CorAlloc* allocP)
       continue;
     }
 
-    // Deep-merge two structural objects (recurse); stop at arrays and opaque
-    // value objects, which replace wholesale.
-    if (fP->type == CorObject && existingP != NULL && existingP->type == CorObject
-        && (isOpaqueValueObject(fP) == false) && (isOpaqueValueObject(existingP) == false))
-    {
-      ldRegSubMerge(existingP, fP, allocP);
-      continue;
-    }
-
-    // Otherwise replace an existing member IN PLACE (preserving field order) or
-    // append if new.
+    // Replace an existing member IN PLACE (preserving field order), or append if new
     CorNode* cloneP = corTreeClone(allocP, fP);
 
     if (existingP != NULL)
