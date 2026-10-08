@@ -28,5 +28,6 @@
 #define LD_ERROR_LOOP_DETECTED      "https://uri.etsi.org/ngsi-ld/errors/LoopDetected"
 #define LD_ERROR_NONEXISTENT_TENANT      "https://uri.etsi.org/ngsi-ld/errors/NonexistentTenant"
 #define LD_ERROR_LD_CONTEXT_NOT_AVAILABLE "https://uri.etsi.org/ngsi-ld/errors/LdContextNotAvailable"
+#define LD_ERROR_TOO_MANY_RESULTS   "https://uri.etsi.org/ngsi-ld/errors/TooManyResults"
 
 #endif
