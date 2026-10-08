@@ -19,6 +19,7 @@
 //
 #include <regex.h>                                     // regexec
 #include <stdio.h>                                     // snprintf
+#include <stdlib.h>                                    // qsort
 #include <string.h>                                    // strcmp, strlen, strcpy, strcat
 #include <time.h>                                      // time
 
@@ -133,14 +134,19 @@ static bool triggerMatches(LdSubCacheItem* itemP, LdNotifyOp op, int reasonsMask
 //
 static bool selectorMatches(LdSubEntitySelector* selP, const char* entityId, CorNode* entityTypeP)
 {
+  // id first: a strcmp rejects all but one of the subscriptions to single entities - the type
+  // expression is evaluated for that one only. Both must hold, so the order changes nothing else.
+  if ((selP->id != NULL) && ((entityId == NULL) || (strcmp(entityId, selP->id) != 0)))
+    return false;
+
   // Type check — use the parsed § 4.17 expression so (A|B), A&B and
   // !A operators match correctly. typeExpr is set whenever type is.
   if (selP->typeExpr != NULL && !ldEntityMatchType(entityTypeP, selP->typeExpr))
     return false;
 
-  // id check (takes precedence over idPattern)
+  // id check (takes precedence over idPattern) - matched above
   if (selP->id != NULL)
-    return (entityId != NULL && strcmp(entityId, selP->id) == 0);
+    return true;
 
   // idPattern check (pre-compiled regex)
   if (selP->idPatternList != NULL && entityId != NULL)
@@ -182,6 +188,9 @@ static bool entitiesMatch(LdSubCacheItem* itemP, const char* entityId, CorNode* 
 //
 // watchedAttrsMatch - check if any changed attribute is watched
 //
+// entityP NULL (an update only): matched on the report alone, a watched instance ("attr@datasetId")
+// counting as a match.
+//
 // An entry of watchedDsV names ONE instance ("attr@datasetId"): the change must
 // then have written that instance, not just the Attribute.
 //
@@ -221,6 +230,10 @@ static bool watchedAttrsMatch(LdSubCacheItem* itemP, CorNode* entityP, LdNotifyO
           continue;
 
         if ((dsV == NULL) || (dsV[i] == NULL))
+          return true;
+
+        // Without the entity (ldSubscriptionUpdateMayMatch) the instance cannot be told: it may match
+        if (entityP == NULL)
           return true;
 
         //
@@ -1067,6 +1080,68 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
 
 // -----------------------------------------------------------------------------
 //
+// candidateSeqCompare - subscriptions in the order of addition, the cache list's
+//
+static int candidateSeqCompare(const void* a, const void* b)
+{
+  uint64_t sa = (*(LdSubCacheItem* const*) a)->seq;
+  uint64_t sb = (*(LdSubCacheItem* const*) b)->seq;
+
+  return (sa < sb) ? -1 : ((sa > sb) ? 1 : 0);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldSubscriptionUpdateMayMatch -
+//
+bool ldSubscriptionUpdateMayMatch(LdSubCache* cacheP, const char* entityId, CorNode* entityTypeP, LdMergeReport* reportP)
+{
+  if (cacheP == NULL)
+    return false;
+
+  int reasonsMask = 0;
+
+  if ((reportP != NULL) && (reportP->changes != NULL))
+  {
+    for (CorNode* chP = reportP->changes->value.head; chP != NULL; chP = chP->next)
+    {
+      CorNode* reasonP = corTreeLookup(chP, "reason");
+
+      if ((reasonP != NULL) && (reasonP->type == CorString))
+        reasonsMask |= ldTriggerFromReport(reasonP->value.s);
+    }
+  }
+
+  bool mayMatch = false;
+
+  ldSubCacheRdLock(cacheP);
+
+  LdSubCacheItem** candV;
+  int              candN = ldSubCacheCandidates(cacheP, entityId, entityTypeP, &corRest.kalloc, &candV);
+
+  for (int c = 0; (c < candN) && (mayMatch == false); c++)
+  {
+    LdSubCacheItem* itemP = candV[c];
+
+    if ((itemP->status == LdSubStatusPaused) || (itemP->status == LdSubStatusExpired))
+      continue;
+
+    mayMatch = triggerMatches(itemP, LdNotifyEntityUpdate, reasonsMask) &&
+               entitiesMatch(itemP, entityId, entityTypeP) &&
+               watchedAttrsMatch(itemP, NULL, LdNotifyEntityUpdate, reportP);
+  }
+
+  ldSubCacheUnlock(cacheP);
+
+  return mayMatch;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldSubscriptionNotifyBatch -
 //
 void ldSubscriptionNotifyBatch(LdSubCache*           cacheP,
@@ -1090,14 +1165,60 @@ void ldSubscriptionNotifyBatch(LdSubCache*           cacheP,
 
   ldSubCacheRdLock(cacheP);
 
-  int subCount = 0;
-  for (LdSubCacheItem* c = cacheP->itemList; c != NULL; c = c->next)
-    subCount++;
+  //
+  // Only the subscriptions that can match one of the pending entities - by its id and its types
+  // (ldSubCacheCandidates) - each once, in the list's order
+  //
+  LdSubCacheItem** candV = NULL;
+  int              candN = 0;
+
+  for (int i = 0; i < pendingN; i++)
+  {
+    CorNode*         idP  = (pendingV[i].entityP != NULL) ? corTreeLookup(pendingV[i].entityP, "id") : NULL;
+    const char*      id   = ((idP != NULL) && (idP->type == CorString)) ? idP->value.s : NULL;
+    CorNode*         typP = (pendingV[i].entityP != NULL) ? corTreeLookup(pendingV[i].entityP, "type") : NULL;
+    LdSubCacheItem** vP;
+    int              n    = ldSubCacheCandidates(cacheP, id, typP, &corRest.kalloc, &vP);
+
+    if (n == 0)
+      continue;
+
+    if (candN == 0)
+    {
+      candV = vP;
+      candN = n;
+      continue;
+    }
+
+    LdSubCacheItem** newV = (LdSubCacheItem**) corAlloc(&corRest.kalloc, (candN + n) * sizeof(LdSubCacheItem*));
+
+    memcpy(newV, candV, candN * sizeof(LdSubCacheItem*));
+    memcpy(&newV[candN], vP, n * sizeof(LdSubCacheItem*));
+    candV  = newV;
+    candN += n;
+  }
+
+  if ((pendingN > 1) && (candN > 1))                  // in the list's order, each once
+  {
+    qsort(candV, candN, sizeof(LdSubCacheItem*), candidateSeqCompare);
+
+    int u = 1;
+    for (int i = 1; i < candN; i++)
+    {
+      if (candV[i] != candV[u - 1])
+        candV[u++] = candV[i];
+    }
+    candN = u;
+  }
+
+  int subCount = candN;
   SendEntry* sendV = (subCount > 0) ? (SendEntry*) corAlloc(&corRest.kalloc, subCount * sizeof(SendEntry)) : NULL;
   int        sendN = 0;
 
-  for (LdSubCacheItem* itemP = cacheP->itemList; itemP != NULL; itemP = itemP->next)
+  for (int c = 0; c < candN; c++)
   {
+    LdSubCacheItem* itemP = candV[c];
+
     //
     // Per-sub static checks (done once, regardless of pending count)
     //
