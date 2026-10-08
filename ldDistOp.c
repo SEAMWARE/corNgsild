@@ -1071,6 +1071,55 @@ int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
                       const char*            ownAlias,
                       LdDistOpBatchResult*   resultV)
 {
+  return ldDistOpSendMultiMax(itemV, itemCount, verb, ownAlias, resultV, 0);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// distOpTooLarge - drop an answer already in memory (self-forward, plugin) whose body passes maxBytes
+//
+// Not the source's failure: the counters of its failures stay as they are. Its lastSuccess is not
+// touched either - a source answered, but not with anything this request can use.
+//
+static void distOpTooLarge(LdDistOpBatchResult* rP, int64_t maxBytes, LdRegCacheItem* csr)
+{
+  if ((maxBytes <= 0) || (rP->statusCode < 200) || (rP->statusCode >= 300))
+    return;
+
+  int64_t bytes = rP->responseBodyLen;
+
+  if ((bytes == 0) && (rP->responseTree != NULL))
+    bytes = corJsonFastRenderSize(rP->responseTree);
+
+  if (bytes <= maxBytes)
+    return;
+
+  rP->statusCode      = 0;
+  rP->responseBody    = NULL;
+  rP->responseBodyLen = 0;
+  rP->responseTree    = NULL;
+  rP->tooLarge        = true;
+  rP->errorDetail     = "response body larger than the response size budget";
+
+  COR_W("dist-op: CSR %s answered with %lld bytes, more than the %lld the request can take - dropped",
+        (csr->regId != NULL) ? csr->regId : "?", (long long) bytes, (long long) maxBytes);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldDistOpSendMultiMax -
+//
+int ldDistOpSendMultiMax(LdDistOpBatchItem*     itemV,
+                         int                    itemCount,
+                         CorRestVerb             verb,
+                         const char*            ownAlias,
+                         LdDistOpBatchResult*   resultV,
+                         int64_t                maxResponseBytes)
+{
   if (itemCount <= 0)
     return 0;
 
@@ -1081,6 +1130,8 @@ int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
       resultV[i].errorDetail = "corRestClientMultiCreate failed";
     return -1;
   }
+
+  corRestClientMultiMaxResponse(multi, maxResponseBytes);   // a body past it is not read further
 
   // The multi engine takes a single overall budget. Use the highest per-CSR
   // override so a fast peer doesn't pre-empt a slow one; fall back to the
@@ -1223,6 +1274,9 @@ int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
       distOpTraceResponse(sc, respHdrV, respHdrCount);
       distOpBodyParse(&resultV[i]);
       resultV[i].responseContextUrl = responseContextLink(respHdrV, respHdrCount);
+      distOpTooLarge(&resultV[i], maxResponseBytes, csr);
+      if (resultV[i].tooLarge)
+        continue;
 
       if (sc >= 200 && sc < 300)
         csr->lastSuccess = nowNs;
@@ -1237,6 +1291,7 @@ int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
     if (idx == -3)
     {
       distOpPluginItem(&itemV[i], itemV[i].hasVerb ? itemV[i].verb : verb, selfHv[i], selfHc[i], &resultV[i], nowNs);
+      distOpTooLarge(&resultV[i], maxResponseBytes, csr);
       continue;
     }
 
@@ -1252,6 +1307,7 @@ int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
       int ret = plugin->wait(handleV[i], &resp);
 
       distOpPluginResult(&itemV[i], itemV[i].hasVerb ? itemV[i].verb : verb, ret, &resp, &resultV[i], nowNs);
+      distOpTooLarge(&resultV[i], maxResponseBytes, csr);
       continue;
     }
 
@@ -1266,6 +1322,21 @@ int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
 
     CorRestClientResponse* resp = corRestClientMultiResponse(multi, idx);
     csr->timesSent++;
+
+    //
+    // A body past the cap: not read further (corRestClientMultiMaxResponse), and not the source's
+    // failure - no cooldown for it
+    //
+    if ((resp != NULL) && (resp->error == CORR_ERR_TOO_LARGE))
+    {
+      resultV[i].statusCode  = 0;
+      resultV[i].tooLarge    = true;
+      resultV[i].errorDetail = "response body larger than the response size budget";
+      COR_W("dist-op %s %s: CSR %s answered with more than the %lld bytes the request can take - not read further",
+            corRestVerbToString(itemV[i].hasVerb ? itemV[i].verb : verb), itemV[i].url,
+            (csr->regId != NULL) ? csr->regId : "?", (long long) maxResponseBytes);
+      continue;
+    }
 
     if (resp == NULL || resp->error != 0)
     {

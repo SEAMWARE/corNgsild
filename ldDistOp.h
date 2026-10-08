@@ -17,6 +17,7 @@
 // BatchEntityError append helper.
 //
 #include <stdbool.h>                                   // bool
+#include <stdint.h>                                    // int64_t
 
 #include "corTree/CorNode.h"                           // CorNode
 #include "corRest/CorRestVerb.h"                         // CorRestVerb
@@ -204,6 +205,11 @@ typedef struct LdDistOpBatchResult
   // redirect source that fails to respond in time → 504 (vs 502 for any other
   // reason). Left false for cooldown-declined legs (§ 5.2.6.5.3).
   bool         timedOut;
+  // true when the source answered with a body larger than ldDistOpSendMultiMax's maxResponseBytes:
+  // statusCode 0, no body, and - not being the source's failure - no failure counted against it
+  // (timesFailed, lastFailure, cooldown). Last in the struct: a caller built against an older header
+  // allocates it all the same (sizeof), and never reads it.
+  bool         tooLarge;
 } LdDistOpBatchResult;
 
 extern int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
@@ -211,6 +217,26 @@ extern int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
                              CorRestVerb             verb,
                              const char*            ownAlias,
                              LdDistOpBatchResult*   resultV);
+
+//
+// ldDistOpSendMultiMax - ldDistOpSendMulti with a cap on each source's response body (0 = none)
+//
+// Over HTTP the cap is applied while the response is read (corRestClientMultiMaxResponse): a body
+// that passes it is not read further and its connection is closed. A self-forward (in process) and a
+// forwarding plugin (cor://) hand over an answer already in memory, which is measured after the fact
+// (its length, or its rendered size for a tree) - dropped all the same. Either way: tooLarge, see above.
+//
+extern int ldDistOpSendMultiMax(LdDistOpBatchItem*     itemV,
+                                int                    itemCount,
+                                CorRestVerb             verb,
+                                const char*            ownAlias,
+                                LdDistOpBatchResult*   resultV,
+                                int64_t                maxResponseBytes);
+
+//
+// LD_DIST_OP_SEND_MULTI_MAX - this header has ldDistOpSendMultiMax and LdDistOpBatchResult.tooLarge
+//
+#define LD_DIST_OP_SEND_MULTI_MAX
 
 
 
