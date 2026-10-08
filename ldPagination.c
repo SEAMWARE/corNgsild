@@ -89,8 +89,24 @@ const char* ldPaginationMediaType(void)
 //
 // Builds a Link header (RFC 8288) with rel="next" and/or rel="prev" based on
 // the current offset and whether more results exist beyond the current page.
+// The next page starts at offset + limit.
 //
 void ldPaginationLinkHeader(bool hasMore)
+{
+  ldPaginationLinkHeaderAt(hasMore, corNgsild.offset + corNgsild.limit);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldPaginationLinkHeaderAt - add Link header with next/prev pagination links, next at nextOffset
+//
+// For a page that ended before `limit` did - a byte budget spent - the next page
+// starts where this one stopped, not a whole `limit` further on. The links keep
+// the request's `limit`: it is the page size the client asked for.
+//
+void ldPaginationLinkHeaderAt(bool hasMore, int nextOffset)
 {
   int offset = corNgsild.offset;
   int limit  = corNgsild.limit;
@@ -141,8 +157,6 @@ void ldPaginationLinkHeader(bool hasMore)
   // next link (when more results exist)
   if (hasMore)
   {
-    int nextOffset = offset + limit;
-
     if (bLen > 0)
       bLen += snprintf(buf + bLen, bufSize - bLen, ", ");
 

@@ -43,6 +43,15 @@ extern void ldPaginationLinkHeader(bool hasMore);
 
 // -----------------------------------------------------------------------------
 //
+// ldPaginationLinkHeaderAt - as ldPaginationLinkHeader, with the next page starting at nextOffset
+//                            (a page shorter than limit: offset + the entities it holds)
+//
+extern void ldPaginationLinkHeaderAt(bool hasMore, int nextOffset);
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldTemporalPaginationLinkHeader - Link rel="intervalafter"/"intervalbefore"
 //                                  page pointers (§ 6.4.7.3)
 //
