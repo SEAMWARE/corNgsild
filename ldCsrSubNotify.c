@@ -472,6 +472,7 @@ static void csourceNotificationPost(LdSubCacheItem* subItemP, CorNode* notificat
   }
 
   corRestClientResponseCleanup(&resp);
+  corRestClientRequestCleanup(&req);     // the header vector, malloc'd when receiverInfo made it outgrow the inline one
   ldNotifyStatsHookInvoke(true /*csrSub*/, ok);
 }
 

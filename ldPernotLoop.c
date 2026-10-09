@@ -148,6 +148,7 @@ static bool pernotSendNotification(LdPernotItem* itemP, CorNode* entityArray, Co
   // Send via HTTP
   CorRestClientRequest  req;
   CorRestClientResponse resp;
+  char                  linkBuf[512];   // the Link header - req keeps a pointer to it until the send
 
   corRestClientRequestInit(&req, CorVerbPost, itemP->endpointUri, kaP);
   corRestClientRequestHeader(&req, "Content-Type", "application/json");
@@ -158,7 +159,6 @@ static bool pernotSendNotification(LdPernotItem* itemP, CorNode* entityArray, Co
   CorLdContext* ctxP = corLdCoreContext();
   if (ctxP != NULL && ctxP->url != NULL)
   {
-    char linkBuf[512];
     snprintf(linkBuf, sizeof(linkBuf),
              "<%s>; rel=\"http://www.w3.org/ns/json-ld#context\"; type=\"application/ld+json\"",
              itemP->contextUrl ? itemP->contextUrl : ctxP->url);
