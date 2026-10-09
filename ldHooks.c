@@ -1546,8 +1546,10 @@ static void ldRenderHook(void)
 
   // A 201 Created body is either empty or an array of created entity ids
   // (entityOperations) — never compacted terms — so there is no response
-  // @context to advertise, neither inline nor via a Link header.
-  if (corRest.out.httpStatusCode == 201)
+  // @context to advertise, neither inline nor via a Link header. Except the
+  // entities of a query that created the EntityMap it asked for (?entityMap=true,
+  // 201 - TS 104-176 clause 7): those are compacted as any query's.
+  if ((corRest.out.httpStatusCode == 201) && ((corNgsild.entityMapCreate == false) || corNgsild.entityMapOnly))
     return;
 
   CorLdContext* ctxP   = respCtxP;

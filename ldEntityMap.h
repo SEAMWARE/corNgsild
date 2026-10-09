@@ -78,4 +78,33 @@ extern void ldEntityMapSetStoredQ(LdEntityMap* mapP, const char* storedQ);
 
 
 
+// -----------------------------------------------------------------------------
+//
+// ldEntityMapMaxBytes - the memory every EntityMap of the broker may hold together, in bytes
+//
+// Set by the broker at start (coraine: --entityMapMemory). 0: no cap - and no automatic maps (the
+// broker only creates maps by itself within a cap). An automatic map that does not fit, after the
+// expired maps and the automatic maps used longest ago have gone, is not kept; nor is a map a
+// client asked for (the broker answers 403 TooManyResults for that one).
+//
+extern int64_t ldEntityMapMaxBytes;
+
+// ldEntityMapBytesTotal - what all EntityMaps hold now (an estimate, malloc overhead included)
+extern int64_t ldEntityMapBytesTotal(void);
+
+// ldEntityMapAdmit - mapP is filled: true if it is kept, false if it does not fit (it is out of the store then)
+extern bool ldEntityMapAdmit(LdEntityMapStore* storeP, LdEntityMap* mapP);
+
+// ldEntityMapTouch - a page was served from mapP (an automatic map's lifetime slides)
+extern void ldEntityMapTouch(LdEntityMap* mapP);
+
+// ldEntityMapRequestHeader - the NGSILD-EntityMap request header into corNgsild.entityMapId (false: 400 raised)
+extern bool ldEntityMapRequestHeader(void);
+
+// ldEntityMapSetQueryParams - the URL parameters of the creating request (all but pagination) into the map
+extern void ldEntityMapSetQueryParams(LdEntityMap* mapP);
+
+// ldEntityMapQueryParam - the value of a URL parameter of the request that created the map (NULL: none)
+extern const char* ldEntityMapQueryParam(LdEntityMap* mapP, const char* key);
+
 #endif  // CORNGSILD_LDENTITYMAP_OPS_H_

@@ -16,7 +16,9 @@
 #include "corNgsild/CorNgsild.h"                         // corNgsild
 #include "corNgsild/ldParams.h"                           // LD_PARAM_LIMIT, LD_PARAM_OFFSET
 #include "corRest/CorRestIn.h"                      // corAcceptParse, CorMimeType
+#include "corRest/corRestUrlValueEncode.h"             // corRestUrlValueEncode
 
+#include "corNgsild/LdEntityMap.h"                        // LdEntityMap
 #include "corNgsild/ldPagination.h"                       // Own interface
 
 
@@ -169,6 +171,173 @@ void ldPaginationLinkHeaderAt(bool hasMore, int nextOffset)
   {
     corRest.out.headerV[corRest.out.headerCount].key   = (char*) "Link";
     corRest.out.headerV[corRest.out.headerCount].value  = buf;
+    corRest.out.headerCount++;
+  }
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// linkValueEncode - a URL parameter value for a URI-reference inside a Link header
+//
+// corRestUrlValueEncode leaves the q language's own characters alone ('=', '"', ';', '<', '>', ...).
+// Inside "<...>" a '>' ends the URI-reference, and a ',' or ';' is where a client splitting the header
+// starts a new link or parameter: those, '<', '"' and a space are percent-encoded here as well.
+//
+static const char* linkValueEncode(const char* value)
+{
+  const char* v    = corRestUrlValueEncode(value, &corRest.kalloc);
+  int         n    = strlen(v);
+  char*       out  = (char*) corAlloc(&corRest.kalloc, 3 * n + 1);
+  int         o    = 0;
+
+  for (int i = 0; i < n; i++)
+  {
+    char c = v[i];
+
+    if ((c == '<') || (c == '>') || (c == ',') || (c == ';') || (c == '"') || (c == ' '))
+      o += snprintf(out + o, 4, "%%%02X", (unsigned char) c);
+    else
+      out[o++] = c;
+  }
+
+  out[o] = 0;
+  return out;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// linkParamAppend - "&key=value" (value encoded) into buf, unless key is already in it or is pagination's
+//
+static void linkParamAppend(char** bufP, int* lenP, int* sizeP, const char* key, const char* value)
+{
+  if ((strcmp(key, "entityMap") == 0) || (strcmp(key, "limit") == 0) || (strcmp(key, "offset") == 0) || (strcmp(key, "entityMapLifetime") == 0))
+    return;
+
+  // Already there? "&key=" at the start or after another parameter
+  int  kLen = strlen(key);
+  char* p   = *bufP;
+
+  while ((p = strstr(p, key)) != NULL)
+  {
+    if ((p > *bufP) && (p[-1] == '&') && (p[kLen] == '='))
+      return;
+    p += kLen;
+  }
+
+  const char* v    = (value != NULL) ? linkValueEncode(value) : "";
+  int         need = *lenP + kLen + strlen(v) + 3;
+
+  if (need > *sizeP)
+  {
+    int   newSize = 2 * need;
+    char* newBuf  = (char*) corAlloc(&corRest.kalloc, newSize);
+
+    memcpy(newBuf, *bufP, *lenP + 1);
+    *bufP  = newBuf;
+    *sizeP = newSize;
+  }
+
+  *lenP += snprintf(*bufP + *lenP, *sizeP - *lenP, "&%s=%s", key, v);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldPaginationEntityMapLinkHeader - the Link header of a page served from an EntityMap
+//
+// Every link names the map (entityMap=<id>) AND repeats the query: TS 104-175 § 9.6, "Subsequent
+// requests referencing an Entity Map shall use the same parameters as in the original request that
+// created the Entity Map, except for ... parameters related to pagination". A followed link is a
+// complete query by itself - should the map have expired, the broker creates a new one from it.
+// The parameters, in this order, each once:
+//
+//   - the creating request's (LdEntityMap.queryParamV) - the map's query, whatever this request said;
+//   - this request's (but pagination) that the creating one did not have (options, pick, ...);
+//   - the map's bound filters (type, q, scopeQ, the GeoQuery) still missing - a map created by
+//     POST /entityMaps has its query in a body, not in URL parameters.
+//
+// rel="first" / rel="prev" on any page but the first, rel="next" / rel="last" while the map holds more.
+//
+//   offset      where this page starts in the map
+//   nextOffset  where the next one does - offset + limit, or less when the byte budget ended the page
+//   total       the map's size (the frozen set) - rel="last" is the page that holds its last entity
+//
+void ldPaginationEntityMapLinkHeader(LdEntityMap* mapP, int offset, int limit, int nextOffset, int total, bool hasMore)
+{
+  bool hasPrev = (offset > 0);
+
+  if ((hasPrev == false) && (hasMore == false))
+    return;
+
+  if (limit <= 0)
+    limit = 20;
+
+  int   pSize = 256;
+  int   pLen  = 0;
+  char* params = (char*) corAlloc(&corRest.kalloc, pSize);
+
+  params[0] = 0;
+
+  for (int ix = 0; ix < mapP->queryParamCount; ix++)
+    linkParamAppend(&params, &pLen, &pSize, mapP->queryParamV[2 * ix], mapP->queryParamV[2 * ix + 1]);
+
+  for (int i = 0; i < corRest.in.uriParamCount; i++)
+    linkParamAppend(&params, &pLen, &pSize, corRest.in.uriParamV[i].key, corRest.in.uriParamV[i].value);
+
+  if (mapP->boundType        != NULL) linkParamAppend(&params, &pLen, &pSize, "type",        mapP->boundType);
+  if (mapP->boundQ           != NULL) linkParamAppend(&params, &pLen, &pSize, "q",           mapP->boundQ);
+  if (mapP->boundScopeQ      != NULL) linkParamAppend(&params, &pLen, &pSize, "scopeQ",      mapP->boundScopeQ);
+  if (mapP->boundGeorel      != NULL) linkParamAppend(&params, &pLen, &pSize, "georel",      mapP->boundGeorel);
+  if (mapP->boundGeometry    != NULL) linkParamAppend(&params, &pLen, &pSize, "geometry",    mapP->boundGeometry);
+  if (mapP->boundCoordinates != NULL) linkParamAppend(&params, &pLen, &pSize, "coordinates", mapP->boundCoordinates);
+
+  const char* path      = "/ngsi-ld/v1/entities";
+  const char* mapId     = mapP->mapId;
+  const char* mediaType = ldPaginationMediaType();
+  int         bufSize   = 4 * (128 + strlen(path) + strlen(mapId) + pLen + strlen(mediaType));
+  char*       buf       = (char*) corAlloc(&corRest.kalloc, bufSize);
+  int         bLen      = 0;
+
+  if (hasPrev)
+  {
+    int prevOffset = offset - limit;
+
+    if (prevOffset < 0)
+      prevOffset = 0;
+
+    bLen += snprintf(buf + bLen, bufSize - bLen,
+                     "<%s?entityMap=%s%s&limit=%d&offset=0>;rel=\"first\";type=\"%s\", "
+                     "<%s?entityMap=%s%s&limit=%d&offset=%d>;rel=\"prev\";type=\"%s\"",
+                     path, mapId, params, limit, mediaType,
+                     path, mapId, params, limit, prevOffset, mediaType);
+  }
+
+  if (hasMore)
+  {
+    int lastOffset = (total > 0) ? ((total - 1) / limit) * limit : 0;
+
+    if (lastOffset < nextOffset)                      // a page the budget ended: the last page starts after it
+      lastOffset = nextOffset;
+
+    if (bLen > 0)
+      bLen += snprintf(buf + bLen, bufSize - bLen, ", ");
+
+    bLen += snprintf(buf + bLen, bufSize - bLen,
+                     "<%s?entityMap=%s%s&limit=%d&offset=%d>;rel=\"next\";type=\"%s\", "
+                     "<%s?entityMap=%s%s&limit=%d&offset=%d>;rel=\"last\";type=\"%s\"",
+                     path, mapId, params, limit, nextOffset, mediaType,
+                     path, mapId, params, limit, lastOffset, mediaType);
+  }
+
+  if (corRest.out.headerCount < corRest.out.headerSize)
+  {
+    corRest.out.headerV[corRest.out.headerCount].key   = (char*) "Link";
+    corRest.out.headerV[corRest.out.headerCount].value = buf;
     corRest.out.headerCount++;
   }
 }

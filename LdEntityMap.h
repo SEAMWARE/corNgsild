@@ -90,11 +90,32 @@ typedef struct LdEntityMap
   //
   char*                boundQStored;
 
+  //
+  // The URL parameters of the request that created the map - all but pagination (limit, offset) and
+  // entityMap / entityMapLifetime - as key, value pairs (decoded, malloc'd; NULL when none). A link to
+  // a page of the map repeats them (TS 104-175 § 9.6: a request referencing a map "shall use the same
+  // parameters as in the original request"), so a followed link is a complete query by itself - and
+  // can create a new map should this one be gone.
+  //
+  char**               queryParamV;    // key0, value0, key1, value1, ...
+  int                  queryParamCount; // pairs
+
   // References (as the snapshot cache): one held by the store while the map is in it, one per
   // pin. A request that uses the map - pages it, renders it, has its query parameters pointing
   // at the map's bound strings - pins it for the request. Remove and the expiry purge unlink it
   // and drop the store's reference; the last reference frees it.
   int                  refCount;
+
+  //
+  // An AUTOMATIC map is the broker's own - created for a query paginated past its first page (roadmap
+  // § 13). Its lifetime slides: every page served from it moves expiresAt to now + lifetimeNs. When the
+  // maps' memory (ldEntityMapMaxBytes) is spent, the automatic map used longest ago gives way first; a
+  // map a client asked for (entityMap=true, POST /entityMaps) is never evicted - it only expires.
+  //
+  bool                 automatic;
+  uint64_t             lifetimeNs;     // the sliding lifetime of an automatic map
+  uint64_t             lastUsed;       // epoch nanoseconds: created, or a page last served from it
+  int64_t              bytes;          // what the map holds (an estimate, malloc overhead included)
 
   struct LdEntityMap*  next;           // linked list in store
 } LdEntityMap;
