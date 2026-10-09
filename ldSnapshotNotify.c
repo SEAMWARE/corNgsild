@@ -124,4 +124,7 @@ void ldSnapshotNotify(LdSnapshotCacheItem* itemP, bool deleted)
   if (rc != 0 || resp.statusCode < 200 || resp.statusCode >= 300)
     COR_E("snapshotNotify: POST %s failed (rc=%d, status=%d)",
           endpointP->value.s, rc, resp.statusCode);
+
+  corRestClientResponseCleanup(&resp);
+  corRestClientRequestCleanup(&req);
 }

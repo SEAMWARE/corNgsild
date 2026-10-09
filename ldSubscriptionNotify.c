@@ -1073,6 +1073,7 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   }
 
   corRestClientResponseCleanup(&resp);
+  corRestClientRequestCleanup(&req);     // the header vector, malloc'd when receiverInfo made it outgrow the inline one
   ldNotifyStatsHookInvoke(false /*csrSub*/, ok);
 }
 
