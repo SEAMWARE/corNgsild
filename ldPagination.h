@@ -52,6 +52,15 @@ extern void ldPaginationLinkHeaderAt(bool hasMore, int nextOffset);
 
 // -----------------------------------------------------------------------------
 //
+// ldPaginationEntityMapLinkHeader - the Link header of a page served from an EntityMap: every link
+//                                   names the map (entityMap=<mapId>), never the query that made it
+//
+extern void ldPaginationEntityMapLinkHeader(const char* mapId, int offset, int limit, int nextOffset, int total, bool hasMore);
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldTemporalPaginationLinkHeader - Link rel="intervalafter"/"intervalbefore"
 //                                  page pointers (§ 6.4.7.3)
 //

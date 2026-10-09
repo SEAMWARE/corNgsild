@@ -186,8 +186,10 @@ typedef struct CorNgsild
   char*         orderGeometry;   // ?orderGeometry= reference geometry type (default Point)
 
   // URL parameters — entity map + split entities
-  bool    entityMapCreate;    // true if ?entityMap=true (create new map)
-  char*   entityMapId;        // non-NULL if ?entityMap=<mapId> (page from existing)
+  bool    entityMapCreate;    // true if ?entityMap=true (create new map) - or the broker decided to (entityMapAuto)
+  bool    entityMapAuto;      // the map is the broker's own: a query paginated past its first page (200, not 201)
+  bool    entityMapAutoOff;   // the broker's own map did not fit in the maps' memory: this request pages without one
+  char*   entityMapId;        // non-NULL if ?entityMap=<mapId> or the NGSILD-EntityMap request header (page from existing)
   bool    splitEntitiesSet;   // true if ?splitEntities= was present in URL
   bool    splitEntitiesVal;   // value of ?splitEntities= (only valid if splitEntitiesSet)
 

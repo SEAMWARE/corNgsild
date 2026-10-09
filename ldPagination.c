@@ -16,6 +16,7 @@
 #include "corNgsild/CorNgsild.h"                         // corNgsild
 #include "corNgsild/ldParams.h"                           // LD_PARAM_LIMIT, LD_PARAM_OFFSET
 #include "corRest/CorRestIn.h"                      // corAcceptParse, CorMimeType
+#include "corRest/corRestUrlValueEncode.h"             // corRestUrlValueEncode
 
 #include "corNgsild/ldPagination.h"                       // Own interface
 
@@ -169,6 +170,139 @@ void ldPaginationLinkHeaderAt(bool hasMore, int nextOffset)
   {
     corRest.out.headerV[corRest.out.headerCount].key   = (char*) "Link";
     corRest.out.headerV[corRest.out.headerCount].value  = buf;
+    corRest.out.headerCount++;
+  }
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// entityMapLinkSkip - a URL parameter the pages of an EntityMap do not repeat
+//
+// A page served from a map is the map's slice, not a query: the parameters that SELECT were bound to
+// the map when it was created (and are re-applied from it to every page - getEntities.c,
+// bindEntityMapFilters), and a link repeating them would be a link a server could re-query from.
+// Pagination is ours to set, and what made the map (local, splitEntities, csf, orderBy and its
+// companions, entityMapLifetime) has nothing left to do. Everything else - what SHAPES the answer:
+// options, format, pick, omit, attrs, lang, join, count, sysAttrs, ... - is carried over, as
+// § 7.4.2.2 asks: "all the parameters needed to allow NGSI-LD Clients to retrieve the next and
+// previous page".
+//
+static bool entityMapLinkSkip(const char* name)
+{
+  static const char* skipV[] =
+  {
+    "entityMap", "limit", "offset",
+    "type", "q", "scopeQ", "georel", "geometry", "coordinates", "geoproperty", "id", "idPattern",
+    "local", "splitEntities", "csf", "orderBy", "collation", "orderFrom", "orderGeometry",
+    "entityMapLifetime",
+    NULL
+  };
+
+  for (int ix = 0; skipV[ix] != NULL; ix++)
+  {
+    if (strcmp(name, skipV[ix]) == 0)
+      return true;
+  }
+
+  return false;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldPaginationEntityMapLinkHeader - the Link header of a page served from an EntityMap
+//
+// Every link names the map (entityMap=<mapId>) - never the query that created it: a link that
+// repeated `entityMap=true` created a second map when followed (roadmap § 13.2). rel="first" and
+// rel="prev" on any page but the first, rel="next" and rel="last" while the map holds more:
+//
+//   offset      where this page starts in the map
+//   nextOffset  where the next one does - offset + limit, or less when the byte budget ended the page
+//   total       the map's size (the frozen set) - rel="last" is the page that holds its last entity
+//
+void ldPaginationEntityMapLinkHeader(const char* mapId, int offset, int limit, int nextOffset, int total, bool hasMore)
+{
+  bool hasPrev = (offset > 0);
+
+  if ((hasPrev == false) && (hasMore == false))
+    return;
+
+  if (limit <= 0)
+    limit = 20;
+
+  //
+  // The carried-over parameters, encoded again: corRest decoded them on the way in, and a raw '&' or
+  // space in a value (a lang list, a pick of an IRI) would break the link.
+  //
+  int need = 1;
+
+  for (int i = 0; i < corRest.in.uriParamCount; i++)
+  {
+    const char* v = corRest.in.uriParamV[i].value;
+    need += strlen(corRest.in.uriParamV[i].key) + 2 + ((v != NULL) ? 3 * strlen(v) : 0);
+  }
+
+  char* params = (char*) corAlloc(&corRest.kalloc, need);
+  int   pLen   = 0;
+
+  params[0] = 0;
+
+  for (int i = 0; i < corRest.in.uriParamCount; i++)
+  {
+    const char* key = corRest.in.uriParamV[i].key;
+
+    if (entityMapLinkSkip(key))
+      continue;
+
+    const char* value = (corRest.in.uriParamV[i].value != NULL) ? corRestUrlValueEncode(corRest.in.uriParamV[i].value, &corRest.kalloc) : "";
+
+    pLen += snprintf(params + pLen, need - pLen, "&%s=%s", key, value);
+  }
+
+  const char* path      = "/ngsi-ld/v1/entities";
+  const char* mediaType = ldPaginationMediaType();
+  int         bufSize   = 4 * (128 + strlen(path) + strlen(mapId) + pLen + strlen(mediaType));
+  char*       buf       = (char*) corAlloc(&corRest.kalloc, bufSize);
+  int         bLen      = 0;
+
+  if (hasPrev)
+  {
+    int prevOffset = offset - limit;
+
+    if (prevOffset < 0)
+      prevOffset = 0;
+
+    bLen += snprintf(buf + bLen, bufSize - bLen,
+                     "<%s?entityMap=%s%s&limit=%d&offset=0>;rel=\"first\";type=\"%s\", "
+                     "<%s?entityMap=%s%s&limit=%d&offset=%d>;rel=\"prev\";type=\"%s\"",
+                     path, mapId, params, limit, mediaType,
+                     path, mapId, params, limit, prevOffset, mediaType);
+  }
+
+  if (hasMore)
+  {
+    int lastOffset = (total > 0) ? ((total - 1) / limit) * limit : 0;
+
+    if (lastOffset < nextOffset)                      // a page the budget ended: the last page starts after it
+      lastOffset = nextOffset;
+
+    if (bLen > 0)
+      bLen += snprintf(buf + bLen, bufSize - bLen, ", ");
+
+    bLen += snprintf(buf + bLen, bufSize - bLen,
+                     "<%s?entityMap=%s%s&limit=%d&offset=%d>;rel=\"next\";type=\"%s\", "
+                     "<%s?entityMap=%s%s&limit=%d&offset=%d>;rel=\"last\";type=\"%s\"",
+                     path, mapId, params, limit, nextOffset, mediaType,
+                     path, mapId, params, limit, lastOffset, mediaType);
+  }
+
+  if (corRest.out.headerCount < corRest.out.headerSize)
+  {
+    corRest.out.headerV[corRest.out.headerCount].key   = (char*) "Link";
+    corRest.out.headerV[corRest.out.headerCount].value = buf;
     corRest.out.headerCount++;
   }
 }

@@ -96,6 +96,17 @@ typedef struct LdEntityMap
   // and drop the store's reference; the last reference frees it.
   int                  refCount;
 
+  //
+  // An AUTOMATIC map is the broker's own - created for a query paginated past its first page (roadmap
+  // § 13). Its lifetime slides: every page served from it moves expiresAt to now + lifetimeNs. When the
+  // maps' memory (ldEntityMapMaxBytes) is spent, the automatic map used longest ago gives way first; a
+  // map a client asked for (entityMap=true, POST /entityMaps) is never evicted - it only expires.
+  //
+  bool                 automatic;
+  uint64_t             lifetimeNs;     // the sliding lifetime of an automatic map
+  uint64_t             lastUsed;       // epoch nanoseconds: created, or a page last served from it
+  int64_t              bytes;          // what the map holds (an estimate, malloc overhead included)
+
   struct LdEntityMap*  next;           // linked list in store
 } LdEntityMap;
 
