@@ -10,6 +10,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // 
 //
+#include <stdint.h>                                      // uint64_t
 #include <stdbool.h>                                     // bool
 
 #include "corTree/CorNode.h"                            // CorNode
@@ -48,6 +49,17 @@ extern void ldPaginationLinkHeader(bool hasMore);
 //                            (a page shorter than limit: offset + the entities it holds)
 //
 extern void ldPaginationLinkHeaderAt(bool hasMore, int nextOffset);
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldPaginationSeekLinkHeader - the Link header of a page that is a position in the result's order
+//
+// next / prev carry the request's parameters (but limit, offset and skipMask's), limit, and
+// <nextParam>=<nextCursor> / <prevParam>=<prevCursor> - a NULL cursor: no such link.
+//
+extern void ldPaginationSeekLinkHeader(uint64_t skipMask, const char* nextParam, const char* nextCursor, const char* prevParam, const char* prevCursor);
 
 
 
