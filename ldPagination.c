@@ -98,7 +98,18 @@ const char* ldPaginationMediaType(void)
 static const char* linkValueEncodeAs(const char* value, bool separators)
 {
   const char* v    = corRestUrlValueEncode(value, &corRest.kalloc);
-  int         n    = strlen(v);
+  int         n    = 0;
+  bool        any  = false;
+
+  for (const char* p = v; *p != 0; p++, n++)        // the common case: nothing to encode - the value as it is
+  {
+    if ((*p == '<') || (*p == '>') || (*p == '"') || (*p == ' ') || (separators && ((*p == ',') || (*p == ';'))))
+      any = true;
+  }
+
+  if (any == false)
+    return v;
+
   char*       out  = (char*) corAlloc(&corRest.kalloc, 3 * n + 1);
   int         o    = 0;
 
