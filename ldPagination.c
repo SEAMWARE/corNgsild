@@ -87,6 +87,49 @@ const char* ldPaginationMediaType(void)
 
 // -----------------------------------------------------------------------------
 //
+// linkValueEncodeAs - a URL parameter value for a URI-reference inside a Link header
+//
+// corRestUrlValueEncode leaves the q language's own characters alone ('=', '"', ';', '<', '>', ...).
+// Inside "<...>" a '>' ends the URI-reference: that, '<', '"' and a space are percent-encoded here
+// as well. With `separators`, also ',' and ';' - where a client splitting the header starts a new
+// link or parameter (the links of an EntityMap).
+//
+static const char* linkValueEncodeAs(const char* value, bool separators)
+{
+  const char* v    = corRestUrlValueEncode(value, &corRest.kalloc);
+  int         n    = strlen(v);
+  char*       out  = (char*) corAlloc(&corRest.kalloc, 3 * n + 1);
+  int         o    = 0;
+
+  for (int i = 0; i < n; i++)
+  {
+    char c = v[i];
+
+    if ((c == '<') || (c == '>') || (c == '"') || (c == ' ') || (separators && ((c == ',') || (c == ';'))))
+      o += snprintf(out + o, 4, "%%%02X", (unsigned char) c);
+    else
+      out[o++] = c;
+  }
+
+  out[o] = 0;
+  return out;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// linkValueEncode - a value for the links of an EntityMap: linkValueEncodeAs, ',' and ';' encoded too
+//
+static const char* linkValueEncode(const char* value)
+{
+  return linkValueEncodeAs(value, true);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldPaginationLinkHeader - add Link header with next/prev pagination links
 //
 // Builds a Link header (RFC 8288) with rel="next" and/or rel="prev" based on
@@ -117,11 +160,13 @@ void ldPaginationLinkHeaderAt(bool hasMore, int nextOffset)
   if (!hasMore && offset == 0)
     return;
 
-  // Build the query string from original URI params, skipping limit /
-  // offset (we'll add our own pagination values).
-  char params[2048];
-  params[0] = '\0';
-  int  pLen = 0;
+  //
+  // The query string from the request's parameters, but limit / offset (re-emitted below), each value
+  // encoded again (they arrive decoded: q=speed%3E20 is "speed>20", and a raw '>' ends the link's
+  // URI-reference). Sized from the parameters: a fixed buffer cut a long query, and its link with it.
+  //
+  int          pSize  = 1;
+  const char** valueV = (const char**) corAlloc(&corRest.kalloc, sizeof(char*) * (corRest.in.uriParamCount + 1));
 
   for (int i = 0; i < corRest.in.uriParamCount; i++)
   {
@@ -129,17 +174,28 @@ void ldPaginationLinkHeaderAt(bool hasMore, int nextOffset)
     if (corRest.in.uriParamV[i].bit & (LD_PARAM_LIMIT | LD_PARAM_OFFSET))
       continue;
 
-    pLen += snprintf(params + pLen, sizeof(params) - pLen, "%s=%s&",
-                     corRest.in.uriParamV[i].key, corRest.in.uriParamV[i].value);
+    valueV[i] = linkValueEncodeAs((corRest.in.uriParamV[i].value != NULL) ? corRest.in.uriParamV[i].value : "", false);
+    pSize    += strlen(corRest.in.uriParamV[i].key) + strlen(valueV[i]) + 2;
   }
 
-  // Build Link header value
-  // Max: two link-values, each ~300 bytes => 1024 is plenty
-  int  bufSize = 1024;
-  char* buf = (char*) corAlloc(&corRest.kalloc, bufSize);
-  int  bLen = 0;
+  char* params = (char*) corAlloc(&corRest.kalloc, pSize);
+  int   pLen   = 0;
 
+  params[0] = '\0';
+
+  for (int i = 0; i < corRest.in.uriParamCount; i++)
+  {
+    if (corRest.in.uriParamV[i].bit & (LD_PARAM_LIMIT | LD_PARAM_OFFSET))
+      continue;
+
+    pLen += snprintf(params + pLen, pSize - pLen, "%s=%s&", corRest.in.uriParamV[i].key, valueV[i]);
+  }
+
+  // The Link header: two link-values, each the path, the parameters and ~100 bytes more
   const char* mediaType = ldPaginationMediaType();
+  int         bufSize   = 2 * (strlen(corRest.in.urlPath) + pLen + strlen(mediaType) + 100);
+  char*       buf       = (char*) corAlloc(&corRest.kalloc, bufSize);
+  int         bLen      = 0;
 
   // prev link only (rel=first / rel=last are permitted by § 6.3.10
   // but redundant for offset/limit clients and the ETSI conformance
@@ -173,37 +229,6 @@ void ldPaginationLinkHeaderAt(bool hasMore, int nextOffset)
     corRest.out.headerV[corRest.out.headerCount].value  = buf;
     corRest.out.headerCount++;
   }
-}
-
-
-
-// -----------------------------------------------------------------------------
-//
-// linkValueEncode - a URL parameter value for a URI-reference inside a Link header
-//
-// corRestUrlValueEncode leaves the q language's own characters alone ('=', '"', ';', '<', '>', ...).
-// Inside "<...>" a '>' ends the URI-reference, and a ',' or ';' is where a client splitting the header
-// starts a new link or parameter: those, '<', '"' and a space are percent-encoded here as well.
-//
-static const char* linkValueEncode(const char* value)
-{
-  const char* v    = corRestUrlValueEncode(value, &corRest.kalloc);
-  int         n    = strlen(v);
-  char*       out  = (char*) corAlloc(&corRest.kalloc, 3 * n + 1);
-  int         o    = 0;
-
-  for (int i = 0; i < n; i++)
-  {
-    char c = v[i];
-
-    if ((c == '<') || (c == '>') || (c == ',') || (c == ';') || (c == '"') || (c == ' '))
-      o += snprintf(out + o, 4, "%%%02X", (unsigned char) c);
-    else
-      out[o++] = c;
-  }
-
-  out[o] = 0;
-  return out;
 }
 
 
