@@ -167,12 +167,18 @@ static void addAttrType(CorNode* typeEntry, const char* attrName, const char* at
 
 // -----------------------------------------------------------------------------
 //
-// expandShort - short name → full IRI via our own core @context
+// expandShort - a name or IRI from an upstream response, in the broker's own internal form
 //
 // Upstream responses default to the NGSI-LD core @context, so expanding
 // short names here against core gives the right IRI most of the time.
 // A future refinement can parse the Link header of the response and
 // use the advertised @context.
+//
+// Also for the `id` of an upstream Attribute / EntityType: the Full URI of the
+// name (§ 5.2.6.10.1), which for a CORE term ("https://uri.etsi.org/ngsi-ld/location")
+// corLdExpand turns into the short name the broker holds core terms by - the key
+// the local entries are aggregated under. Taken raw, a core Attribute held by the
+// broker and by a source was listed twice.
 //
 static const char* expandShort(const char* name)
 {
@@ -235,7 +241,7 @@ static void mergeEntityTypeArray(CorNode* agg, CorNode* respP, bool details)
     CorNode* idP = corTreeLookup(et, "id");
     if (idP == NULL || idP->type != CorString) continue;
 
-    CorNode* te = typeEntryEnsure(agg, idP->value.s, details);
+    CorNode* te = typeEntryEnsure(agg, expandShort(idP->value.s), details);
     CorNode* attrs = corTreeLookup(te, "attrs");
 
     CorNode* anArr = corTreeLookup(et, "attributeNames");
@@ -264,7 +270,7 @@ static void mergeEntityTypeInfo(CorNode* agg, CorNode* respP)
   CorNode* idP = corTreeLookup(respP, "id");
   if (idP == NULL || idP->type != CorString) return;
 
-  CorNode* te = typeEntryEnsure(agg, idP->value.s, true);
+  CorNode* te = typeEntryEnsure(agg, expandShort(idP->value.s), true);
 
   CorNode* countP = corTreeLookup(respP, "entityCount");
   if (countP != NULL && countP->type == CorInt)
@@ -284,14 +290,16 @@ static void mergeEntityTypeInfo(CorNode* agg, CorNode* respP)
       CorNode* adIdP = corTreeLookup(ad, "id");
       if (adIdP == NULL || adIdP->type != CorString) continue;
 
-      stringArrayAddUnique(attrs, adIdP->value.s);
+      const char* adIri = expandShort(adIdP->value.s);
+
+      stringArrayAddUnique(attrs, adIri);
 
       CorNode* atArr = corTreeLookup(ad, "attributeTypes");
       if (atArr != NULL && atArr->type == CorArray)
       {
         for (CorNode* at = atArr->value.head; at != NULL; at = at->next)
           if (at->type == CorString)
-            addAttrType(te, adIdP->value.s, at->value.s);
+            addAttrType(te, adIri, at->value.s);
       }
     }
   }
@@ -312,7 +320,7 @@ static void mergeAttributeArray(CorNode* agg, CorNode* respP, bool details)
     CorNode* idP = corTreeLookup(at, "id");
     if (idP == NULL || idP->type != CorString) continue;
 
-    CorNode* ae = attrEntryEnsure(agg, idP->value.s, details);
+    CorNode* ae = attrEntryEnsure(agg, expandShort(idP->value.s), details);
     if (!details) continue;
 
     CorNode* tnArr = corTreeLookup(at, "typeNames");
@@ -339,7 +347,7 @@ static void mergeAttributeInfo(CorNode* agg, CorNode* respP)
   CorNode* idP = corTreeLookup(respP, "id");
   if (idP == NULL || idP->type != CorString) return;
 
-  CorNode* ae = attrEntryEnsure(agg, idP->value.s, true);
+  CorNode* ae = attrEntryEnsure(agg, expandShort(idP->value.s), true);
 
   CorNode* countP = corTreeLookup(respP, "attributeCount");
   if (countP != NULL && countP->type == CorInt)
