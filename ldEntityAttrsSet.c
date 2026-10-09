@@ -417,7 +417,11 @@ static void applyScope(CorNode* target, CorNode* fragScope, bool overwrite, CorA
   //
   CorNode* firstP = arrayP->value.head;
   if ((firstP != NULL) && (firstP->next == NULL))
+  {
     corTreeChildAdd(target, corTreeString(allocP, LD_VOCAB_SCOPE, firstP->value.s));
+    if (allocP == NULL)          // a malloc'd tree (the store's own): the array is not part of it
+      corTreeFree(arrayP);
+  }
   else
     corTreeChildAdd(target, arrayP);
 }
