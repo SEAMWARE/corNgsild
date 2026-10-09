@@ -90,6 +90,16 @@ typedef struct LdEntityMap
   //
   char*                boundQStored;
 
+  //
+  // The URL parameters of the request that created the map - all but pagination (limit, offset) and
+  // entityMap / entityMapLifetime - as key, value pairs (decoded, malloc'd; NULL when none). A link to
+  // a page of the map repeats them (TS 104-175 § 9.6: a request referencing a map "shall use the same
+  // parameters as in the original request"), so a followed link is a complete query by itself - and
+  // can create a new map should this one be gone.
+  //
+  char**               queryParamV;    // key0, value0, key1, value1, ...
+  int                  queryParamCount; // pairs
+
   // References (as the snapshot cache): one held by the store while the map is in it, one per
   // pin. A request that uses the map - pages it, renders it, has its query parameters pointing
   // at the map's bound strings - pins it for the request. Remove and the expiry purge unlink it

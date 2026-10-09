@@ -101,4 +101,10 @@ extern void ldEntityMapTouch(LdEntityMap* mapP);
 // ldEntityMapRequestHeader - the NGSILD-EntityMap request header into corNgsild.entityMapId (false: 400 raised)
 extern bool ldEntityMapRequestHeader(void);
 
+// ldEntityMapSetQueryParams - the URL parameters of the creating request (all but pagination) into the map
+extern void ldEntityMapSetQueryParams(LdEntityMap* mapP);
+
+// ldEntityMapQueryParam - the value of a URL parameter of the request that created the map (NULL: none)
+extern const char* ldEntityMapQueryParam(LdEntityMap* mapP, const char* key);
+
 #endif  // CORNGSILD_LDENTITYMAP_OPS_H_

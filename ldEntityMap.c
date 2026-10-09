@@ -393,6 +393,12 @@ static void mapFree(LdEntityMap* mapP)
   if (mapP->boundGeometry    != NULL) free(mapP->boundGeometry);
   if (mapP->boundCoordinates != NULL) free(mapP->boundCoordinates);
   if (mapP->boundGeoproperty != NULL) free(mapP->boundGeoproperty);
+  if (mapP->queryParamV != NULL)
+  {
+    for (int ix = 0; ix < 2 * mapP->queryParamCount; ix++)
+      free(mapP->queryParamV[ix]);
+    free(mapP->queryParamV);
+  }
   free(mapP);
 }
 
@@ -694,4 +700,62 @@ bool ldEntityMapRequestHeader(void)
   }
 
   return true;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldEntityMapSetQueryParams - the URL parameters of the creating request into the map (LdEntityMap.queryParamV)
+//
+void ldEntityMapSetQueryParams(LdEntityMap* mapP)
+{
+  if ((mapP == NULL) || (corRest.in.uriParamCount <= 0))
+    return;
+
+  char**  pairV = (char**) calloc(2 * corRest.in.uriParamCount, sizeof(char*));
+  int     n     = 0;
+  int64_t bytes = 2 * corRest.in.uriParamCount * sizeof(char*) + MALLOC_OVERHEAD;
+
+  if (pairV == NULL)
+    return;
+
+  for (int i = 0; i < corRest.in.uriParamCount; i++)
+  {
+    const char* key   = corRest.in.uriParamV[i].key;
+    const char* value = (corRest.in.uriParamV[i].value != NULL) ? corRest.in.uriParamV[i].value : "";
+
+    if ((strcmp(key, "limit")             == 0) || (strcmp(key, "offset")    == 0) ||
+        (strcmp(key, "entityMap")         == 0) || (strcmp(key, "entityMapLifetime") == 0))
+      continue;
+
+    pairV[2 * n]     = strdup(key);
+    pairV[2 * n + 1] = strdup(value);
+    bytes           += strlen(key) + strlen(value) + 2 + 2 * MALLOC_OVERHEAD;
+    n++;
+  }
+
+  mapP->queryParamV     = pairV;
+  mapP->queryParamCount = n;
+  mapBytesAdd(mapP, bytes);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldEntityMapQueryParam - the value of a URL parameter of the creating request (NULL: it had none)
+//
+const char* ldEntityMapQueryParam(LdEntityMap* mapP, const char* key)
+{
+  if ((mapP == NULL) || (mapP->queryParamV == NULL))
+    return NULL;
+
+  for (int ix = 0; ix < mapP->queryParamCount; ix++)
+  {
+    if (strcmp(mapP->queryParamV[2 * ix], key) == 0)
+      return mapP->queryParamV[2 * ix + 1];
+  }
+
+  return NULL;
 }
