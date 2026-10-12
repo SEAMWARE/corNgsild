@@ -23,6 +23,7 @@
 #include <stdint.h>                                    // uint64_t
 #include <string.h>                                    // strcmp (for inline helpers)
 
+#include "corAlloc/CorAlloc.h"                       // CorAlloc
 #include "corTree/CorNode.h"
 
 #include "corNgsild/ldEntityMerge.h"                    // LdMergeReport
@@ -127,6 +128,24 @@ typedef struct LdNotifyPendingEntry
 //
 // pendingN == 1 is the single-entity case — still valid, produces the same
 // notification shape as the pre-batch implementation (one data[] of one).
+//
+// -----------------------------------------------------------------------------
+//
+// LdNotifyFilterHook - the broker's last word on a notification's entities (its auth plugin): every entity
+// of 'dataArrayP' - the notification's data, the linked entities of a join included - the subscriber may
+// not read is removed (kaP: the arena the notification is built in). A notification left with none is not
+// sent. While a hook is set, join=inline is not done (its nested entities could not be decided one by one).
+// NULL (the default): every entity goes out.
+//
+typedef void (*LdNotifyFilterHook)(void* tenantP, const char* subId, CorNode* dataArrayP, CorAlloc* kaP);
+
+extern LdNotifyFilterHook ldNotifyFilterHook;
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldSubscriptionNotifyBatch -
 //
 extern void ldSubscriptionNotifyBatch(LdSubCache*           cacheP,
                                       LdNotifyPendingEntry* pendingV,

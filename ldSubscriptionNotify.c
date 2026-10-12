@@ -750,6 +750,10 @@ static CorNode* buildNotifDataEntry(LdSubCacheItem*      itemP,
 // notificationSendMany - build a Notification payload with N entities in data[]
 // and POST it to the subscription's endpoint.
 //
+LdNotifyFilterHook ldNotifyFilterHook = NULL;
+
+
+
 static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** entries, int n)
 {
   if (itemP->endpointUri == NULL || itemP->subId == NULL || n == 0)
@@ -782,10 +786,21 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   // § 5.2.14 notification.join — linked-entity retrieval (§ 4.5.23).
   // Hook is installed by the broker (it owns db.* and the reg cache);
   // a no-op when the broker hasn't registered or join is "@none".
-  if (itemP->notifJoinActive)
+  if (itemP->notifJoinActive && ((ldNotifyFilterHook == NULL) || (strcmp(itemP->notifJoin, "inline") != 0)))
   {
     int level = (itemP->notifJoinLevel > 0) ? itemP->notifJoinLevel : 1;
     ldLinkedEntitiesHookInvoke(dataArray, itemP->notifJoin, level, itemP->sysAttrs, corNgsild.tenantP);
+  }
+
+  //
+  // The broker's last word: the entities the subscriber may not read go - and with them, perhaps, the notification
+  //
+  if (ldNotifyFilterHook != NULL)
+  {
+    ldNotifyFilterHook(corNgsild.tenantP, itemP->subId, dataArray, corRest.kallocP);
+
+    if (dataArray->value.head == NULL)
+      return;
   }
 
   // Format conversion (deferred from buildNotifDataEntry so the linked-
