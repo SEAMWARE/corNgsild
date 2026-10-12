@@ -305,6 +305,10 @@ typedef struct CorNgsild
   // point at its bound strings) - released by ldEntityMapRequestRelease, like snapshotPinned.
   struct LdEntityMap*          entityMapPinned;
 
+  // Who sent the request, as the broker's auth plugin found it (--auth): opaque, the broker's - set when
+  // the request is let in, released by the post-response hook. NULL: no auth plugin, or not yet decided.
+  void*                        authP;
+
 } CorNgsild;
 
 
