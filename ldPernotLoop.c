@@ -39,6 +39,7 @@
 #include "corNgsild/ldEntityToApi.h"                    // ldEntityToApi
 #include "corNgsild/ldStripSysAttrs.h"                  // ldStripSysAttrs
 #include "corNgsild/ldPeriodicLoop.h"                   // ldPeriodicLoopRegister
+#include "corNgsild/ldSubscriptionNotify.h"            // ldNotifyFilterHook
 #include "corNgsild/ldPernotLoop.h"                     // Own interface
 
 
@@ -120,10 +121,22 @@ static bool pernotSendNotification(LdPernotItem* itemP, CorNode* entityArray, Co
   corTreeChildAdd(notification, dataArray);
 
   // § 5.2.14 notification.join — linked-entity retrieval (§ 4.5.23)
-  if (itemP->notifJoin != NULL && strcmp(itemP->notifJoin, "@none") != 0)
+  if (itemP->notifJoin != NULL && strcmp(itemP->notifJoin, "@none") != 0 &&
+      ((ldNotifyFilterHook == NULL) || (strcmp(itemP->notifJoin, "inline") != 0)))
   {
     int level = (itemP->notifJoinLevel > 0) ? itemP->notifJoinLevel : 1;
     ldLinkedEntitiesHookInvoke(dataArray, itemP->notifJoin, level, false, itemP->tenantP);
+  }
+
+  //
+  // The broker's last word (ldNotifyFilterHook): the entities the subscriber may not read go
+  //
+  if (ldNotifyFilterHook != NULL)
+  {
+    ldNotifyFilterHook(itemP->tenantP, itemP->subId, dataArray, kaP);
+
+    if (dataArray->value.head == NULL)
+      return false;
   }
 
   // Compact using the subscription's @context so attribute IRIs (e.g.
