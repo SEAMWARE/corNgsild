@@ -447,6 +447,13 @@ static void ldParseHook(void)
   if ((corRest.serviceP != NULL) && ((corRest.serviceP->ldOp & LdOpInvokeService) != 0))
     return;
 
+  //
+  // A route whose body is JSON of the application's own (CorRestServiceOptions.features.plainJsonBody - the
+  // ODRL policies of coraine's policy API): no JSON-LD document either
+  //
+  if ((corRest.serviceP != NULL) && (corRest.serviceP->options.features.plainJsonBody == 1))
+    return;
+
   CorNode* atCtx   = corTreeLookup(corRest.in.requestTree, "@context");
   char*   ct       = corRest.in.contentType;
   bool    isLdJson = (ct != NULL && strncasecmp(ct, "application/ld+json", 19) == 0);
