@@ -871,7 +871,12 @@ static void distOpBodyParse(LdDistOpBatchResult* rP)
 //         but its payload was invalid / non-NGSI-LD (the 2xx→502 downgrade set
 //         by distOpBodyParse, errorDetail "malformed...").
 //   299 - Miscellaneous Persistent Warning — a genuine HTTP error status (e.g.
-//         403 - Forbidden) was received from the endpoint.
+//         403 - Forbidden) was received from the endpoint; or no request could
+//         be made: no forwarding plugin for the endpoint's scheme (a broker
+//         built without cor:// and a cor:// registration) - every request fails
+//         the same way, so persistent, and not 199's timeout.
+//
+// The warn-agent is the endpoint's authority (host[:port]), whatever its scheme.
 //
 // NOT signalled (skipped here):
 //   - a 404 Not Found — § 6.3.5 states a source responding with no data and a
@@ -896,11 +901,13 @@ char* ldDistOpWarnings(LdDistOpBatchItem* itemV, LdDistOpBatchResult* resultV, i
     LdDistOpBatchResult* rP       = &resultV[i];
     bool                 cooldown = (rP->errorDetail != NULL) && (strstr(rP->errorDetail, "cooldown")  != NULL);
     bool                 malformed = (rP->errorDetail != NULL) && (strstr(rP->errorDetail, "malformed") != NULL);
+    bool                 noPlugin  = (rP->errorDetail != NULL) && (strstr(rP->errorDetail, "no forwarding plugin") != NULL);
 
     int         code;
     const char* warnText;
 
     if      (cooldown)             continue;                    // no request was made (§ 5.2.34)
+    else if (noPlugin)             { code = 299; warnText = "The registration endpoint's scheme is not supported by this broker"; }
     else if (rP->statusCode == 0)  { code = 199; warnText = "No response was received from the registration endpoint within the timeout period"; }
     else if (malformed)            { code = 111; warnText = "An invalid response payload was received from the registration endpoint"; }
     else if (rP->statusCode == 404) continue;                   // § 6.3.5: a 404 (no data) is NOT abnormal behaviour
@@ -915,8 +922,10 @@ char* ldDistOpWarnings(LdDistOpBatchItem* itemV, LdDistOpBatchResult* resultV, i
       strcpy(authority, "-");
     else
     {
-      if      (strncmp(ep, "https://", 8) == 0) ep += 8;
-      else if (strncmp(ep, "http://",  7) == 0) ep += 7;
+      const char* afterScheme = strstr(ep, "://");             // http://, https://, cor://, ...
+
+      if (afterScheme != NULL)
+        ep = afterScheme + 3;
 
       int a = 0;
       while ((ep[a] != 0) && (ep[a] != '/') && (a < (int) sizeof(authority) - 1))
@@ -1036,6 +1045,7 @@ static void distOpPluginItem(LdDistOpBatchItem* itemP, CorRestVerb verb, CorRest
     csr->lastFailure = nowNs;
     rP->statusCode   = 0;
     rP->errorDetail  = "no forwarding plugin available for endpoint";
+    COR_W("dist-op %s: CSR %s not forwarded (no forwarding plugin for the endpoint's scheme)", csr->endpoint, (csr->regId != NULL) ? csr->regId : "?");
     return;
   }
 
