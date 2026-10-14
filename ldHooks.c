@@ -846,11 +846,24 @@ static void ldParseHook(void)
           CorNode* entry = corTreeObject(corRest.kallocP, NULL);
           corTreeChildAdd(entry, corTreeString(corRest.kallocP, "entityId", eid));
           CorNode* errObj = corTreeObject(corRest.kallocP, "error");
-          corTreeChildAdd(errObj, corTreeString(corRest.kallocP, "type", LD_ERROR_LD_CONTEXT_NOT_AVAILABLE));
-          corTreeChildAdd(errObj, corTreeString(corRest.kallocP, "title", "Context Not Available"));
-          char detail[512];
-          snprintf(detail, sizeof(detail), "unable to retrieve @context from '%s'", badUrl);
-          corTreeChildAdd(errObj, corTreeString(corRest.kallocP, "detail", detail));
+          if ((corRest.out.httpStatusCode == 501) && (corRest.out.problemType != NULL))
+          {
+            //
+            // The error callback said why - a 501: downloading a @context is not in this build. That is the
+            // entity's error, not "unable to retrieve"
+            //
+            corTreeChildAdd(errObj, corTreeString(corRest.kallocP, "type", (char*) corRest.out.problemType));
+            corTreeChildAdd(errObj, corTreeString(corRest.kallocP, "title", (char*) corRest.out.problemTitle));
+            corTreeChildAdd(errObj, corTreeString(corRest.kallocP, "detail", corAllocStrdup(corRest.kallocP, corRest.out.problemDetail)));
+          }
+          else
+          {
+            corTreeChildAdd(errObj, corTreeString(corRest.kallocP, "type", LD_ERROR_LD_CONTEXT_NOT_AVAILABLE));
+            corTreeChildAdd(errObj, corTreeString(corRest.kallocP, "title", "Context Not Available"));
+            char detail[512];
+            snprintf(detail, sizeof(detail), "unable to retrieve @context from '%s'", badUrl);
+            corTreeChildAdd(errObj, corTreeString(corRest.kallocP, "detail", detail));
+          }
           corTreeChildAdd(entry, errObj);
           corTreeChildAdd(corNgsild.batchPreErrors, entry);
 
