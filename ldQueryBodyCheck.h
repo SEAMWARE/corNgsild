@@ -1,0 +1,30 @@
+//
+// FILE            ldQueryBodyCheck.h
+//
+// AUTHOR          Ken Zangelin
+//
+// Copyright 2026 Seamware
+// SPDX-License-Identifier: Apache-2.0
+//
+#ifndef CORNGSILD_LD_QUERY_BODY_CHECK_H_
+#define CORNGSILD_LD_QUERY_BODY_CHECK_H_
+
+#include <stdbool.h>                                     // bool
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldQueryBodyCheck - validate the POST /entityOperations/query payload body
+//
+// Registered as the 'payloadCheck' hook for the query route, so it runs on the
+// parsed requestTree BEFORE the service routine. A malformed Query object is
+// rejected with a pinpointed 400 BadRequestData (wrong JSON type, duplicated /
+// unknown / empty field, bad entities/attrs member, unparseable q) instead of
+// being half-ignored by the handler. Returns false (and sets the ProblemDetails
+// via ldError) on the first violation; true if the body is a valid Query - and then the request's params,
+// expanded (ldQueryBodyToParams).
+//
+extern bool ldQueryBodyCheck(void);
+
+#endif  // CORNGSILD_LD_QUERY_BODY_CHECK_H_

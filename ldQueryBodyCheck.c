@@ -1,5 +1,5 @@
 //
-// FILE            ldPCheckQuery.c
+// FILE            ldQueryBodyCheck.c
 //
 // AUTHOR          Ken Zangelin
 //
@@ -26,7 +26,7 @@
 #include "corNgsild/ldCheckUri.h"                         // ldCheckUri
 #include "corNgsild/LdGeoRel.h"                           // ldGeoRelParse
 #include "corNgsild/ldQueryBody.h"                        // ldQueryBodyToParams
-#include "corNgsild/ldPCheckQuery.h"                      // Own interface
+#include "corNgsild/ldQueryBodyCheck.h"                      // Own interface
 
 
 
@@ -158,9 +158,9 @@ static CorNode* findField(LdField* fieldV, int fields, const char* name)
 
 // -----------------------------------------------------------------------------
 //
-// pCheckEntities - each member of the Query 'entities' array is a valid selector
+// entitiesCheck - each member of the Query 'entities' array is a valid selector
 //
-static bool pCheckEntities(CorNode* entitiesP)
+static bool entitiesCheck(CorNode* entitiesP)
 {
   for (CorNode* entityP = entitiesP->value.head; entityP != NULL; entityP = entityP->next)
   {
@@ -192,14 +192,14 @@ static bool pCheckEntities(CorNode* entitiesP)
 
 // -----------------------------------------------------------------------------
 //
-// pCheckGeoQ - validate the Query 'geoQ' (§ 5.2.13 GeoQuery) sub-object
+// geoQCheck - validate the Query 'geoQ' (§ 5.2.13 GeoQuery) sub-object
 //
 // geometry, coordinates and georel are mandatory; geoproperty is optional. The
 // geometry-type and coordinates-shape values are deep-checked by the handler's
 // URL-param path (ldParamHook) — here we own the structure (mandatory/type/
 // unknown/duplicate) plus the georel parse, which the handler does not check.
 //
-static bool pCheckGeoQ(CorNode* geoQP)
+static bool geoQCheck(CorNode* geoQP)
 {
   LdField geoV[] =
   {
@@ -228,11 +228,11 @@ static bool pCheckGeoQ(CorNode* geoQP)
 
 // -----------------------------------------------------------------------------
 //
-// pCheckUriArray - every member of a URI array (e.g. datasetId) is a URI
+// uriArrayCheck - every member of a URI array (e.g. datasetId) is a URI
 //
 // The reserved keyword '@none' (instances without the field) is exempt.
 //
-static bool pCheckUriArray(CorNode* arrayP, const char* what)
+static bool uriArrayCheck(CorNode* arrayP, const char* what)
 {
   for (CorNode* memberP = arrayP->value.head; memberP != NULL; memberP = memberP->next)
   {
@@ -254,9 +254,9 @@ static bool pCheckUriArray(CorNode* arrayP, const char* what)
 
 // -----------------------------------------------------------------------------
 //
-// pCheckAttrs - each member of the Query 'attrs' array is a non-empty string
+// attrsCheck - each member of the Query 'attrs' array is a non-empty string
 //
-static bool pCheckAttrs(CorNode* attrsP)
+static bool attrsCheck(CorNode* attrsP)
 {
   for (CorNode* attrP = attrsP->value.head; attrP != NULL; attrP = attrP->next)
   {
@@ -279,9 +279,9 @@ static bool pCheckAttrs(CorNode* attrsP)
 
 // -----------------------------------------------------------------------------
 //
-// pCheckQuery -
+// ldQueryBodyCheck -
 //
-bool pCheckQuery(void)
+bool ldQueryBodyCheck(void)
 {
   CorNode* bodyP = corRest.in.requestTree;
 
@@ -375,8 +375,8 @@ bool pCheckQuery(void)
   CorNode* geoQP     = findField(fieldV, fields, "geoQ");
   CorNode* datasetIdP = findField(fieldV, fields, "datasetId");
 
-  if (entitiesP != NULL && pCheckEntities(entitiesP) == false)  return false;
-  if (attrsP    != NULL && pCheckAttrs(attrsP)        == false)  return false;
+  if (entitiesP != NULL && entitiesCheck(entitiesP) == false)  return false;
+  if (attrsP    != NULL && attrsCheck(attrsP)        == false)  return false;
 
   // q-expression: reject a syntactically broken filter up front (ldQParse sets
   // its own ProblemDetails; add a fallback in case it returns NULL silently).
@@ -390,8 +390,8 @@ bool pCheckQuery(void)
     }
   }
 
-  if (geoQP      != NULL && pCheckGeoQ(geoQP)                       == false)  return false;
-  if (datasetIdP != NULL && pCheckUriArray(datasetIdP, "datasetId") == false)  return false;
+  if (geoQP      != NULL && geoQCheck(geoQP)                       == false)  return false;
+  if (datasetIdP != NULL && uriArrayCheck(datasetIdP, "datasetId") == false)  return false;
 
   //
   // The body is the query's parameters: made them now, expanded (ldQueryBodyToParams) - the service
