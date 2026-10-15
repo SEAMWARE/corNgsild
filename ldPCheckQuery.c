@@ -341,11 +341,20 @@ bool pCheckQuery(void)
 
   //
   // timeAt: the point in time of a timepoint query (POST /temporal/timepoint/entityOperations/query) - a
-  // member of the Query there, as in a temporalQ; any other Query has no such member
+  // member of that Query only. It picks the instance of each attribute an entity had then; a temporalQ
+  // selects entities by their history, which a timepoint query does not: there, a temporalQ is refused.
   //
-  if ((fieldV[fields - 1].nodeP != NULL) && ((corRest.serviceP == NULL) || (corRest.serviceP->ldOp != LdOpQueryEntityTimepoint)))
+  bool timepoint = (corRest.serviceP != NULL) && (corRest.serviceP->ldOp == LdOpQueryEntityTimepoint);
+
+  if ((fieldV[fields - 1].nodeP != NULL) && (timepoint == false))
   {
     ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid field for query", "timeAt");
+    return false;
+  }
+
+  if (timepoint && (fieldV[5].nodeP != NULL))     // temporalQ
+  {
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid field for query", "temporalQ - a timepoint query's timeAt is a member of the Query");
     return false;
   }
 
