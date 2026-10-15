@@ -847,6 +847,40 @@ static bool mergeAttrWrapper(CorNode* target, CorNode* fragment, uint64_t ts, Co
 
 // -----------------------------------------------------------------------------
 //
+// newInstancesHaveValue - every instance of the fragment's wrapper that is not in the target's (a
+// new attribute: tWrapper NULL) carries its value - "value" in the DB model, whatever the type
+//
+// A merge fragment may leave the value out (§ 8.4.3: what does not change is not sent), so the
+// fragment check lets it through - but only an instance that is already there has a value to keep.
+// A simplified attribute ("speed": 12) was made an instance with its value before this.
+//
+static bool newInstancesHaveValue(const char* attrName, CorNode* tWrapper, CorNode* fWrapper)
+{
+  for (CorNode* iP = fWrapper->value.head; iP != NULL; iP = iP->next)
+  {
+    if ((iP->type != CorObject) || isNgsildNull(iP))
+      continue;
+    if ((tWrapper != NULL) && (corTreeLookup(tWrapper, iP->name) != NULL))
+      continue;
+    if (corTreeLookup(iP, "value") != NULL)
+      continue;
+
+    if ((iP->name != NULL) && (strcmp(iP->name, "@none") != 0))
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Missing Value",
+              "Attribute '%s': the instance '%s' is not in the entity - a merge that adds it gives its value", attrName, iP->name);
+    else
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Missing Value",
+              "Attribute '%s' is not in the entity - a merge that adds it gives its value", attrName);
+    return false;
+  }
+
+  return true;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // mergeApply - shared core for both fragment-apply (replace/append) and the
 // true RFC 7396 Merge Entity. deepValueMerge selects the value-leaf semantics:
 //   false → replace the primary value wholesale (Update/Partial/Append/Replace)
@@ -1033,6 +1067,12 @@ static bool mergeApply(CorNode*       target,
     // fragment itself does not.
     if (corNgsild.observedAtNs != 0 && tAttr != NULL)
       injectObservedAtIfNeeded(tAttr, fragWrapper, corNgsild.observedAtNs, targetAllocP);
+
+    //
+    // Merge Entity only: the fragment-apply flows (update, append, replace) check their fragments whole
+    //
+    if (deepValueMerge && (newInstancesHaveValue(name, tAttr, fragWrapper) == false))
+      return false;  // ldError already set - the caller stores nothing
 
     if (tAttr == NULL)
     {

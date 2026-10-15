@@ -384,6 +384,14 @@ bool ldCheckAttribute(CorNode* attrP, LdOp op, LdAttrType attrTypeFromDb, CorAll
   const bool nullAllowed = (op == LdOpMergeEntity) || (op == LdOpBatchMerge) ||
                            (op == LdOpUpdateEntity) || (op == LdOpUpdateAttrs);
 
+  //
+  // A merge (§ 8.4.3) merges "up to an arbitrary depth": its fragment carries what changes, and an
+  // attribute's value only when the value changes - {"type": "Property", "unitCode": "urn:ngsi-ld:null"}
+  // touches unitCode alone. Whether the attribute ends up WITH a value is the merge's to know, not the
+  // fragment's: ldEntityMerge refuses a new attribute or instance without one.
+  //
+  const bool mergeOp = (op == LdOpMergeEntity) || (op == LdOpBatchMerge);
+
   // If no type detected (might be a partial update), the type-specific value
   // checks below don't apply — but a structural sub-attribute carried by the
   // fragment (observedAt / unitCode / datasetId) still has a fixed shape and
@@ -431,6 +439,8 @@ bool ldCheckAttribute(CorNode* attrP, LdOp op, LdAttrType attrTypeFromDb, CorAll
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Wrong Value Field",
               "Attribute '%s' of type %s carries its value in '%s', not '%s'",
               attrP->name, ldAttrTypeToString(attrType), expectedKey, wrongValueKeyP->name);
+    else if (mergeOp)
+      goto subFields;                     // the value is not touched - the sub-attributes still are checked
     else
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Missing Value",
               "Attribute '%s' of type %s must have '%s'",
@@ -530,6 +540,12 @@ bool ldCheckAttribute(CorNode* attrP, LdOp op, LdAttrType attrTypeFromDb, CorAll
     break;
 
   case LdAttrGeoProperty:
+    //
+    // A merge descends into the value too: {"coordinates": [...]} with no "type" is a fragment of the
+    // stored geometry, not a geometry. The merged one is checked where it is stored (DB_INVALID_GEOMETRY).
+    //
+    if (mergeOp && (valueNodeP->type == CorObject) && (corTreeLookup(valueNodeP, "type") == NULL))
+      break;
     if (ldCheckGeo(valueNodeP) == false)
       return false;
     break;
@@ -602,6 +618,8 @@ bool ldCheckAttribute(CorNode* attrP, LdOp op, LdAttrType attrTypeFromDb, CorAll
   // allowed / dropped / forbidden by what a client may send for this type), and the
   // sub-attributes (everything that is not a member).
   //
+  subFields:
+  ;
   uint32_t seen = 0;
   uint32_t keep = ldAttrKeep[LdSourceEntityRequest][attrType];
   uint32_t drop = ldAttrDrop[LdSourceEntityRequest][attrType];
