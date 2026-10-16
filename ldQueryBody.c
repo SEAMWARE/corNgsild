@@ -32,7 +32,7 @@
 #include "corNgsild/LdProblem.h"                         // LD_ERROR_BAD_REQUEST_DATA
 #include "corNgsild/ldError.h"                           // ldError
 #include "corNgsild/ldTermId.h"                          // ldTermId, CorTerm*
-#include "corNgsild/ldExpandParams.h"                  // ldExpandParamsQ
+#include "corNgsild/ldExpandParams.h"                  // ldExpandParams
 #include "corNgsild/ldQueryBody.h"                       // Own interface
 
 
@@ -293,8 +293,11 @@ bool ldQueryBodyToParams(CorNode* bodyP)
   }
 
   //
-  // The request hook ran ldExpandParams before this body became params: what goes WITH q -
-  // expandValues, jsonKeys, langProperties - is applied now, or a Query body's would never be.
+  // The params expanded as the URL's are: ldExpandParams ran in the pre-service hook, before the body
+  // became params - its names (pick, omit, attrs, a geoQ's geoproperty, what goes with q) would otherwise
+  // stay as sent. Every step is idempotent: the URL's params, expanded already, stay as they are.
   //
-  return ldExpandParamsQ(&corRest.kalloc);
+  ldExpandParams(&corRest.kalloc);
+
+  return (corRest.out.problemType == NULL);
 }

@@ -25,6 +25,7 @@
 #include "corNgsild/ldQParse.h"                           // ldQParse
 #include "corNgsild/ldCheckUri.h"                         // ldCheckUri
 #include "corNgsild/LdGeoRel.h"                           // ldGeoRelParse
+#include "corNgsild/ldQueryBody.h"                        // ldQueryBodyToParams
 #include "corNgsild/ldPCheckQuery.h"                      // Own interface
 
 
@@ -372,5 +373,9 @@ bool pCheckQuery(void)
   if (geoQP      != NULL && pCheckGeoQ(geoQP)                       == false)  return false;
   if (datasetIdP != NULL && pCheckUriArray(datasetIdP, "datasetId") == false)  return false;
 
-  return true;
+  //
+  // The body is the query's parameters: made them now, expanded (ldQueryBodyToParams) - the service
+  // routine gets the query ready, whichever form it came in
+  //
+  return ldQueryBodyToParams(bodyP);
 }

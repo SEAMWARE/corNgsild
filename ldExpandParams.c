@@ -86,9 +86,8 @@ static void expandArray(char** v, CorAlloc* kaP)
 // and a q [..] under an attribute jsonKeys or langProperties names goes back to the segments as sent
 // (ldQRawValuePaths).
 //
-// Run by ldExpandParams for the URL params, and AGAIN by ldQueryBodyToParams: a POST Query's body is
-// turned into params by its service routine, after the hook has run - so expandValues in a Query
-// body was never applied at all. Every step is idempotent (expanding an IRI leaves it as it is).
+// Run by ldExpandParams. Every step is idempotent (expanding an IRI leaves it as it is): ldExpandParams
+// runs a second time for a POST Query, its body turned into params (ldQueryBodyToParams).
 //
 bool ldExpandParamsQ(CorAlloc* kaP)
 {
@@ -109,8 +108,8 @@ bool ldExpandParamsQ(CorAlloc* kaP)
 //
 // ldExpandParams - expand all vocab-bearing URL params in corNgsild
 //
-// Called once per request from the preServiceHook, after the payload body
-// has been parsed (@context available) and all URL params stored.
+// Called from the preServiceHook, after the payload body has been parsed (@context available) and all
+// URL params stored - and again by ldQueryBodyToParams for a POST Query, once its body is params too.
 //
 // Expands: typeV[], pickV[], omitV[], jsonKeysV[], expandValuesV[],
 //          geoproperty, geometryProperty.
