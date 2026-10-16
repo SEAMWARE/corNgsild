@@ -331,12 +331,32 @@ bool pCheckQuery(void)
     { "ordering",          PC_OBJ,  0,            NULL },
     { "splitEntities",     PC_BOOL, 0,            NULL },
     { "geometryProperty",  PC_STR,  0,            NULL },
-    { "local",             PC_BOOL, 0,            NULL }
+    { "local",             PC_BOOL, 0,            NULL },
+    { "timeAt",            PC_STR,  0,            NULL }    // the timepoint query's only (below)
   };
   int fields = sizeof(fieldV) / sizeof(fieldV[0]);
 
   if (ldFieldsExtract(bodyP, fieldV, fields, true) == false)
     return false;
+
+  //
+  // timeAt: the point in time of a timepoint query (POST /temporal/timepoint/entityOperations/query) - a
+  // member of that Query only. It picks the instance of each attribute an entity had then; a temporalQ
+  // selects entities by their history, which a timepoint query does not: there, a temporalQ is refused.
+  //
+  bool timepoint = (corRest.serviceP != NULL) && (corRest.serviceP->ldOp == LdOpQueryEntityTimepoint);
+
+  if ((fieldV[fields - 1].nodeP != NULL) && (timepoint == false))
+  {
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid field for query", "timeAt");
+    return false;
+  }
+
+  if (timepoint && (fieldV[5].nodeP != NULL))     // temporalQ
+  {
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid field for query", "temporalQ - a timepoint query's timeAt is a member of the Query");
+    return false;
+  }
 
   // type must be the string "Query" (the parseHook may have expanded it to the
   // default-vocab IRI — accept both, matching ldQueryBodyToParams).

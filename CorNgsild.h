@@ -309,6 +309,11 @@ typedef struct CorNgsild
   // the request is let in, released by the post-response hook. NULL: no auth plugin, or not yet decided.
   void*                        authP;
 
+  // A timepoint request (/temporal/timepoint/entities[/{id}], /temporal/timepoint/entityOperations/query):
+  // the entities AS THEY WERE at timeAtNs - read from the history instead of the current state. Set by
+  // the broker's timepoint service routines before they run the Core API's retrieve / query.
+  bool                         timepoint;
+
 } CorNgsild;
 
 

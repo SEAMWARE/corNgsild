@@ -105,7 +105,11 @@ typedef enum LdOp
 
   // Service Execution (coraine, GR CIM-055) - Invoke Entity Service: POST /entities/{id}/services/{name}.
   // Its body is the service's input, the executor's JSON - never expanded (ldParseHook).
-  LdOpInvokeService                  = 1ULL << 54
+  LdOpInvokeService                  = 1ULL << 54,
+
+  // The entity as it was at a point in time (NGSI-LD v2.1, the timepoint resources)
+  LdOpRetrieveEntityTimepoint        = 1ULL << 55,   // GET /temporal/timepoint/entities/{id}
+  LdOpQueryEntityTimepoint           = 1ULL << 56    // GET /temporal/timepoint/entities, POST /temporal/timepoint/entityOperations/query
 } LdOp;
 
 

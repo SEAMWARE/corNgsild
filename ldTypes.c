@@ -156,6 +156,8 @@ const char* ldOpToString(LdOp op)
   case LdOpDeleteTemporal:                  return "DeleteTemporal";
   case LdOpRetrieveTemporal:                return "RetrieveTemporal";
   case LdOpQueryTemporal:                   return "QueryTemporal";
+  case LdOpRetrieveEntityTimepoint:         return "RetrieveEntityTimepoint";
+  case LdOpQueryEntityTimepoint:            return "QueryEntityTimepoint";
   case LdOpCreateEntityMapQueryTemporal:    return "CreateEntityMapQueryTemporal";
   case LdOpCreateSnapshot:                  return "CreateSnapshot";
   case LdOpCloneSnapshot:                   return "CloneSnapshot";
@@ -233,6 +235,8 @@ LdOp ldOpFromName(const char* name)
   if (strcmp(name, "deleteTemporal")              == 0)  return LdOpDeleteTemporal;
   if (strcmp(name, "retrieveTemporal")            == 0)  return LdOpRetrieveTemporal;
   if (strcmp(name, "queryTemporal")               == 0)  return LdOpQueryTemporal;
+  if (strcmp(name, "retrieveEntityTimepoint")     == 0)  return LdOpRetrieveEntityTimepoint;
+  if (strcmp(name, "queryEntityTimepoint")        == 0)  return LdOpQueryEntityTimepoint;
   if (strcmp(name, "createEntityMapQueryTemporal") == 0) return LdOpCreateEntityMapQueryTemporal;
 
   return LdOpNone;
