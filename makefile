@@ -147,7 +147,7 @@ LIB_SOURCES   = corNgsild.c \
                 ldPeriodicLoop.c \
                 ldEntityMap.c \
                 ldQueryBody.c \
-                ldPCheckQuery.c \
+                ldQueryBodyCheck.c \
                 ldRegCache.c \
                 ldEntityFragment.c \
                 ldDistOp.c \
