@@ -33,6 +33,7 @@
 #include "corNgsild/ldError.h"                            // ldError
 #include "corNgsild/ldCheckDateTime.h"                    // ldIsoToNanoseconds
 #include "corNgsild/ldCheckUri.h"                         // ldUriValid
+#include "corNgsild/ldRegexValid.h"                       // ldRegexValid
 #include "corNgsild/ldQParse.h"                           // Own interface
 
 
@@ -953,6 +954,25 @@ static LdQNode* parseTerm(const char** pp, CorAlloc* kaP, QParseMode mode)
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid q parameter",
               "%s cannot be compared with an ordering operator - only a number, "
               "a quoted string, a date-time, a date or a time can", what);
+      return NULL;
+    }
+  }
+
+
+  //
+  // ~= and !~= take a POSIX extended regular expression (§ 7.2.3.2: RegExp as per IEEE 1003.2) - checked
+  // here, as idPattern is: one that does not compile matched nothing, silently, and (?i) is not POSIX.
+  // A q read back from storage was checked when it came in - and one stored before this check still
+  // loads, matching what it matched.
+  //
+  if (((nodeP->term.op == LdQPattern) || (nodeP->term.op == LdQNotPattern)) && (nodeP->term.valueType == LdQString) && (mode != QParseStored))
+  {
+    char errBuf[160];
+
+    if (ldRegexValid(nodeP->term.value.s, errBuf, sizeof(errBuf)) == false)
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid q parameter",
+              "'%s' is not a POSIX extended regular expression: %s", nodeP->term.value.s, errBuf);
       return NULL;
     }
   }
