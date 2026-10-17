@@ -293,6 +293,12 @@ typedef struct CorNgsild
   // subscriber before the request's own notification of the write.
   void*                  bridgeReleaseQ;
 
+  // This write is a bridge's own - a DataChannel's record, made into entities - not a client's. What a
+  // client writes to an attribute a bridge's channel maps may be refused by that bridge (the broker's
+  // payload check, bridge ABI 13); what the bridge itself writes is not checked against itself.
+  // Set around the write by whoever makes it.
+  bool                   bridgeOwnWrite;
+
   // The parse of this request's body (ldParse.c) - NULL unless an NGSI-LD body was parsed
   struct LdParseState* parseP;
 
