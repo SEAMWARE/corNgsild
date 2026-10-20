@@ -29,7 +29,7 @@
 #include "corNgsild/ldPernotCache.h"                    // Own interface
 #include "corNgsild/ldCheckDateTime.h"                  // ldIsoToNanoseconds
 #include "corNgsild/ldQParse.h"                         // ldQParse
-#include "corNgsild/LdScopeExpr.h"                      // ldScopeExprParse
+#include "corNgsild/LdScopeExpr.h"                      // ldScopeExprParseStored
 #include "corNgsild/LdGeoRel.h"                         // ldGeoRelParse
 #include "corNgsild/ldNotifyStream.h"                   // ldNotifyIsEventStream
 
@@ -251,7 +251,7 @@ static LdPernotItem* itemBuild(CorNode* subTree, void* tenantP, const char* tena
 
   CorNode* scopeQP = corTreeLookup(itemP->subTree, "scopeQ");
   if (scopeQP != NULL && scopeQP->type == CorString)
-    itemP->scopeExpr = ldScopeExprParse(scopeQP->value.s, &itemP->alloc);
+    itemP->scopeExpr = ldScopeExprParseStored(scopeQP->value.s, &itemP->alloc);
 
   CorNode* geoQP = corTreeLookup(itemP->subTree, "geoQ");
   if (geoQP != NULL && geoQP->type == CorObject)

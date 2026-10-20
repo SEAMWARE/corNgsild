@@ -49,10 +49,18 @@ typedef struct LdScopeExpr
 
 // -----------------------------------------------------------------------------
 //
-// ldScopeExprParse - parse a scopeQ selection expression
+// ldScopeExprParse - parse a scopeQ selection expression, checked against the grammar of § 7.2.5
 //
 // Returns a faP-allocated LdScopeExpr, or NULL on error (ldError(400) called).
 //
 extern LdScopeExpr* ldScopeExprParse(const char* value, CorAlloc* faP);
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldScopeExprParseStored - parse a stored scopeQ - the parenthesis balance its only check
+//
+extern LdScopeExpr* ldScopeExprParseStored(const char* value, CorAlloc* faP);
 
 #endif  // CORNGSILD_LDSCOPEEXPR_H_
