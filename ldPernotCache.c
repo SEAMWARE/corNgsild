@@ -31,6 +31,7 @@
 #include "corNgsild/ldQParse.h"                         // ldQParse
 #include "corNgsild/LdScopeExpr.h"                      // ldScopeExprParse
 #include "corNgsild/LdGeoRel.h"                         // ldGeoRelParse
+#include "corNgsild/ldNotifyStream.h"                   // ldNotifyIsEventStream
 
 
 
@@ -299,6 +300,14 @@ static LdPernotItem* itemBuild(CorNode* subTree, void* tenantP, const char* tena
   CorNode* endpointP = (notifP != NULL) ? corTreeLookup(notifP, LD_VOCAB_ENDPOINT) : NULL;
   CorNode* uriP     = (endpointP != NULL) ? corTreeLookup(endpointP, LD_VOCAB_URI) : NULL;
   itemP->endpointUri = (uriP != NULL && uriP->type == CorString) ? uriP->value.s : NULL;
+
+#if COR_WITH_EVENT_STREAM
+  // On an event stream: an event has no Link header - the @context goes in the body, unless the
+  // subscription asks for plain JSON (as ldSubCache does for the other notifications)
+  CorNode* acceptP = (endpointP != NULL) ? corTreeLookup(endpointP, "accept") : NULL;
+  itemP->streamLd  = ldNotifyIsEventStream(itemP->endpointUri) &&
+                     ((acceptP == NULL) || (acceptP->type != CorString) || (strcmp(acceptP->value.s, "application/json") != 0));
+#endif
 
   // § 5.2.15 endpoint.cooldown — minimum ms before retrying after failure.
   CorNode* coolP = (endpointP != NULL) ? corTreeLookup(endpointP, "cooldown") : NULL;

@@ -46,6 +46,7 @@
 #include "corNgsild/ldTraceLevels.h"                      // LdTCheckSub
 #include "corNgsild/ldTermId.h"                           // ldTermId, CorTerm*
 #include "corNgsild/ldNotifyTransport.h"                // ldNotifyIsHttp, ldNotifyTransportHas
+#include "corNgsild/ldNotifyStream.h"                   // ldNotifyIsEventStream, ldNotifyStreamOn
 
 
 
@@ -239,6 +240,9 @@ static bool checkReceiverInfo(CorNode* riP, CorNode* acceptP)
 
 
 
+
+
+
 // -----------------------------------------------------------------------------
 //
 // checkEndpoint - validate the "notification.endpoint" object
@@ -270,6 +274,22 @@ static bool checkEndpoint(CorNode* endpointP, bool complete)
       // notification, quietly. HTTP is built in; any other scheme is delivered by a transport the
       // application loaded (in coraine: the bridge plugin claiming it, e.g. --bridges mqtt).
       //
+#if COR_WITH_EVENT_STREAM
+      //
+      // urn:ngsi-ld:self: the response to the POST that made it, nothing to send to - there when the application
+      // serves streams
+      //
+      if (ldNotifyIsEventStream(childP->value.s) == true)
+      {
+        if (ldNotifyStreamOn() == false)
+        {
+          ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
+                  "'notification.endpoint.uri': this broker serves no event streams");
+          return false;
+        }
+      }
+      else
+#endif
       if ((ldNotifyIsHttp(childP->value.s) == false) && (ldNotifyTransportHas(childP->value.s) == false))
       {
         ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
@@ -1148,6 +1168,7 @@ bool ldCheckSubscription(CorNode* subP, LdOp op, bool merged, LdFormat* notifFor
       ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription", "'timeInterval' must be greater than 0");
       return false;
     }
+
   }
 
   //
