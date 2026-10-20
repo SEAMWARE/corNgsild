@@ -41,6 +41,7 @@
 #include "corNgsild/ldPeriodicLoop.h"                   // ldPeriodicLoopRegister
 #include "corNgsild/ldSubscriptionNotify.h"            // ldNotifyFilterHook
 #include "corNgsild/ldNotifyStream.h"                  // ldNotifyIsEventStream, ldNotifyStreamHand
+#include "corNgsild/ldNotifyTransport.h"               // ldNotifyIsHttp, ldNotifyTransportSend
 #include "corNgsild/ldPernotLoop.h"                     // Own interface
 
 
@@ -185,6 +186,22 @@ static bool pernotSendNotification(LdPernotItem* itemP, CorNode* entityArray, Co
   if (onStream)
     return ldNotifyStreamHand(itemP->tenantP, itemP->subId, false, body);
 #endif
+
+  //
+  // Anything but HTTP (§ 7 - mqtt[s]://, a transport's connection) - delivered by the transport the
+  // application installed for the scheme, as for a change-driven Subscription (ldSubscriptionNotify)
+  //
+  if (ldNotifyIsHttp(itemP->endpointUri) == false)
+  {
+    char          tLink[512] = "";
+    CorLdContext* coreP      = corLdCoreContext();
+    const char*   ctxUrl     = (itemP->contextUrl != NULL) ? itemP->contextUrl : ((coreP != NULL) ? coreP->url : NULL);
+
+    if (ctxUrl != NULL)
+      snprintf(tLink, sizeof(tLink), "<%s>; rel=\"http://www.w3.org/ns/json-ld#context\"; type=\"application/ld+json\"", ctxUrl);
+
+    return ldNotifyTransportSend(itemP->endpointUri, body, "application/json", (tLink[0] != 0) ? tLink : NULL, itemP->receiverInfo, NULL);
+  }
 
   // Send via HTTP
   CorRestClientRequest  req;
