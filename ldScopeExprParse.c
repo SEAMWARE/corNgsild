@@ -7,7 +7,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // 
 //
-#include <string.h>                                      // strlen, strchr
+#include <string.h>                                      // strlen, strcmp, memcpy
 
 #include "corAlloc/CorAlloc.h"                         // corAlloc
 #include "corAlloc/corAlloc.h"                         // corAlloc
@@ -92,27 +92,162 @@ static bool parseGroup(char* str, LdScopeGroup* group, CorAlloc* faP)
 
 // -----------------------------------------------------------------------------
 //
-// ldScopeExprParse - parse a scopeQ selection expression
+// levelCharOk - a character of a Scope level
 //
-// Grammar:
-//   ScopesQ    = OrScopeQ *(orOp OrScopeQ)
-//   OrScopeQ   = '(' ScopeQ *(';' ScopeQ) ')' | ScopeQ
-//   orOp       = '|' / ','
-//   ScopeQ     = scope-path with optional '+' (single-level wildcard) and '/#' (multi-level wildcard)
+// § 7.2.5: ScopeQLevel = unicodeLetter *(unicodeNumber / unicodeLetter / "_"). The Scopes of an Entity
+// are stored as given, so the level characters are those of ldIsValidName - digits first, '.' and '-'
+// too - for a query to reach every Scope that can be stored. Non-ASCII bytes are UTF-8, candidates for
+// unicodeLetter / unicodeNumber. What the grammar rules on is the structure: '/', '+', '#', ';', ',',
+// '|', '(' and ')' are never level characters.
 //
-LdScopeExpr* ldScopeExprParse(const char* value, CorAlloc* faP)
+static bool levelCharOk(unsigned char c)
 {
-  if (value == NULL || value[0] == 0)
+  if (c >= 0x80)
+    return true;
+
+  if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9'))
+    return true;
+
+  return (c == '_' || c == '.' || c == '-');
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// scopeQPath - ScopeQ = [/] ScopeQLevel *(/ ScopeQLevel), ScopeQLevel being '+' or level characters
+//
+// Advances *pP past the Scope, stopping before a "/#" that follows it. Returns NULL, or what is wrong.
+//
+static const char* scopeQPath(const char** pP)
+{
+  const char* p = *pP;
+
+  // § 5.2.7: the leading '/' of a Scope is implicit (see parseGroup)
+  if (*p == '/')
+    ++p;
+
+  while (true)
+  {
+    if (*p == '+')
+    {
+      ++p;
+
+      if (*p != 0 && levelCharOk((unsigned char) *p))
+        return "'+' is a whole scope level - '/+/', not part of one";
+    }
+    else
+    {
+      const char* start = p;
+
+      while (*p != 0 && levelCharOk((unsigned char) *p))
+        ++p;
+
+      if (p == start)
+        return "empty scope level, or a character that the Scope Query Language does not allow in one";
+    }
+
+    if (p[0] != '/' || p[1] == '#')
+      break;
+
+    ++p;
+  }
+
+  *pP = p;
+  return NULL;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// scopeQSyntax - check a scopeQ against the grammar of § 7.2.5
+//
+//   ScopesQ  = OrScopeQ *(orOp OrScopeQ)  /  "/#"
+//   OrScopeQ = "(" ScopeQ *(";" ScopeQ) ")"  /  ScopeQ ["/#"]
+//   orOp     = "|" / ","
+//
+// "For logical and grouping parenthesis are needed" - an AND outside parentheses is outside the
+// grammar, as is a "#" anywhere but in a "/#" at the end of a Scope.
+//
+// Returns NULL, or what is wrong - the detail of the 400.
+//
+static const char* scopeQSyntax(const char* value)
+{
+  if (strcmp(value, "/#") == 0)
     return NULL;
 
-  //
-  // Parenthesis balance
-  //
-  // Both splitting loops below use the parenthesis depth to tell a top-level OR operator from one
-  // inside an AND group, and the second loop ends on the string-terminating zero *at depth zero*.
-  // An unbalanced expression leaves the depth off, so without this check the loop walks past the
-  // end of the string, reading whatever follows it in memory.
-  //
+  const char* p = value;
+  const char* detail;
+
+  while (true)
+  {
+    if (*p == '(')
+    {
+      ++p;
+
+      while (true)
+      {
+        if ((detail = scopeQPath(&p)) != NULL)
+          return detail;
+
+        //
+        // "/#" inside an AND group, "(/Madrid/#;/CompanyA)", is outside the grammar, which gives the
+        // wildcard to OrScopeQ only. It is accepted: the prose of the clause does not limit it, and an
+        // AND of hierarchies is the query a scope tree is made for.
+        //
+        if (p[0] == '/' && p[1] == '#')
+          p += 2;
+
+        if (*p != ';')
+          break;
+
+        ++p;
+      }
+
+      if (*p != ')')
+        return "a parenthesised group is Scopes separated by ';' and closed by ')' - no nesting";
+
+      ++p;
+    }
+    else
+    {
+      if ((detail = scopeQPath(&p)) != NULL)
+        return detail;
+
+      if (p[0] == '/' && p[1] == '#')
+      {
+        p += 2;
+
+        if (*p != 0 && *p != ',' && *p != '|')
+          return "'#' only as the last level of a Scope: '/A/#'";
+      }
+
+      if (*p == ';')
+        return "an AND of Scopes needs parentheses: (/A;/B)";
+    }
+
+    if (*p == 0)
+      return NULL;
+
+    if (*p == '#')
+      return "'#' only as the last level of a Scope: '/A/#'";
+
+    if (*p != ',' && *p != '|')
+      return "Scopes are separated by ',' or '|' - an AND of them is '(/A;/B)'";
+
+    ++p;
+  }
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// parenthesesBalanced -
+//
+static bool parenthesesBalanced(const char* value)
+{
   int depth = 0;
 
   for (const char* p = value; *p != 0; p++)
@@ -121,12 +256,50 @@ LdScopeExpr* ldScopeExprParse(const char* value, CorAlloc* faP)
     else if (*p == ')')  depth--;
 
     if (depth < 0)
-      break;
+      return false;
   }
 
-  if (depth != 0)
+  return (depth == 0);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// scopeExprParse - parse a scopeQ selection expression
+//
+// Grammar:
+//   ScopesQ    = OrScopeQ *(orOp OrScopeQ)
+//   OrScopeQ   = '(' ScopeQ *(';' ScopeQ) ')' | ScopeQ
+//   orOp       = '|' / ','
+//   ScopeQ     = scope-path with optional '+' (single-level wildcard) and '/#' (multi-level wildcard)
+//
+// strict: the whole grammar (scopeQSyntax). Without it, only the parenthesis balance - what a scopeQ
+// stored before the grammar check was accepted with (ldScopeExprParseStored).
+//
+static LdScopeExpr* scopeExprParse(const char* value, CorAlloc* faP, bool strict)
+{
+  if (value == NULL || value[0] == 0)
+    return NULL;
+
+  //
+  // Syntax
+  //
+  // Both splitting loops below use the parenthesis depth to tell a top-level OR operator from one
+  // inside an AND group, and the second loop ends on the string-terminating zero *at depth zero*.
+  // Unbalanced parentheses leave the depth off, and the loop walks past the end of the string,
+  // reading whatever follows it in memory.
+  //
+  const char* detail = NULL;
+
+  if (parenthesesBalanced(value) == false)
+    detail = "unbalanced parenthesis in scopeQ expression";
+  else if (strict)
+    detail = scopeQSyntax(value);
+
+  if (detail != NULL)
   {
-    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid scopeQ parameter", "unbalanced parenthesis in scopeQ expression");
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid scopeQ parameter", detail);
     return NULL;
   }
 
@@ -137,8 +310,7 @@ LdScopeExpr* ldScopeExprParse(const char* value, CorAlloc* faP)
   // First pass: count OR groups by scanning for '|' and ',' outside parens
   //
   int groupCount = 1;
-
-  depth = 0;
+  int depth      = 0;
 
   for (char* p = buf; *p != 0; p++)
   {
@@ -204,4 +376,29 @@ LdScopeExpr* ldScopeExprParse(const char* value, CorAlloc* faP)
   }
 
   return expr;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldScopeExprParse - parse a scopeQ of a request: the grammar of § 7.2.5
+//
+LdScopeExpr* ldScopeExprParse(const char* value, CorAlloc* faP)
+{
+  return scopeExprParse(value, faP, true);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldScopeExprParseStored - parse a stored scopeQ (a subscription's, loaded into a cache)
+//
+// A subscription created before the grammar check may hold a scopeQ outside it - "/A;/B", an AND
+// without its parentheses. Refused, it would leave the subscription with no scope filter at all.
+//
+LdScopeExpr* ldScopeExprParseStored(const char* value, CorAlloc* faP)
+{
+  return scopeExprParse(value, faP, false);
 }

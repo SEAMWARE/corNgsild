@@ -31,7 +31,7 @@
 #include "corNgsild/LdVocab.h"                          // LD_VOCAB_*
 #include "corNgsild/LdSubCache.h"                       // LdSubCache, LdSubCacheItem
 #include "corNgsild/ldThrottleDirty.h"                  // ldThrottleDirtyFree
-#include "corNgsild/LdScopeExpr.h"                      // ldScopeExprParse
+#include "corNgsild/LdScopeExpr.h"                      // ldScopeExprParseStored
 #include "corNgsild/LdGeoRel.h"                         // ldGeoRelParse
 #include "corNgsild/LdTypeExpr.h"                       // ldTypeExprParse
 #include "corNgsild/ldCheckDateTime.h"                  // ldCheckDateTime
@@ -514,7 +514,7 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, CorNode* subTree, LdQNode*
 
   CorNode* scopeQP = corTreeLookup(itemP->subTree, "scopeQ");
   if (scopeQP != NULL && scopeQP->type == CorString)
-    itemP->scopeExpr = ldScopeExprParse(scopeQP->value.s, &cacheP->alloc);
+    itemP->scopeExpr = ldScopeExprParseStored(scopeQP->value.s, &cacheP->alloc);
 
   CorNode* triggerP = corTreeLookup(itemP->subTree, "notificationTrigger");
   if (triggerP != NULL && triggerP->type == CorArray)
