@@ -8,6 +8,7 @@
 //
 
 #include <stdio.h>                                     // snprintf
+#include <stdlib.h>                                    // strtoll
 #include <string.h>                                    // strcmp, strlen, strcpy
 #include <strings.h>                                   // strcasecmp
 #include <stdint.h>                                    // uint64_t
@@ -822,6 +823,40 @@ static const char* responseContextLink(CorRestKeyValue* headerV, int headerCount
 
 // -----------------------------------------------------------------------------
 //
+// responseResultsCount - the NGSILD-Results-Count header of a response, into the result
+//
+// What a source answers for count=true: the number of its matches, whatever page it returned. Not
+// given when the response has no such header, or its value is not a non-negative integer.
+//
+static void responseResultsCount(LdDistOpBatchResult* rP, CorRestKeyValue* headerV, int headerCount)
+{
+  rP->resultsCountGiven = false;
+  rP->resultsCount      = 0;
+
+  for (int h = 0; h < headerCount; h++)
+  {
+    if ((headerV[h].key == NULL) || (headerV[h].value == NULL))          continue;
+    if (strcasecmp(headerV[h].key, "NGSILD-Results-Count") != 0)          continue;
+
+    const char* v = headerV[h].value;
+    while (*v == ' ') ++v;
+    if ((*v < '0') || (*v > '9'))                                         return;
+
+    char*     end = NULL;
+    long long n   = strtoll(v, &end, 10);
+    while ((end != NULL) && (*end == ' ')) ++end;
+    if ((end == NULL) || (*end != 0) || (n < 0))                          return;
+
+    rP->resultsCountGiven = true;
+    rP->resultsCount      = (int64_t) n;
+    return;
+  }
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // distOpBodyParse - parse a forwarded response body once, at reception
 //
 // The parsed tree is cached on the result so no consumer re-parses it (corJsonParse
@@ -1016,6 +1051,7 @@ static void distOpPluginResult(LdDistOpBatchItem* itemP, CorRestVerb verb, int s
   }
 
   rP->responseContextUrl = responseContextLink(respP->headerV, respP->headerCount);
+  responseResultsCount(rP, respP->headerV, respP->headerCount);
 
   if ((respP->statusCode >= 200) && (respP->statusCode < 300))
     csr->lastSuccess = nowNs;
@@ -1284,6 +1320,7 @@ int ldDistOpSendMultiMax(LdDistOpBatchItem*     itemV,
       distOpTraceResponse(sc, respHdrV, respHdrCount);
       distOpBodyParse(&resultV[i]);
       resultV[i].responseContextUrl = responseContextLink(respHdrV, respHdrCount);
+      responseResultsCount(&resultV[i], respHdrV, respHdrCount);
       distOpTooLarge(&resultV[i], maxResponseBytes, csr);
       if (resultV[i].tooLarge)
         continue;
@@ -1393,6 +1430,7 @@ int ldDistOpSendMultiMax(LdDistOpBatchItem*     itemV,
     // The context the response speaks (its json-ld#context Link), so the
     // caller can expand the body via its own vocabulary, not the request's.
     resultV[i].responseContextUrl = responseContextLink(resp->headerV, resp->headerCount);
+    responseResultsCount(&resultV[i], resp->headerV, resp->headerCount);
 
     if (resp->statusCode >= 200 && resp->statusCode < 300)
       csr->lastSuccess = nowNs;
