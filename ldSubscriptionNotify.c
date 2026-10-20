@@ -64,6 +64,7 @@
 #include "corNgsild/ldRequestSubstitute.h"              // ldRequestSubstitute
 #include "corNgsild/ldLinkedEntitiesHook.h"             // ldLinkedEntitiesHookInvoke
 #include "corNgsild/ldNotifyTransport.h"                // ldNotifyIsHttp, ldNotifyTransportSend
+#include "corNgsild/ldNotifyStream.h"                   // ldNotifyIsEventStream, ldNotifyStreamPut
 #include "corNgsild/ldThrottleDirty.h"                  // ldThrottleDirtyUpsert/Drain/EntriesFree
 #include "corNgsild/ldPeriodicLoop.h"                   // ldPeriodicLoopRegister
 #include "corNgsild/ldTermId.h"                         // ldTermId, CorTerm*
@@ -884,8 +885,17 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   // json, or geo+json with Prefer body=json).
   bool ctxInBody = acceptLdJson || (acceptGeoJson && !notifPreferBodyJson);
 
-  // ld+json: @context inline on each entity in data[] (§ 5.8.6 / § 6.3.5).
-  if (acceptLdJson && itemP->contextUrl != NULL)
+  // ld+json: @context inline on each entity in data[] (§ 5.8.6 / § 6.3.5). On an event stream the core
+  // context's URL when the subscription names none: an event has no Link header to say it.
+  const char* inlineCtx = itemP->contextUrl;
+#if COR_WITH_EVENT_STREAM
+  bool        onStream  = ldNotifyIsEventStream(itemP->endpointUri);
+
+  if (onStream && (inlineCtx == NULL) && (corLdCoreContext() != NULL))
+    inlineCtx = corLdCoreContext()->url;
+#endif
+
+  if (acceptLdJson && inlineCtx != NULL)
   {
     CorNode* dataP = corTreeLookup(notification, "data");
     if (dataP != NULL && dataP->type == CorArray)
@@ -893,7 +903,7 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
       for (CorNode* ep = dataP->value.head; ep != NULL; ep = ep->next)
       {
         if (ep->type == CorObject && corTreeLookup(ep, "@context") == NULL)
-          corTreeChildAdd(ep, corTreeString(corRest.kallocP, "@context", itemP->contextUrl));
+          corTreeChildAdd(ep, corTreeString(corRest.kallocP, "@context", inlineCtx));
       }
     }
   }
@@ -957,6 +967,17 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   //   default              → application/json (Link header carries @context)
   //
   const char* contentType = corMimeString(itemP->endpointAccept);
+
+#if COR_WITH_EVENT_STREAM
+  //
+  // An event stream - kept for its reader; counted when it is written on the stream
+  //
+  if (onStream)
+  {
+    ldNotifyStreamPut(itemP, false /*csrSub*/, body, corRest.requestStartTime);
+    return;
+  }
+#endif
 
   //
   // Anything but HTTP (§ 7 - mqtt[s]://...) - delivered by the transport the application installed for

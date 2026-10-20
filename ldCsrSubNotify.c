@@ -48,6 +48,7 @@
 #include "corJsonld/CorLdContext.h"                      // CorLdContext
 
 #include "corNgsild/ldNotifyTransport.h"                // ldNotifyIsHttp, ldNotifyTransportSend
+#include "corNgsild/ldNotifyStream.h"                   // ldNotifyIsEventStream, ldNotifyStreamPut
 #include "corNgsild/ldTraceLevels.h"                    // LdTCsrNotify
 #include "corNgsild/LdSubCache.h"                       // LdSubCacheItem, LdSubEntitySelector
 #include "corNgsild/ldSubCache.h"                       // ldSubCacheRdLock, ldSubCacheUnlock, ldSubCacheItemPin
@@ -339,9 +340,16 @@ static void csourceNotificationPost(LdSubCacheItem* subItemP, CorNode* notificat
   // ships inline in the body (one per data[] member, parallel to the entity-
   // notification path in ldSubscriptionNotify) and NO Link header is sent; for
   // plain json the @context travels in the Link header instead.
-  bool acceptLdJson = (subItemP->endpointAccept == CorMimeLdJson);
+  bool        acceptLdJson = (subItemP->endpointAccept == CorMimeLdJson);
+  const char* inlineCtx    = subItemP->contextUrl;
+#if COR_WITH_EVENT_STREAM
+  bool        onStream     = ldNotifyIsEventStream(subItemP->endpointUri);
 
-  if (acceptLdJson && subItemP->contextUrl != NULL)
+  if (onStream && (inlineCtx == NULL) && (corLdCoreContext() != NULL))
+    inlineCtx = corLdCoreContext()->url;          // an event has no Link header (ldSubscriptionNotify)
+#endif
+
+  if (acceptLdJson && inlineCtx != NULL)
   {
     CorNode* dataP = corTreeLookup(notification, "data");
     if (dataP != NULL && dataP->type == CorArray)
@@ -349,7 +357,7 @@ static void csourceNotificationPost(LdSubCacheItem* subItemP, CorNode* notificat
       for (CorNode* ep = dataP->value.head; ep != NULL; ep = ep->next)
       {
         if (ep->type == CorObject && corTreeLookup(ep, "@context") == NULL)
-          corTreeChildAdd(ep, corTreeString(corRest.kallocP, "@context", subItemP->contextUrl));
+          corTreeChildAdd(ep, corTreeString(corRest.kallocP, "@context", inlineCtx));
       }
     }
   }
@@ -374,6 +382,14 @@ static void csourceNotificationPost(LdSubCacheItem* subItemP, CorNode* notificat
                "<%s>; rel=\"http://www.w3.org/ns/json-ld#context\"; type=\"application/ld+json\"",
                ctxUrl);
   }
+
+#if COR_WITH_EVENT_STREAM
+  if (onStream)                                   // kept for its reader (ldSubscriptionNotify)
+  {
+    ldNotifyStreamPut(subItemP, true /*csrSub*/, body, corRest.requestStartTime);
+    return;
+  }
+#endif
 
   //
   // Anything but HTTP (§ 7 - mqtt[s]://, a transport's connection) - delivered by the transport the

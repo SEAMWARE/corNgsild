@@ -60,7 +60,19 @@ endif
 # EXTRA_CFLAGS is appended LAST, so a caller's -O0 / -Wno-error also win over the
 # -O2 / -Werror here, which is what an instrumented build needs.
 #
-CFLAGS        = -Wall -Werror -O2 -fPIC $(DFLAGS) $(INCLUDE) $(ICU_CFLAGS) -MMD -MP $(EXTRA_CFLAGS)
+#
+# COR_WITH_EVENT_STREAM - 1 | 0. Notifications on an event stream (ldNotifyStream.h, the endpoint
+# urn:ngsi-ld:EventStream - coraine's server-sent events). 0 leaves the code out: the endpoint is refused.
+#
+COR_WITH_EVENT_STREAM ?= 1
+
+ifneq ($(COR_WITH_EVENT_STREAM),1)
+  ifneq ($(COR_WITH_EVENT_STREAM),0)
+    $(error COR_WITH_EVENT_STREAM must be 1 or 0, not '$(COR_WITH_EVENT_STREAM)')
+  endif
+endif
+
+CFLAGS        = -Wall -Werror -Wundef -O2 -fPIC -DCOR_WITH_EVENT_STREAM=$(COR_WITH_EVENT_STREAM) $(DFLAGS) $(INCLUDE) $(ICU_CFLAGS) -MMD -MP $(EXTRA_CFLAGS)
 
 #
 # BUILD - which flavour of build this is, and where its objects live.
@@ -172,6 +184,7 @@ LIB_SOURCES   = corNgsild.c \
                 ldNameContentCheck.c \
                 ldUrlWildcardCheck.c \
                 ldNotifyTransport.c \
+                ldNotifyStream.c \
                 ldBinCodec.c \
                 ldSnapshotCache.c \
                 ldSnapshotNotify.c \

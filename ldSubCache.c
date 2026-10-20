@@ -25,6 +25,7 @@
 #include "corJson/corJsonRenderSize.h"                 // corJsonFastRenderSize
 
 #include "corNgsild/ldTypes.h"                          // ldFormatFromString
+#include "corNgsild/ldNotifyStream.h"                   // ldNotifyIsEventStream
 #include "corRest/CorRestIn.h"                    // corAcceptParse
 #include "corNgsild/CorNgsild.h"                  // corNgsild (contextP)
 #include "corNgsild/LdVocab.h"                          // LD_VOCAB_*
@@ -563,6 +564,10 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, CorNode* subTree, LdQNode*
     const char* riCt = riHeaderValue(corTreeLookup(endpointP, "receiverInfo"), "Content-Type");
     if (riCt != NULL)
       itemP->endpointAccept = corAcceptParse(riCt);
+#if COR_WITH_EVENT_STREAM
+    else if (ldNotifyIsEventStream(itemP->endpointUri) == true)
+      itemP->endpointAccept = CorMimeLdJson;          // an event has no Link header: the @context in the body
+#endif
   }
 
   // § 5.2.12 / § 4.3.6.8 ngsildConformance — back-compat target version
