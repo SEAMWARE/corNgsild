@@ -40,6 +40,7 @@
 #include "corNgsild/ldStripSysAttrs.h"                  // ldStripSysAttrs
 #include "corNgsild/ldPeriodicLoop.h"                   // ldPeriodicLoopRegister
 #include "corNgsild/ldSubscriptionNotify.h"            // ldNotifyFilterHook
+#include "corNgsild/ldNotifyStream.h"                  // ldNotifyIsEventStream, ldNotifyStreamHand
 #include "corNgsild/ldPernotLoop.h"                     // Own interface
 
 
@@ -153,10 +154,37 @@ static bool pernotSendNotification(LdPernotItem* itemP, CorNode* entityArray, Co
       corLdCompactTree(notification);
   }
 
+#if COR_WITH_EVENT_STREAM
+  //
+  // urn:ngsi-ld:self: the Notification to the stream (ldNotifyStream.h) - an event has no Link header,
+  // so the @context goes in each entity (streamLd)
+  //
+  bool onStream = ldNotifyIsEventStream(itemP->endpointUri);
+
+  if (onStream && itemP->streamLd)
+  {
+    const char* ctxUrl = itemP->contextUrl;
+
+    if ((ctxUrl == NULL) && (corLdCoreContext() != NULL))
+      ctxUrl = corLdCoreContext()->url;
+
+    for (CorNode* ep = dataArray->value.head; (ctxUrl != NULL) && (ep != NULL); ep = ep->next)
+    {
+      if ((ep->type == CorObject) && (corTreeLookup(ep, "@context") == NULL))
+        corTreeChildAdd(ep, corTreeString(allocP, "@context", ctxUrl));
+    }
+  }
+#endif
+
   // Render to JSON
   int bodySize = corJsonFastRenderSize(notification);
   char* body = (char*) corAlloc(kaP, bodySize);
   corJsonFastRender(notification, body);
+
+#if COR_WITH_EVENT_STREAM
+  if (onStream)
+    return ldNotifyStreamHand(itemP->tenantP, itemP->subId, false, body);
+#endif
 
   // Send via HTTP
   CorRestClientRequest  req;

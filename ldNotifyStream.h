@@ -64,6 +64,15 @@ extern bool ldNotifyStreamOn(void);
 
 // -----------------------------------------------------------------------------
 //
+// ldNotifyStreamHand - the Notification to the hook, nothing counted: the caller counts - the periodic
+// loop (ldPernotLoop), whose counters are its own. false: not kept.
+//
+extern bool ldNotifyStreamHand(void* tenantP, const char* subId, bool csrSub, const char* json);
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldNotifyStreamPut - the Notification to the hook (the counters of a failure updated here)
 //
 extern void ldNotifyStreamPut(LdSubCacheItem* itemP, bool csrSub, const char* json, uint64_t now);

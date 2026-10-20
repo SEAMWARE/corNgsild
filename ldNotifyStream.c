@@ -60,6 +60,17 @@ bool ldNotifyStreamOn(void)
 
 // -----------------------------------------------------------------------------
 //
+// ldNotifyStreamHand -
+//
+bool ldNotifyStreamHand(void* tenantP, const char* subId, bool csrSub, const char* json)
+{
+  return (streamPut != NULL) && (streamPut(tenantP, subId, csrSub, json) == true);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // ldNotifyStreamPut -
 //
 // Kept: nothing is counted yet - the stream counts it when it writes it (ldNotifyStreamSent). Not kept:
@@ -67,7 +78,7 @@ bool ldNotifyStreamOn(void)
 //
 void ldNotifyStreamPut(LdSubCacheItem* itemP, bool csrSub, const char* json, uint64_t now)
 {
-  if ((streamPut != NULL) && (streamPut(corNgsild.tenantP, itemP->subId, csrSub, json) == true))
+  if (ldNotifyStreamHand(corNgsild.tenantP, itemP->subId, csrSub, json) == true)
     return;
 
   itemP->timesSent       += 1;

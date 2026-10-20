@@ -67,6 +67,7 @@ typedef struct LdPernotItem
   char*                  endpointUri;     // notification.endpoint.uri
   char*                  contextUrl;      // jsonldContext URL
   char*                  format;          // notification format (NULL=normalized)
+  bool                   streamLd;        // urn:ngsi-ld:self (ldNotifyStream.h): the @context in each entity - endpoint.accept not application/json
 
   // State
   LdPernotState          state;

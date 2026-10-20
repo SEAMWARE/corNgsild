@@ -965,6 +965,13 @@ static void csrSubTickTenant(CsrSubTickCtx* tcP, uint64_t now)
     CorNode* notification = csourceNotificationBuild(subItemP, matchV, n, "updated");
     ldRegCacheUnlock(tcP->regCache);
 
+#if COR_WITH_EVENT_STREAM
+    // On a stream the counters move when the event is written (ldNotifyStreamSent), up to a second
+    // later: the interval runs from the hand-over, or the next tick would send it again
+    if (ldNotifyIsEventStream(subItemP->endpointUri) == true)
+      subItemP->lastNotification = now;
+#endif
+
     csourceNotificationPost(subItemP, notification);
     ldSubCacheItemUnpin(subItemP);
   }
