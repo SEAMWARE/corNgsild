@@ -210,6 +210,10 @@ typedef struct LdDistOpBatchResult
   // (timesFailed, lastFailure, cooldown). Last in the struct: a caller built against an older header
   // allocates it all the same (sizeof), and never reads it.
   bool         tooLarge;
+  // The source's NGSILD-Results-Count response header (a query asked with count=true): resultsCountGiven
+  // false when the response carried none (or not a number). After tooLarge, for the reason given there.
+  bool         resultsCountGiven;
+  int64_t      resultsCount;
 } LdDistOpBatchResult;
 
 extern int ldDistOpSendMulti(LdDistOpBatchItem*     itemV,
