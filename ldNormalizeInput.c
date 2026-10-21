@@ -144,10 +144,11 @@ static bool isGeoJsonObject(CorNode* objP)
 // GeoProperty *attempt* so it gets wrapped and ldCheckGeo rejects it as a bad
 // geometry — rather than the whole object being stored as a junk Property.
 //
-// Only reached from Case 3 (no explicit attr type, no value key), so a valid
+// Reached from Case 3 (no explicit attr type, no value key), so a valid
 // NGSI-LD attribute type such as "Property" has already been handled as
 // normalized format by Case 1 ({"type":"Property","coordinates":[]} → "Missing
-// value", not a geometry).
+// value", not a geometry). And from isGeoJsonValue, for the value of a concise
+// attribute - the same shape, one level down.
 //
 static bool isSimplifiedGeoProperty(CorNode* objP)
 {
@@ -194,14 +195,18 @@ static bool isJsonLiteral(CorNode* objP)
 
 // -----------------------------------------------------------------------------
 //
-// isGeoJsonValue - check if a value node (child of hasValue) is GeoJSON
+// isGeoJsonValue - check if a value node (child of hasValue) is GeoJSON - or an attempt at it
+//
+// A concise GeoProperty is { "value": <geometry>, ... } with no "type" (§ 5.3.2.3). With a misspelled
+// geometry, { "value": { "type": "Piont", "coordinates": [1, 2] }, "datasetId": ... }, the structural
+// shape still makes it a GeoProperty, for ldCheckGeo to reject - not a Property with an object value.
 //
 static bool isGeoJsonValue(CorNode* valueP)
 {
   if (valueP->type != CorObject)
     return false;
 
-  return isGeoJsonObject(valueP);
+  return isGeoJsonObject(valueP) || isSimplifiedGeoProperty(valueP);
 }
 
 
