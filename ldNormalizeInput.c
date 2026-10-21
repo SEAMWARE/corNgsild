@@ -137,18 +137,20 @@ static bool isGeoJsonObject(CorNode* objP)
 //
 // isSimplifiedGeoProperty - structural test for a simplified-format GeoProperty
 //
-// An attribute object whose ONLY members are exactly "type" (a string) and
-// "coordinates" is a simplified-format GeoProperty (a bare GeoJSON geometry).
-// Unlike isGeoJsonObject(), the "type" value need NOT be a valid GeoJSON
-// geometry name: an invalid one (e.g. "Poinxt") must still be recognized as a
-// GeoProperty *attempt* so it gets wrapped and ldCheckGeo rejects it as a bad
-// geometry — rather than the whole object being stored as a junk Property.
+// An attribute object with no NGSI-LD value key is a GeoProperty *attempt* - wrapped, for ldCheckGeo to
+// say what is wrong with the geometry - when its "type" is a string and either
+//   - its ONLY members are "type" and "coordinates": the type need not be a geometry name -
+//     {"type": "Piont", ...} and {"type": "Porperty", ...} are bad geometries; or
+//   - the "type" names a GeoJSON geometry, GeometryCollection included, whatever the other members:
+//     {"type": "Point", "coodrinates": [1, 2]} lacks its coordinates.
+// Read as an Attribute, either is "'Point' is not an NGSI-LD Attribute type" - or, as a concise value,
+// a Property with an object value. The spec rules only on VALID GeoJSON (§ 5.3.2.3, expansion step 2);
+// the shape is coraine's rule (KZ, 2026-10-21).
 //
-// Reached from Case 3 (no explicit attr type, no value key), so a valid
-// NGSI-LD attribute type such as "Property" has already been handled as
-// normalized format by Case 1 ({"type":"Property","coordinates":[]} → "Missing
-// value", not a geometry). And from isGeoJsonValue, for the value of a concise
-// attribute - the same shape, one level down.
+// Reached from Case 1b and Case 3 (no explicit attr type, no value key), so a valid NGSI-LD attribute
+// type such as "Property" has already been handled as normalized format by Case 1
+// ({"type":"Property","coordinates":[]} → "Missing value", not a geometry). And from isGeoJsonValue,
+// for the value of a concise attribute - the same shape, one level down.
 //
 static bool isSimplifiedGeoProperty(CorNode* objP)
 {
@@ -159,11 +161,21 @@ static bool isSimplifiedGeoProperty(CorNode* objP)
   for (CorNode* childP = objP->value.head; childP != NULL; childP = childP->next)
   {
     ++count;
-    if      (ldTermId(childP) == CorTermType)  typeP   = childP;
+    if      (ldTermId(childP) == CorTermType)         typeP   = childP;
     else if (ldTermId(childP) == CorTermCoordinates)  coordsP = childP;
   }
 
-  return (count == 2 && typeP != NULL && typeP->type == CorString && coordsP != NULL);
+  if ((typeP == NULL) || (typeP->type != CorString) || hasValueKey(objP))
+    return false;
+
+  if ((count == 2) && (coordsP != NULL))
+    return true;
+
+  const char* geoType = typeP->value.s;
+
+  return isGeoJsonTypeName(geoType) ||
+         (strcmp(geoType, "GeometryCollection") == 0) ||
+         (strcmp(geoType, "https://purl.org/geojson/vocab#GeometryCollection") == 0);
 }
 
 
