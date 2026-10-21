@@ -29,6 +29,7 @@
 #include "corNgsild/ldCheckEntity.h"                      // Own interface
 #include "corNgsild/ldTraceLevels.h"                      // LdTCheckEnt
 #include "corNgsild/ldTermId.h"                           // ldTermId, CorTerm*
+#include "corNgsild/LdScopeExpr.h"                        // ldScopeSyntax
 
 
 
@@ -273,6 +274,15 @@ bool ldCheckEntity(CorNode* entityP, LdOp op, CorNode* dbEntityP, CorAlloc* faP)
           ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Scope", "Entity 'scope' must not be an empty string");
           return false;
         }
+
+        // The NGSI-LD Null as the whole value deletes the Scope (§ 5.4.1)
+        const char* why;
+
+        if (strcmp(childP->value.s, LD_VOCAB_NGSILD_NULL) != 0 && (why = ldScopeSyntax(childP->value.s)) != NULL)
+        {
+          ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Scope", why);
+          return false;
+        }
       }
       else if (childP->type == CorArray)
       {
@@ -306,6 +316,14 @@ bool ldCheckEntity(CorNode* entityP, LdOp op, CorNode* dbEntityP, CorAlloc* faP)
           {
             ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Scope",
                     "the NGSI-LD Null is not a Scope - as the value of 'scope' it deletes it, inside the array it means nothing");
+            return false;
+          }
+
+          const char* why = ldScopeSyntax(elemP->value.s);
+
+          if (why != NULL)
+          {
+            ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Scope", why);
             return false;
           }
         }
