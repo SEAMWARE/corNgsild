@@ -43,8 +43,8 @@ static bool isAttrKeyword(CorNode* nodeP)
 //
 // attrTypeCanBeInferred - check if the type can be inferred from the value key
 //
-// Property ("value") and GeoProperty ("value") share the same value key,
-// so GeoProperty cannot be inferred from key alone.
+// GeoProperty shares the "value" key with Property; its type is inferred from the value, a GeoJSON
+// geometry (§ 5.2.6.4 + the Concise-to-Normalized Expansion of § 5.3.2.3, step 2 - ldNormalizeInput).
 //
 static bool attrTypeCanBeInferred(LdAttrType attrType)
 {
@@ -57,7 +57,7 @@ static bool attrTypeCanBeInferred(LdAttrType attrType)
   case LdAttrListProperty:     return true;    // from hasValueList
   case LdAttrListRelationship: return true;    // from hasObjectList
   case LdAttrJsonProperty:     return true;    // from hasJSON
-  case LdAttrGeoProperty:      return false;   // shares hasValue with Property
+  case LdAttrGeoProperty:      return true;    // from a GeoJSON geometry in hasValue
   default:                     return false;
   }
 }
@@ -119,9 +119,7 @@ static void attrToConcise(CorNode* attrP)
   // bare value — scalar, array, or (for GeoProperty) the GeoJSON object. Only
   // these two types may collapse; every other type keeps its value-key so the
   // concise form stays lossless (a bare array/object would be indistinguishable
-  // from a Property value). GeoProperty's "type" is not inferable from the
-  // "value" key (Property uses it too), so it is still present here — ignore it
-  // when checking value-only, then discard it by replacing the attr with value.
+  // from a Property value).
   if ((attrType == LdAttrProperty) || (attrType == LdAttrGeoProperty))
   {
     CorNode* valueP    = NULL;
