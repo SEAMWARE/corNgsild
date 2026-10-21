@@ -366,10 +366,20 @@ bool ldCheckGeo(CorNode* geoValueP)
   if (typeP == NULL || typeP->type != CorString)
     return geoError("GeoJSON must have a 'type' string field");
 
+  const char* geoType = typeP->value.s;
+
+  // TS 104-175 § 5.2.6.4.5: NGSI-LD allows all RFC 7946 geometry types
+  // except GeometryCollection — explicit error so the client sees the
+  // spec-level reason, not "Unknown" nor the "coordinates" it does not have.
+  if ((strcmp(geoType, "GeometryCollection") == 0) || (strcmp(geoType, "https://purl.org/geojson/vocab#GeometryCollection") == 0))
+  {
+    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid GeoJSON",
+            "GeoJSON GeometryCollection is not allowed in NGSI-LD (TS 104-175 § 5.2.6.4.5)");
+    return false;
+  }
+
   if (coordsP == NULL || coordsP->type != CorArray)
     return geoError("GeoJSON must have a 'coordinates' array field");
-
-  const char* geoType = typeP->value.s;
 
   // After JSON-LD expansion, GeoJSON type values may be expanded to full IRIs.
   // Accept both short and expanded forms.
@@ -411,16 +421,6 @@ bool ldCheckGeo(CorNode* geoValueP)
         return false;
     }
     return true;
-  }
-
-  // § 4.7.1 / § 4.6.1: NGSI-LD allows all RFC 7946 geometry types
-  // except GeometryCollection — explicit error so the client sees the
-  // spec-level reason, not "Unknown".
-  if (strcmp(geoType, "GeometryCollection") == 0)
-  {
-    ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid GeoJSON",
-            "GeoJSON GeometryCollection is not allowed in NGSI-LD (§ 4.7.1)");
-    return false;
   }
 
   //

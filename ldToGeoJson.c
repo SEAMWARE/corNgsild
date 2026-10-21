@@ -78,7 +78,7 @@ static CorNode* extractGeometry(CorNode* entityP, const char* geoPropName, CorAl
   if (typeP == NULL || typeP->type != CorString)
     return NULL;
 
-  // NGSI-LD § 4.7.1 / § 4.6.1: all GeoJSON geometries are allowed
+  // TS 104-175 § 5.2.6.4.5: all GeoJSON geometries are allowed
   // except GeometryCollection.
   const char* t = typeP->value.s;
   if (strcmp(t, "Point")           != 0 &&
