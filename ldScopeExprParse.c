@@ -7,7 +7,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // 
 //
-#include <string.h>                                      // strlen, strcmp, memcpy
+#include <string.h>                                      // strlen, strcmp, memcpy, strchr
 
 #include "corAlloc/CorAlloc.h"                         // corAlloc
 #include "corAlloc/corAlloc.h"                         // corAlloc
@@ -94,11 +94,9 @@ static bool parseGroup(char* str, LdScopeGroup* group, CorAlloc* faP)
 //
 // levelCharOk - a character of a Scope level
 //
-// § 7.2.5: ScopeQLevel = unicodeLetter *(unicodeNumber / unicodeLetter / "_"). The Scopes of an Entity
-// are stored as given, so the level characters are those of ldIsValidName - digits first, '.' and '-'
-// too - for a query to reach every Scope that can be stored. Non-ASCII bytes are UTF-8, candidates for
-// unicodeLetter / unicodeNumber. What the grammar rules on is the structure: '/', '+', '#', ';', ',',
-// '|', '(' and ')' are never level characters.
+// § 7.2.5: ScopeQLevel = unicodeLetter *(unicodeNumber / unicodeLetter / "_") - and § 5.2.7 the same for
+// the ScopeLevel of a stored Scope (ldScopeSyntax), so a query reaches every Scope that can be stored.
+// Non-ASCII bytes are UTF-8, candidates for unicodeLetter / unicodeNumber.
 //
 static bool levelCharOk(unsigned char c)
 {
@@ -108,7 +106,44 @@ static bool levelCharOk(unsigned char c)
   if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9'))
     return true;
 
-  return (c == '_' || c == '.' || c == '-');
+  return (c == '_');
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// levelStartOk - the first character of a Scope level: a unicodeLetter (§ 5.2.7, § 7.2.5)
+//
+static bool levelStartOk(unsigned char c)
+{
+  return (c >= 0x80) || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// levelEnd - past the Scope level that starts at p, or NULL with *whyP set when no level starts there
+//
+static const char* levelEnd(const char* p, const char** whyP)
+{
+  if (*p == 0 || !levelCharOk((unsigned char) *p))
+  {
+    *whyP = "empty scope level, or a character that the Scope Query Language does not allow in one";
+    return NULL;
+  }
+
+  if (!levelStartOk((unsigned char) *p))
+  {
+    *whyP = "a scope level starts with a letter";
+    return NULL;
+  }
+
+  while (*p != 0 && levelCharOk((unsigned char) *p))
+    ++p;
+
+  return p;
 }
 
 
@@ -138,13 +173,13 @@ static const char* scopeQPath(const char** pP)
     }
     else
     {
-      const char* start = p;
+      const char* why = NULL;
 
-      while (*p != 0 && levelCharOk((unsigned char) *p))
-        ++p;
+      if ((p = levelEnd(p, &why)) == NULL)
+        return why;
 
-      if (p == start)
-        return "empty scope level, or a character that the Scope Query Language does not allow in one";
+      if (*p != 0 && strchr("/,|;)", *p) == NULL)
+        return "a character that a Scope level does not allow";
     }
 
     if (p[0] != '/' || p[1] == '#')
@@ -155,6 +190,44 @@ static const char* scopeQPath(const char** pP)
 
   *pP = p;
   return NULL;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldScopeSyntax - check a stored Scope (an Entity's) against § 5.2.7
+//
+//   Scope      = [/] ScopeLevel *(/ ScopeLevel)
+//   ScopeLevel = unicodeLetter *(unicodeNumber / unicodeLetter / "_")
+//
+// No '+' and no '#' - those are of the query language. Returns NULL, or what is wrong.
+//
+const char* ldScopeSyntax(const char* scope)
+{
+  const char* p = scope;
+
+  if (*p == '/')
+    ++p;
+
+  while (true)
+  {
+    const char* why = NULL;
+
+    if (*p == '+' || *p == '#')
+      return "'+' and '#' are wildcards of a scopeQ, not part of a Scope";
+
+    if ((p = levelEnd(p, &why)) == NULL)
+      return why;
+
+    if (*p == 0)
+      return NULL;
+
+    if (*p != '/')
+      return "a character that a Scope level does not allow";
+
+    ++p;
+  }
 }
 
 

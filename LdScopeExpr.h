@@ -63,4 +63,12 @@ extern LdScopeExpr* ldScopeExprParse(const char* value, CorAlloc* faP);
 //
 extern LdScopeExpr* ldScopeExprParseStored(const char* value, CorAlloc* faP);
 
+
+
+// -----------------------------------------------------------------------------
+//
+// ldScopeSyntax - check a Scope of an Entity against § 5.2.7 - NULL, or what is wrong
+//
+extern const char* ldScopeSyntax(const char* scope);
+
 #endif  // CORNGSILD_LDSCOPEEXPR_H_
