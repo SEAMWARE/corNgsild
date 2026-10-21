@@ -642,18 +642,24 @@ static void ldParseHook(void)
     {
       corNgsild.userContextUrl = contextUrl;
 
-      if (!isArrayBody)
+      if (corRest.in.requestTree->type == CorObject)
       {
         // Single-object body: inject @context so corLdExpandTree picks it up.
         CorNode* ctxNode = corTreeString(corRest.kallocP, "@context", contextUrl);
         corTreeChildAdd(corRest.in.requestTree, ctxNode);
       }
-      else
+      else if (isArrayBody)
       {
         // Array body (batch op): can't inject at the root. Pre-resolve so
         // corLdExpandTree uses it as the per-element fallback.
         corNgsild.contextP = corLdContextFromUrl(contextUrl, &corRest.kalloc);
       }
+      //
+      // A JSON scalar (a string, a number, true, null) has no member to carry the @context, and is no
+      // NGSI-LD payload: the service routine answers it with a 400. The member used to be added to it
+      // anyway - corTreeChildAdd on a string's value, a SIGSEGV for any request with a Link header and
+      // a body like "x" (the ETSI suite's 055_03_05, MR !304).
+      //
     }
   }
 
