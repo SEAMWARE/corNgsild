@@ -435,7 +435,9 @@ extern bool ldTimestampHighPrecision;
 
 // ldCsourceAliasBase - per-broker contextSourceAlias base (NGSI-LD § 5.7.5 /
 // RFC 7230 pseudonym), used in Via headers for distributed-op loop detection.
-// Set by --csourceAlias CLI arg, defaults to "<exe-basename>:<port>".
+// Set by --csourceAlias CLI arg; without it, the authority (host:port) of the
+// advertised HTTP endpoint (ldBrokerHttpEndpoint, --httpEndpoint or the detected
+// one), and "<exe-basename>:<port>" only when that is empty.
 //
 // The per-tenant alias used in Via headers is derived from this base; see
 // ldCsourceAliasForTenant.
