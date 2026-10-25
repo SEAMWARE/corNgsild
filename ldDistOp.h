@@ -192,7 +192,9 @@ typedef struct LdDistOpBatchResult
   int          statusCode;        // 0 on transport failure
   char*        responseBody;      // request-kalloc backing buffer; NULL if empty
   int          responseBodyLen;
-  CorNode*     responseTree;      // responseBody parsed once at reception; NULL if no/invalid body
+  CorNode*     responseTree;      // the response as a tree; NULL if no/invalid body. HTTP: responseBody
+                                  // parsed once at reception. cor:// (LdForwardResponse.bodyTree): the
+                                  // tree IS the response - no responseBody, it stays NULL
   const char*  errorDetail;       // NULL on success; otherwise request-kalloc
   // The @context that travels WITH the response — the URL in the response's
   // json-ld#context Link header (application/json). NULL if the response
