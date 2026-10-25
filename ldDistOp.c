@@ -24,6 +24,8 @@
 #include "corJson/corJsonRenderSize.h"                 // corJsonFastRenderSize
 
 #include "corAlloc/corAlloc.h"                         // corAlloc
+#include "corBase/corHeaderIsCredential.h"             // corHeaderIsCredential
+#include "corBase/corUriPasswordMask.h"                // corUriPasswordMask
 #include "corLog/corLog.h"                             // COR_T, COR_W
 #include "corRest/CorRestState.h"                        // corRest
 #include "corRest/CorRestKeyValue.h"                     // CorRestKeyValue
@@ -43,6 +45,7 @@
 #include "corJsonld/corLdDownload.h"                     // corLdIsCoreContextUrl
 #include "corNgsild/ldContextHost.h"                    // ldContextHostVolatile
 #include "corNgsild/ldTraceLevels.h"                    // LdTForwardResp
+#include "corNgsild/ldUrlPathShown.h"                   // ldUrlPathShown
 #include "corNgsild/ldDistOp.h"                         // Own interface
 
 
@@ -589,9 +592,13 @@ static void distOpTraceRequest(CorRestVerb verb, const char* url, CorRestKeyValu
   if (url == NULL)
     return;
 
+  //
+  // A URL's password, and a credential header's value (Authorization, ...), are "***" in a trace - the
+  // registration's endpoint may carry user:password, its contextSourceInfo a token
+  //
+  char        shown[1024];
   const char* q = strchr(url, '?');
-  int         pathLen = (q != NULL) ? (int)(q - url) : (int) strlen(url);
-  COR_T(LdTFwdReq, "forward request: %s %.*s", corRestVerbToString(verb), pathLen, url);
+  COR_T(LdTFwdReq, "forward request: %s %s", corRestVerbToString(verb), ldUrlPathShown(url, shown, sizeof(shown)));
 
   if (q != NULL)
   {
@@ -606,7 +613,7 @@ static void distOpTraceRequest(CorRestVerb verb, const char* url, CorRestKeyValu
   }
 
   for (int i = 0; i < hc; i++)
-    COR_T(LdTFwdReqHeader, "forward request header: %s: %s", hv[i].key, hv[i].value ? hv[i].value : "");
+    COR_T(LdTFwdReqHeader, "forward request header: %s: %s", hv[i].key, corHeaderIsCredential(hv[i].key) ? "***" : (hv[i].value ? hv[i].value : ""));
 
   if (body != NULL && bodyLen > 0)
     COR_T(LdTFwdReqBody, "forward request body (%d bytes): %.*s", bodyLen, bodyLen, body);
@@ -623,7 +630,7 @@ static void distOpTraceResponse(int statusCode, CorRestKeyValue* hv, int hc)
 {
   COR_T(LdTFwdRes, "forward response: status %d", statusCode);
   for (int i = 0; i < hc; i++)
-    COR_T(LdTFwdResHeader, "forward response header: %s: %s", hv[i].key, hv[i].value ? hv[i].value : "");
+    COR_T(LdTFwdResHeader, "forward response header: %s: %s", hv[i].key, corHeaderIsCredential(hv[i].key) ? "***" : (hv[i].value ? hv[i].value : ""));
 }
 
 
@@ -1034,7 +1041,8 @@ static void distOpPluginResult(LdDistOpBatchItem* itemP, CorRestVerb verb, int s
     rP->statusCode   = 0;
     rP->errorDetail  = (respP->errorDetail[0] != 0) ? corAllocStrdup(&corRest.kalloc, respP->errorDetail) : "transport failure";
 
-    COR_W("dist-op %s %s: CSR %s forward failed (%s)", corRestVerbToString(verb), itemP->url, (csr->regId != NULL) ? csr->regId : "?", rP->errorDetail);
+    char shown[1024];
+    COR_W("dist-op %s %s: CSR %s forward failed (%s)", corRestVerbToString(verb), corUriPasswordMask(itemP->url, shown, sizeof(shown)), (csr->regId != NULL) ? csr->regId : "?", rP->errorDetail);
     return;
   }
 
@@ -1081,7 +1089,8 @@ static void distOpPluginItem(LdDistOpBatchItem* itemP, CorRestVerb verb, CorRest
     csr->lastFailure = nowNs;
     rP->statusCode   = 0;
     rP->errorDetail  = "no forwarding plugin available for endpoint";
-    COR_W("dist-op %s: CSR %s not forwarded (no forwarding plugin for the endpoint's scheme)", csr->endpoint, (csr->regId != NULL) ? csr->regId : "?");
+    char shown[1024];
+    COR_W("dist-op %s: CSR %s not forwarded (no forwarding plugin for the endpoint's scheme)", corUriPasswordMask(csr->endpoint, shown, sizeof(shown)), (csr->regId != NULL) ? csr->regId : "?");
     return;
   }
 

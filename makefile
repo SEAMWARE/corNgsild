@@ -163,6 +163,7 @@ LIB_SOURCES   = corNgsild.c \
                 ldRegCache.c \
                 ldEntityFragment.c \
                 ldDistOp.c \
+                ldUrlPathShown.c \
                 ldContextHost.c \
                 ldBatchErrors.c \
                 ldWriteResult.c \
