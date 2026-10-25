@@ -205,7 +205,9 @@ typedef struct CorNgsild
   // @context (set in parseHook)
   bool              contextError;
   const char*       contextUnavailableUrl;  // Set by ldContextResolve when the Link header named
-                                            // an @context that could NOT be retrieved. It does not
+                                            // an @context that could NOT be retrieved - or, with
+                                            // none named, the default user @context could not
+                                            // (--defaultUserContext). It does not
                                             // raise the 504 itself - only the caller knows whether
                                             // the operation uses the context at all (a DELETE of a
                                             // whole entity does not), so the caller decides.
@@ -481,8 +483,9 @@ extern void ldParamHook(const char* name, const char* value);
 
 // -----------------------------------------------------------------------------
 //
-// ldContextResolve - resolve @context from Link header, or fall back to core;
-// false (with a 504 raised) when the request NAMED one that could not be used
+// ldContextResolve - resolve @context from Link header, else the default user
+// @context, else core; false when the one to use (named, or the default) could
+// not be - nothing raised, the caller decides (see ldUrlParams.c)
 //
 extern bool ldContextResolve(void);
 

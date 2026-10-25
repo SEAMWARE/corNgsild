@@ -123,8 +123,10 @@ __thread CorNgsild corNgsildFallback;
 // Also callable directly from service routines that need the context before
 // the param hook runs (e.g. GET with zero URL params).
 //
-// Returns false when the request NAMED an @context that could not be used - the
-// 504 is raised here and the caller must reject. Every other outcome is true.
+// Returns false when the request NAMED an @context that could not be used - or
+// named none and the default user @context (--defaultUserContext) could not be
+// used - and the caller decides whether that rejects the request (a 504 for GET
+// and HEAD). Every other outcome is true.
 //
 // ⚠️ A failed download and "no @context supplied" both leave contextP NULL, and
 // treating them the same is what made an unreachable Link-header @context a
@@ -241,8 +243,23 @@ bool ldContextResolve(void)
   // its own (no Link header, no body), so fall back to the broker-configured
   // default user context before core. Core still wins term-by-term (it sits
   // last in the chain), so this only adds the user's terms, never overrides.
+  //
+  // ⚠️ A default user @context that cannot be used is the same failure as a Link header's: the request is
+  // to be read with it, and core instead is a silent downgrade - so false, the caller decides, as above.
+  // Falling through to core here was what made GET /entities?type=Room answer 200 [] (Room expanded with
+  // core alone) where POST /entities, through the parse hook, answered 504.
+  //
   if (corNgsild.contextP == NULL && ldDefaultContextUrl != NULL)
+  {
     corNgsild.contextP = corLdContextFromUrl(ldDefaultContextUrl, faP);
+
+    if (corNgsild.contextP == NULL)
+    {
+      corNgsild.contextUnavailableUrl = ldDefaultContextUrl;
+      corNgsild.contextP              = corLdCoreContext();
+      return false;
+    }
+  }
 
   if (corNgsild.contextP == NULL)
     corNgsild.contextP = corLdCoreContext();
