@@ -13,6 +13,7 @@
 
 #include "corBase/corLibLog.h"                           // COR_LIB_W
 #include "corBase/corCoLoop.h"                           // corCoBlocking
+#include "corBase/corUriPasswordMask.h"                  // corUriPasswordMask
 #include "corAlloc/corAlloc.h"                           // corAlloc
 #include "corTree/CorNode.h"                             // CorNode
 #include "corTree/corTreeBuilder.h"                      // corTreeObject, corTreeString, corTreeChildAdd
@@ -166,7 +167,8 @@ bool ldNotifyTransportSend(const char* uri,
 {
   if (transportSend == NULL)
   {
-    COR_LIB_W("notification to '%s': no transport for its scheme", uri);
+    char shown[1024];
+    COR_LIB_W("notification to '%s': no transport for its scheme", corUriPasswordMask(uri, shown, sizeof(shown)));
     return false;
   }
 

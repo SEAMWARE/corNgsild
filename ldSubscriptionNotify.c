@@ -24,6 +24,7 @@
 #include <time.h>                                      // time
 
 #include "corBase/corTimeIso.h"                          // corTimeIso
+#include "corBase/corHeaderIsCredential.h"               // corHeaderIsCredential
 #include "corAlloc/corAlloc.h"                         // corAlloc
 #include "corAlloc/CorAlloc.h"                         // CorAlloc
 #include "corLog/corLog.h"                             // COR_T
@@ -42,6 +43,7 @@
 
 #include "corNgsild/ldInstanceWritten.h"                // ldInstanceWritten
 #include "corNgsild/ldTraceLevels.h"                    // LdTNotif*
+#include "corNgsild/ldUrlPathShown.h"                   // ldUrlPathShown
 #include "corNgsild/ldTypes.h"                          // ldFormatToString
 #include "corNgsild/LdVocab.h"                          // LD_VOCAB_*
 #include "corNgsild/CorNgsild.h"                        // corNgsild
@@ -1071,11 +1073,12 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   int reqTmoMs = (itemP->timeoutMs > 0) ? itemP->timeoutMs : 10000;
   corRestClientRequestTimeout(&req, 5000, reqTmoMs);
 
-  // Trace the outgoing notification (each aspect on its own level).
+  // Trace the outgoing notification (each aspect on its own level) - the endpoint's password, and a
+  // credential header's value (receiverInfo's Authorization, ...), as "***"
   {
-    const char* nq       = (req.url != NULL) ? strchr(req.url, '?') : NULL;
-    int         nPathLen  = (nq != NULL) ? (int)(nq - req.url) : (req.url ? (int) strlen(req.url) : 0);
-    COR_T(LdTNotifReq, "notification request: %s %.*s", corRestVerbToString(req.verb), nPathLen, req.url ? req.url : "");
+    char        shown[1024];
+    const char* nq = (req.url != NULL) ? strchr(req.url, '?') : NULL;
+    COR_T(LdTNotifReq, "notification request: %s %s", corRestVerbToString(req.verb), ldUrlPathShown(req.url, shown, sizeof(shown)));
     for (const char* p = (nq != NULL) ? nq + 1 : NULL; p != NULL && *p != 0; )
     {
       const char* amp = strchr(p, '&');
@@ -1085,7 +1088,7 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
       p = amp + 1;
     }
     for (int h = 0; h < req.headerCount; h++)
-      COR_T(LdTNotifHeader, "notification request header: %s: %s", req.headerV[h].key, req.headerV[h].value ? req.headerV[h].value : "");
+      COR_T(LdTNotifHeader, "notification request header: %s: %s", req.headerV[h].key, corHeaderIsCredential(req.headerV[h].key) ? "***" : (req.headerV[h].value ? req.headerV[h].value : ""));
     COR_T(LdTNotifBody, "notification request body (%zu bytes): %s", strlen(body), body);
   }
 

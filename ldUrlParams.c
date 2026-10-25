@@ -16,6 +16,7 @@
 
 #include "corAlloc/CorAlloc.h"                         // corAlloc
 #include "corAlloc/corAlloc.h"                         // corAlloc
+#include "corBase/corUriPasswordMask.h"                // corUriPasswordMask
 #include "corAlloc/corAllocStrdup.h"                   // corAllocStrdup
 #include "corNgsild/ldRegexValid.h"                   // ldRegexValid
 #include "corNgsild/LdProj.h"                              // LdProjItem, ldProjectionParse, ldProjectionTopLevelNames
@@ -89,7 +90,8 @@ CorLdContext* ldDefaultContext(CorAlloc* kaP)
     // something different from what the deployment intended, and the symptom
     // is an attribute under an IRI nobody asked for rather than an error.
     //
-    COR_W("the default user @context '%s' could not be used - expanding with the core context alone", ldDefaultContextUrl);
+    char shown[1024];
+    COR_W("the default user @context '%s' could not be used - expanding with the core context alone", corUriPasswordMask(ldDefaultContextUrl, shown, sizeof(shown)));
     return corLdCoreContext();
   }
 
