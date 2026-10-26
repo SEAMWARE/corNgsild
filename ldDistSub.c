@@ -190,6 +190,39 @@ static CorNode* narrowEntities(LdSubCacheItem* itemP, LdRegCacheItem* regP, CorA
 
 // -----------------------------------------------------------------------------
 //
+// endpointForRemote - notification.endpoint as a subordinate subscription on a Context Source gets it
+//
+// The subordinate's endpoint is this broker's callback (/ngsi-ld/ex/v1/notifications/{parent}). The
+// subscriber's receiverInfo (Authorization and the like) and notifierInfo are for the subscriber's
+// endpoint: this broker adds them when it re-dispatches the notification (postExNotification) - the
+// Context Source gets neither. A PATCH (dropUri true) does not move the callback either: its uri is
+// removed, and an endpoint - or a notification - left empty with it.
+//
+static void endpointForRemote(CorNode* notifP, bool dropUri)
+{
+  CorNode* endpointP = (notifP != NULL) ? corTreeLookup(notifP, LD_VOCAB_ENDPOINT) : NULL;
+
+  if (endpointP == NULL)
+    return;
+
+  const char* names[] = { "receiverInfo", "notifierInfo", dropUri ? LD_VOCAB_URI : NULL };
+
+  for (int ix = 0; ix < 3; ix++)
+  {
+    CorNode* nodeP = (names[ix] != NULL) ? corTreeLookup(endpointP, names[ix]) : NULL;
+
+    if (nodeP != NULL)
+      corTreeChildRemove(endpointP, nodeP);
+  }
+
+  if ((dropUri == true) && (endpointP->type == CorObject) && (endpointP->value.head == NULL))
+    corTreeChildRemove(notifP, endpointP);
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // derivedSubBody - build the JSON-LD body for the derived subscription
 //
 // corTreeClones the local sub tree, strips broker-internal fields ("status",
@@ -245,6 +278,8 @@ static char* derivedSubBody(LdSubCacheItem* itemP,
   CorNode* uriP     = (endpointP != NULL) ? corTreeLookup(endpointP, LD_VOCAB_URI) : NULL;
   if (uriP != NULL && uriP->type == CorString)
     uriP->value.s = (char*) callbackUri;
+
+  endpointForRemote(notifP, false);
 
   // Filter narrowing: replace parent's entities[] with the parent×reg
   // intersection. Pre-validated non-empty by the caller.
@@ -508,6 +543,14 @@ static char* patchBody(LdSubCacheItem* itemP, CorNode* fragmentP, int* bodyLenP)
   if (jcP != NULL) corTreeChildRemove(clone, jcP);
   CorNode* jcrP = corTreeLookup(clone, "_jcResolved");
   if (jcrP != NULL) corTreeChildRemove(clone, jcrP);
+
+  CorNode* notifP = corTreeLookup(clone, LD_VOCAB_NOTIFICATION);
+  if (notifP != NULL)
+  {
+    endpointForRemote(notifP, true);
+    if ((notifP->type == CorObject) && (notifP->value.head == NULL))
+      corTreeChildRemove(clone, notifP);
+  }
 
   // Strip body @context — forward goes out as application/json + Link.
   CorNode* atCtxP2 = corTreeLookup(clone, "@context");

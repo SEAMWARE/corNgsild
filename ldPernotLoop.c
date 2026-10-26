@@ -9,7 +9,6 @@
 #include <stdbool.h>                                   // bool
 #include <stdint.h>                                    // uint64_t
 #include <string.h>                                    // strcmp, strlen, strcpy
-#include <strings.h>                                   // strcasecmp
 #include <stdio.h>                                     // snprintf
 #include <time.h>                                      // clock_gettime
 #include <stdlib.h>                                    // malloc, free
@@ -25,6 +24,7 @@
 #include "corRest/CorRestState.h"                        // corRest (for thread-local init)
 #include "corRest/corRestClient.h"                       // CorRestClientRequest, corRestClientSend
 #include "corNgsild/ldTenantHeader.h"                    // ldTenantHeaderAdd, ldSnapshotHeaderAdd
+#include "corNgsild/ldReceiverInfoHeaders.h"           // ldReceiverInfoHeadersAdd
 
 #include "corJsonld/corLdCompactTree.h"                  // corLdCompactTree, corLdCompactTreeWith
 #include "corJsonld/corLdDownload.h"                     // corLdContextFromUrl
@@ -223,24 +223,8 @@ static bool pernotSendNotification(LdPernotItem* itemP, CorNode* entityArray, Co
     corRestClientRequestHeader(&req, "Link", linkBuf);
   }
 
-  // § 5.2.15 endpoint.receiverInfo — emit each {key,value} as a request header.
-  // Periodic notifications run on a background thread with no triggering
-  // request, so any "urn:ngsi-ld:request" placeholder is silently dropped.
-  if (itemP->receiverInfo != NULL && itemP->receiverInfo->type == CorArray)
-  {
-    for (CorNode* kvP = itemP->receiverInfo->value.head; kvP != NULL; kvP = kvP->next)
-    {
-      if (kvP->type != CorObject) continue;
-      CorNode* kP = corTreeLookup(kvP, "key");
-      CorNode* vP = corTreeLookup(kvP, "value");
-      if (kP == NULL || kP->type != CorString || vP == NULL || vP->type != CorString) continue;
-      if (strcmp(vP->value.s, "urn:ngsi-ld:request") == 0) continue;
-      // Broker-managed (§ 6.4.8 / § 6.4.9 / § 6.5.2: "cannot be overridden") - emitted above
-      if (strcasecmp(kP->value.s, "NGSILD-Tenant") == 0)   continue;
-      if (strcasecmp(kP->value.s, "NGSILD-Snapshot") == 0) continue;
-      corRestClientRequestHeader(&req, kP->value.s, vP->value.s);
-    }
-  }
+  // § 5.2.15 endpoint.receiverInfo (ldReceiverInfoHeaders.h) - a periodic tick has no triggering request
+  ldReceiverInfoHeadersAdd(&req, itemP->receiverInfo, false);
 
   corRestClientRequestBody(&req, body, strlen(body));
   // § 5.2.15 endpoint.timeout — per-sub override; default 10s
