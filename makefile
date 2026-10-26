@@ -192,6 +192,7 @@ LIB_SOURCES   = corNgsild.c \
                 ldTenantHeader.c \
                 ldIso8601Duration.c \
                 ldRequestSubstitute.c \
+                ldReceiverInfoHeaders.c \
                 ldLinkedEntitiesHook.c \
                 ldExpiresAtPropagate.c \
                 ldConformanceDowngrade.c

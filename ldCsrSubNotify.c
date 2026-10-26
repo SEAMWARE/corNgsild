@@ -60,8 +60,8 @@
 #include "corNgsild/ldPeriodicLoop.h"                   // ldPeriodicLoopRegister
 #include "corNgsild/corNgsild.h"                         // corNgsild (for tenant access via opaque)
 #include "corNgsild/ldTenantHeader.h"                    // ldTenantHeaderAdd
+#include "corNgsild/ldReceiverInfoHeaders.h"           // ldReceiverInfoHeadersAdd
 #include "corNgsild/ldNotifyStatsHook.h"                // ldNotifyStatsHookInvoke
-#include "corNgsild/ldRequestSubstitute.h"              // ldRequestSubstitute
 #include "corNgsild/ldIdGenerate.h"                     // ldIdGenerate
 #include "corNgsild/ldCsrSubNotify.h"                   // Own interface
 
@@ -433,22 +433,8 @@ static void csourceNotificationPost(LdSubCacheItem* subItemP, CorNode* notificat
   if (linkBuf[0] != 0)
     corRestClientRequestHeader(&req, "Link", linkBuf);
 
-  // § 5.2.15 endpoint.receiverInfo — emit each {key,value} as a request header
-  if (subItemP->receiverInfo != NULL && subItemP->receiverInfo->type == CorArray)
-  {
-    for (CorNode* kvP = subItemP->receiverInfo->value.head; kvP != NULL; kvP = kvP->next)
-    {
-      if (kvP->type != CorObject) continue;
-      CorNode* kP = corTreeLookup(kvP, "key");
-      CorNode* vP = corTreeLookup(kvP, "value");
-      if (kP != NULL && kP->type == CorString && vP != NULL && vP->type == CorString)
-      {
-        const char* hv = ldRequestSubstitute(kP->value.s, vP->value.s);
-        if (hv != NULL)
-          corRestClientRequestHeader(&req, kP->value.s, hv);
-      }
-    }
-  }
+  // § 5.2.15 endpoint.receiverInfo - Authorization and the like (ldReceiverInfoHeaders.h)
+  ldReceiverInfoHeadersAdd(&req, subItemP->receiverInfo, true);
 
   corRestClientRequestBody(&req, body, strlen(body));
   // § 5.2.15 endpoint.timeout — per-sub override; default 10s

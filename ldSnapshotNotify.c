@@ -30,8 +30,8 @@
 #include "corNgsild/ldIdGenerate.h"                       // ldIdGenerate
 #include "corNgsild/CorNgsild.h"                          // corNgsild
 #include "corNgsild/ldTenantHeader.h"                     // ldTenantHeaderAdd
+#include "corNgsild/ldReceiverInfoHeaders.h"           // ldReceiverInfoHeadersAdd
 #include "corNgsild/ldSnapshotNotify.h"                   // Own interface
-#include "corNgsild/ldRequestSubstitute.h"                // ldRequestSubstitute (§ 6.3.18)
 
 
 //
@@ -99,23 +99,8 @@ void ldSnapshotNotify(LdSnapshotCacheItem* itemP, bool deleted)
   corRestClientRequestHeader(&req, "Content-Type", "application/json");
   ldTenantHeaderAdd(&req, corNgsild.tenantName);   // the snapshot's tenant (set with tenantP by the capture)
 
-  // § 5.16.6 / § 5.2.15 receiverInfo → HTTP headers.
-  CorNode* riP = corTreeLookup(itemP->tree, "receiverInfo");
-  if (riP != NULL && riP->type == CorArray)
-  {
-    for (CorNode* kvP = riP->value.head; kvP != NULL; kvP = kvP->next)
-    {
-      if (kvP->type != CorObject) continue;
-      CorNode* kP = corTreeLookup(kvP, "key");
-      CorNode* vP = corTreeLookup(kvP, "value");
-      if (kP != NULL && kP->type == CorString && vP != NULL && vP->type == CorString)
-      {
-        const char* hv = ldRequestSubstitute(kP->value.s, vP->value.s);
-        if (hv != NULL)
-          corRestClientRequestHeader(&req, kP->value.s, hv);
-      }
-    }
-  }
+  // § 5.16.6 / § 5.2.15 receiverInfo (ldReceiverInfoHeaders.h)
+  ldReceiverInfoHeadersAdd(&req, corTreeLookup(itemP->tree, "receiverInfo"), true);
 
   corRestClientRequestBody(&req, body, strlen(body));
   corRestClientRequestTimeout(&req, 5000, 10000);

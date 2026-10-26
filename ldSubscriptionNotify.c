@@ -48,6 +48,7 @@
 #include "corNgsild/LdVocab.h"                          // LD_VOCAB_*
 #include "corNgsild/CorNgsild.h"                        // corNgsild
 #include "corNgsild/ldTenantHeader.h"                   // ldTenantHeaderAdd, ldSnapshotHeaderAdd
+#include "corNgsild/ldReceiverInfoHeaders.h"           // ldReceiverInfoHeadersAdd
 #include "corNgsild/LdSubCache.h"                       // LdSubCache, LdSubCacheItem
 #include "corNgsild/ldSubCache.h"                       // ldSubCacheRdLock, ldSubCacheItemPin, ...
 #include "corNgsild/ldEntityToApi.h"                    // ldEntityToApi
@@ -63,7 +64,6 @@
 #include "corNgsild/ldPickOmit.h"                       // ldPickOmit
 #include "corNgsild/ldLangReduce.h"                     // ldLangReduce
 #include "corNgsild/ldNotifyStatsHook.h"                // ldNotifyStatsHookInvoke
-#include "corNgsild/ldRequestSubstitute.h"              // ldRequestSubstitute
 #include "corNgsild/ldLinkedEntitiesHook.h"             // ldLinkedEntitiesHookInvoke
 #include "corNgsild/ldNotifyTransport.h"                // ldNotifyIsHttp, ldNotifyTransportSend
 #include "corNgsild/ldNotifyStream.h"                   // ldNotifyIsEventStream, ldNotifyStreamPut
@@ -1035,38 +1035,8 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   if (linkBuf[0] != 0 && !ctxInBody)
     corRestClientRequestHeader(&req, "Link", linkBuf);
 
-  // § 5.2.15 endpoint.receiverInfo — emit each {key,value} as a request header
-  if (itemP->receiverInfo != NULL && itemP->receiverInfo->type == CorArray)
-  {
-    for (CorNode* kvP = itemP->receiverInfo->value.head; kvP != NULL; kvP = kvP->next)
-    {
-      if (kvP->type != CorObject) continue;
-      CorNode* kP = corTreeLookup(kvP, "key");
-      CorNode* vP = corTreeLookup(kvP, "value");
-      if (kP != NULL && kP->type == CorString && vP != NULL && vP->type == CorString)
-      {
-        // Content-Type and an @context Link are absorbed into endpointAccept /
-        // contextUrl (ldSubCache) and emitted once by the broker above. Prefer
-        // is a broker-side rendering directive (geo+json @context placement),
-        // not receiver information — skip all three so the notification carries
-        // exactly one Content-Type / Link and no stray Prefer (the rest, e.g.
-        // Authorization, pass through). (Prefer-in-receiverInfo per § 6.5.2 — but
-        // we do not leak it to the receiver; see spec-doubt #101.)
-        // NGSILD-Tenant and NGSILD-Snapshot are broker-managed (§ 6.4.8 / § 6.4.9 /
-        // § 6.5.2: "cannot be overridden") — the broker emits them above.
-        if ((strcasecmp(kP->value.s, "Content-Type") == 0) ||
-            (strcasecmp(kP->value.s, "Prefer") == 0) ||
-            (strcasecmp(kP->value.s, "NGSILD-Tenant") == 0) ||
-            (strcasecmp(kP->value.s, "NGSILD-Snapshot") == 0) ||
-            ((strcasecmp(kP->value.s, "Link") == 0) && (strstr(vP->value.s, "json-ld#context") != NULL)))
-          continue;
-
-        const char* hv = ldRequestSubstitute(kP->value.s, vP->value.s);
-        if (hv != NULL)
-          corRestClientRequestHeader(&req, kP->value.s, hv);
-      }
-    }
-  }
+  // § 5.2.15 endpoint.receiverInfo - Authorization and the like (ldReceiverInfoHeaders.h)
+  ldReceiverInfoHeadersAdd(&req, itemP->receiverInfo, true);
 
   corRestClientRequestBody(&req, body, strlen(body));
   // § 5.2.15 endpoint.timeout — per-sub override; default 10s
