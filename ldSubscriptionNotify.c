@@ -837,9 +837,9 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
   if (itemP->contextUrl != NULL)
     notifCtx = corLdContextFromUrl(itemP->contextUrl, &corRest.kalloc);
   if (notifCtx != NULL)
-    corLdCompactTreeWith(notification, notifCtx);
+    corLdCompactTreeWith(notification, notifCtx, &corRest.kalloc);
   else
-    corLdCompactTree(notification);
+    corLdCompactTree(notification, &corRest.kalloc);
 
   // § 5.2.12 / § 4.3.6.8: backwards-compat downgrade of entity payloads
   // when the subscription requested an older NGSI-LD version.

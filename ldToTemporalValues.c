@@ -39,7 +39,7 @@
 // gets compacted to its short form ("monument"). Compact here, inline,
 // using the response @context (request context, falling back to core).
 //
-static void vocabCompactInPlace(CorNode* valP)
+static void vocabCompactInPlace(CorNode* valP, CorAlloc* allocP)
 {
   if (valP == NULL)
     return;
@@ -50,7 +50,7 @@ static void vocabCompactInPlace(CorNode* valP)
 
   if (valP->type == CorString)
   {
-    const char* cv = corLdCompact(ctxP, valP->value.s);
+    const char* cv = corLdCompact(ctxP, valP->value.s, allocP);
     if (cv != NULL)
       valP->value.s = (char*) cv;
   }
@@ -60,7 +60,7 @@ static void vocabCompactInPlace(CorNode* valP)
     {
       if (itemP->type != CorString)
         continue;
-      const char* cv = corLdCompact(ctxP, itemP->value.s);
+      const char* cv = corLdCompact(ctxP, itemP->value.s, allocP);
       if (cv != NULL)
         itemP->value.s = (char*) cv;
     }
@@ -169,7 +169,7 @@ static void addPair(CorNode*     valuesArray,
       // VocabProperty's `vocab` is @type:@vocab — IRIs in the store have
       // to come out compacted on the wire.
       if (strcmp(firstKey, "vocab") == 0)
-        vocabCompactInPlace(clone);
+        vocabCompactInPlace(clone, allocP);
       ldNodeRename(clone, (char*) firstKey);
       CorNode* wrapper = corTreeObject(allocP, NULL);
       corTreeChildAdd(wrapper, clone);

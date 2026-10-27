@@ -31,10 +31,10 @@
 // ldLanguageTag - the language tag a stored languageMap key stands for
 //
 // "@none" (and any other JSON-LD keyword) is returned as it is; anything else is
-// compacted with contextP (NULL: the core context). A key that does not compact is
-// returned unchanged.
+// compacted with contextP (NULL: the core context); a tag that has to be built (a
+// compact IRI) is allocated in kaP. A key that does not compact is returned unchanged.
 //
-extern const char* ldLanguageTag(const char* key, CorLdContext* contextP);
+extern const char* ldLanguageTag(const char* key, CorLdContext* contextP, CorAlloc* kaP);
 
 
 

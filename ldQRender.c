@@ -155,7 +155,7 @@ const char* ldCompactOrEncode(const char* iri, CorLdContext* contextP, CorAlloc*
   if (contextP == NULL)
     return iri;
 
-  const char* compacted = corLdCompact(contextP, iri);
+  const char* compacted = corLdCompact(contextP, iri, allocP);
 
   // corLdCompact's contract: returns a different pointer for an actual short
   // term, returns iri unchanged otherwise. Belt-and-suspenders, also reject
@@ -296,7 +296,7 @@ static int renderTerm(LdQTerm* term, CorLdContext* contextP, CorAlloc* allocP, c
     break;
 
   case LdQString:
-    n = snprintf(buf, bufSize, "%s%s\"%s\"", attr, op, (compactValues == true) ? corLdCompact(contextP, term->value.s) : term->value.s);
+    n = snprintf(buf, bufSize, "%s%s\"%s\"", attr, op, (compactValues == true) ? corLdCompact(contextP, term->value.s, allocP) : term->value.s);
     break;
 
   case LdQBool:
@@ -315,7 +315,7 @@ static int renderTerm(LdQTerm* term, CorLdContext* contextP, CorAlloc* allocP, c
 
       if (i > 0) n += snprintf(buf + n, bufSize - n, ",");
       if (itemType == LdQString)
-        n += snprintf(buf + n, bufSize - n, "\"%s\"", (compactValues == true) ? corLdCompact(contextP, term->value.list.values[i]) : term->value.list.values[i]);
+        n += snprintf(buf + n, bufSize - n, "\"%s\"", (compactValues == true) ? corLdCompact(contextP, term->value.list.values[i], allocP) : term->value.list.values[i]);
       else
         n += snprintf(buf + n, bufSize - n, "%s", term->value.list.values[i]);
     }

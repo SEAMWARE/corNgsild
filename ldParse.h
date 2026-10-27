@@ -26,8 +26,9 @@
 // ldTermId never has to look a request node up, and the expander uses the stamp
 // instead of expanding a core term's name again.
 //
-// Stamping only (step B.3a): no renaming, no duplicate check, no deferred list - those
-// need to know where values and JSON literals are, which comes with the deferred pass.
+// It also tracks, per nesting level, whether a member lies inside a value, and lists every
+// "@id"/"@type" in a structural position: ldParseAliasesApply renames them once the body
+// is complete (the container may yet turn out to be a JSON-LD value object).
 //
 extern bool ldParseKeyHook(CorJson* corJsonP, CorNode* containerP, CorNode* nodeP, int depth);
 

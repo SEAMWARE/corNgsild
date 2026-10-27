@@ -710,7 +710,7 @@ LdRegCacheItem* ldRegCacheItemAdd(LdRegCache* cacheP, CorNode* regTree, CorAlloc
   //      binding").
   //   2) Core context (always present, neutral, never lies about a CSR's
   //      vocabulary).
-  // Never NULL — emission sites can `corLdCompact(forwardCtxP, iri)`
+  // Never NULL — emission sites can `corLdCompact(forwardCtxP, iri, kaP)`
   // unconditionally and get back the short alias if available, or the
   // expanded IRI unchanged otherwise (then URL-encoded on the way out).
   itemP->forwardCtxP = NULL;
@@ -1597,8 +1597,9 @@ static bool itemDiscoveryMatches(LdRegCacheItem* itemP,
 // ldRegCacheMatchForDiscovery - § 5.10.2 Query Context Source Registrations.
 //
 // Walks every non-expired CSR in the cache regardless of mode and returns
-// those with at least one RegistrationInfo matching the filters. Caller
-// frees *matchVP with free().
+// those with at least one RegistrationInfo matching the filters, each
+// pinned. The caller releases them with ldRegCacheMatchRelease - after
+// ldRegCacheItemUnpin for every one it drops - never with free().
 //
 // typeV:      NULL = ignore type filter; else NULL-terminated expanded IRIs
 // entityId:   NULL = ignore id filter; else exact URI

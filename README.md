@@ -17,8 +17,11 @@ and targets **ETSI GS CIM 009 (NGSI-LD)**.
 
 ## Architecture
 
-The umbrella header exposes a thread-local per-request state struct, `CorNgsild`
-(see `CorNgsild.h`), holding the parsed URL parameters and their derived forms
+The umbrella header exposes a per-request state struct, `CorNgsild` (see
+`CorNgsild.h`), reached as `corNgsild`: it lives in corRest's request state
+(`corRest.userData`), so it follows the request to whatever thread runs it; a
+thread with no request bound gets a per-thread fallback. It holds the parsed URL
+parameters and their derived forms
 (`id`/`idV`, `type`/`typeExpr`, `q`/`qExpr`, `scopeQ`/`scopeExpr`, `pick`/`pickTree`,
 `datasetId`, …). Service routines populate and read this state; the rest of the
 library is the set of operations performed against it.
@@ -41,7 +44,7 @@ NGSI-LD ProblemDetails.
 ### Format conversion
 
 NGSI-LD's three representations and the projections over them:
-- **normalized / concise / simplified** — `ldRender`, `ldSimplifyEntity`,
+- **normalized / concise / simplified** — `ldRender`, `ldToConcise`, `ldToSimplified`,
   `LdFormat.h`, `ldEntityToApi` / `ldApiEntityToDbModel` (API ↔ DB model).
 - **GeoJSON** output — `ldToGeoJson`.
 - **LanguageProperty reduction** — `ldLangReduce`.
@@ -103,7 +106,8 @@ make di         # debug + install
 Sibling Cor-Lib repos:
 
 - [`corRest`](https://github.com/SEAMWARE/corRest) — REST server + HTTP client (transport)
-- [`corJsonld`](https://github.com/SEAMWARE/corJsonld) — JSON-LD context expansion / compaction
+- [`corJsonld`](https://github.com/SEAMWARE/corJsonld) — JSON-LD context expansion / compaction (it brings
+  [`corHash`](https://github.com/SEAMWARE/corHash), which corNgsild does not call itself)
 
 Sibling repos:
 
@@ -112,6 +116,5 @@ Sibling repos:
 - [`corJson`](https://github.com/SEAMWARE/corJson) — JSON parsing and rendering
 - [`corBase`](https://github.com/SEAMWARE/corBase) — core utilities and the library log (`COR_LIB_*`)
 - [`corLog`](https://github.com/SEAMWARE/corLog) — logging and trace levels
-- [`corHash`](https://github.com/SEAMWARE/corHash) — hash tables (cache indexes)
 
 Plus `pthread`.

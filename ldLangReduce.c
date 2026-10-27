@@ -87,7 +87,7 @@ static void attrLangReduce(CorNode* attrP, const char* lang, CorAlloc* faP)
     //
     for (CorNode* keyP = langMapP->value.head; keyP != NULL; keyP = keyP->next)
     {
-      const char* tag = ldLanguageTag(keyP->name, corNgsild.contextP);
+      const char* tag = ldLanguageTag(keyP->name, corNgsild.contextP, &corRest.kalloc);
 
       if (strcmp(tag, lang) == 0)
       {
@@ -103,7 +103,7 @@ static void attrLangReduce(CorNode* attrP, const char* lang, CorAlloc* faP)
 
     if (matchP != NULL)
     {
-      const char* chosenLang = ldLanguageTag(matchP->name, corNgsild.contextP);
+      const char* chosenLang = ldLanguageTag(matchP->name, corNgsild.contextP, &corRest.kalloc);
 
       // Create "value" node with the matched value
       CorNode* valueP = corTreeString(corRest.kallocP, "value", matchP->value.s);

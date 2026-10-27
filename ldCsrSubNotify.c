@@ -330,9 +330,9 @@ static void csourceNotificationPost(LdSubCacheItem* subItemP, CorNode* notificat
     if (subItemP->contextUrl != NULL)
       notifCtx = corLdContextFromUrl(subItemP->contextUrl, &corRest.kalloc);
     if (notifCtx != NULL)
-      corLdCompactTreeWith(notification, notifCtx);
+      corLdCompactTreeWith(notification, notifCtx, &corRest.kalloc);
     else
-      corLdCompactTree(notification);
+      corLdCompactTree(notification, &corRest.kalloc);
   }
 
   // § 6.5.3: the POST MIME type is application/json by default but switches to
