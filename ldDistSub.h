@@ -175,4 +175,32 @@ extern int ldDistSubOnRegDelete(LdSubCache*          subCacheP,
                                 LdDistSubPersistFunc persistFunc,
                                 void*                persistUserData);
 
+// -----------------------------------------------------------------------------
+//
+// ldDistSubOnRegUpdate - the subordinates of a CSR that was patched (§ 10.5.2.4)
+//
+// For each entity-sub, compares the registration before (oldRegP) and after
+// (newRegP) the PATCH - the CSR-sub side's newlyMatching / updated /
+// noLongerMatching, applied to the subordinates:
+//
+//   * a subordinate still matching, same endpoint and tenant → PATCH its
+//     entities[] at the CSR when the parent×reg narrowing changed
+//   * a subordinate no longer matching (the type, the operations, a Via loop),
+//     or whose CSR moved (endpoint or tenant) → DELETE it where it is (oldRegP,
+//     best-effort) and unlink it
+//   * matching now, no subordinate (or the one just deleted) → POST a new one
+//
+// Called from patchCsourceRegistration's service routine with both items in
+// regCacheP (the new one added, the old one not yet removed), under its wrlock.
+// persistFunc fires for each entity-sub whose subordinate list changed.
+//
+// Returns the number of PATCHes, DELETEs and POSTs.
+//
+extern int ldDistSubOnRegUpdate(LdSubCache*          subCacheP,
+                                LdRegCacheItem*      oldRegP,
+                                LdRegCacheItem*      newRegP,
+                                const char*          ownAlias,
+                                LdDistSubPersistFunc persistFunc,
+                                void*                persistUserData);
+
 #endif  // CORNGSILD_LDDISTSUB_H_

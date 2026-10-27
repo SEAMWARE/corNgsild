@@ -750,6 +750,11 @@ int ldDistSubOnRegCreate(LdSubCache*          subCacheP,
 {
   if (subCacheP == NULL || regItemP == NULL || regItemP->endpoint == NULL)
     return 0;
+
+  // A subscription forwarded to a registered Context Source is a distributed
+  // operation — off unless --distributed says so.
+  if (ldDistributed == false)
+    return 0;
   if (!ldRegOpSupported(regItemP, LdOpCreateSubscription))
     return 0;
   if (ldDistOpCsrWouldLoop(regItemP, ownAlias))
@@ -862,4 +867,185 @@ int ldDistSubOnRegDelete(LdSubCache*          subCacheP,
   ldSubCacheUnlock(subCacheP);
 
   return cleaned;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// regSubordinateTarget - the registration is one a subordinate subscription can go to
+//
+static bool regSubordinateTarget(LdRegCacheItem* regP, const char* ownAlias)
+{
+  if (regP->endpoint == NULL)                           return false;
+  if (!ldRegOpSupported(regP, LdOpCreateSubscription))  return false;
+  if (ldDistOpCsrWouldLoop(regP, ownAlias))             return false;
+
+  return true;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// sameString - both NULL, or both the same string
+//
+static bool sameString(const char* a, const char* b)
+{
+  if ((a == NULL) || (b == NULL))
+    return a == b;
+
+  return strcmp(a, b) == 0;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// entitiesRender - an entities[] array as JSON text, to tell two narrowings apart
+//
+static char* entitiesRender(CorNode* entitiesP)
+{
+  if (entitiesP == NULL)
+    return NULL;
+
+  char* buf = (char*) corAlloc(&corRest.kalloc, corJsonFastRenderSize(entitiesP) + 1);
+  corJsonFastRender(entitiesP, buf);
+  return buf;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// subordinateEntitiesPatch - PATCH a subordinate's entities[] at its Context Source
+//
+static bool subordinateEntitiesPatch(LdSubCacheItem*   itemP,
+                                     LdSubSubordinate* sub,
+                                     LdRegCacheItem*   regP,
+                                     CorNode*          entitiesP,
+                                     const char*       ownAlias)
+{
+  CorNode* bodyP = corTreeObject(corRest.kallocP, NULL);
+  corTreeChildAdd(bodyP, entitiesP);
+
+  int   bodyLen = corJsonFastRenderSize(bodyP);
+  char* body    = (char*) corAlloc(&corRest.kalloc, bodyLen + 1);
+  corJsonFastRender(bodyP, body);
+  bodyLen = (int) strlen(body);
+
+  const char* errorDetail = NULL;
+  int         status      = ldDistOpSendReceive(regP, CorVerbPatch, buildSubUrl(regP, sub->remoteSubId), body, bodyLen,
+                                                ownAlias, &errorDetail, NULL, NULL);
+
+  if (status >= 200 && status < 300)
+    return true;
+
+  COR_W("dist-sub on-reg-update PATCH: CSR %s remote sub %s for parent %s status=%d (%s)",
+        sub->regId, sub->remoteSubId, (itemP->subId != NULL) ? itemP->subId : "?",
+        status, (errorDetail != NULL) ? errorDetail : "");
+  return false;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// ldDistSubOnRegUpdate -
+//
+// Per entity-sub, the registration before (oldRegP) and after (newRegP) the PATCH:
+//
+//   subordinate, still matching, same endpoint and tenant -> PATCH its entities[] if the narrowing changed
+//   subordinate, no longer matching, or moved            -> DELETE it where it is (oldRegP), unlink it
+//   no subordinate (or just deleted), matching now        -> POST a new one (newRegP)
+//
+int ldDistSubOnRegUpdate(LdSubCache*          subCacheP,
+                         LdRegCacheItem*      oldRegP,
+                         LdRegCacheItem*      newRegP,
+                         const char*          ownAlias,
+                         LdDistSubPersistFunc persistFunc,
+                         void*                persistUserData)
+{
+  if (subCacheP == NULL || oldRegP == NULL || newRegP == NULL || newRegP->regId == NULL)
+    return 0;
+
+  // Subordinate subscriptions are a distributed operation — off unless --distributed says so.
+  if (ldDistributed == false)
+    return 0;
+
+  bool newTarget = regSubordinateTarget(newRegP, ownAlias);
+  bool moved     = !sameString(oldRegP->endpoint, newRegP->endpoint) || !sameString(oldRegP->tenant, newRegP->tenant);
+  int  changes   = 0;
+
+  // Entity-sub cache walk under its rdlock (reg->sub — the reg writer holds the reg-wrlock), as ldDistSubOnRegCreate
+  ldSubCacheRdLock(subCacheP);
+  for (LdSubCacheItem* itemP = subCacheP->itemList; itemP != NULL; itemP = itemP->next)
+  {
+    if (itemP->subId == NULL || itemP->entitySelectors == NULL)
+      continue;
+
+    CorNode* narrowedP = newTarget ? narrowEntities(itemP, newRegP, corRest.kallocP) : NULL;
+    bool     touched   = false;
+
+    LdSubSubordinate** prevP = &itemP->subordinateP;
+    LdSubSubordinate*  sub   = itemP->subordinateP;
+
+    while (sub != NULL)
+    {
+      if (sub->regId == NULL || strcmp(sub->regId, newRegP->regId) != 0)
+      {
+        prevP = &sub->next;
+        sub   = sub->next;
+        continue;
+      }
+
+      if ((narrowedP != NULL) && (moved == false))
+      {
+        // Still matching, where it was: its entities[] follow the registration's
+        CorNode* wasP = narrowEntities(itemP, oldRegP, corRest.kallocP);
+        char*    was  = entitiesRender(wasP);
+        char*    now  = entitiesRender(narrowedP);
+
+        if ((sub->remoteSubId != NULL) && !sameString(was, now) && subordinateEntitiesPatch(itemP, sub, newRegP, narrowedP, ownAlias))
+          changes++;
+
+        prevP = &sub->next;
+        sub   = sub->next;
+        continue;
+      }
+
+      // No longer matching, or the Context Source moved: DELETE it where it is (best-effort), unlink it
+      if ((oldRegP->endpoint != NULL) && (sub->remoteSubId != NULL))
+      {
+        const char* errorDetail = NULL;
+        int         status      = ldDistOpSendReceive(oldRegP, CorVerbDelete, buildSubUrl(oldRegP, sub->remoteSubId), NULL, 0,
+                                                      ownAlias, &errorDetail, NULL, NULL);
+        if (status < 200 || status >= 300)
+          COR_W("dist-sub on-reg-update DELETE: CSR %s remote sub %s for parent %s status=%d (%s)",
+                sub->regId, sub->remoteSubId, itemP->subId, status, (errorDetail != NULL) ? errorDetail : "");
+      }
+
+      LdSubSubordinate* gone = sub;
+      *prevP = sub->next;
+      sub    = sub->next;
+      free(gone->remoteSubId);
+      free(gone->regId);
+      free(gone);
+      touched = true;
+      changes++;
+    }
+
+    // Matching now, no subordinate (or the one it had was just deleted): a new one
+    if ((narrowedP != NULL) && !hasSubordinateForReg(itemP, newRegP->regId) && fanoutToReg(itemP, newRegP, ownAlias))
+    {
+      touched = true;
+      changes++;
+    }
+
+    if (touched && persistFunc != NULL)
+      persistFunc(itemP, persistUserData);
+  }
+  ldSubCacheUnlock(subCacheP);
+
+  return changes;
 }
