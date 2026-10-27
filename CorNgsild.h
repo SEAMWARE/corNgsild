@@ -51,7 +51,7 @@ typedef struct LdExpiredEntity
 
 // -----------------------------------------------------------------------------
 //
-// CorNgsild - per-request NGSI-LD state (thread-local)
+// CorNgsild - per-request NGSI-LD state (in corRest.userData - see corNgsild below)
 //
 typedef struct CorNgsild
 {

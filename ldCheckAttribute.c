@@ -13,6 +13,7 @@
 
 #include "corBase/corLibLog.h"                         // COR_LIB_*
 #include "corAlloc/CorAlloc.h"                         // CorAlloc
+#include "corRest/corRest.h"                            // corRest
 #include "corTree/corTreeBuilder.h"                    // corTreeChildRemove
 #include "corTree/CorNode.h"                            // CorNode
 #include "corTree/corTreeLookup.h"                      // corTreeLookup
@@ -243,7 +244,7 @@ static bool checkLanguageMap(CorNode* lmP)
     // The key arrives EXPANDED (the broker's internal encoding of a language tag -
     // see ldLanguageKey.h): every check below, and every error, is about the TAG.
     //
-    const char* tag = (childP->name != NULL) ? ldLanguageTag(childP->name, corNgsild.contextP) : NULL;
+    const char* tag = (childP->name != NULL) ? ldLanguageTag(childP->name, corNgsild.contextP, &corRest.kalloc) : NULL;
 
     if ((tag == NULL) || (tag[0] == 0))
     {

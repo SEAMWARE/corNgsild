@@ -23,7 +23,7 @@
 //
 // Called after JSON-LD expansion in ldParseHook.  Walks the entity tree and
 // ensures every attribute is an CorObject with an explicit "type" field and
-// the appropriate value key (hasValue, hasObject, etc.).
+// the appropriate value key (value, object, languageMap, ...).
 //
 // mergeMode: set to true for PATCH /entities/{id} (Merge Entity § 5.6.17) so
 // that a fragment attribute which is a plain object without a type/value key

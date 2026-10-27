@@ -1546,9 +1546,9 @@ static void ldRenderHook(void)
     respCtxP = corLdCoreContext();
 
   if (respCtxP != NULL)
-    corLdCompactTreeWith(corRest.out.responseTree, respCtxP);
+    corLdCompactTreeWith(corRest.out.responseTree, respCtxP, &corRest.kalloc);
   else
-    corLdCompactTree(corRest.out.responseTree);
+    corLdCompactTree(corRest.out.responseTree, &corRest.kalloc);
 
   // (lang reduction now happens earlier — before format simplification)
 

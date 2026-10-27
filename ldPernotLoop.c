@@ -150,9 +150,9 @@ static bool pernotSendNotification(LdPernotItem* itemP, CorNode* entityArray, Co
     if (itemP->contextUrl != NULL)
       notifCtx = corLdContextFromUrl(itemP->contextUrl, kaP);
     if (notifCtx != NULL)
-      corLdCompactTreeWith(notification, notifCtx);
+      corLdCompactTreeWith(notification, notifCtx, kaP);
     else
-      corLdCompactTree(notification);
+      corLdCompactTree(notification, kaP);
   }
 
 #if COR_WITH_EVENT_STREAM

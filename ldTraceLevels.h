@@ -11,7 +11,7 @@
 // 
 //
 //
-// Trace levels for corNgsild (range 200-399)
+// Trace levels for corNgsild (200-240; a new one takes 241 and up, below corAlloc's 300-303)
 //
 #define LdTInit       200   // Library initialization
 #define LdTTypes      201   // Type conversions

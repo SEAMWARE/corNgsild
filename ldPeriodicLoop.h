@@ -35,7 +35,8 @@
 //
 // Called once per second by the engine thread.
 //   ctx   : the opaque pointer the consumer passed to ldPeriodicLoopRegister
-//   nowNs : monotonic clock_gettime(CLOCK_REALTIME) at the start of this tick
+//   nowNs : wall-clock time, clock_gettime(CLOCK_REALTIME), at the start of this tick (the waits between
+//           ticks are on CLOCK_MONOTONIC)
 //   kaP   : per-tick scratch allocator (reset before each callback)
 //
 typedef void (*LdPeriodicTickFn)(void* ctx, uint64_t nowNs, CorAlloc* kaP);

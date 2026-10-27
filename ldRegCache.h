@@ -135,9 +135,9 @@ extern void ldRegCacheRelease(LdRegCache* cacheP);
 //     entityId == EntityInfo.id, OR
 //     entityId matches EntityInfo.idPattern.
 //
-// On match the LdRegCacheItem* is written into *matchVP[i]. The array
-// is malloc'd; caller must free(*matchVP) (the items themselves are
-// owned by the cache — do not free them).
+// On match the LdRegCacheItem* is written into *matchVP[i], pinned. The
+// array is malloc'd; the caller releases it with ldRegCacheMatchRelease
+// (which unpins every item and frees the array) - never free() it.
 //
 // Returns the count of matches (0 = no matches; *matchVP unchanged).
 //
@@ -217,8 +217,9 @@ typedef struct ProbePending
 // ldRegCacheMatchForDiscovery - § 5.10.2 Query Context Source Registrations.
 //
 // Walks every non-expired CSR in the cache regardless of mode and returns
-// those with at least one RegistrationInfo matching the filters. Caller
-// frees *matchVP with free().
+// those with at least one RegistrationInfo matching the filters, each
+// pinned. The caller releases them with ldRegCacheMatchRelease - after
+// ldRegCacheItemUnpin for every one it drops - never with free().
 //
 // typeV:      NULL = ignore; else NULL-terminated expanded IRIs
 // entityIdV:  NULL or empty = ignore; else NULL-terminated list of exact

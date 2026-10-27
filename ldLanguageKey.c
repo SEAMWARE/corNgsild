@@ -22,12 +22,12 @@
 //
 // ldLanguageTag -
 //
-const char* ldLanguageTag(const char* key, CorLdContext* contextP)
+const char* ldLanguageTag(const char* key, CorLdContext* contextP, CorAlloc* kaP)
 {
   if ((key == NULL) || (key[0] == '@'))
     return key;
 
-  const char* tagP = corLdCompact((contextP != NULL) ? contextP : corLdCoreContext(), key);
+  const char* tagP = corLdCompact((contextP != NULL) ? contextP : corLdCoreContext(), key, kaP);
 
   return (tagP != NULL) ? tagP : key;
 }

@@ -20,10 +20,10 @@
 
 // -----------------------------------------------------------------------------
 //
-// ldNotifyDefer - append one entity-change candidate to the thread-local queue
+// ldNotifyDefer - append one entity-change candidate to the request's queue
 //
 // Called by entity service routines (single-entity and batch). Each call
-// appends an entry to a per-thread dynamic array. For a single-entity
+// appends an entry to the request's dynamic array (corNgsild.pendingV). For a single-entity
 // request that's one entry; a batch request appends one per merged
 // instance, in order.
 //
@@ -57,7 +57,7 @@ extern void ldNotifyDeferDelete(LdSubCache* cacheP,
 
 // -----------------------------------------------------------------------------
 //
-// ldNotifyDispatchPending - flush the per-thread queue.
+// ldNotifyDispatchPending - flush the request's queue (corNgsild.pendingV).
 //
 // Runs after the HTTP response has been sent. Invokes
 // ldSubscriptionNotifyBatch() which emits one notification per matched

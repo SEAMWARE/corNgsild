@@ -173,7 +173,7 @@ bool ldParseAliasesApply(void)
 
           if ((containerP->name != NULL) && (containerP->name[0] != 0))
           {
-            const char* sentP = corLdCompact((corNgsild.contextP != NULL) ? corNgsild.contextP : corLdCoreContext(), containerP->name);
+            const char* sentP = corLdCompact((corNgsild.contextP != NULL) ? corNgsild.contextP : corLdCoreContext(), containerP->name, &corRest.kalloc);
 
             if (sentP != NULL)
               where = sentP;

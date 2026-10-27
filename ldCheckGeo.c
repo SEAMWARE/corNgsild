@@ -428,7 +428,7 @@ bool ldCheckGeo(CorNode* geoValueP)
   // geometry names are core terms and stay short, an unknown one is an IRI here -
   // the error names what the client sent.
   //
-  const char* sentType = corLdCompact((corNgsild.contextP != NULL) ? corNgsild.contextP : corLdCoreContext(), geoType);
+  const char* sentType = corLdCompact((corNgsild.contextP != NULL) ? corNgsild.contextP : corLdCoreContext(), geoType, &corRest.kalloc);
 
   ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid GeoJSON", "Unknown GeoJSON geometry type: '%s'", (sentType != NULL) ? sentType : geoType);
   return false;
