@@ -172,6 +172,7 @@ LIB_SOURCES   = corNgsild.c \
                 ldForwarding.c \
                 ldExpandParams.c \
                 ldQExpandValues.c \
+                ldNameList.c \
                 ldExtensionTerms.c \
                 ldCsourceAlias.c \
                 ldQRender.c \

@@ -37,6 +37,7 @@
 #include "corNgsild/ldSubscriptionNotify.h"               // ldTriggerFromString
 #include "corNgsild/ldQParse.h"                           // ldQParse
 #include "corNgsild/ldQExpandValues.h"                   // ldQExpandValues, ldAttrListExpand
+#include "corNgsild/ldNameList.h"                        // ldNameListCheck
 #include "corNgsild/ldCheckGeo.h"                          // ldCheckGeoQuery
 #include "corNgsild/ldTypes.h"                            // ldOpToString
 #include "corNgsild/ldError.h"                            // ldError
@@ -1250,14 +1251,15 @@ bool ldCheckSubscription(CorNode* subP, LdOp op, bool merged, LdFormat* notifFor
   //
   //
   // "expandValues", "jsonKeys" (§ 5.2.6.5.2) and "langProperties" (not NGSI-LD, spec-doubts #134):
-  // strings, the comma-separated attribute names that go WITH q - as for a query.
+  // the attribute names that go WITH q - as for a query: a String, comma separated, or a String[],
+  // one name per item. Stored as sent; read with ldNameListCsv.
   //
-  if (expandValuesP != NULL)
-    STRING_CHECK(expandValuesP, "Invalid Subscription", "'expandValues' must be a string");
-  if (jsonKeysP != NULL)
-    STRING_CHECK(jsonKeysP, "Invalid Subscription", "'jsonKeys' must be a string");
-  if (langPropsP != NULL)
-    STRING_CHECK(langPropsP, "Invalid Subscription", "'langProperties' must be a string");
+  if ((expandValuesP != NULL) && (ldNameListCheck(expandValuesP, "Invalid Subscription", "expandValues") == false))
+    return false;
+  if ((jsonKeysP != NULL) && (ldNameListCheck(jsonKeysP, "Invalid Subscription", "jsonKeys") == false))
+    return false;
+  if ((langPropsP != NULL) && (ldNameListCheck(langPropsP, "Invalid Subscription", "langProperties") == false))
+    return false;
 
   if (qP != NULL)
   {
