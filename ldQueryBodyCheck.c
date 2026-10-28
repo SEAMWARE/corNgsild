@@ -26,6 +26,7 @@
 #include "corNgsild/ldCheckUri.h"                         // ldCheckUri
 #include "corNgsild/LdGeoRel.h"                           // ldGeoRelParse
 #include "corNgsild/ldQueryBody.h"                        // ldQueryBodyToParams
+#include "corNgsild/ldNameList.h"                        // ldNameListCheck
 #include "corNgsild/ldQueryBodyCheck.h"                      // Own interface
 
 
@@ -321,10 +322,10 @@ bool ldQueryBodyCheck(void)
     { "containedBy",       PC_ARR,  0,            NULL },
     { "createEntityMap",   PC_BOOL, 0,            NULL },
     { "datasetId",         PC_ARR,  0,            NULL },
-    { "expandValues",      PC_STR,  0,            NULL },
-    { "langProperties",    PC_STR,  0,            NULL },   // not NGSI-LD - spec-doubts #134
+    { "expandValues",      PC_STR | PC_ARR, 0,   NULL },
+    { "langProperties",    PC_STR | PC_ARR, 0,   NULL },   // not NGSI-LD - spec-doubts #134
     { "entityMapLifetime", PC_STR,  0,            NULL },
-    { "jsonKeys",          PC_STR,  0,            NULL },
+    { "jsonKeys",          PC_STR | PC_ARR, 0,   NULL },
     { "join",              PC_STR,  0,            NULL },
     { "joinLevel",         PC_NUM,  0,            NULL },
     { "lang",              PC_STR,  0,            NULL },
@@ -392,6 +393,25 @@ bool ldQueryBodyCheck(void)
 
   if (geoQP      != NULL && geoQCheck(geoQP)                       == false)  return false;
   if (datasetIdP != NULL && uriArrayCheck(datasetIdP, "datasetId") == false)  return false;
+
+  //
+  // The lists of names - expandValues, jsonKeys, langProperties, and the temporalQ's aggrMethods
+  // (TemporalParams § 5.2.6.7.4): a String, comma separated, or a String[], one name per item
+  //
+  const char* listV[] = { "expandValues", "jsonKeys", "langProperties" };
+  for (unsigned int ix = 0; ix < sizeof(listV) / sizeof(listV[0]); ix++)
+  {
+    CorNode* listP = findField(fieldV, fields, listV[ix]);
+
+    if ((listP != NULL) && (ldNameListCheck(listP, "Invalid field for query", listV[ix]) == false))
+      return false;
+  }
+
+  CorNode* temporalQP   = findField(fieldV, fields, "temporalQ");
+  CorNode* aggrMethodsP = (temporalQP != NULL) ? corTreeLookup(temporalQP, "aggrMethods") : NULL;
+
+  if ((aggrMethodsP != NULL) && (ldNameListCheck(aggrMethodsP, "Invalid field for query", "temporalQ.aggrMethods") == false))
+    return false;
 
   //
   // The body is the query's parameters: made them now, expanded (ldQueryBodyToParams) - the service

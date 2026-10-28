@@ -15,6 +15,7 @@
 #include "corNgsild/LdQ.h"                              // LdQNode
 #include "corNgsild/ldQRender.h"                        // ldQRender
 #include "corNgsild/ldQExpandValues.h"                   // ldAttrListExpand
+#include "corNgsild/ldNameList.h"                        // ldNameListCsv
 #include "corNgsild/ldSubscriptionCompactQ.h"           // Own interface
 
 
@@ -36,7 +37,7 @@ void ldSubscriptionCompactQ(CorNode* subP, LdQNode* qExpr, CorLdContext* context
   // Render the pre-parsed tree with compaction against the response @context - the values
   // expandValues named, stored expanded, compacted back as well
   CorNode* evP = corTreeLookup(subP, "expandValues");
-  char**   evV = ((evP != NULL) && (evP->type == CorString)) ? ldAttrListExpand(evP->value.s, contextP, allocP) : NULL;
+  char**   evV = ldAttrListExpand(ldNameListCsv(evP, allocP), contextP, allocP);   // a String or a String[]
   char*    compactedQ = ldQRenderCompactValues(qExpr, contextP, allocP, true, evV);
   if (compactedQ != NULL)
     qP->value.s = compactedQ;

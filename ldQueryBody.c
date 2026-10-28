@@ -33,6 +33,7 @@
 #include "corNgsild/ldError.h"                           // ldError
 #include "corNgsild/ldTermId.h"                          // ldTermId, CorTerm*
 #include "corNgsild/ldExpandParams.h"                  // ldExpandParams
+#include "corNgsild/ldNameList.h"                        // ldNameListCsv
 #include "corNgsild/ldQueryBody.h"                       // Own interface
 
 
@@ -247,6 +248,12 @@ bool ldQueryBodyToParams(CorNode* bodyP)
 
         if (tP->type == CorString)
           ldParamHook(tP->name, tP->value.s);
+        else if (tP->type == CorArray)                      // aggrMethods: String or String[] (§ 5.2.6.7.4)
+        {
+          const char* csv = ldNameListCsv(tP, &corRest.kalloc);
+          if (csv != NULL)
+            ldParamHook(tP->name, csv);
+        }
         else if (tP->type == CorInt)
         {
           char buf[32];
@@ -254,6 +261,18 @@ bool ldQueryBodyToParams(CorNode* bodyP)
           ldParamHook(tP->name, buf);
         }
       }
+      continue;
+    }
+
+    //
+    // expandValues, jsonKeys, langProperties: String or String[] (§ 5.2.6.5.1) - the URL parameter's
+    // comma separated list either way (ldQueryBodyCheck has checked an array's items)
+    //
+    if ((ldTermId(fP) == CorTermExpandValues) || (ldTermId(fP) == CorTermJsonKeys) || (ldTermId(fP) == CorTermLangProperties))
+    {
+      const char* csv = ldNameListCsv(fP, &corRest.kalloc);
+      if (csv != NULL)
+        ldParamHook(fP->name, csv);
       continue;
     }
 
