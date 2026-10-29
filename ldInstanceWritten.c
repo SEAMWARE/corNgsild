@@ -8,8 +8,11 @@
 //
 #include <stdbool.h>                                  // bool
 #include <stddef.h>                                   // NULL
+#include <stdint.h>                                   // int64_t
 
+#include "corRest/corRest.h"                          // corRest
 #include "corTree/CorNode.h"                          // CorNode
+#include "corTree/corTreeArraySort.h"                 // corTreeNodeCompare
 #include "corTree/corTreeLookup.h"                    // corTreeLookup
 
 #include "corNgsild/LdVocab.h"                        // LD_VOCAB_MODIFIED_AT
@@ -35,5 +38,17 @@ bool ldInstanceWritten(CorNode* preAttrP, CorNode* postAttrP, const char* dsKey)
   if ((preModP == NULL) || (postModP == NULL) || (preModP->type != CorInt) || (postModP->type != CorInt))
     return true;  // nothing to tell them apart - a write to the Attribute counts, as for a plain name
 
-  return (preModP->value.i != postModP->value.i);
+  if (preModP->value.i != postModP->value.i)
+    return true;
+
+  //
+  // The same modifiedAt: carried over - unless it is THIS request's time, which every write of the request
+  // is given: a batch that names the Entity more than once writes the instance in an earlier fragment, and
+  // this one may write it again. Then what the instance holds tells (§ 10.3.3.3: each fragment its own).
+  // An instance of an earlier request is told by its time alone, at no cost
+  //
+  if (postModP->value.i != (int64_t) corRest.requestStartTime)
+    return false;
+
+  return (corTreeNodeCompare(preP, postP) != 0);
 }

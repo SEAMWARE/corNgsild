@@ -23,7 +23,9 @@
 // for attributeCreated) and postAttrP after it (NULL for attributeDeleted), both
 // dataset-keyed. An instance that appeared or went away was written; one that is
 // in both was written if its modifiedAt moved - every instance a write touches
-// is stamped, the others keep theirs.
+// is stamped, the others keep theirs - or, with the same modifiedAt and that the
+// request's own, if what it holds changed: one request stamps all its writes
+// alike, and a batch naming the Entity twice writes an instance twice within it.
 //
 // The ONE answer to "which instances did this write touch" - a subscription
 // watching attr@datasetId and the temporal history both ask it.
