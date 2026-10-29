@@ -154,6 +154,7 @@ typedef struct LdSubCacheItem
   LdFormat                  format;         // notification format (§ 5.2.14) — LdFormatNone = normalized default
   bool                      sysAttrs;       // notification.sysAttrs (default false)
   bool                      showChanges;    // notification.showChanges (default false) — implies previousValue/Object/LanguageMap
+  char*                     geometryProperty; // notification.geometryProperty, expanded - the GeoProperty of a GeoJSON notification's geometry (NULL: location)
 
   // Expiration
   uint64_t                  expiresAt;      // epoch nanoseconds (0 = no expiration)

@@ -689,6 +689,19 @@ LdSubCacheItem* ldSubCacheItemAdd(LdSubCache* cacheP, CorNode* subTree, LdQNode*
     CorNode* showP = corTreeLookup(notifP, "showChanges");
     itemP->sysAttrs    = (sysP  != NULL && sysP->type  == CorBoolean && sysP->value.b == true);
     itemP->showChanges = (showP != NULL && showP->type == CorBoolean && showP->value.b == true);
+
+    //
+    // notification.geometryProperty - the GeoProperty whose value is a GeoJSON notification's geometry, as
+    // geometryProperty is a query's (TS 104-175 § 5.3.3.2). Expanded as notification.pick is
+    //
+    CorNode* geoP = corTreeLookup(notifP, "geometryProperty");
+
+    if (geoP == NULL)    // not a core term: the member's name expanded by the @context
+      geoP = corTreeLookup(notifP, corLdExpand(corNgsild.contextP, "geometryProperty", &cacheP->alloc, NULL, NULL));
+
+    itemP->geometryProperty = NULL;
+    if ((geoP != NULL) && (geoP->type == CorString) && (geoP->value.s[0] != 0))
+      itemP->geometryProperty = corLdAlreadyExpanded(geoP->value.s) ? geoP->value.s : corLdExpand(corNgsild.contextP, geoP->value.s, &cacheP->alloc, NULL, NULL);
   }
 
   // User-provided `jsonldContext` (the spec-visible field) wins; otherwise a
