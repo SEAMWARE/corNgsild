@@ -28,6 +28,7 @@
 #include "corNgsild/ldRegexValid.h"                   // ldRegexValid
 #include "corNgsild/LdOp.h"                               // LdOp
 #include "corNgsild/CorNgsild.h"                          // corNgsild
+#include "corJsonld/corLdExpand.h"                         // corLdExpand, corLdAlreadyExpanded
 #include "corNgsild/LdTypeExpr.h"                         // ldTypeExprParse, ldTypeExprFree
 #include "corNgsild/LdCheck.h"                            // OBJECT_CHECK, STRING_CHECK, ...
 #include "corNgsild/ldCheckUri.h"                         // ldCheckUri
@@ -355,6 +356,7 @@ static bool checkNotification(CorNode* notifP, bool complete, bool merged, LdFor
   CorNode* pickP       = NULL;
   CorNode* omitP       = NULL;
   CorNode* showChangesP = NULL;
+  CorNode* geometryPropertyP = NULL;
 
   for (CorNode* childP = notifP->value.head; childP != NULL; childP = childP->next)
   {
@@ -450,6 +452,18 @@ static bool checkNotification(CorNode* notifP, bool complete, bool merged, LdFor
         }
       }
     }
+    else if ((childP->name != NULL) &&
+             ((strcmp(childP->name, "geometryProperty") == 0) ||
+              (strcmp(childP->name, corLdExpand(corNgsild.contextP, "geometryProperty", &corRest.kalloc, NULL, NULL)) == 0)))   // not a core term: expanded by the @context
+    {
+      DUPLICATE_CHECK(geometryPropertyP, "notification.geometryProperty", childP);
+      if ((childP->type != CorString) || (childP->value.s[0] == 0))
+      {
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
+                "'notification.geometryProperty' must be a non-empty string - the name of a GeoProperty");
+        return false;
+      }
+    }
     else if (ldTermId(childP) == CorTermShowChanges)
     {
       DUPLICATE_CHECK(showChangesP, "notification.showChanges", childP);
@@ -475,6 +489,64 @@ static bool checkNotification(CorNode* notifP, bool complete, bool merged, LdFor
         ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Read-Only Field",
                 "'notification.%s' is read-only and cannot be set", childP->name);
         return false;
+      }
+    }
+  }
+
+  //
+  // notification.geometryProperty (TS 104-175 issue #67) picks the GeoProperty of a GeoJSON notification's
+  // geometry: without endpoint.accept application/geo+json there is no geometry to pick - refused, as a
+  // query's geometryProperty is without a GeoJSON Accept (§ 10.4.3.4). On a complete document only: a PATCH
+  // fragment is checked merged.
+  //
+  if (complete && (geometryPropertyP != NULL))
+  {
+    CorNode* acceptP = (endpointP != NULL) ? corTreeLookup(endpointP, "https://uri.etsi.org/ngsi-ld/accept") : NULL;
+
+    if ((acceptP == NULL) && (endpointP != NULL))
+      acceptP = corTreeLookup(endpointP, "accept");
+
+    if ((acceptP == NULL) || (acceptP->type != CorString) || (strcmp(acceptP->value.s, "application/geo+json") != 0))
+    {
+      ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
+              "'notification.geometryProperty' needs 'notification.endpoint.accept' application/geo+json");
+      return false;
+    }
+
+    //
+    // The GeoProperty named for the geometry, then projected away - pick (or its alias attributes) without
+    // it, omit with it - is a contradiction: refused. The names compared expanded, as the cache keeps them
+    //
+    const char* geoName = geometryPropertyP->value.s;
+    const char* geoIri  = corLdAlreadyExpanded(geoName) ? geoName : corLdExpand(corNgsild.contextP, geoName, &corRest.kalloc, NULL, NULL);
+    CorNode*    keepP   = (pickP != NULL) ? pickP : attributesP;
+    const char* keepWhy = (pickP != NULL) ? "pick" : "attributes";
+
+    if (keepP != NULL)
+    {
+      bool kept = false;
+
+      for (CorNode* itemP = keepP->value.head; (itemP != NULL) && (kept == false); itemP = itemP->next)
+        kept = (strcmp(corLdAlreadyExpanded(itemP->value.s) ? itemP->value.s : corLdExpand(corNgsild.contextP, itemP->value.s, &corRest.kalloc, NULL, NULL), geoIri) == 0);
+
+      if (kept == false)
+      {
+        ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
+                "'notification.%s' leaves out '%s', the 'notification.geometryProperty' of the GeoJSON geometry", keepWhy, geoName);
+        return false;
+      }
+    }
+
+    if (omitP != NULL)
+    {
+      for (CorNode* itemP = omitP->value.head; itemP != NULL; itemP = itemP->next)
+      {
+        if (strcmp(corLdAlreadyExpanded(itemP->value.s) ? itemP->value.s : corLdExpand(corNgsild.contextP, itemP->value.s, &corRest.kalloc, NULL, NULL), geoIri) == 0)
+        {
+          ldError(400, LD_ERROR_BAD_REQUEST_DATA, "Invalid Subscription",
+                  "'notification.omit' names '%s', the 'notification.geometryProperty' of the GeoJSON geometry", geoName);
+          return false;
+        }
       }
     }
   }

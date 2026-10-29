@@ -38,6 +38,7 @@
 
 #include "corRest/CorRestState.h"                        // corRest
 #include "corRest/corRestClient.h"                       // CorRestClientRequest, etc.
+#include "corJsonld/corLdCompact.h"                      // corLdCompact
 #include "corJsonld/corLdCompactTree.h"                  // corLdCompactTree, corLdCompactTreeWith
 #include "corJsonld/corLdDownload.h"                     // corLdContextFromUrl
 
@@ -916,7 +917,16 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
     if (oldDataP != NULL && oldDataP->type == CorArray)
     {
       CorNode* newDataP = oldDataP;
-      ldToGeoJson(&newDataP, NULL /* default "location" */, corRest.kallocP);
+      //
+      // The GeoProperty of the geometry: notification.geometryProperty, by the name it has in the
+      // notification - compacted as the entities were, above. location without one.
+      //
+      const char* geometryProperty = NULL;
+
+      if (itemP->geometryProperty != NULL)
+        geometryProperty = corLdCompact((notifCtx != NULL) ? notifCtx : corLdCoreContext(), itemP->geometryProperty, &corRest.kalloc);
+
+      ldToGeoJson(&newDataP, geometryProperty, corRest.kallocP);
       if (newDataP != NULL && newDataP != oldDataP)
       {
         ldNodeRename(newDataP, (char*) "data");
