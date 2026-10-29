@@ -39,6 +39,7 @@
 #include "corRest/CorRestState.h"                        // corRest
 #include "corRest/corRestClient.h"                       // CorRestClientRequest, etc.
 #include "corJsonld/corLdCompact.h"                      // corLdCompact
+#include "corJsonld/corLdExpand.h"                       // corLdExpand
 #include "corJsonld/corLdCompactTree.h"                  // corLdCompactTree, corLdCompactTreeWith
 #include "corJsonld/corLdDownload.h"                     // corLdContextFromUrl
 
@@ -250,6 +251,52 @@ static bool watchedAttrsMatch(LdSubCacheItem* itemP, CorNode* entityP, LdNotifyO
       }
     }
   }
+
+  return false;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// geoJsonGeomIri - the GeoProperty a GeoJSON notification's geometry comes from, expanded: notification.geometryProperty,
+// location without it. NULL: not a GeoJSON notification
+//
+static const char* geoJsonGeomIri(LdSubCacheItem* itemP)
+{
+  if (itemP->endpointAccept != CorMimeGeoJson)
+    return NULL;
+
+  if (itemP->geometryProperty != NULL)
+    return itemP->geometryProperty;
+
+  return corLdExpand(corLdCoreContext(), "location", &corRest.kalloc, NULL, NULL);   // the name the entity has it by, as a query's (geoJsonGeomProtectSetup)
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
+// geoJsonGeomForced - would the notification's projection (attributes, pick, omit) leave out the geometry's GeoProperty?
+//
+// As for a query (§ 5.3.3.2): the geometry is taken from the entity before the projection - the GeoProperty is kept
+// through it for the geometry, and left out of "properties" when the projection would have left it out.
+//
+static bool geoJsonGeomForced(LdSubCacheItem* itemP, const char* geomIri)
+{
+  char** keepV = (itemP->notifPickV != NULL) ? itemP->notifPickV : itemP->notifAttrsV;
+
+  if (keepV != NULL)
+  {
+    for (int ix = 0; keepV[ix] != NULL; ix++)
+      if (strcmp(keepV[ix], geomIri) == 0)
+        return false;
+    return true;
+  }
+
+  for (int ix = 0; (itemP->notifOmitV != NULL) && (itemP->notifOmitV[ix] != NULL); ix++)
+    if (strcmp(itemP->notifOmitV[ix], geomIri) == 0)
+      return true;
 
   return false;
 }
@@ -700,6 +747,8 @@ static CorNode* buildNotifDataEntry(LdSubCacheItem*      itemP,
     }
   }
 
+  const char* geomIri = geoJsonGeomIri(itemP);    // GeoJSON: the geometry's GeoProperty, kept through the projection
+
   if (itemP->notifAttrsV != NULL)
   {
     CorNode* childP = entityClone->value.head;
@@ -721,7 +770,7 @@ static CorNode* buildNotifDataEntry(LdSubCacheItem*      itemP,
             break;
           }
         }
-        if (!keep)
+        if ((keep == false) && ((geomIri == NULL) || (strcmp(childP->name, geomIri) != 0)))
           corTreeChildRemove(entityClone, childP);
       }
 
@@ -732,8 +781,18 @@ static CorNode* buildNotifDataEntry(LdSubCacheItem*      itemP,
   // notification.pick / notification.omit (§ 5.2.14, § 4.21) — entity-member
   // projection on the notification body. Applied before format conversion
   // so the chosen format operates on the already-reduced entity.
+  //
+  // The geometry's GeoProperty is protected as a query's is (ldPickOmit, corNgsild.geometryPropertyExpanded) -
+  // the triggering request's own value put back after
+  //
   if (itemP->notifPickV != NULL || itemP->notifOmitV != NULL)
+  {
+    char* reqGeomIri = corNgsild.geometryPropertyExpanded;
+
+    corNgsild.geometryPropertyExpanded = (char*) geomIri;
     ldPickOmit(entityClone, itemP->notifPickV, itemP->notifOmitV);
+    corNgsild.geometryPropertyExpanded = reqGeomIri;
+  }
 
   // Subscription-level lang (§ 4.15) — collapse LanguageMap attrs to the
   // selected language before format conversion.
@@ -926,7 +985,15 @@ static void notificationSendMany(LdSubCacheItem* itemP, LdNotifyPendingEntry** e
       if (itemP->geometryProperty != NULL)
         geometryProperty = corLdCompact((notifCtx != NULL) ? notifCtx : corLdCoreContext(), itemP->geometryProperty, &corRest.kalloc);
 
+      //
+      // A GeoProperty kept through the projection only for the geometry is left out of "properties"
+      // (corNgsild.geoJsonGeomForced, as for a query) - the triggering request's own value put back after
+      //
+      bool reqGeomForced = corNgsild.geoJsonGeomForced;
+
+      corNgsild.geoJsonGeomForced = geoJsonGeomForced(itemP, geoJsonGeomIri(itemP));
       ldToGeoJson(&newDataP, geometryProperty, corRest.kallocP);
+      corNgsild.geoJsonGeomForced = reqGeomForced;
       if (newDataP != NULL && newDataP != oldDataP)
       {
         ldNodeRename(newDataP, (char*) "data");
