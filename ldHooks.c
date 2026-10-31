@@ -1656,6 +1656,29 @@ static void ldRenderHook(void)
 
 // -----------------------------------------------------------------------------
 //
+// ldHeadRenderHook - ldRenderHook, and then TS 104-176 § 5 for a HEAD: it functions as the GET would and
+// omits the body, and "the response code 204 No Content shall be used on success". The headers of the GET
+// stay (Link, NGSILD-Results-Count, Location, ...); the backends drop the body of a HEAD, and the
+// Content-Length of a 204. The NGSI-LD API only: a HEAD on a broker's own endpoints (/version, ...) is
+// plain HTTP and answers what its GET does.
+//
+static void ldHeadRenderHook(void)
+{
+  ldRenderHook();
+
+  if ((corRest.in.verb != CorVerbHead) || (corRest.in.urlPath == NULL) || (strncmp(corRest.in.urlPath, "/ngsi-ld/", 9) != 0))
+    return;
+
+  int status = corRest.out.httpStatusCode;
+
+  if ((corRest.out.problemType == NULL) && ((status == 200) || (status == 201) || (status == 203)))
+    corRest.out.httpStatusCode = 204;
+}
+
+
+
+// -----------------------------------------------------------------------------
+//
 // corNgsildStateCreate / corNgsildStateFree - per-connection corNgsild lifecycle
 //
 // Registered as corRest's userData hooks: corRest creates one CorNgsild per
@@ -1736,7 +1759,7 @@ void ldHooksRegister(void)
   corRestSetPreDispatchHook(ldPreDispatchHook);
   corRestSetPrePayloadParseHook(ldPrePayloadParseHook);
   corRestSetPayloadParseHook(ldParseHook);
-  corRestSetPayloadRenderHook(ldRenderHook);
+  corRestSetPayloadRenderHook(ldHeadRenderHook);
   corRestSetParamHook(ldParamHook);
   corRestSetUserDataHooks(corNgsildStateCreate, corNgsildStateFree);
 }
